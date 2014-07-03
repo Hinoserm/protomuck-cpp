@@ -1,0 +1,31 @@
+
+How to use this source to build protomuck. 
+---------------------------------------------------------------------
+
+Instructions for Visual Studio 2012
+--------------------------------------------------
+1. Open the ext folder
+2. Run get_libraries.bat
+3. Open proto2.sln
+4. Select 'build solution'
+
+Congratulations, you've built protomuck. 
+
+
+Scimicat 072813 - Restructuring of folders done, but I've only spent 
+about 12 hours overall at this, so Visual Studio settings are the only
+ones updated. Linux will NOT build yet. I still need to do a complete
+overhaul on the Makefile. So, below is simply how it is going to work
+AFTER I do my rewrite of the Makefile. I also haven't tested the script
+I wrote to get deps. Need to make sure names are right for various 
+distributions so it works with more flavors. I'll be sticking to apt and
+yum based distros, I'm not really familiar with pacman stuff. 
+
+Instructions for Linux (Red Hat/Debian and kin)
+--------------------------------------------------
+1. In a terminal, open the ext folder
+2. Run ./get_deps.sh
+3. Open the main folder
+4. Run make
+
+Congratulations, you've built protomuck. 

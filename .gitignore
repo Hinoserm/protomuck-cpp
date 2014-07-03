@@ -1,0 +1,67 @@
+# Compiled object files and libraries
+*.o
+*.obj
+*.d
+*.lo
+*.la
+*.a
+*.so
+*.so.*
+*.dll
+*.exe
+
+# Assembler and alternate-optimization dumps
+*.asm
+*.o3
+*.o3-native
+
+# Compiled server binaries
+/src/protomuck
+/src/resolver
+/src/prog
+/game/proto2.exe
+/game/protomuck
+/game/resolver
+
+# Visual Studio build output
+/obj/
+/ipch/
+*.pdb
+*.ilk
+*.ipch
+*.tlog
+*.suo
+*.sdf
+*.user
+UpgradeLog.XML
+
+# Autoconf and configure generated output
+autom4te.cache/
+config.log
+config.status
+config.cache
+confdefs.h
+autoscan.log
+/src/Makefile
+
+# Editor and backup files
+*~
+*.bak
+*.orig
+*.rej
+*.swp
+*.vpw
+*.vpwhistu
+*.vtg
+
+# Subversion metadata
+.svn/
+
+# Runtime state and logs
+*.PANIC
+*.pid
+nethost.cache
+/game/logs/*
+!/game/logs/README-LOGS
+/game/backup/
+/dat/backup/

@@ -1,0 +1,22 @@
+072813 Scimicat
+Over the last few days, I've also begun working on rewriting interface.c/h.. took a break
+Here's everything I've done during my break from the rewrite of interface...
+* Restructured the entire project for Visual Studio, still have the linux makefiles to do
+* Added a cleaner batch file, for making a nice and neat package to distribute
+* Created a batch file to download and setup all required dependancies
+* Began working on tweaking that file to add x64 dependancies, but need to build them
+* Built the PCRE 8.33 for vc11 x64, have more to do, before we are Windows x64 buildable
+* The build_pcre.bat in ext\bin was what I used to build the pcre vc11 x64 dll, wrote it myself
+* ALL hard coded paths to things removed, it all uses nice, neat relative-to-project paths
+* Completely overhauled the VS project file, uses the new paths, no more 'where did something install'
+* Debugging settings setup in the VS project, can now simply run the debugger or profiler
+* The game folder has the basic data, as does dat... don't touch dat, the cleaner uses it to freshen game
+* The bin folder in ext has a few tools for library collection, namely wget and 7za
+* To obtain all the libraries needed to build, open ext, and run get_libraries.bat 
+* The get_deps.sh is the beginnings of a shell script for 'nix to run apt-get or yum for dev libs
+* In the top level, make_dist_clean is for making a distributable package, squeaky clean will remove
+*    EVERYTHING that isn't needed. This includes visual studio user settings, netlist, libraries, and
+*    so on. Before you go to zip the directory up to send it off, that's what you run. The regular
+*    clean option simply removes all the VS output files and the dlls from the game folder. The 
+*    project makes sure dlls are in place when you build. This is future-proofing to ease the transition
+*    into building x64 on windows. Squeaky clean will mean VS takes a few to load the next time!

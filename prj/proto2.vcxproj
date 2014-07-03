@@ -1,0 +1,362 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{EE40A35B-83C0-4637-B88B-3D7F8DF4E8EE}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>proto2</RootNamespace>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v100</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v100</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v100</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v100</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <LinkIncremental>true</LinkIncremental>
+    <OutDir>$(SolutionDir)game\</OutDir>
+    <IntDir>$(SolutionDir)obj\</IntDir>
+    <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <CodeAnalysisRules />
+    <CodeAnalysisRuleAssemblies />
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <LinkIncremental>true</LinkIncremental>
+    <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <CodeAnalysisRules />
+    <CodeAnalysisRuleAssemblies />
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(SolutionDir)game\</OutDir>
+    <IntDir>$(SolutionDir)obj\</IntDir>
+    <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <CodeAnalysisRules />
+    <CodeAnalysisRuleAssemblies />
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <LinkIncremental>false</LinkIncremental>
+    <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <CodeAnalysisRules />
+    <CodeAnalysisRuleAssemblies />
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SolutionDir)src\inc\;$(SolutionDir)ext\x86\inc\;$(SolutionDir)ext\x86\inc\mysql</AdditionalIncludeDirectories>
+      <MultiProcessorCompilation>false</MultiProcessorCompilation>
+      <CompileAs>CompileAsCpp</CompileAs>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <ProgramDataBaseFileName>$(IntDir)$(ProjectName)_d.pdb</ProgramDataBaseFileName>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>pcre.lib;ssleay32.lib;libeay32.lib;zlib.lib;libmysql.lib;wsock32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <StackCommitSize>128000</StackCommitSize>
+      <StackReserveSize>16000000</StackReserveSize>
+      <AdditionalOptions>/NODEFAULTLIB:library /ignore:4099 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalLibraryDirectories>$(SolutionDir)\ext\x86\lib\;</AdditionalLibraryDirectories>
+      <IgnoreSpecificDefaultLibraries>LIBCMTD.lib</IgnoreSpecificDefaultLibraries>
+      <OutputFile>$(SolutionDir)game\$(TargetName).exe</OutputFile>
+      <ProgramDatabaseFile>$(SolutionDir)game\$(TargetName).pdb</ProgramDatabaseFile>
+      <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
+    </Link>
+    <PostBuildEvent>
+      <Command>(robocopy "$(SolutionDir)ext\x86\dll" "$(SolutionDir)game" /is /njh /njs /ndl /ndl /nc /ns /np /XX) ^&amp; IF %ERRORLEVEL% LEQ 1 exit 0</Command>
+    </PostBuildEvent>
+    <PostBuildEvent>
+      <Message>Ensuring DLLs and PDBs in output folder</Message>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SolutionDir)src\inc;$(SolutionDir)ext\x64\inc;</AdditionalIncludeDirectories>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <CompileAs>CompileAsCpp</CompileAs>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>mysqlclient_d.lib;wsock32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SolutionDir)\ext\x64\lib;</AdditionalLibraryDirectories>
+      <StackCommitSize>128000</StackCommitSize>
+      <StackReserveSize>16000000</StackReserveSize>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <OmitFramePointers>true</OmitFramePointers>
+      <CompileAs>CompileAsCpp</CompileAs>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <AdditionalIncludeDirectories>$(SolutionDir)src\inc\;$(SolutionDir)ext\x86\inc\;</AdditionalIncludeDirectories>
+      <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <ProgramDataBaseFileName>$(IntDir)$(ProjectName).pdb</ProgramDataBaseFileName>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <StackReserveSize>16000000</StackReserveSize>
+      <StackCommitSize>128000</StackCommitSize>
+      <AdditionalDependencies>pcre.lib;ssleay32.lib;libeay32.lib;zlib.lib;mysqlclient.lib;wsock32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <LinkErrorReporting>NoErrorReport</LinkErrorReporting>
+      <AdditionalLibraryDirectories>$(SolutionDir)\ext\x86\lib\;</AdditionalLibraryDirectories>
+      <IgnoreAllDefaultLibraries>
+      </IgnoreAllDefaultLibraries>
+      <IgnoreSpecificDefaultLibraries>LIBCMT.lib</IgnoreSpecificDefaultLibraries>
+      <AdditionalOptions>/ignore:4099 %(AdditionalOptions)</AdditionalOptions>
+      <OutputFile>$(SolutionDir)game\$(TargetName).exe</OutputFile>
+      <ProgramDatabaseFile>$(SolutionDir)game\$(TargetName).pdb</ProgramDatabaseFile>
+      <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
+    </Link>
+    <PostBuildEvent>
+      <Command>(robocopy "$(SolutionDir)ext\x86\dll" "$(SolutionDir)game" /is /njh /njs /ndl /ndl /nc /ns /np /XX) ^&amp; IF %ERRORLEVEL% LEQ 1 exit 0</Command>
+      <Message>Ensuring DLLs in output folder</Message>
+    </PostBuildEvent>
+    <PreBuildEvent>
+      <Command>del $(SolutionDir)game\*.pdb</Command>
+      <Message>Removing PDBs from game directory</Message>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <OmitFramePointers>true</OmitFramePointers>
+      <CompileAs>CompileAsCpp</CompileAs>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <InlineFunctionExpansion>Default</InlineFunctionExpansion>
+      <AdditionalIncludeDirectories>$(SolutionDir)src\inc;$(SolutionDir)ext\x86\inc;</AdditionalIncludeDirectories>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <StackReserveSize>16000000</StackReserveSize>
+      <StackCommitSize>128000</StackCommitSize>
+      <AdditionalDependencies>mysqlclient.lib;wsock32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SolutionDir)\ext\x64\lib;</AdditionalLibraryDirectories>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClInclude Include="$(SolutionDir)\src\inc\array.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\autoconf.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\cgi.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\config.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\copyright.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\crt_malloc.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\db.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\dbsearch.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\defaults.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\dirent_win.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\externs.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\inst.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\interface.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\interp.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\maillib.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\match.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\mcp.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\mcpgui.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\mcppkg.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\mfun.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\mfunlist.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\mpi.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\msgparse.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\mufevent.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\nan.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\netresolve.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\newhttp.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\oldcopyright.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\params.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\parser.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\patchlevel.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\props.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\p_array.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\p_connects.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\p_db.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\p_error.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\p_file.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\p_float.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\p_http.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\p_math.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\p_mcp.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\p_misc.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\p_muf.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\p_mysql.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\p_props.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\p_regex.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\p_socket.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\p_stack.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\p_strings.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\p_system.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\reg.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\sha1.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\strings.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\tune.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\version.h" />
+    <ClInclude Include="$(SolutionDir)\src\inc\winconf.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\src\array.cpp" />
+    <ClCompile Include="..\src\boolexp.cpp" />
+    <ClCompile Include="..\src\case.cpp" />
+    <ClCompile Include="..\src\cgi.cpp" />
+    <ClCompile Include="..\src\compile.cpp" />
+    <ClCompile Include="..\src\compress.cpp" />
+    <ClCompile Include="..\src\copyright.cpp" />
+    <ClCompile Include="..\src\create.cpp" />
+    <ClCompile Include="..\src\crt_malloc.cpp" />
+    <ClCompile Include="..\src\db.cpp" />
+    <ClCompile Include="..\src\debugger.cpp" />
+    <ClCompile Include="..\src\disassem.cpp" />
+    <ClCompile Include="..\src\diskprop.cpp" />
+    <ClCompile Include="..\src\edit.cpp" />
+    <ClCompile Include="..\src\events.cpp" />
+    <ClCompile Include="..\src\game.cpp" />
+    <ClCompile Include="..\src\hashtab.cpp" />
+    <ClCompile Include="..\src\help.cpp" />
+    <ClCompile Include="..\src\inst.cpp" />
+    <ClCompile Include="..\src\interface.cpp" />
+    <ClCompile Include="..\src\interp.cpp" />
+    <ClCompile Include="..\src\log.cpp" />
+    <ClCompile Include="..\src\look.cpp" />
+    <ClCompile Include="..\src\match.cpp" />
+    <ClCompile Include="..\src\mfuns.cpp" />
+    <ClCompile Include="..\src\mfuns2.cpp" />
+    <ClCompile Include="..\src\mfuns3.cpp" />
+    <ClCompile Include="..\src\move.cpp" />
+    <ClCompile Include="..\src\msgparse.cpp" />
+    <ClCompile Include="..\src\mufevent.cpp" />
+    <ClCompile Include="..\src\netresolve.cpp" />
+    <ClCompile Include="..\src\newhttp.cpp" />
+    <ClCompile Include="..\src\oldcompress.cpp" />
+    <ClCompile Include="..\src\player.cpp" />
+    <ClCompile Include="..\src\predicates.cpp" />
+    <ClCompile Include="..\src\propdirs.cpp" />
+    <ClCompile Include="..\src\property.cpp" />
+    <ClCompile Include="..\src\props.cpp" />
+    <ClCompile Include="..\src\p_array.cpp" />
+    <ClCompile Include="..\src\p_connects.cpp" />
+    <ClCompile Include="..\src\p_db.cpp" />
+    <ClCompile Include="..\src\p_error.cpp" />
+    <ClCompile Include="..\src\p_file.cpp" />
+    <ClCompile Include="..\src\p_float.cpp" />
+    <ClCompile Include="..\src\p_html.cpp" />
+    <ClCompile Include="..\src\p_http.cpp" />
+    <ClCompile Include="..\src\p_math.cpp" />
+    <ClCompile Include="..\src\p_misc.cpp" />
+    <ClCompile Include="..\src\p_muf.cpp" />
+    <ClCompile Include="..\src\p_mysql.cpp" />
+    <ClCompile Include="..\src\p_props.cpp" />
+    <ClCompile Include="..\src\p_regex.cpp" />
+    <ClCompile Include="..\src\p_socket.cpp" />
+    <ClCompile Include="..\src\p_stack.cpp" />
+    <ClCompile Include="..\src\p_strings.cpp" />
+    <ClCompile Include="..\src\p_system.cpp" />
+    <ClCompile Include="..\src\random.cpp" />
+    <ClCompile Include="..\src\reg.cpp" />
+    <ClCompile Include="..\src\rob.cpp" />
+    <ClCompile Include="..\src\sanity.cpp" />
+    <ClCompile Include="..\src\set.cpp" />
+    <ClCompile Include="..\src\sha1.cpp" />
+    <ClCompile Include="..\src\signal.cpp" />
+    <ClCompile Include="..\src\smatch.cpp" />
+    <ClCompile Include="..\src\speech.cpp" />
+    <ClCompile Include="..\src\strftime.cpp" />
+    <ClCompile Include="..\src\stringutil.cpp" />
+    <ClCompile Include="..\src\timequeue.cpp" />
+    <ClCompile Include="..\src\timestamp.cpp" />
+    <ClCompile Include="..\src\tune.cpp" />
+    <ClCompile Include="..\src\unparse.cpp" />
+    <ClCompile Include="..\src\utils.cpp" />
+    <ClCompile Include="..\src\version.cpp" />
+    <ClCompile Include="..\src\wiz.cpp" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

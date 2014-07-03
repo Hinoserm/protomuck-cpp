@@ -1,0 +1,391 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<CodeBlocks_project_file>
+	<FileVersion major="1" minor="6" />
+	<Project>
+		<Option title="proto2" />
+		<Option pch_mode="2" />
+		<Option compiler="msvc10" />
+		<Build>
+			<Target title="Debug Win32">
+				<Option output="proto2" prefix_auto="1" extension_auto="1" />
+				<Option type="0" />
+				<Option compiler="msvc10" />
+				<Compiler>
+					<Add option="/DWIN32" />
+					<Add option="/D_DEBUG" />
+					<Add option="/D_CONSOLE" />
+					<Add directory="inc" />
+					<Add directory="C:/Program Files (x86)/MySQL/MySQL Connector C 6.0.2/include" />
+					<Add directory="C:/Program Files (x86)/GnuWin32/include" />
+					<Add directory="C:/openssl-0.9.8g_win32/include" />
+				</Compiler>
+				<Linker>
+					<Add option="/debug" />
+					<Add library="pcre.lib" />
+					<Add library="ssleay32.lib" />
+					<Add library="libeay32.lib" />
+					<Add library="zlib.lib" />
+					<Add library="mysqlclient.lib" />
+					<Add library="wsock32.lib" />
+					<Add directory="C:/Program Files (x86)/GnuWin32/lib" />
+					<Add directory="C:/Program Files (x86)/MySQL/MySQL Connector C 6.0.2/lib/debug" />
+					<Add directory="C:/openssl-0.9.8g_win32/lib/" />
+				</Linker>
+			</Target>
+			<Target title="Debug x64">
+				<Option output="proto2" prefix_auto="1" extension_auto="1" />
+				<Option type="0" />
+				<Option compiler="msvc10" />
+				<Compiler>
+					<Add option="/DWIN32" />
+					<Add option="/D_DEBUG" />
+					<Add option="/D_CONSOLE" />
+					<Add directory="inc" />
+					<Add directory="C:/Program File/MySQL/MySQL Connector C 6.0.2/include" />
+				</Compiler>
+				<Linker>
+					<Add option="/debug" />
+					<Add library="mysqlclient.lib" />
+					<Add library="wsock32.lib" />
+				</Linker>
+			</Target>
+			<Target title="Release x64">
+				<Option output="proto2" prefix_auto="1" extension_auto="1" />
+				<Option type="0" />
+				<Option compiler="msvc10" />
+				<Compiler>
+					<Add option="/DWIN32" />
+					<Add option="/DNDEBUG" />
+					<Add option="/D_CONSOLE" />
+					<Add directory="inc" />
+					<Add directory="C:/Program Files/MySQL/MySQL Connector C 6.0.2/include" />
+				</Compiler>
+				<Linker>
+					<Add option="/debug" />
+					<Add library="mysqlclient.lib" />
+					<Add library="wsock32.lib" />
+				</Linker>
+			</Target>
+			<Target title="Release Win32">
+				<Option output="proto2" prefix_auto="1" extension_auto="1" />
+				<Option type="0" />
+				<Option compiler="msvc10" />
+				<Compiler>
+					<Add option="/DWIN32" />
+					<Add option="/DNDEBUG" />
+					<Add option="/D_CONSOLE" />
+					<Add directory="inc" />
+					<Add directory="C:/Users/Drylar/Desktop/src/ext/include" />
+					<Add directory="C:/Program Files (x86)/GnuWin32/include" />
+					<Add directory="C:/openssl-0.9.8g_win32/include" />
+				</Compiler>
+				<Linker>
+					<Add library="pcre.lib" />
+					<Add library="ssleay32.lib" />
+					<Add library="libeay32.lib" />
+					<Add library="mysqlclient.lib" />
+					<Add library="wsock32.lib" />
+					<Add directory="../ext/lib" />
+					<Add directory="C:/openssl-0.9.8g_win32/lib/" />
+					<Add directory="C:/Users/Drylar/Desktop/src/ext/lib" />
+				</Linker>
+			</Target>
+		</Build>
+		<Unit filename="array.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="boolexp.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="case.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="cgi.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="compile.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="compress.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="copyright.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="create.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="crt_malloc.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="db.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="debugger.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="disassem.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="diskprop.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="edit.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="events.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="game.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="hashtab.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="help.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="inc/array.h" />
+		<Unit filename="inc/autoconf.h" />
+		<Unit filename="inc/cgi.h" />
+		<Unit filename="inc/config.h" />
+		<Unit filename="inc/copyright.h" />
+		<Unit filename="inc/crt_malloc.h" />
+		<Unit filename="inc/db.h" />
+		<Unit filename="inc/dbsearch.h" />
+		<Unit filename="inc/defaults.h" />
+		<Unit filename="inc/dirent_win.h" />
+		<Unit filename="inc/externs.h" />
+		<Unit filename="inc/inst.h" />
+		<Unit filename="inc/interface.h" />
+		<Unit filename="inc/interp.h" />
+		<Unit filename="inc/maillib.h" />
+		<Unit filename="inc/match.h" />
+		<Unit filename="inc/mcp.h" />
+		<Unit filename="inc/mcpgui.h" />
+		<Unit filename="inc/mcppkg.h" />
+		<Unit filename="inc/mfun.h" />
+		<Unit filename="inc/mfunlist.h" />
+		<Unit filename="inc/mpi.h" />
+		<Unit filename="inc/msgparse.h" />
+		<Unit filename="inc/mufevent.h" />
+		<Unit filename="inc/nan.h" />
+		<Unit filename="inc/netresolve.h" />
+		<Unit filename="inc/newhttp.h" />
+		<Unit filename="inc/oldcopyright.h" />
+		<Unit filename="inc/p_array.h" />
+		<Unit filename="inc/p_connects.h" />
+		<Unit filename="inc/p_db.h" />
+		<Unit filename="inc/p_error.h" />
+		<Unit filename="inc/p_file.h" />
+		<Unit filename="inc/p_float.h" />
+		<Unit filename="inc/p_http.h" />
+		<Unit filename="inc/p_math.h" />
+		<Unit filename="inc/p_mcp.h" />
+		<Unit filename="inc/p_misc.h" />
+		<Unit filename="inc/p_muf.h" />
+		<Unit filename="inc/p_mysql.h" />
+		<Unit filename="inc/p_props.h" />
+		<Unit filename="inc/p_regex.h" />
+		<Unit filename="inc/p_socket.h" />
+		<Unit filename="inc/p_stack.h" />
+		<Unit filename="inc/p_strings.h" />
+		<Unit filename="inc/p_system.h" />
+		<Unit filename="inc/params.h" />
+		<Unit filename="inc/parser.h" />
+		<Unit filename="inc/patchlevel.h" />
+		<Unit filename="inc/props.h" />
+		<Unit filename="inc/reg.h" />
+		<Unit filename="inc/sha1.h" />
+		<Unit filename="inc/strings.h" />
+		<Unit filename="inc/tune.h" />
+		<Unit filename="inc/version.h" />
+		<Unit filename="inc/winconf.h" />
+		<Unit filename="inst.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="interface.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="interp.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="log.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="look.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="match.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="mcp.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="mcpgui.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="mcppkgs.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="mfuns.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="mfuns2.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="mfuns3.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="move.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="msgparse.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="mufevent.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="netresolve.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="newhttp.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="oldcompress.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="p_array.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="p_connects.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="p_db.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="p_error.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="p_file.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="p_float.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="p_html.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="p_http.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="p_math.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="p_mcp.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="p_misc.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="p_muf.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="p_mysql.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="p_props.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="p_regex.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="p_socket.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="p_stack.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="p_strings.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="p_system.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="player.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="predicates.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="propdirs.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="property.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="props.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="random.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="reg.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="rob.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="sanity.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="set.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="sha1.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="signal.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="smatch.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="speech.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="strftime.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="stringutil.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="timequeue.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="timestamp.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="tune.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="unparse.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="utils.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="version.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="wiz.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Extensions>
+			<code_completion />
+			<envvars />
+			<debugger />
+			<lib_finder disable_auto="1" />
+		</Extensions>
+	</Project>
+</CodeBlocks_project_file>
