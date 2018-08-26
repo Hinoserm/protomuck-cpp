@@ -25,7 +25,7 @@ format_time(char *buf, size_t max_len, const char *fmt, struct tm *tmval)
     return (strftime(buf, max_len, fmt, tmval));
 #else
     size_t pos;
-	int ret;
+    int ret;
     char tmp[256];
 
     /* struct timezone tz; */
@@ -169,15 +169,12 @@ format_time(char *buf, size_t max_len, const char *fmt, struct tm *tmval)
                         }
                         break;
                     case 'c':
-                        if (!(ret = format_time(buf + pos, max_len - pos,
-                                                (char *) "%x %X\0", tmval)))
+                        if (!(ret = format_time(buf + pos, max_len - pos, (char *) "%x %X\0", tmval)))
                             return (0);
                         pos += ret;
                         break;
                     case 'C':
-                        if (!(ret = format_time(buf + pos, max_len - pos,
-                                                (char *) "%A %B %e, %Y\0",
-                                                tmval)))
+                        if (!(ret = format_time(buf + pos, max_len - pos, (char *) "%A %B %e, %Y\0", tmval)))
                             return (0);
                         pos += ret;
                         break;
@@ -185,8 +182,7 @@ format_time(char *buf, size_t max_len, const char *fmt, struct tm *tmval)
                         int2str(tmp, tmval->tm_mday, 2, '0');
                         break;
                     case 'D':
-                        if (!(ret = format_time(buf + pos, max_len - pos,
-                                                (char *) "%m/%d/%y\0", tmval)))
+                        if (!(ret = format_time(buf + pos, max_len - pos, (char *) "%m/%d/%y\0", tmval)))
                             return (0);
                         pos += ret;
                         break;
@@ -220,15 +216,12 @@ format_time(char *buf, size_t max_len, const char *fmt, struct tm *tmval)
                         tmp[2] = '\0';
                         break;
                     case 'r':
-                        if (!(ret = format_time(buf + pos, max_len - pos,
-                                                (char *) "%I:%M:%S %p\0",
-                                                tmval)))
+                        if (!(ret = format_time(buf + pos, max_len - pos, (char *) "%I:%M:%S %p\0", tmval)))
                             return (0);
                         pos += ret;
                         break;
                     case 'R':
-                        if (!(ret = format_time(buf + pos, max_len - pos,
-                                                (char *) "%H:%M\0", tmval)))
+                        if (!(ret = format_time(buf + pos, max_len - pos, (char *) "%H:%M\0", tmval)))
                             return (0);
                         pos += ret;
                         break;
@@ -236,36 +229,27 @@ format_time(char *buf, size_t max_len, const char *fmt, struct tm *tmval)
                         int2str(tmp, tmval->tm_sec, 2, '0');
                         break;
                     case 'T':
-                        if (!(ret = format_time(buf + pos, max_len - pos,
-                                                (char *) "%H:%M:%S\0", tmval)))
+                        if (!(ret = format_time(buf + pos, max_len - pos, (char *) "%H:%M:%S\0", tmval)))
                             return (0);
                         pos += ret;
                         break;
                     case 'U':
-                        int2str(tmp,
-                                (tmval->tm_yday +
-                                 ((7 + tmval->tm_wday -
-                                   (tmval->tm_yday % 7)) % 7)) / 7, 2, '0');
+                        int2str(tmp, (tmval->tm_yday + ((7 + tmval->tm_wday - (tmval->tm_yday % 7)) % 7)) / 7, 2, '0');
                         break;
                     case 'w':
                         tmp[0] = tmval->tm_wday + '0';
                         tmp[1] = '\0';
                         break;
                     case 'W':
-                        int2str(tmp,
-                                (tmval->tm_yday +
-                                 ((13 + tmval->tm_wday -
-                                   (tmval->tm_yday % 7)) % 7)) / 7, 2, '0');
+                        int2str(tmp, (tmval->tm_yday + ((13 + tmval->tm_wday - (tmval->tm_yday % 7)) % 7)) / 7, 2, '0');
                         break;
                     case 'x':
-                        if (!(ret = format_time(buf + pos, max_len - pos,
-                                                (char *) "%m/%d/%y\0", tmval)))
+                        if (!(ret = format_time(buf + pos, max_len - pos, (char *) "%m/%d/%y\0", tmval)))
                             return (0);
                         pos += ret;
                         break;
                     case 'X':
-                        if (!(ret = format_time(buf + pos, max_len - pos,
-                                                (char *) "%H:%M:%S\0", tmval)))
+                        if (!(ret = format_time(buf + pos, max_len - pos, (char *) "%H:%M:%S\0", tmval)))
                             return (0);
                         pos += ret;
                         break;

@@ -4,7 +4,7 @@ dnl
 dnl TinyMUCK fb5.x auto-config script writen by: Peter "WhiteFire" Torkelson
 dnl
 AC_REVISION($Revision: 1.25 $)dnl
-AC_INIT(game.c)
+AC_INIT(game.cpp)
 AC_CONFIG_HEADER(inc/autoconf.h)
 echo " "
 echo "ProtoMUCK auto-configure script."
@@ -17,8 +17,8 @@ echo " "
 dnl
 dnl Find the compiler first.
 dnl
-AC_PROG_CC
-AC_PROG_CPP
+dnl AC_PROG_CC
+AC_PROG_CXX
 
 dnl
 dnl Specific systems tests.

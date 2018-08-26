@@ -16,8 +16,7 @@
 /* converts an instruction into a printable string, stores the string in
    an internal buffer and returns a pointer to it */
 char *
-insttotext(struct frame *fr, int lev, struct inst *theinst, char *buffer,
-           int buflen, int strmax, dbref program)
+insttotext(struct frame *fr, int lev, struct inst *theinst, char *buffer, int buflen, int strmax, dbref program)
 {
     char buf2[BUFFER_LEN];
     char buf3[BUFFER_LEN];
@@ -27,36 +26,44 @@ insttotext(struct frame *fr, int lev, struct inst *theinst, char *buffer,
     int length;
     int firstflag = 1;
 
-    if (FLAGS(program) & XFORCIBLE)
+    if (OkObj(program) && FLAGS(program) & XFORCIBLE)
         strmax = BUFFER_LEN / 11;
 
     switch (theinst->type) {
 #ifdef MODULAR_SUPPORT
-		case PROG_MODPRIM:
-			sprintf(buffer, "%s{%s}",
-			theinst->data.modprim->name,
-			theinst->data.modprim->mod->info->name);
-			break;
+        case PROG_MODPRIM:
+            sprintf(buffer, "%s{%s}", theinst->data.modprim->name, theinst->data.modprim->mod->info->name);
+            break;
 #endif
         case PROG_PRIMITIVE:
-            if (theinst->data.number >= BASE_MIN &&
-                theinst->data.number <= BASE_MAX)
+            if (theinst->data.number >= BASE_MIN && theinst->data.number <= BASE_MAX)
                 strcpy(buffer, primlist[theinst->data.number - BASE_MIN].name);
             else
                 strcpy(buffer, "???");
             break;
-        case PROG_STRING:
+        case PROG_STRING: {
             if (!theinst->data.string) {
                 strcpy(buffer, "\"\"");
                 break;
             }
-            sprintf(buffer, "\"%1.*s", (strmax - 1),
-                    theinst->data.string->data);
-            if (theinst->data.string->length <= strmax)
+
+            char obuf[strmax+1];
+            bool truncated = false;
+
+            size_t len = escapestr(obuf, strmax+1, theinst->data.string->data, theinst->data.string->length, &truncated);
+
+            //sprintf(buffer, "\"%1.*s", (len), obuf);
+            //sprintf(buffer, "\"%1.*s", len - truncated, obuf);
+
+            strcpy(buffer, "\"");
+            strncat(buffer, obuf, len - truncated);
+
+            if (!truncated)
                 strcat(buffer, "\"");
             else
                 strcat(buffer, "\"_");
             break;
+        }
         case PROG_MARK:
             sprintf(buffer, "MARK");
             break;
@@ -65,10 +72,9 @@ insttotext(struct frame *fr, int lev, struct inst *theinst, char *buffer,
                 strcpy(buffer, "1:0{}");
                 break;
             }
-            if (FLAGS(program) & XFORCIBLE) {
+            if (OkObj(program) && FLAGS(program) & XFORCIBLE) {
 #ifdef DEBUGARRAYS
-                sprintf(buffer, "R%dC%d{", theinst->data.array->links,
-                        theinst->data.array->items);
+                sprintf(buffer, "R%dC%d{", theinst->data.array->links, theinst->data.array->items);
 #else
                 sprintf(buffer, "%d{", theinst->data.array->items);
 #endif
@@ -85,16 +91,12 @@ insttotext(struct frame *fr, int lev, struct inst *theinst, char *buffer,
                         firstflag = 0;
                         oper2 = array_getitem(theinst->data.array, &temp1);
 
-                        inststr =
-                            insttotext(fr, lev, &temp1, buf2, length, strmax,
-                                       program);
+                        inststr = insttotext(fr, lev, &temp1, buf2, length, strmax, program);
                         strcat(buffer, inststr);
                         strcat(buffer, ":");
                         length -= strlen(inststr) + 1;
 
-                        inststr =
-                            insttotext(fr, lev, oper2, buf2, length, strmax,
-                                       program);
+                        inststr = insttotext(fr, lev, oper2, buf2, length, strmax, program);
                         strcat(buffer, inststr);
                         length -= strlen(inststr);
 
@@ -117,26 +119,19 @@ insttotext(struct frame *fr, int lev, struct inst *theinst, char *buffer,
             sprintf(buffer, "%#.15g", theinst->data.fnumber);
             break;
         case PROG_ADD:
-            if (theinst->data.addr->data->type == PROG_FUNCTION &&
-                theinst->data.addr->data->data.mufproc != NULL) {
+            if (theinst->data.addr->data->type == PROG_FUNCTION && theinst->data.addr->data->data.mufproc != NULL) {
                 if (theinst->data.addr->progref != program)
-                    sprintf(buffer, "'#%d'%s", theinst->data.addr->progref,
-                            theinst->data.addr->data->data.mufproc->procname);
+                    sprintf(buffer, "'#%d'%s", theinst->data.addr->progref, theinst->data.addr->data->data.mufproc->procname);
                 else
-                    sprintf(buffer, "'%s",
-                            theinst->data.addr->data->data.mufproc->procname);
+                    sprintf(buffer, "'%s", theinst->data.addr->data->data.mufproc->procname);
             } else if (theinst->data.addr->data->type == PROG_LABEL) {
                 if (theinst->data.addr->progref != program)
-                    sprintf(buffer, "'#%d'LABEL->%s",
-                            theinst->data.addr->progref,
-                            theinst->data.addr->data->data.labelname);
+                    sprintf(buffer, "'#%d'LABEL->%s", theinst->data.addr->progref, theinst->data.addr->data->data.labelname);
                 else
-                    sprintf(buffer, "'LABEL->%s)",
-                            theinst->data.addr->data->data.labelname);
+                    sprintf(buffer, "'LABEL->%s)", theinst->data.addr->data->data.labelname);
             } else {
                 if (theinst->data.addr->progref != program)
-                    sprintf(buffer, "'#%d'line%d?", theinst->data.addr->progref,
-                            theinst->data.addr->data->line);
+                    sprintf(buffer, "'#%d'line%d?", theinst->data.addr->progref, theinst->data.addr->data->line);
                 else
                     sprintf(buffer, "'line%d?", theinst->data.addr->data->line);
             }
@@ -149,19 +144,16 @@ insttotext(struct frame *fr, int lev, struct inst *theinst, char *buffer,
             break;
         case PROG_EXEC:
             if (theinst->data.call->type == PROG_FUNCTION) {
-                sprintf(buffer, "EXEC->%s",
-                        theinst->data.call->data.mufproc->procname);
+                sprintf(buffer, "EXEC->%s", theinst->data.call->data.mufproc->procname);
             } else {
                 sprintf(buffer, "EXEC->line%d", theinst->data.call->line);
             }
             break;
         case PROG_JMP:
             if (theinst->data.call->type == PROG_FUNCTION) {
-                sprintf(buffer, "JMP->%s",
-                        theinst->data.call->data.mufproc->procname);
+                sprintf(buffer, "JMP->%s", theinst->data.call->data.mufproc->procname);
             } else if (theinst->data.call->type == PROG_LABEL) {
-                sprintf(buffer, "JMP->LABEL->%s",
-                        theinst->data.call->data.labelname);
+                sprintf(buffer, "JMP->LABEL->%s", theinst->data.call->data.labelname);
             } else {
                 sprintf(buffer, "JMP->line%d", theinst->data.call->line);
             }
@@ -174,12 +166,7 @@ insttotext(struct frame *fr, int lev, struct inst *theinst, char *buffer,
             break;
         case PROG_SVAR:
             if (fr) {
-                length = snprintf(buffer, buflen, "SV%d:%s",
-                                  theinst->data.number, scopedvar_getname(fr,
-                                                                          lev,
-                                                                          theinst->
-                                                                          data.
-                                                                          number));
+                length = snprintf(buffer, buflen, "SV%d:%s", theinst->data.number, scopedvar_getname(fr, lev, theinst->data.number));
             } else {
                 sprintf(buffer, "SV%d", theinst->data.number);
             }
@@ -187,24 +174,14 @@ insttotext(struct frame *fr, int lev, struct inst *theinst, char *buffer,
         case PROG_SVAR_AT:
         case PROG_SVAR_AT_CLEAR:
             if (fr) {
-                length = snprintf(buffer, buflen, "SV%d:%s @",
-                                  theinst->data.number, scopedvar_getname(fr,
-                                                                          lev,
-                                                                          theinst->
-                                                                          data.
-                                                                          number));
+                length = snprintf(buffer, buflen, "SV%d:%s @", theinst->data.number, scopedvar_getname(fr, lev, theinst->data.number));
             } else {
                 sprintf(buffer, "SV%d @", theinst->data.number);
             }
             break;
         case PROG_SVAR_BANG:
             if (fr) {
-                length = snprintf(buffer, buflen, "SV%d:%s !",
-                                  theinst->data.number, scopedvar_getname(fr,
-                                                                          lev,
-                                                                          theinst->
-                                                                          data.
-                                                                          number));
+                length = snprintf(buffer, buflen, "SV%d:%s !", theinst->data.number, scopedvar_getname(fr, lev, theinst->data.number));
             } else {
                 sprintf(buffer, "SV%d !", theinst->data.number);
             }
@@ -212,7 +189,7 @@ insttotext(struct frame *fr, int lev, struct inst *theinst, char *buffer,
         case PROG_LVAR:
             sprintf(buffer, "LV%d", theinst->data.number);
             break;
-		case PROG_STVAR:
+        case PROG_STVAR:
             sprintf(buffer, "STV%d", theinst->data.number);
             break;
         case PROG_LVAR_AT:
@@ -224,9 +201,7 @@ insttotext(struct frame *fr, int lev, struct inst *theinst, char *buffer,
             break;
 #ifdef MUF_SOCKETS
         case PROG_SOCKET:
-            sprintf(buffer, "(%sSOCKET[%d])",
-                    theinst->data.sock->listening ? "L" : "",
-                    theinst->data.sock->socknum);
+            sprintf(buffer, "(%sSOCKET[%d])", theinst->data.sock->listening ? "L" : "", theinst->data.sock->socknum);
             break;
 #endif
 #ifdef SQL_SUPPORT
@@ -235,25 +210,22 @@ insttotext(struct frame *fr, int lev, struct inst *theinst, char *buffer,
             break;
 #endif
         case PROG_FUNCTION:
-            sprintf(buffer, "INIT FUNC: %s (%d arg%s)",
-                    theinst->data.mufproc->procname,
-                    theinst->data.mufproc->args,
-                    theinst->data.mufproc->args == 1 ? "" : "s");
+            sprintf(buffer, "INIT FUNC: %s (%d arg%s)", theinst->data.mufproc->procname, theinst->data.mufproc->args, theinst->data.mufproc->args == 1 ? "" : "s");
             break;
         case PROG_LOCK:
             if (theinst->data.lock == TRUE_BOOLEXP) {
                 strcpy(buffer, "[TRUE_BOOLEXP]");
                 break;
             }
-            sprintf(buffer, "[%1.*s]", (strmax - 1),
-                    unparse_boolexp(0, theinst->data.lock, 0));
+            char ubuf[BUFFER_LEN];
+
+            sprintf(buffer, "[%1.*s]", (strmax - 1), unparse_boolexp(ubuf, 0, theinst->data.lock, 0));
             break;
         case PROG_LABEL:
             sprintf(buffer, "LABEL->%s", theinst->data.labelname);
             break;
         case PROG_CLEARED:
-            sprintf(buffer, "?<%s:%d>", (char *) theinst->data.addr,
-                    theinst->line);
+            sprintf(buffer, "?<%s:%d>", (char *) theinst->data.addr, theinst->line);
             break;
         default:
             sprintf(buffer, "?(%d)", theinst->type);
@@ -267,8 +239,7 @@ insttotext(struct frame *fr, int lev, struct inst *theinst, char *buffer,
 /* produce one line summary of current state.  Note that sp is the next
    space on the stack -- 0..sp-1 is the current contents. */
 char *
-debug_inst(struct frame *fr, int lev, struct inst *pc, int pid,
-           struct inst *stack, char *buffer, int buflen, int sp, dbref program)
+debug_inst(struct frame *fr, int lev, struct inst *pc, int pid, struct inst *stack, char *buffer, int buflen, int sp, dbref program)
 {
     char buf2[BUFFER_LEN];
     int count;
@@ -278,8 +249,7 @@ debug_inst(struct frame *fr, int lev, struct inst *pc, int pid,
         strcat(buffer, "..., ");
     count = (sp > 8) ? sp - 8 : 0;
     while (count < sp) {
-        strcat(buffer, insttotext(fr, lev, stack + count, buf2,
-                                  buflen, 30, program));
+        strcat(buffer, insttotext(fr, lev, stack + count, buf2, buflen, 30, program));
         if (++count < sp)
             strcat(buffer, ", ");
     }

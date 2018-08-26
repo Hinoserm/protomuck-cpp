@@ -20,39 +20,41 @@ dbref hostdb_flushplyr = NOTHING; /* ref of player if last flush was from #flush
 #ifdef IPV6
 
 const char *
-ip_address_prototype(void* x, int xsize)
+ip_address_prototype(void *x, int xsize)
 {
     static char buf[64];
     int y;
 
     if (xsize <= 4) {
-	y = ntohl(*(unsigned int*)x);
-	inet_ntop(AF_INET, &y, (char *)buf, 64);
+        y = ntohl(*(unsigned int *) x);
+        inet_ntop(AF_INET, &y, (char *) buf, 64);
     } else {
-	inet_ntop(AF_INET6, x, (char *)buf, 64);
+        inet_ntop(AF_INET6, x, (char *) buf, 64);
     }
     return buf;
 }
 
-const char *hostToIPex(struct hostinfo * h)
+const char *
+hostToIPex(struct hostinfo *h)
 {
     /* if the address is filled with either 0.0.0.0 or 255.255.255.255
        assume its ipv6 */
     if (h->a == -1)
 #ifdef IPV6
-	return ip_address_prototype(&h->a6, 16);
+        return ip_address_prototype(&h->a6, 16);
 #else
-	return "255.255.255.255";
+        return "255.255.255.255";
 #endif
     else
-	return ip_address_prototype(&h->a, 4);
+        return ip_address_prototype(&h->a, 4);
 }
 
 #else
 
-const char *hostToIPex(struct hostinfo * h)
+const char *
+hostToIPex(struct hostinfo *h)
 {
-	return host_as_hex(h->a);
+    return host_as_hex(h->a);
 }
 
 #endif
@@ -119,7 +121,7 @@ reslvd_close(void)
     shutdown(reslvd_sock, 2);
     closesocket(reslvd_sock);
 
-    delete[] reslvd_buf;
+    delete[]reslvd_buf;
 
     reslvd_buf = NULL;
     reslvd_buf_at = NULL;
@@ -158,6 +160,7 @@ reslvd_input(void)
 
     if (!reslvd_buf) {
         reslvd_buf = new char[MAX_COMMAND_LEN];
+
         reslvd_buf_at = reslvd_buf;
     }
 
@@ -172,12 +175,11 @@ reslvd_input(void)
                     int myprt, port;
                     char *j;
 
-                    sscanf(reslvd_buf, "USER %x,%d,%d,%s", &a, &myprt, &port,
-                           (char *) &buf2);
+                    sscanf(reslvd_buf, "USER %x,%d,%d,%s", &a, &myprt, &port, (char *) &buf2);
                     for (j = buf2; isspace(*j); ++j) ; /* strip occasional leading spaces */
                     for (u = userdb; u; u = u->next) {
                         if (u->uport == port && u->a == a) {
-                            delete[] u->user;
+                            delete[]u->user;
                             u->user = alloc_string(j);
                         }
                     }
@@ -186,14 +188,13 @@ reslvd_input(void)
 
                     sscanf(reslvd_buf, "HOST %x,%s", &a, (char *) &buf2);
 #ifdef HOSTCACHE_DEBUG
-                    log_status("RLVD: GOT: %X (%s):%s\n", a, host_as_hex(a),
-                               buf2);
+                    log_status("RLVD: GOT: %X (%s):%s\n", a, host_as_hex(a), buf2);
 #endif /* HOSTCACHE_DEBUG */
                     for (h = hostdb; h; h = h->next) {
                         if (h->a == a) {
                             if (h->wupd && strcmp(h->name, buf2))
                                 log_status("*RES: %s to %s\n", h->name, buf2);
-                            delete[] h->name;
+                            delete[]h->name;
                             h->name = alloc_string(buf2);
                             h->wupd = current_systime;
                         }
@@ -214,7 +215,7 @@ reslvd_input(void)
     if (p > reslvd_buf) {
         reslvd_buf_at = p;
     } else {
-        delete[] reslvd_buf;
+        delete[]reslvd_buf;
         reslvd_buf = NULL;
         reslvd_buf_at = NULL;
     }
@@ -287,7 +288,7 @@ spawn_resolver(void)
     check_maxd(resolver_sock[0]);
     check_maxd(resolver_sock[1]);
 
-    fprintf(stderr, "INIT: external host resolver started\n");
+    //fprintf(stderr, "INIT: external host resolver started\n");
 }
 
 void
@@ -344,16 +345,14 @@ resolve_hostnames(void)
                     struct hostinfo *h;
 
 #ifdef HOSTCACHE_DEBUG
-                    log_status("HOST: GOT: %X (%s):%s\n", ipnum,
-                               host_as_hex(ipnum), hostname);
+                    log_status("HOST: GOT: %X (%s):%s\n", ipnum, host_as_hex(ipnum), hostname);
 #endif /* HOSTCACHE_DEBUG */
 
                     for (h = hostdb; h; h = h->next) {
                         if (h->a == ipnum) {
                             if (h->wupd && strcmp(h->name, hostname))
-                                log_status("*RES: %s to %s\n", h->name,
-                                           hostname);
-                            delete[] h->name;
+                                log_status("*RES: %s to %s\n", h->name, hostname);
+                            delete[]h->name;
                             h->name = alloc_string(hostname);
                             h->wupd = current_systime;
                         }
@@ -367,14 +366,13 @@ resolve_hostnames(void)
 
                         for (u = userdb; u; u = u->next) {
                             if (u->uport == iport && u->a == ipnum) {
-                                delete[] u->user;
+                                delete[]u->user;
                                 u->user = alloc_string(username);
                             }
                         }
                     }
                 } else {
-                    log_status("*BUG: resolve_hostnames bad ipstr %s\n",
-                               hostip);
+                    log_status("*BUG: resolve_hostnames bad ipstr %s\n", hostip);
                 }
             }
         }
@@ -391,9 +389,7 @@ host_get_oldres(struct hostinfo *h, unsigned short lport, unsigned short prt)
     if (!resolverpid)
         return 0;
 
-    sprintf(buf, "%d.%d.%d.%d(%u)%u\n",
-            (h->a >> 24) & 0xff,
-            (h->a >> 16) & 0xff, (h->a >> 8) & 0xff, h->a & 0xff, prt, lport);
+    sprintf(buf, "%d.%d.%d.%d(%u)%u\n", (h->a >> 24) & 0xff, (h->a >> 16) & 0xff, (h->a >> 8) & 0xff, h->a & 0xff, prt, lport);
 
     if (write(resolver_sock[1], buf, strlen(buf)) < 1)
         return 0;
@@ -443,7 +439,7 @@ host_get_oldstyle(struct hostinfo * h)
         if (he) {
             if (h->wupd && strcmp(h->name, he->h_name))
                 log_status("*RES: %s to %s\n", h->name, he->h_name);
-            delete[] h->name;
+            delete[]h->name;
             h->name = alloc_string(he->h_name);
             h->wupd = current_systime;
             return 1;
@@ -455,7 +451,7 @@ host_get_oldstyle(struct hostinfo * h)
 
 #ifdef IPV6
 char *
-host_get_ipv6addr(struct hostinfo * h)
+host_get_ipv6addr(struct hostinfo *h)
 {
     struct in6_addr addr;
     char buf[INET_ADDRSTRLEN];
@@ -463,9 +459,9 @@ host_get_ipv6addr(struct hostinfo * h)
     addr = h->a6;
     inet_ntop(AF_INET6, ((char *) &addr.s6_addr), buf, INET6_ADDRSTRLEN);
     if (*buf) {
-        if (h->wupd && strcmp(h->name, buf)) 
-	    log_status("*RES: %s to %s\n", h->name, buf);
-        delete[] h->name;
+        if (h->wupd && strcmp(h->name, buf))
+            log_status("*RES: %s to %s\n", h->name, buf);
+        delete[]h->name;
         h->name = alloc_string(buf);
         h->wupd = current_systime;
     }
@@ -490,12 +486,12 @@ host_request(struct hostinfo *h, unsigned short lport, unsigned short prt)
 #ifdef SPAWN_HOST_RESOLVER
         if (!host_get_oldres(h, lport, prt))
 #endif
-#if 0 //defined(HAVE_PTHREAD_H)
+#if 0                           //defined(HAVE_PTHREAD_H)
             if (!host_get_resthrd(h, lport, prt))
 #endif
-            host_get_oldstyle(h);
+                host_get_oldstyle(h);
 
-    
+
 }
 
 struct huinfo *
@@ -510,12 +506,13 @@ host_getinfo(int a, unsigned short lport, unsigned short prt)
 
     if (prt) {                  /* only if username is requested */
         char smbuf[32];
+
         u = new husrinfo;
         u->user = alloc_string(intostr(smbuf, prt));
         u->next = userdb;
         u->a = a;
 #ifdef IPV6
-	u->a6 = in6addr_any; /* Same as NULL! */
+        u->a6 = in6addr_any;    /* Same as NULL! */
 #endif
         u->uport = prt;
         u->prev = NULL;
@@ -532,9 +529,8 @@ host_getinfo(int a, unsigned short lport, unsigned short prt)
             /* Found it in the cache. */
             h->links++;
             h->uses++;
-#ifdef HATS_ARE_COOL //HOSTCACHE_DEBUG
-            log_status("HOST: In cache: %X (%s), %s\n", h->a, host_as_hex(h->a),
-                       h->name);
+#ifdef HATS_ARE_COOL            //HOSTCACHE_DEBUG
+            log_status("HOST: In cache: %X (%s), %s\n", h->a, host_as_hex(h->a), h->name);
 #endif /* HOSTCACHE_DEBUG */
             /* Only re-request if the time is right. Might eventually */
             /*  want to move this to a seperate @tune.                */
@@ -552,7 +548,7 @@ host_getinfo(int a, unsigned short lport, unsigned short prt)
     /* Not in the cache, make a new entry and request it. */
     h = new hostinfo;
 
-#if 0 //defined(HAVE_PTHREAD_H) || defined(WIN_VC)
+#if 0                           //defined(HAVE_PTHREAD_H) || defined(WIN_VC)
     h->thread_start = 0;
 #endif
     h->links = 1;
@@ -587,11 +583,12 @@ host_getinfo6(struct in6_addr a6, unsigned short lport, unsigned short prt)
 
     if (prt) {                  /* only if username is requested */
         char smbuf[32];
+
         u = new husrinfo;
         u->user = alloc_string(intostr(smbuf, prt));
         u->next = userdb;
         u->a = -1;
-	u->a6 = a6;
+        u->a6 = a6;
         u->uport = prt;
         u->prev = NULL;
         if (userdb)
@@ -608,8 +605,7 @@ host_getinfo6(struct in6_addr a6, unsigned short lport, unsigned short prt)
             h->links++;
             h->uses++;
 #ifdef HOSTCACHE_DEBUG
-            log_status("HOST: In cache: %X (%s), %s\n", h->a, host_as_hex(h->a),
-                       h->name);
+            log_status("HOST: In cache: %X (%s), %s\n", h->a, host_as_hex(h->a), h->name);
 #endif /* HOSTCACHE_DEBUG */
             /* Only re-request if the time is right. Might eventually */
             /*  want to move this to a seperate @tune.                */
@@ -657,8 +653,9 @@ host_delete(struct huinfo *hu)
             hu->u->prev->next = hu->u->next;
         if (hu->u == userdb)
             userdb = hu->u->next;
-        delete[] hu->u->user;
+        delete[]hu->u->user;
         delete hu->u;
+
         userdb_count--;
     }
 
@@ -675,17 +672,17 @@ host_free(struct hostinfo *h)
     if (h == hostdb)
         hostdb = h->next;
     hostdb_count--;
-    
-#if 0 // defined(HAVE_PTHREAD_H) || defined(WIN_VC)
+
+#if 0                           // defined(HAVE_PTHREAD_H) || defined(WIN_VC)
     if (h->thread_start) {
-# ifdef HOSTCACHE_DEBUG           
+# ifdef HOSTCACHE_DEBUG
         log_status("HOST_FREE(%s): Resolver thread has been running for %ld seconds.  Thread terminated.\n", host_as_hex(h->a), current_systime - h->thread_start);
 # endif /* HOSTCACHE_DEBUG */
         //pthread_cancel(h->thread);
         h->thread_start = 0;
     }
 #endif
-    delete[] h->name;
+    delete[]h->name;
     delete h;
 }
 
@@ -802,10 +799,8 @@ unsigned long
 host_hostdb_size(void)
 {
     struct hostinfo *h;
-    unsigned long hsize =
-        ((sizeof(struct hostinfo) + 1) * hostdb_count) + sizeof(hostdb_count) +
-        sizeof(hostdb_flushed) + sizeof(hostdb_flushtime) +
-        sizeof(hostdb_flushplyr);
+    unsigned long hsize = ((sizeof(struct hostinfo) + 1) * hostdb_count) + sizeof(hostdb_count) + sizeof(hostdb_flushed) + sizeof(hostdb_flushtime) + sizeof(hostdb_flushplyr);
+
     /* The +1 above is because each h->name string has a \0 byte, */
     /*  which strlen won't see.  Keeps the add instruction out of */
     /*  the loop.                                                 */
@@ -820,8 +815,8 @@ unsigned long
 host_userdb_size(void)
 {
     struct husrinfo *u;
-    unsigned long usize =
-        ((sizeof(struct husrinfo) + 1) * userdb_count) + sizeof(userdb_count);
+    unsigned long usize = ((sizeof(struct husrinfo) + 1) * userdb_count) + sizeof(userdb_count);
+
     /* The +1 above is because each u->user string has a \0 byte, */
     /*  which strlen won't see.  Keeps the add instruction out of */
     /*  the loop.                                                 */
@@ -849,11 +844,9 @@ time_format_3(time_t dt)
     delta = gmtime(&dt);
 
     if (delta->tm_yday > 0)
-        sprintf(buf, "%dd %02d:%02d ago",
-                delta->tm_yday, delta->tm_hour, delta->tm_min);
+        sprintf(buf, "%dd %02d:%02d ago", delta->tm_yday, delta->tm_hour, delta->tm_min);
     else
-        sprintf(buf, "%02d:%02d:%02ds ago", delta->tm_hour, delta->tm_min,
-                delta->tm_sec);
+        sprintf(buf, "%02d:%02d:%02ds ago", delta->tm_hour, delta->tm_min, delta->tm_sec);
     return buf;
 }
 
@@ -921,19 +914,14 @@ do_hostcache(dbref player, const char *args)
 
         for (h = hostdb; h; h = hnext) {
             hnext = h->next;
-            if (!h->links
-                && (doall
-                    || (current_systime - h->wupd) >
-                    (tp_clean_interval * h->uses))) {
+            if (!h->links && (doall || (current_systime - h->wupd) > (tp_clean_interval * h->uses))) {
                 host_free(h);
                 hostdb_flushed++;
             }
         }
 
         hostdb_flushtime = current_systime;
-        anotify_fmt(player, CSUCC "Done. " CINFO "%ld %s flushed.",
-                    hostdb_flushed,
-                    (hostdb_flushed == 1) ? "entry" : "entries");
+        anotify_fmt(player, CSUCC "Done. " CINFO "%ld %s flushed.", hostdb_flushed, (hostdb_flushed == 1) ? "entry" : "entries");
     } else if (string_prefix(arg1, "#sh")) {
         struct hostinfo **harr;
         unsigned long i = 0;
@@ -953,27 +941,21 @@ do_hostcache(dbref player, const char *args)
         harr = new hostinfo *[hostdb_count];
         for (h = hostdb; h; h = h->next)
             harr[i++] = h;
-        qsort(harr, hostdb_count, sizeof(struct hostinfo *),(*hostsort_mostused));
+        qsort(harr, hostdb_count, sizeof(struct hostinfo *), (*hostsort_mostused));
 
         for (i = 0; i < count; i++)
-            anotify_fmt(player, " %-15s  %0.3d  %-14s %s",
-                        host_as_hex(harr[i]->a), harr[i]->uses,
-                        time_format_3(harr[i]->wupd), harr[i]->name);
-        anotify_fmt(player, CINFO "Top %d host%s displayed (%d total).", count,
-                    count == 1 ? "" : "s", hostdb_count);
+            anotify_fmt(player, " %-15s  %0.3d  %-14s %s", host_as_hex(harr[i]->a), harr[i]->uses, time_format_3(harr[i]->wupd), harr[i]->name);
+        anotify_fmt(player, CINFO "Top %d host%s displayed (%d total).", count, count == 1 ? "" : "s", hostdb_count);
     } else {
         anotify_fmt(player, "Bytes used by cache:  %ld", host_hostdb_size());
         anotify_fmt(player, "Hostnames in cache:   %ld", hostdb_count);
         anotify_fmt(player, "Username entries:     %ld", userdb_count);
         anotify_fmt(player, "Username bytes used:  %ld", host_userdb_size());
         if (hostdb_flushtime)
-            anotify_fmt(player, "Last flush was:       %s",
-                        time_format_3(hostdb_flushtime));
+            anotify_fmt(player, "Last flush was:       %s", time_format_3(hostdb_flushtime));
         if (hostdb_flushplyr != NOTHING)
-            anotify_fmt(player, "  Initiated by:       %s",
-                        unparse_object(player, hostdb_flushplyr));
+            anotify_fmt(player, "  Initiated by:       %s", unparse_object(player, hostdb_flushplyr));
         if (hostdb_flushtime)
             anotify_fmt(player, "  Entries flushed:    %ld", hostdb_flushed);
     }
 }
-

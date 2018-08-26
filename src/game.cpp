@@ -50,9 +50,7 @@ do_autoarchive(int descr, dbref player)
     }
     if (auto_archive_now()) {
         sprintf(timebuf, "%d minutes", ARCHIVE_DELAY / 60);
-        anotify_fmt(player,
-                    CINFO "Need to wait at least %s between @autoarchives.",
-                    timebuf);
+        anotify_fmt(player, CINFO "Need to wait at least %s between @autoarchives.", timebuf);
         return;
     }
     log_status("ARCHIVE: by %s\n", unparse_object(player, player));
@@ -98,18 +96,6 @@ do_dump(dbref player, const char *newfile)
     }
 }
 
-#ifdef DELTADUMPS
-void
-do_delta(dbref player)
-{
-    if (Mage(player)) {
-        anotify_nolisten2(player, CINFO "Dumping deltas...");
-        delta_dump_now();
-        anotify_nolisten2(player, CINFO "Done.");
-    } else
-        anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
-}
-#endif
 
 /* Toggle wizonly and start a shutdown cycle. The final shutdown_flag gets set
  * inside of shovechars when the delay has elapsed.
@@ -124,19 +110,19 @@ do_delta(dbref player)
 void
 do_delayed_shutdown(dbref player)
 {
-	struct inst temp1;
+    struct inst temp1;
 
     if (tp_shutdown_delay < 1) {
         /* This should only happen if someone is messing around with the caller
          * functions that use us. */
-        notify(player, SYSRED
-               "LOGIC ERROR: do_delayed_shutdown run with negative delay.");
+        notify(player, SYSRED "LOGIC ERROR: do_delayed_shutdown run with negative delay.");
         return;
     }
     char buf[BUFFER_LEN];
+
     delayed_shutdown = current_systime + tp_shutdown_delay;
     wizonly_mode = 1;
-    
+
     temp1.type = PROG_INTEGER;
     temp1.data.number = delayed_shutdown;
 
@@ -149,8 +135,7 @@ do_delayed_shutdown(dbref player)
     notify(player, SYSRED "The countdown starts...");
 
 
-    sprintf(buf, "%s%s%sSystem shutdown in %li seconds.\r\n",
-            SYSWHITE, MARK, SYSNORMAL, (long int)tp_shutdown_delay);
+    sprintf(buf, "%s%s%sSystem shutdown in %li seconds.\r\n", SYSWHITE, MARK, SYSNORMAL, (long int) tp_shutdown_delay);
     wall_and_flush(buf);
 }
 
@@ -174,16 +159,14 @@ cancel_delayed_shutdown(dbref player)
         sprintf(buf, "%s%s%sShutdown cancelled.\r\n", SYSWHITE, MARK, SYSNORMAL);
         wall_and_flush(buf);
 
-        notify(player, SYSYELLOW
-            "Countdown aborted. Use \"@restrict off\" to enable logins.");
+        notify(player, SYSYELLOW "Countdown aborted. Use \"@restrict off\" to enable logins.");
 
         /* Restore default shutdown messages. */
         strcpy(restart_message, "\r\nServer restarting, be back in a few!\r\n");
         strcpy(shutdown_message, "\r\nServer shutting down, be back in a few!\r\n");
         return;
     } else {
-        notify(player,
-               SYSYELLOW "No shutdown in progress.");
+        notify(player, SYSYELLOW "No shutdown in progress.");
         return;
     }
 }
@@ -196,8 +179,7 @@ do_shutdown(dbref player, const char *muckname, const char *msg)
 
     if ((Arch(player)) || (POWERS(player) & POW_SHUTDOWN)) {
         if (*muckname == '\0' || strcmp(muckname, tp_muckname)) {
-            notify(player, SYSCYAN
-                "Usage: " SYSAQUA "@shutdown muckname[=now|abort|message]");
+            notify(player, SYSCYAN "Usage: " SYSAQUA "@shutdown muckname[=now|abort|message]");
             return;
         }
         if (cancel) {
@@ -205,17 +187,13 @@ do_shutdown(dbref player, const char *muckname, const char *msg)
             return;
         }
         if (!nodelay && delayed_shutdown) {
-            notify(player, SYSRED
-                   "Delayed shutdown already in progress.");
-            notify(player, SYSCYAN
-                   "    @shutdown muckname=abort (to cancel shutdown)");
-            notify(player, SYSCYAN
-                   "    @shutdown muckname=now   (immediate shutdown)");
+            notify(player, SYSRED "Delayed shutdown already in progress.");
+            notify(player, SYSCYAN "    @shutdown muckname=abort (to cancel shutdown)");
+            notify(player, SYSCYAN "    @shutdown muckname=now   (immediate shutdown)");
             return;
         }
         if (!nodelay && tp_shutdown_delay > 0) {
-            log_status("SHUT: by %s (%lis delay)\n",
-                unparse_object(player, player), (long int)tp_shutdown_delay);
+            log_status("SHUT: by %s (%lis delay)\n", unparse_object(player, player), (long int) tp_shutdown_delay);
             do_delayed_shutdown(player);
         } else {
             log_status("SHUT: by %s\n", unparse_object(player, player));
@@ -242,8 +220,7 @@ do_restart(dbref player, const char *muckname, const char *msg)
 
     if ((Arch(player)) || (POWERS(player) & POW_SHUTDOWN)) {
         if (*muckname == '\0' || strcmp(muckname, tp_muckname)) {
-            notify(player, SYSCYAN
-                   "Syntax: " SYSAQUA "@restart muckname[=now|abort|message]");
+            notify(player, SYSCYAN "Syntax: " SYSAQUA "@restart muckname[=now|abort|message]");
             return;
         }
         if (cancel) {
@@ -251,17 +228,13 @@ do_restart(dbref player, const char *muckname, const char *msg)
             return;
         }
         if (!nodelay && delayed_shutdown) {
-            notify(player, SYSRED
-                   "Delayed shutdown already in progress.");
-            notify(player, SYSCYAN
-                   "    @restart muckname=abort (to cancel shutdown)");
-            notify(player, SYSCYAN
-                   "    @restart muckname=now   (immediate restart)");
+            notify(player, SYSRED "Delayed shutdown already in progress.");
+            notify(player, SYSCYAN "    @restart muckname=abort (to cancel shutdown)");
+            notify(player, SYSCYAN "    @restart muckname=now   (immediate restart)");
             return;
         }
         if (!nodelay && tp_shutdown_delay > 0) {
-            log_status("REST: by %s (%lis delay)\n",
-                unparse_object(player, player), (long int)tp_shutdown_delay);
+            log_status("REST: by %s (%lis delay)\n", unparse_object(player, player), (long int) tp_shutdown_delay);
             do_delayed_shutdown(player);
         } else {
             log_status("REST: by %s\n", unparse_object(player, player));
@@ -278,13 +251,6 @@ do_restart(dbref player, const char *muckname, const char *msg)
         log_status("SHAM: Restart by %s\n", unparse_object(player, player));
     }
 }
-
-
-#ifdef DISKBASE
-extern int propcache_hits;
-
-extern int propcache_misses;
-#endif
 
 static void
 dump_database_internal(void)
@@ -330,38 +296,13 @@ dump_database_internal(void)
 #endif
         if (rename(tmpfile, dumpfile) < 0) {
             perror(tmpfile);
-            sprintf(buf,
-                    SYSRED
-                    "[WARNING] Error renaming the DB from %s to %s.  The DB got saved to %s.",
-                    tmpfile, dumpfile, tmpfile);
+            sprintf(buf, SYSRED "[WARNING] Error renaming the DB from %s to %s.  The DB got saved to %s.", tmpfile, dumpfile, tmpfile);
             ansi_wall_wizards(buf);
         }
-#ifdef DISKBASE
-
-        fclose(input_file);
-        delete[] in_filename;
-        in_filename = string_dup(dumpfile);
-        if ((input_file = fopen(in_filename, "r")) == NULL)
-            perror(dumpfile);
-
-
-#ifdef DELTADUMPS
-        fclose(delta_outfile);
-        if ((delta_outfile = fopen(DELTAFILE_NAME, "w")) == NULL)
-            perror(DELTAFILE_NAME);
-
-        fclose(delta_infile);
-        if ((delta_infile = fopen(DELTAFILE_NAME, "r")) == NULL)
-            perror(DELTAFILE_NAME);
-#endif
-#endif
 
     } else {
         perror(tmpfile);
-        sprintf(buf,
-                SYSRED
-                "[DANGER] Error opening the db file %s for writing!  The DB did not save! :(",
-                tmpfile);
+        sprintf(buf, SYSRED "[DANGER] Error opening the db file %s for writing!  The DB did not save! :(", tmpfile);
         ansi_wall_wizards(buf);
     }
 
@@ -380,27 +321,16 @@ dump_database_internal(void)
             perror(tmpfile);
     } else {
         perror(tmpfile);
-        sprintf(buf,
-                SYSRED
-                "[WARN] Error opening the MUF macros file %s for writing.",
-                tmpfile);
+        sprintf(buf, SYSRED "[WARN] Error opening the MUF macros file %s for writing.", tmpfile);
         ansi_wall_wizards(buf);
     }
 
-#ifdef DISKBASE
     if (tp_dbdump_warning)
         wall_and_flush(tp_dumpdone_mesg);
-
-    propcache_hits = 0L;
-    propcache_misses = 1L;
-#endif
 
     if (tp_periodic_program_purge)
         free_unused_programs();
 
-#ifdef DISKBASE
-    dispose_all_oldprops();
-#endif
 }
 
 void
@@ -474,7 +404,7 @@ dump_database(bool dofork)
     log_status("DUMP: %s.#%d#\n", dumpfile, epoch);
 
     if (tp_db_events) {
-		struct inst temp1;
+        struct inst temp1;
 
         temp1.type = PROG_INTEGER;
         temp1.data.number = current_systime;
@@ -486,20 +416,23 @@ dump_database(bool dofork)
     if (tp_dbdump_warning)
         wall_and_flush(tp_dumping_mesg);
 
-#ifdef DISKBASE
-    dump_database_internal();
-#else
     /* Alynna - saving the PID of the dumper so I can get around an SSL issue */
-#ifndef WIN_VC
+#ifdef THREADED_DB_DUMP
     if (dofork) {
+        db_write_threaded();
+    } else
+#else /* !THREADED_DB_DUMP */
+#ifndef WIN_VC
+    if (dofork && tp_dump_forking) {
         if (!(dumper_pid = fork())) {
             dump_database_internal();
             _exit(0);
         }
     } else
 #endif
+#endif /* THREADED_DB_DUMP */
         dump_database_internal();
-#endif
+
     log_status("DUMP: %s.#%d# (done)\n", dumpfile, epoch);
 }
 
@@ -517,7 +450,7 @@ fork_and_dump(bool dofork)
     log_status("DUMP: %s.#%d#\n", dumpfile, epoch);
 
     if (tp_db_events) {
-		struct inst temp1;
+        struct inst temp1;
 
         temp1.type = PROG_INTEGER;
         temp1.data.number = current_systime;
@@ -529,82 +462,36 @@ fork_and_dump(bool dofork)
     if (tp_dbdump_warning)
         wall_and_flush(tp_dumping_mesg);
 
-#ifdef DISKBASE
-    dump_database_internal();
-#else
     /* Alynna - saving the PID of the dumper so I can get around an SSL issue */
-#ifndef WIN_VC
+#ifdef THREADED_DB_DUMP
     if (dofork) {
+        db_write_threaded();
+    } else
+#else /* !THREADED_DB_DUMP */
+#ifndef WIN_VC
+    if (dofork && tp_dump_forking) {
         if (!(dumper_pid = fork())) {
             dump_database_internal();
             _exit(0);
         }
     } else
 #endif
+#endif /* THREADED_DB_DUMP */
         dump_database_internal();
-#endif
+
     time(&current_systime);
     host_check_cache();
     host_save();
 }
 
-#ifdef DELTADUMPS
-extern deltas_count;
-
-int
-time_for_monolithic(void)
-{
-    dbref i;
-
-    int count = 0;
-
-    int a, b;
-
-    if (!last_monolithic_time)
-        last_monolithic_time = current_systime;
-    if (current_systime - last_monolithic_time >=
-        (tp_monolithic_interval - tp_dump_warntime)
-        ) {
-        return 1;
-    }
-
-    for (i = 0; i < db_top; i++)
-        if (FLAGS(i) & (SAVED_DELTA | OBJECT_CHANGED))
-            count++;
-    if (((count * 100) / db_top) > tp_max_delta_objs) {
-        return 1;
-    }
-#ifdef DISKBASE
-    fseek(delta_infile, 0L, 2);
-    a = ftell(delta_infile);
-    fseek(input_file, 0L, 2);
-    b = ftell(input_file);
-    if (a >= b) {
-        return 1;
-    }
-#endif
-    return 0;
-}
-#endif
-
 void
 dump_warning(void)
 {
-    if (tp_dbdump_warning) {
-#ifdef DELTADUMPS
-        if (time_for_monolithic()) {
-            wall_and_flush(tp_dumpwarn_mesg);
-        } else {
-            if (tp_deltadump_warning) {
-                wall_and_flush(tp_deltawarn_mesg);
-            }
-        }
-#else
+    if (tp_dbdump_warning)
         wall_and_flush(tp_dumpwarn_mesg);
-#endif
-    }
+
     if (tp_db_events) {
-		struct inst temp1;
+        struct inst temp1;
 
         temp1.type = PROG_INTEGER;
         temp1.data.number = current_systime + tp_dump_warntime;
@@ -615,34 +502,6 @@ dump_warning(void)
         propqueue(0, 1, 0, -1, 0, -1, "@dumpwarn", "Dumpwarn", 1, 1);
 }
 
-#ifdef DELTADUMPS
-void
-dump_deltas(void)
-{
-    if (time_for_monolithic()) {
-        fork_and_dump(1);
-        deltas_count = 0;
-        return;
-    }
-
-    epoch++;
-    log_status("DELT: %s.#%d#\n", dumpfile, epoch);
-
-    if (tp_deltadump_warning)
-        wall_and_flush(tp_dumpdeltas_mesg);
-
-    db_write_deltas(delta_outfile);
-
-    if (tp_deltadump_warning)
-        wall_and_flush(tp_dumpdone_mesg);
-#ifdef DISKBASE
-    propcache_hits = 0L;
-    propcache_misses = 1L;
-#endif
-    host_save();
-}
-#endif
-
 int
 init_game(const char *infile, const char *outfile)
 {
@@ -651,8 +510,7 @@ init_game(const char *infile, const char *outfile)
     log_status_nowall("init_game\n");
 
     if ((f = fopen(MACRO_FILE, "r")) == NULL)
-        log_status_nowall("INIT: Macro storage file %s is tweaked.\n",
-                          MACRO_FILE);
+        log_status_nowall("INIT: Macro storage file %s is tweaked.\n", MACRO_FILE);
     else {
         macroload(f);
         fclose(f);
@@ -663,16 +521,6 @@ init_game(const char *infile, const char *outfile)
         log_status_nowall("DIE: input file not readable\n");
         return -1;
     }
-#ifdef DELTADUMPS
-    if ((delta_outfile = fopen(DELTAFILE_NAME, "w")) == NULL) {
-        log_status_nowall("DIE: delta outfile not writable\n");
-        return -1;
-    }
-    if ((delta_infile = fopen(DELTAFILE_NAME, "r")) == NULL) {
-        log_status_nowall("DIE: delta infile not readable\n");
-        return -1;
-    }
-#endif
 
     db_free();
     log_status_nowall("init_game/db_free\n");
@@ -695,31 +543,23 @@ init_game(const char *infile, const char *outfile)
     log_status_nowall("LOAD: %s (done)\n", infile);
     fprintf(stderr, "LOAD: %s (done)\n", infile);
 
-#ifndef DISKBASE
-    /* everything ok */
-    fclose(input_file);
-#endif
-
     tune_load_parmsfile(NOTHING); /* load @tune parms from file */
     /* set up dumper */
-    delete[] dumpfile;
+    delete[]dumpfile;
     dumpfile = alloc_string(outfile);
 
     if (!db_conversion_flag) {
         /* initialize the ~sys/startuptime property */
-        add_property((dbref) 0, "~sys/startuptime", NULL,
-                     (int) time((time_t *) NULL));
+        add_property((dbref) 0, "~sys/startuptime", NULL, (int) time((time_t *) NULL));
         add_property((dbref) 0, "~sys/maxpennies", NULL, tp_max_pennies);
-        add_property((dbref) 0, "~sys/dumpinterval", NULL, (int)tp_dump_interval);
+        add_property((dbref) 0, "~sys/dumpinterval", NULL, (int) tp_dump_interval);
         add_property((dbref) 0, "~sys/concount", NULL, 0);
         add_property((dbref) 0, "~sys/max_connects", NULL, 0);
         if (tp_allow_old_trigs) {
-            add_property((dbref) 0, "_sys/startuptime", NULL,
-                         (int) time((time_t *) NULL));
+            add_property((dbref) 0, "_sys/startuptime", NULL, (int) time((time_t *) NULL));
             add_property((dbref) 0, "_sys/maxpennies", NULL, tp_max_pennies);
             add_property((dbref) 0, "_sys/concount", NULL, 0);
-            add_property((dbref) 0, "_sys/dumpinterval", NULL,
-                         (int)tp_dump_interval);
+            add_property((dbref) 0, "_sys/dumpinterval", NULL, (int) tp_dump_interval);
             add_property((dbref) 0, "_sys/max_connects", NULL, 0);
         }
     }
@@ -731,8 +571,8 @@ init_game(const char *infile, const char *outfile)
 void
 cleanup_game(void)
 {
-    delete[] dumpfile;
-    delete[] in_filename;
+    delete[]dumpfile;
+    delete[]in_filename;
 }
 
 void
@@ -745,14 +585,12 @@ do_restrict(dbref player, const char *arg)
 
     if (!strcmp(arg, "on")) {
         wizonly_mode = 1;
-        anotify(player,
-                CSUCC "Login access is now restricted to wizards only.");
+        anotify(player, CSUCC "Login access is now restricted to wizards only.");
     } else if (!strcmp(arg, "off")) {
         wizonly_mode = 0;
         anotify(player, CSUCC "Login access is now unrestricted.");
     } else {
-        anotify_fmt(player, CINFO "Restricted mode is: %s",
-                    wizonly_mode ? "on" : "off");
+        anotify_fmt(player, CINFO "Restricted mode is: %s", wizonly_mode ? "on" : "off");
     }
 }
 
@@ -764,150 +602,125 @@ int force_level = 0;
 
 struct frame *aForceFrameStack[9];
 
-const char version_line1[] =
-    SYSCRIMSON "ProtoMUCK " PROTOBASE SYSPURPLE " (" SYSRED VERSION SYSPURPLE
-    ")" SYSNORMAL " on " SYSCYAN 
+const char version_line1[] = SYSCRIMSON "ProtoMUCK " PROTOBASE SYSPURPLE " (" SYSRED VERSION SYSPURPLE ")" SYSNORMAL " on " SYSCYAN
 #if defined(WIN32) || defined(WIN_VC)
-    "Windows (native)" 
-#else  /* 
- */
+    "Windows (native)"
+#else /* 
+       */
 # ifdef CYGWIN
-    "Windows (cygwin)" 
+    "Windows (cygwin)"
 # else
 #  if defined(__APPLE__)
-    "Mac OS X" 
+    "Mac OS X"
 #  else
 #   if defined(__linux__)
-    "GNU/Linux" 
+    "GNU/Linux"
 #   else
-    "Unix" 
+    "Unix"
 #   endif
 #  endif
 # endif
-#endif  /* 
- */
+#endif /* 
+        */
     SYSNORMAL ": " SYSGREEN UNAME_VALUE SYSNORMAL;
 
 
 
-const char version_line2[] = SYSGREEN "Compile-time Options: " SYSNORMAL 
+const char version_line2[] = SYSGREEN "Compile-time Options: " SYSNORMAL
 #ifdef SQL_SUPPORT
-    "MySQL " 
+    "MySQL "
 #endif
-
 #ifdef USE_SSL
-    "SSL " 
+    "SSL "
 #endif
-
 #ifdef USE_RESLVD
-    "ReslvD " 
+    "ReslvD "
 #endif
-
 #ifdef IPV6
-    "IPv6 " 
+    "IPv6 "
 #endif
-
 #ifdef CONTROLS_SUPPORT
-    "ControlsACLs " 
+    "ControlsACLs "
 #endif
-
 #ifdef DESCRFILE_SUPPORT
-    "DescrFile " 
+    "DescrFile "
 #endif
-
 #ifdef IGNORE_SUPPORT
-    "Ignores " 
-#endif 
-
+    "Ignores "
+#endif
 #ifndef NO_SYSCOLOR
-    "Color " 
+    "Color "
 #endif
-
 #ifdef __cplusplus
-	"C++ "
+    "C++ "
 #endif
-
-#ifdef MCP_SUPPORT
-    "MCP " 
-#endif 
-
-#ifdef ARCHAIC_DATABASES
-    "ArchaicDB " 
+#ifdef __llvm__
+    "LLVM "
 #endif
-
-#ifdef DETACH
-    "Detach " 
-#endif
-
-#ifdef COMPRESS
-    "Compression " 
-#endif
-
-#ifdef USE_PS
-    "ProcessAPI " 
-#endif
-
-#ifdef DISKBASE
-    "DiskBased " 
+#ifdef __clang__
+    "CLANG "
 #else
-    "MemBased " 
-#endif
-
-#ifdef DELTADUMPS
-    "Deltas " 
-#endif
-
-    "Userflags " 
-#ifdef MUF_SOCKETS
-    "MUF:Sockets " 
-#endif
-
-#ifdef USE_SSL
-# ifdef SSL_SOCKETS
-    "MUF:SSL " 
+# ifdef __GNUC__
+    "GCC "
 # endif
 #endif
-
+#ifdef MCP_SUPPORT
+    "MCP "
+#endif
+#ifdef ARCHAIC_DATABASES
+    "ArchaicDB "
+#endif
+#ifdef DETACH
+    "Detach "
+#endif
+#ifdef COMPRESS
+    "Compression "
+#endif
+#ifdef USE_PS
+    "ProcessAPI "
+#endif
+    "MemBased " "Userflags "
+#ifdef MUF_SOCKETS
+    "MUF:Sockets "
+#endif
+#ifdef USE_SSL
+# ifdef SSL_SOCKETS
+    "MUF:SSL "
+# endif
+#endif
 #ifdef MCCP_ENABLED
     "MCCP "
 #endif
-
 #ifdef UTF8_SUPPORT
     "UTF8 "
 #endif
-
 #ifdef UDP_SOCKETS
-    "MUF:UDP " 
+    "MUF:UDP "
 #endif
-
 #ifdef IPV6
-    "MUF:IPv6 " 
+    "MUF:IPv6 "
 #endif
-
 #ifdef MUF_EDIT_PRIMS
-    "MUF:Edit " 
+    "MUF:Edit "
 #endif
-
 #ifdef PCRE_SUPPORT
     "MUF:PCRE "
 #endif
-
 #ifdef DEBUGPROCESS
 # ifdef DBDEBUG
-    "Debug:3 " 
+    "Debug:3 "
 # else
-    "Debug:2 " 
+    "Debug:2 "
 # endif
 #else
 # ifdef DBDEBUG
-    "Debug:1 " 
+    "Debug:1 "
 # else
-    "Debug:0 " 
+    "Debug:0 "
 # endif
 #endif
-
 #if defined(WIN_VC) && defined(_DEBUG)
-	"WIN_DEBUG "
+    "WIN_DEBUG "
 #endif
     ;
 
@@ -950,37 +763,26 @@ process_command(int descr, dbref player, char *command, int len, int wclen)
     }
 
     if (force_level >= 32) {
-        anotify_fmt(player,
-                    CFAIL
-                    "I'm sorry, %s, I'm afraid I cannot do that.  Maximum force recursion depth exceeded.",
-                    NAME(player));
+        anotify_fmt(player, CFAIL "I'm sorry, %s, I'm afraid I cannot do that.  Maximum force recursion depth exceeded.", NAME(player));
         return;
     }
 
     /* robustify player */
-    if (player < 0 || player >= db_top ||
-        (Typeof(player) != TYPE_PLAYER && Typeof(player) != TYPE_THING)) {
+    if (player < 0 || player >= db_top || (Typeof(player) != TYPE_PLAYER && Typeof(player) != TYPE_THING)) {
         log_status("process_command: bad player %d\n", player);
         return;
     }
 
     if (((tp_log_commands || (tp_log_guests && Guest(OWNER(player)))) ||
-         (tp_log_suspects && (FLAG2(OWNER(player)) & F2SUSPECT)) ||
-         (tp_log_wizards && (MLevel(OWNER(player)) >= LMAGE))
-        ) &&
-        (tp_log_interactive || !(FLAGS(player) & (INTERACTIVE | READMODE)))) {
+         (tp_log_suspects && (FLAG2(OWNER(player)) & F2SUSPECT)) || (tp_log_wizards && (MLevel(OWNER(player)) >= LMAGE))
+        ) && (tp_log_interactive || !(FLAGS(player) & (INTERACTIVE | READMODE)))) {
         if (*command)           /* To prevent logging of NULL commands? FB6 change */
-            log_command("%s%s%s%s(%d) in %s(%d):%s %s\n",
-                        (MLevel(OWNER(player)) >=
-                         LMAGE) ? "WIZ: " : (FLAG2(OWNER(player)) & F2SUSPECT) ?
-                        "SUSPECT: " : "",
+            log_command("%s%s%s%s(%d) in %s(%d):%s %s\n", (MLevel(OWNER(player)) >= LMAGE) ? "WIZ: " : (FLAG2(OWNER(player)) & F2SUSPECT)
+                        ? "SUSPECT: " : "",
                         (Typeof(player) != TYPE_PLAYER) ? NAME(player) : "",
                         (Typeof(player) != TYPE_PLAYER) ? " by " : "",
                         NAME(OWNER(player)), (int) player,
-                        NAME(DBFETCH(player)->location),
-                        (int) DBFETCH(player)->location,
-                        (FLAGS(player) & INTERACTIVE) ? " [interactive]" : " ",
-                        command);
+                        NAME(DBFETCH(player)->location), (int) DBFETCH(player)->location, (FLAGS(player) & INTERACTIVE) ? " [interactive]" : " ", command);
     }
 
     if (FLAGS(player) & INTERACTIVE) {
@@ -1002,10 +804,8 @@ process_command(int descr, dbref player, char *command, int len, int wclen)
     } else if (*command == POSE_TOKEN || *command == ';') {
         sprintf(pbuf, "pose %s", command + 1);
         command = &pbuf[0];
-    } else
-        if ((*command == '|'
-             || (*commandstuff++ == '\\' && *commandstuff == '\\'))
-            && can_move(descr, player, "spoof", 0)) {
+    } else if ((*command == '|' || (*commandstuff++ == '\\' && *commandstuff == '\\'))
+               && can_move(descr, player, "spoof", 0)) {
         if (*command == '\\')
             sprintf(pbuf, "spoof %s", command + 2);
         else
@@ -1248,35 +1048,21 @@ process_command(int descr, dbref player, char *command, int len, int wclen)
                             break;
                         case 'e':
                         case 'E':
-#ifdef DELTADUMPS
-                            if (command[3] == 'l' || command[3] == 'L') {
-                                Matched("@delta");
-                                do_delta(player);
-                            } else
-#endif
-                            {
-                                if ((command[3] == 's' || command[3] == 'S') &&
-                                    (command[4] == 't' || command[4] == 'T')) {
-                                    Matched("@destroy");
-                                    do_recycle(descr, player, arg1);
-                                } else {
-                                    Matched("@describe");
-                                    do_describe(descr, player, arg1, arg2);
-                                }
+                        {
+                            if ((command[3] == 's' || command[3] == 'S') && (command[4] == 't' || command[4] == 'T')) {
+                                Matched("@destroy");
+                                do_recycle(descr, player, arg1);
+                            } else {
+                                Matched("@describe");
+                                do_describe(descr, player, arg1, arg2);
                             }
+                        }
                             break;
                         case 'i':
                         case 'I':
                             Matched("@dig");
                             do_dig(descr, player, arg1, arg2);
                             break;
-#ifdef DELTADUMPS
-                        case 'l':
-                        case 'L':
-                            Matched("@dlt");
-                            do_delta(player);
-                            break;
-#endif
                         case 'o':
                         case 'O':
                             Matched("@doing");
@@ -1434,8 +1220,7 @@ process_command(int descr, dbref player, char *command, int len, int wclen)
                                 case 's':
                                 case 'S':
                                     Matched("@list");
-                                    match_and_list(descr, player, arg1, arg2,
-                                                   1);
+                                    match_and_list(descr, player, arg1, arg2, 1);
                                     break;
                                 default:
                                     goto bad;
@@ -1453,6 +1238,25 @@ process_command(int descr, dbref player, char *command, int len, int wclen)
                 case 'm':
                 case 'M':
                     switch (command[2]) {
+#ifdef MCP_SUPPORT
+                        case 'c':
+                        case 'C':
+                            switch (command[4]) {
+                                case 'e':
+                                case 'E':
+                                    Matched("@mcpedit");
+                                    (void) do_mcpedit(descr, player, arg1);
+                                    break;
+                                case 'p':
+                                case 'P':
+                                    Matched("@mcpprogram");
+                                    (void) do_mcpprogram(descr, player, arg1);
+                                    break;
+                                default:
+                                    goto bad;
+                            }
+                            break;
+#endif
                         case 'e':
                         case 'E':
                             Matched("@memory");
@@ -1468,34 +1272,34 @@ process_command(int descr, dbref player, char *command, int len, int wclen)
                             Matched("@muftops");
                             do_muf_topprofs(player, arg1);
                             break;
-						case 'f':
-						case 'F':
-							Matched("@mfuncs");
-							do_muf_funcprofs(player, arg1);
-							break;
+                        case 'f':
+                        case 'F':
+                            Matched("@mfuncs");
+                            do_muf_funcprofs(player, arg1);
+                            break;
 #ifdef MODULAR_SUPPORT
-						case 'o':
-						case 'O':
-							switch (command[4]) {
-								case 'l':
-								case 'L':
-									Matched("@modload");
-									do_modload(player, full_command);
-									break;
-								case 's':
-								case 'S':
-									Matched("@modinfo");
-									do_modinfo(player, full_command);
-								    break;
-								case 'u':
-								case 'U':
-									Matched("@modunload");
-									do_modunload(player, full_command);
-									break;
-								default:
+                        case 'o':
+                        case 'O':
+                            switch (command[4]) {
+                                case 'l':
+                                case 'L':
+                                    Matched("@modload");
+                                    do_modload(player, full_command);
+                                    break;
+                                case 's':
+                                case 'S':
+                                    Matched("@modinfo");
+                                    do_modinfo(player, full_command);
+                                    break;
+                                case 'u':
+                                case 'U':
+                                    Matched("@modunload");
+                                    do_modunload(player, full_command);
+                                    break;
+                                default:
                                     goto bad;
-						   }
-						   break;
+                            }
+                            break;
 #endif
                         default:
                             goto bad;
@@ -1969,7 +1773,8 @@ process_command(int descr, dbref player, char *command, int len, int wclen)
                 case 'c':
                 case 'C':
                 case '\0':
-                    if (command[1] && (command[2] == 'a' || command[2] == 'A')) {
+                    if (command[1]
+                        && (command[2] == 'a' || command[2] == 'A')) {
                         Matched("scan");
                         do_sweep(descr, player, arg1);
                     } else {
@@ -2032,18 +1837,12 @@ process_command(int descr, dbref player, char *command, int len, int wclen)
 
             /* Do the propqueue, with the HUH args on the stack */
             sprintf(zbuf, "HUH:%s %s", command, full_command);
-            propqueue(descr, player, DBFETCH(player)->location, player, 0, -1,
-                      "@huh", zbuf, 1, 1);
+            propqueue(descr, player, DBFETCH(player)->location, player, 0, -1, "@huh", zbuf, 1, 1);
 
             /* Regular logging */
-            if (tp_log_failed_commands
-                && !controls(player, DBFETCH(player)->location)) {
+            if (tp_log_failed_commands && !controls(player, DBFETCH(player)->location)) {
                 log_status("HUH from %s(%d) in %s(%d)[%s]: %s %s\n",
-                           NAME(player), player,
-                           NAME(DBFETCH(player)->location),
-                           DBFETCH(player)->location,
-                           NAME(OWNER(DBFETCH(player)->location)), command,
-                           full_command);
+                           NAME(player), player, NAME(DBFETCH(player)->location), DBFETCH(player)->location, NAME(OWNER(DBFETCH(player)->location)), command, full_command);
             }
         }
             break;
@@ -2060,8 +1859,7 @@ process_command(int descr, dbref player, char *command, int len, int wclen)
  */
 
 int
-prop_command(int descr, dbref player, const char *command, const char *arg,
-             const char *type, int mt)
+prop_command(int descr, dbref player, const char *command, const char *arg, const char *type, int mt)
 {
     PropPtr ptr;
 
@@ -2082,9 +1880,6 @@ prop_command(int descr, dbref player, const char *command, const char *arg,
     ptr = envprop_cmds(&where, propName, Prop_Hidden(propName));
     if (!ptr)
         return 0;
-#ifdef DISKBASE
-    propfetch(where, ptr);
-#endif
 
     switch (PropType(ptr)) {
         case PROP_STRTYP:
@@ -2114,11 +1909,9 @@ prop_command(int descr, dbref player, const char *command, const char *arg,
         }
     } else if (progRef == AMBIGUOUS || progRef == NOTHING) {
         if (player < 1)
-            notify_descriptor(descr,
-                              "Invalid program call from a command prop.");
+            notify_descriptor(descr, "Invalid program call from a command prop.");
         else
-            anotify_nolisten2(player, CINFO
-                              "Invalid program call from a command prop.");
+            anotify_nolisten2(player, CINFO "Invalid program call from a command prop.");
         return 1;
     }
     if (progRef == AMBIGUOUS) {
@@ -2128,11 +1921,9 @@ prop_command(int descr, dbref player, const char *command, const char *arg,
 
         ival = (mt == 0) ? MPI_ISPUBLIC : MPI_ISPRIVATE;
         if (player < 1)
-            do_parse_mesg(descr, (dbref) -1, (dbref) 0, workBuf + 1,
-                          match_cmdname, cbuf, ival);
+            do_parse_mesg(descr, (dbref) -1, (dbref) 0, workBuf + 1, match_cmdname, cbuf, ival);
         else
-            do_parse_mesg(descr, player, where, workBuf + 1, match_cmdname,
-                          cbuf, ival);
+            do_parse_mesg(descr, player, where, workBuf + 1, match_cmdname, cbuf, ival);
 
         if (*cbuf) {
             if (player < 1) {
@@ -2145,8 +1936,7 @@ prop_command(int descr, dbref player, const char *command, const char *arg,
 
                     dbref plyr;
 
-                    sprintf(bbuf, ">> %.4000s",
-                            pronoun_substitute(descr, player, cbuf));
+                    sprintf(bbuf, ">> %.4000s", pronoun_substitute(descr, player, cbuf));
                     plyr = DBFETCH(where)->contents;
                     while (plyr != NOTHING) {
                         if (Typeof(plyr) == TYPE_PLAYER && plyr != player)
@@ -2160,22 +1950,18 @@ prop_command(int descr, dbref player, const char *command, const char *arg,
     } else {
         if (progRef < 0 || progRef >= db_top) {
             if (player < 1)
-                notify_descriptor(descr,
-                                  "Invalid program call from a command prop.");
+                notify_descriptor(descr, "Invalid program call from a command prop.");
             else
-                anotify_nolisten2(player,
-                                  CINFO
-                                  "Invalid program call from a command prop.");
+                anotify_nolisten2(player, CINFO "Invalid program call from a command prop.");
             return 1;
 
         } else if (Typeof(progRef) == TYPE_ROOM) {
             if (!OkObj(player) || !OkObj(progRef)) {
-                notify_descriptor(descr,
-                                  "Invalid program call from a command prop.");
+                notify_descriptor(descr, "Invalid program call from a command prop.");
                 return 1;
             } else {
                 if (Wizard(player) || Mage(where) || controls(player, progRef)
-                    || (FLAGS(progRef) && JUMP_OK))
+                    || (FLAGS(progRef) & JUMP_OK))
                     enter_room(descr, player, progRef, where);
                 else
                     notify_descriptor(descr, RED "Permission denied.");
@@ -2184,23 +1970,19 @@ prop_command(int descr, dbref player, const char *command, const char *arg,
             return 1;
         } else if (Typeof(progRef) == TYPE_EXIT) {
             if (!OkObj(player) || !OkObj(progRef)) {
-                notify_descriptor(descr,
-                                  "Invalid program call from a command prop.");
+                notify_descriptor(descr, "Invalid program call from a command prop.");
                 return 1;
             } else {
                 if (OkObj((DBFETCH(progRef)->sp.exit.dest)[0])
                     && Typeof((DBFETCH(progRef)->sp.exit.dest)[0]) == TYPE_ROOM) {
                     if (Wizard(player) || Mage(where)
                         || controls(player, progRef) || (FLAGS(progRef)
-                                                         && JUMP_OK))
-                        enter_room(descr, player,
-                                   (int) (DBFETCH(progRef)->sp.exit.dest)[0],
-                                   progRef);
+                                                         & JUMP_OK))
+                        enter_room(descr, player, (int) (DBFETCH(progRef)->sp.exit.dest)[0], progRef);
                     else
                         notify_descriptor(descr, RED "Permission denied.");
                 } else {
-                    notify_descriptor(descr,
-                                      "Exits in command props can only enter rooms.");
+                    notify_descriptor(descr, "Exits in command props can only enter rooms.");
                     return 1;
                 }
                 return 1;
@@ -2208,14 +1990,13 @@ prop_command(int descr, dbref player, const char *command, const char *arg,
 /* Alynna - Jump to player support -- not refined enough to enable 
         } else if (Typeof(progRef) == TYPE_PLAYER) {
             if (!OkObj(player) || !OkObj(progRef)) {
-                notify_descriptor(descr,
-                                  "Invalid program call from a command prop.");
+                notify_descriptor(descr, "Invalid program call from a command prop.");
 		return 1;
             } else {
             if (OkObj(DBFETCH(progRef)->location) && 
 		(Typeof(DBFETCH(progRef)->location == TYPE_ROOM) || Typeof(DBFETCH(progRef)->location) == TYPE_THING)) {
     	        if (Wizard(player) || Mage(where) || controls(player,progRef) || 
-                   ((FLAGS(progRef) && JUMP_OK) || (FLAGS(DBFETCH(progRef)->location) && JUMP_OK)) )
+                   ((FLAGS(progRef) & JUMP_OK) || (FLAGS(DBFETCH(progRef)->location) & JUMP_OK)) )
 		    enter_room(descr, player, (int) (DBFETCH(progRef)->location), progRef);
         	else
                     notify_descriptor(descr, RED "Permission denied.");
@@ -2229,48 +2010,37 @@ prop_command(int descr, dbref player, const char *command, const char *arg,
 */
         } else if (Typeof(progRef) == TYPE_THING) {
             if (!OkObj(player) || !OkObj(progRef)) {
-                notify_descriptor(descr,
-                                  "Invalid program call from a command prop.");
+                notify_descriptor(descr, "Invalid program call from a command prop.");
                 return 1;
             } else {
-                if (OkObj(DBFETCH(progRef)->location) &&
-                    ((Typeof(DBFETCH(progRef)->location) == TYPE_ROOM)
-                     || Typeof(DBFETCH(progRef)->location) == TYPE_THING)) {
+                if (OkObj(DBFETCH(progRef)->location) && ((Typeof(DBFETCH(progRef)->location) == TYPE_ROOM)
+                                                          || Typeof(DBFETCH(progRef)->location) == TYPE_THING)) {
                     if (Wizard(player) || Mage(where)
                         || (controls(player, progRef)
                             && controls(player, DBFETCH(progRef)->location))
                         || (((FLAGS(progRef) & JUMP_OK)
                              || (FLAGS(progRef) & VEHICLE))
                             && ((FLAGS(DBFETCH(progRef)->location) & JUMP_OK)
-                                && !(FLAGS(DBFETCH(progRef)->location) &
-                                     VEHICLE))))
-                        enter_room(descr, player,
-                                   (int) (DBFETCH(progRef)->location), progRef);
+                                && !(FLAGS(DBFETCH(progRef)->location) & VEHICLE))))
+                        enter_room(descr, player, (int) (DBFETCH(progRef)->location), progRef);
                     else
                         notify_descriptor(descr, RED "Permission denied.");
                 } else {
-                    notify_descriptor(descr,
-                                      "Cowardly refusing to move you into that.");
+                    notify_descriptor(descr, "Cowardly refusing to move you into that.");
                     return 1;
                 }
                 return 1;
             }
         } else if (Typeof(progRef) != TYPE_PROGRAM) {
             if (player < 1)
-                notify_descriptor(descr,
-                                  "Invalid program call from a command prop.");
+                notify_descriptor(descr, "Invalid program call from a command prop.");
             else
-                anotify_nolisten2(player,
-                                  CINFO
-                                  "Invalid program call from a command prop.");
+                anotify_nolisten2(player, CINFO "Invalid program call from a command prop.");
             return 1;
         } else {
             struct frame *tmpfr;
 
-            tmpfr =
-                interp(descr, player,
-                       (OkObj(player)) ? DBFETCH(player)->location : -1,
-                       progRef, where, FOREGROUND, STD_HARDUID, 0);
+            tmpfr = interp(descr, player, (OkObj(player)) ? DBFETCH(player)->location : -1, progRef, where, FOREGROUND, STD_HARDUID, 0);
             if (tmpfr) {
                 interp_loop(player, progRef, tmpfr, 0);
             }

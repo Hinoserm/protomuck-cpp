@@ -39,6 +39,63 @@
 #define valid_obj(a) (a > -1 && a < db_top)
 
 
+static int array_tree_compare(array_iter *a, array_iter *b, int case_sens, int objname, bool natural);
+
+/*
+** This function compares two arrays in struct insts (array_iter's).
+** The arrays are compared in order until the first difference.
+** If the key is the difference, the comparison result is based on the key.
+** If the value is the difference, the comparison result is based on the value.
+** Comparison of keys and values is done by array_tree_compare().
+*/
+static int
+array_tree_compare_arrays(array_iter *a, array_iter *b, int case_sens, int objname, bool natural)
+{
+    int more1, more2, res;
+    array_iter idx1;
+    array_iter idx2;
+    array_data *val1;
+    array_data *val2;
+
+    assert(a != NULL);
+    assert(b != NULL);
+
+    if (a->type != PROG_ARRAY || b->type != PROG_ARRAY) {
+        return array_tree_compare(a, b, case_sens, objname, natural);
+    }
+
+    if (a->data.array == b->data.array) {
+        return 0;
+    }
+
+    more1 = array_first(a->data.array, &idx1);
+    more2 = array_first(b->data.array, &idx2);
+    for (;;) {
+        if (more1 && more2) {
+            val1 = array_getitem(a->data.array, &idx1);
+            val2 = array_getitem(b->data.array, &idx2);
+            res = array_tree_compare(&idx1, &idx2, case_sens, objname, natural);
+            if (res != 0) {
+                return res;
+            }
+            res = array_tree_compare(val1, val2, case_sens, objname, natural);
+            if (res != 0) {
+                return res;
+            }
+        } else if (more1) {
+            return 1;
+        } else if (more2) {
+            return -1;
+        } else {
+            return 0;
+        }
+        more1 = array_next(a->data.array, &idx1);
+        more2 = array_next(b->data.array, &idx2);
+    }
+    /* NOTREACHED */
+    return 0;
+}
+
 /* This key function helps sort dictionary arrays by comparing the
  * key values, and also sorting list arrays by comparing the data
  * values. It differs slightly from the FB6 implementaton in that
@@ -54,9 +111,7 @@ array_tree_compare(array_iter *a, array_iter *b, int case_sens, int objname, boo
 
     if (a->type != b->type) {
         if (a->type == PROG_INTEGER && b->type == PROG_FLOAT) {
-            if (fabs
-                (((double) a->data.number -
-                  b->data.fnumber) / (double) a->data.number) < DBL_EPSILON) {
+            if (fabs(((double) a->data.number - b->data.fnumber) / (double) a->data.number) < DBL_EPSILON) {
                 return 0;
             } else if (a->data.number > b->data.fnumber) {
                 return 1;
@@ -66,47 +121,44 @@ array_tree_compare(array_iter *a, array_iter *b, int case_sens, int objname, boo
         } else if (a->type == PROG_FLOAT && b->type == PROG_INTEGER) {
             if (a->data.fnumber == b->data.fnumber) {
                 return 0;
-            } else
-                if (fabs((a->data.fnumber - b->data.number) / a->data.fnumber) <
-                    DBL_EPSILON) {
+            } else if (fabs((a->data.fnumber - b->data.number) / a->data.fnumber)
+                       < DBL_EPSILON) {
                 return 0;
             } else if (a->data.fnumber > b->data.number) {
                 return 1;
             } else {
                 return -1;
             }
-        } else if (a->type == PROG_OBJECT && b->type == PROG_STRING
-                   && objname && valid_obj(a->data.objref)) {
+        } else if (a->type == PROG_OBJECT && b->type == PROG_STRING && objname && valid_obj(a->data.objref)) {
             char *astr = (char *) NAME(a->data.objref);
             char *bstr = (b->data.string) ? b->data.string->data : pad_char;
 
             if (case_sens) {
-				if (natural)
-					return strnatcmp(astr, bstr);
-				else
-					return strcmp(astr, bstr);
+                if (natural)
+                    return strnatcmp(astr, bstr);
+                else
+                    return strcmp(astr, bstr);
             } else {
-				if (natural)
-					return strnatcasecmp(astr, bstr);
-				else
-					return string_compare(astr, bstr);
+                if (natural)
+                    return strnatcasecmp(astr, bstr);
+                else
+                    return string_compare(astr, bstr);
             }
-        } else if (a->type == PROG_STRING && b->type == PROG_OBJECT
-                   && objname && valid_obj(b->data.objref)) {
+        } else if (a->type == PROG_STRING && b->type == PROG_OBJECT && objname && valid_obj(b->data.objref)) {
             char *astr = (a->data.string) ? a->data.string->data : pad_char;
             char *bstr = (char *) NAME(b->data.objref);
 
             if (case_sens) {
-				if (natural)
-					return strnatcmp(astr, bstr);
-				else
-					return strcmp(astr, bstr);
+                if (natural)
+                    return strnatcmp(astr, bstr);
+                else
+                    return strcmp(astr, bstr);
             } else {
-				if (natural)
-					return strnatcasecmp(astr, bstr);
-				else
-					return string_compare(astr, bstr);
-			}
+                if (natural)
+                    return strnatcasecmp(astr, bstr);
+                else
+                    return string_compare(astr, bstr);
+            }
         }
         return (a->type - b->type);
     }
@@ -116,17 +168,17 @@ array_tree_compare(array_iter *a, array_iter *b, int case_sens, int objname, boo
         char *astr = (char *) NAME(a->data.objref);
         char *bstr = (char *) NAME(b->data.objref);
 
-		if (case_sens) {
-			if (natural)
-				return strnatcmp(astr, bstr);
-			else
-				return strcmp(astr, bstr);
-		} else {
-			if (natural)
-				return strnatcasecmp(astr, bstr);
-			else
-				return string_compare(astr, bstr);
-		}
+        if (case_sens) {
+            if (natural)
+                return strnatcmp(astr, bstr);
+            else
+                return strcmp(astr, bstr);
+        } else {
+            if (natural)
+                return strnatcasecmp(astr, bstr);
+            else
+                return string_compare(astr, bstr);
+        }
     }
     if (a->type == PROG_OBJECT) {
         if (a->data.objref > b->data.objref)
@@ -139,9 +191,7 @@ array_tree_compare(array_iter *a, array_iter *b, int case_sens, int objname, boo
     if (a->type == PROG_FLOAT) {
         if (a->data.fnumber == b->data.fnumber) {
             return 0;
-        } else
-            if (fabs((a->data.fnumber - b->data.fnumber) / a->data.fnumber) <
-                DBL_EPSILON) {
+        } else if (fabs((a->data.fnumber - b->data.fnumber) / a->data.fnumber) < DBL_EPSILON) {
             return 0;
         } else if (a->data.fnumber > b->data.fnumber) {
             return 1;
@@ -153,36 +203,28 @@ array_tree_compare(array_iter *a, array_iter *b, int case_sens, int objname, boo
         char *astr = (a->data.string) ? a->data.string->data : pad_char;
         char *bstr = (b->data.string) ? b->data.string->data : pad_char;
 
-		if (case_sens) {
-			if (natural)
-				return strnatcmp(astr, bstr);
-			else
-				return strcmp(astr, bstr);
-		} else {
-			if (natural)
-				return strnatcasecmp(astr, bstr);
-			else
-				return string_compare(astr, bstr);
-		}
+        if (case_sens) {
+            if (natural)
+                return strnatcmp(astr, bstr);
+            else
+                return strcmp(astr, bstr);
+        } else {
+            if (natural)
+                return strnatcasecmp(astr, bstr);
+            else
+                return string_compare(astr, bstr);
+        }
     } else if (a->type == PROG_ARRAY) {
-        /* Sort arrays by memory address. */
-        /* This is a bug, really. */
-        /* in a perfect world, we'd compare the array elements recursively. */
-        return (a->data.array - b->data.array);
+        return array_tree_compare_arrays(a, b, case_sens, objname, natural);
     } else if (a->type == PROG_LOCK) {
-        /* Sort locks by memory address. */
-        /* This is a bug, really. */
-        /* in a perfect world, we'd compare the locks by element. */
-        char *la;
-        char *lb;
-        int retval = 0;
+        /*
+         * In a perfect world, we'd compare the locks by element,
+         * instead of unparsing them into strings for strcmp()s.
+         */
+        char la[BUFFER_LEN];
+        char lb[BUFFER_LEN];
 
-        la = (char *) unparse_boolexp((dbref) 1, a->data.lock, 0);
-        la = string_dup(la);
-        lb = (char *) unparse_boolexp((dbref) 1, b->data.lock, 0);
-        retval = strcmp(la, lb);
-        delete la;
-        return retval;
+        return strcmp(unparse_boolexp(la, (dbref) 1, a->data.lock, 0), unparse_boolexp(lb, (dbref) 1, b->data.lock, 0));
     } else if (a->type == PROG_ADD) {
         int result = (a->data.addr->progref - b->data.addr->progref);
 
@@ -226,8 +268,7 @@ static int
 array_tree_height_diff(array_tree *node)
 {
     if (node != NULL)
-        return (array_tree_height_of(AVL_RT(node)) -
-                array_tree_height_of(AVL_LF(node)));
+        return (array_tree_height_of(AVL_RT(node)) - array_tree_height_of(AVL_LF(node)));
     else
         return 0;
 }
@@ -244,9 +285,7 @@ static void
 array_tree_fixup_height(array_tree *node)
 {
     if (node)
-        node->height = (int) 1 +
-            max(array_tree_height_of(AVL_LF(node)),
-                array_tree_height_of(AVL_RT(node)));
+        node->height = (int) 1 + max(array_tree_height_of(AVL_LF(node)), array_tree_height_of(AVL_RT(node)));
 }
 
 static array_tree *
@@ -343,6 +382,7 @@ array_tree_alloc_node(array_iter *key)
     array_tree *new_node;
 
     new_node = new array_tree;
+
     if (!new_node) {
         fprintf(stderr, "array_tree_alloc_node(): Out of Memory!\n");
         abort();
@@ -373,8 +413,8 @@ static array_tree *
 array_tree_insert(array_tree **avl, array_iter *key)
 {
     array_tree *ret;
-    register array_tree *p = *avl;
-    register int cmp;
+    array_tree *p = *avl;
+    int cmp;
     static int balancep;
 
     if (p) {
@@ -426,9 +466,7 @@ array_tree_remove_node(array_iter *key, array_tree **root)
         } else if (!(AVL_RT(avl))) {
             avl = AVL_LF(avl);
         } else {
-            tmp =
-                array_tree_remove_node(AVL_KEY(array_tree_getmax(AVL_LF(avl))),
-                                       &AVL_LF(avl));
+            tmp = array_tree_remove_node(AVL_KEY(array_tree_getmax(AVL_LF(avl))), &AVL_LF(avl));
             if (!tmp)
                 abort();        /* this shouldn't be possible. */
             AVL_LF(tmp) = AVL_LF(avl);
@@ -566,6 +604,7 @@ new_array(void)
     stk_array *new2;
 
     new2 = new stk_array;
+
     new2->links = 1;
     new2->items = 0;
     new2->presize = 0;
@@ -595,7 +634,8 @@ new_array_packed(int size, int presize)
         new2->presize = presize;
     if (size < 1)
         size = 1;
-    new2->data.packed = new array_data[size+new2->presize];
+    new2->data.packed = new array_data[size + new2->presize];
+
     for (i = size; i-- > 0;) {
         new2->data.packed[i].type = PROG_INTEGER;
         new2->data.packed[i].line = 0;
@@ -633,6 +673,7 @@ array_decouple(stk_array *arr)
 
             new2->items = arr->items;
             new2->data.packed = new array_data[arr->items];
+
             for (i = arr->items; i-- > 0;) {
                 copyinst(&arr->data.packed[i], &new2->data.packed[i]);
             }
@@ -705,13 +746,14 @@ array_free(stk_array *arr)
             for (i = arr->items; i-- > 0;) {
                 CLEAR(&arr->data.packed[i]);
             }
-            delete[] arr->data.packed;
+            delete[]arr->data.packed;
             break;
         }
         case ARRAY_DICTIONARY:
             array_tree_delete_all(arr->data.dict);
-
+            break;
         default:{
+            assert(0);          /* should never get here */
             break;
         }
     }
@@ -1041,14 +1083,14 @@ array_setitem(stk_array **harr, array_iter *idx, array_data *item)
                     arr->links--;
                     arr = *harr = array_decouple(arr);
                 }
-
                 //arr->data.packed = (array_data *)realloc(arr->data.packed, sizeof(array_data) * (arr->items + 1));
                 if (!arr->presize) {
                     arr->presize = ARRAY_PRESIZE_CHUNK;
-                    array_data *atmp = new array_data[arr->presize+arr->items+1];
+                    array_data *atmp = new array_data[arr->presize + arr->items + 1];
+
                     for (int i = 0; i < arr->items; i++)
                         atmp[i] = arr->data.packed[i];
-                    delete[] arr->data.packed;
+                    delete[]arr->data.packed;
                     arr->data.packed = atmp;
                 } else
                     arr->presize--;
@@ -1110,14 +1152,14 @@ array_insertitem(stk_array **harr, array_iter *idx, array_data *item)
                 arr->links--;
                 arr = *harr = array_decouple(arr);
             }
-            
             //arr->data.packed = (array_data *)realloc(arr->data.packed, sizeof(array_data) * (arr->items + 1));
             if (!arr->presize) {
                 arr->presize = ARRAY_PRESIZE_CHUNK;
-                array_data *atmp = new array_data[arr->presize+arr->items+1];
+                array_data *atmp = new array_data[arr->presize + arr->items + 1];
+
                 for (int i = 0; i < arr->items; i++)
                     atmp[i] = arr->data.packed[i];
-                delete[] arr->data.packed;
+                delete[]arr->data.packed;
                 arr->data.packed = atmp;
             } else
                 arr->presize--;
@@ -1355,14 +1397,14 @@ array_insertrange(stk_array **harr, array_iter *start, stk_array *inarr)
                 arr->links--;
                 arr = *harr = array_decouple(arr);
             }
-            
             //arr->data.packed = (array_data *)realloc(arr->data.packed, sizeof(array_data) * ((arr->items + inarr->items)));
             if (inarr->items >= arr->presize) {
-                array_data *atmp = new array_data[arr->items+inarr->items+arr->presize];
+                array_data *atmp = new array_data[arr->items + inarr->items + arr->presize];
+
                 //memcpy(atmp, arr->data.packed, sizeof(array_data) * arr->items);
                 for (int i = 0; i < arr->items; i++)
                     atmp[i] = arr->data.packed[i];
-                delete[] arr->data.packed;
+                delete[]arr->data.packed;
                 arr->data.packed = atmp;
             } else
                 arr->presize -= inarr->items;
@@ -1416,7 +1458,7 @@ array_delrange(stk_array **harr, array_iter *start, array_iter *end)
 {
     stk_array *arr;
     array_data *itm;
-    int sidx, eidx; //, totsize;
+    int sidx, eidx;             //, totsize;
     array_iter idx;
     array_iter didx;
 
@@ -1467,8 +1509,21 @@ array_delrange(stk_array **harr, array_iter *start, array_iter *end)
                 idx.data.number++;
                 didx.data.number++;
             }
-            arr->items   -= (eidx - sidx + 1);
+            arr->items -= (eidx - sidx + 1);
             arr->presize += (eidx - sidx + 1);
+
+            if (arr->presize > ARRAY_PRESIZE_CHUNK) {
+                //log_status("SHRINKING IN ARRAY_DELRANGE: %d, %d\r\n", arr->items, arr->presize);
+
+                arr->presize = ARRAY_PRESIZE_CHUNK;
+                array_data *atmp = new array_data[((arr->items) ? arr->items : 1) + arr->presize];
+
+                for (int i = 0; i < arr->items; i++)
+                    atmp[i] = arr->data.packed[i];
+
+                delete[]arr->data.packed;
+                arr->data.packed = atmp;
+            }
             //totsize = (arr->items)?arr->items:1;
 
             //arr->data.packed = (array_data*)realloc(arr->data.packed, sizeof(array_data) * totsize);
@@ -1476,8 +1531,8 @@ array_delrange(stk_array **harr, array_iter *start, array_iter *end)
             //array_data *atmp = new array_data[totsize+arr->presize];
             //memcpy(atmp, arr->data.packed, sizeof(array_data) * totsize);
             //delete[] arr->data.packed;
-           // arr->data.packed = atmp;
-            
+            // arr->data.packed = atmp;
+
 
             return arr->items;
             break;
@@ -1509,10 +1564,13 @@ array_delrange(stk_array **harr, array_iter *start, array_iter *end)
                 arr = *harr = array_decouple(arr);
             }
             copyinst(&s->key, &idx);
-            while (s && array_tree_compare(&s->key, &e->key, 0, 0, 0) <= 0) {
+            while (s && e && array_tree_compare(&s->key, &e->key, 0, 0, 0) <= 0) {
                 arr->data.dict = array_tree_delete(&s->key, arr->data.dict);
                 arr->items--;
                 s = array_tree_next_node(arr->data.dict, &idx);
+                e = array_tree_find(arr->data.dict, end);
+                if (!e)
+                    e = array_tree_prev_node(arr->data.dict, end);
             }
             CLEAR(&idx);
             return arr->items;
@@ -1569,12 +1627,11 @@ array_demote_only(stk_array *arr, int threshold)
 
     new_index.type = PROG_INTEGER;;
     new_index.data.number = 0;
-    demoted_array = new_array_packed(0, (array_count(arr)+1)/2);
+    demoted_array = new_array_packed(0, (array_count(arr) + 1) / 2);
     items_left = array_first(arr, &current_key);
     while (items_left) {
         current_value = array_getitem(arr, &current_key);
-        if (PROG_INTEGER == current_value->type
-            && current_value->data.number >= threshold) {
+        if (PROG_INTEGER == current_value->type && current_value->data.number >= threshold) {
             array_insertitem(&demoted_array, &new_index, &current_key);
             new_index.data.number++;
         }
@@ -1812,21 +1869,21 @@ array_appendref(stk_array **arr, dbref theref)
 //void
 //array_shrink(stk_array *arr, int newsize)
 //{
-//	if (arr->items <= newsize)
-//		return;
+// if (arr->items <= newsize)
+//  return;
 //
-//	arr->items = newsize;
-//	arr->data.packed = (array_data *)realloc(arr->data.packed, sizeof(array_data) * newsize);
+// arr->items = newsize;
+// arr->data.packed = (array_data *)realloc(arr->data.packed, sizeof(array_data) * newsize);
 //}
 
 
 int
 array_compare(stk_array *arr1, stk_array *arr2)
 {
-	struct inst *val1;
+    struct inst *val1;
     struct inst *val2;
     int res1, res2, result;
-	struct inst temp1, temp2;
+    struct inst temp1, temp2;
 
     res1 = array_first(arr1, &temp1);
     res2 = array_first(arr2, &temp2);
@@ -1834,31 +1891,31 @@ array_compare(stk_array *arr1, stk_array *arr2)
     if (!res1 && !res2) {
         result = 0;
     } else if (!res1) {
-		CLEAR(&temp2);
+        CLEAR(&temp2);
         result = -1;
     } else if (!res2) {
-		CLEAR(&temp1);
+        CLEAR(&temp1);
         result = 1;
     } else {
         do {
             result = array_idxcmp(&temp1, &temp2);
             if (result) {
-				CLEAR(&temp1);
-				CLEAR(&temp2);
+                CLEAR(&temp1);
+                CLEAR(&temp2);
                 break;
-			}
+            }
 
             val1 = array_getitem(arr1, &temp1);
             val2 = array_getitem(arr2, &temp2);
-			if (val1->type == PROG_ARRAY && val2->type == PROG_ARRAY)
-				result = array_compare(val1->data.array, val2->data.array);
-			else
-				result = array_idxcmp(val1, val2);
+            if (val1->type == PROG_ARRAY && val2->type == PROG_ARRAY)
+                result = array_compare(val1->data.array, val2->data.array);
+            else
+                result = array_idxcmp(val1, val2);
             if (result) {
-				CLEAR(&temp1);
-				CLEAR(&temp2);
+                CLEAR(&temp1);
+                CLEAR(&temp2);
                 break;
-			}
+            }
 
             res1 = array_next(arr1, &temp1);
             res2 = array_next(arr2, &temp2);
@@ -1873,5 +1930,5 @@ array_compare(stk_array *arr1, stk_array *arr2)
         }
     }
 
-	return result;
+    return result;
 }

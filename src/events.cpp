@@ -29,8 +29,7 @@ next_dump_time(void)
             < currtime) {
             return (0L);
         } else {
-            return (last_dump_time + tp_dump_interval - tp_dump_warntime -
-                    currtime);
+            return (last_dump_time + tp_dump_interval - tp_dump_warntime - currtime);
         }
     }
 
@@ -192,8 +191,7 @@ check_cron_time(void)
             && Typeof(tp_cron_prog) == TYPE_PROGRAM) {
             strcpy(match_args, "Cron");
             strcpy(match_cmdname, "Cron Event");
-            tempfr = interp(-1, (dbref) -1, (dbref) -1, tp_cron_prog,
-                            (dbref) -4, BACKGROUND, STD_REGUID, 0);
+            tempfr = interp(-1, (dbref) -1, (dbref) -1, tp_cron_prog, (dbref) -4, BACKGROUND, STD_REGUID, 0);
             if (tempfr) {
                 interp_loop((dbref) -1, tp_cron_prog, tempfr, 0);
             }
@@ -206,7 +204,8 @@ check_cron_time(void)
  **********************************************/
 
 static time_t last_archive_time = 0L; /* Always stores the last archive time */
-static int archive_done = 0;          /* Indicates if an archive has been done */
+static int archive_done = 0;    /* Indicates if an archive has been done */
+
                                       /* since startup. (to prevent repetition) */
 /* This returns the next time that a full site archive is to be done. */
 time_t
@@ -238,11 +237,9 @@ check_archive_time(void)
     if (((currtime - last_archive_time) < ARCHIVE_DELAY) && archive_done)
         return;
     if ((last_archive_time + tp_archive_interval) < currtime) {
-        add_property((dbref) 0, "~sys/lastarchive", NULL,
-                     (int) currtime);
+        add_property((dbref) 0, "~sys/lastarchive", NULL, (int) currtime);
         if (tp_allow_old_trigs)
-            add_property((dbref) 0, "_sys/lastarchive", NULL,
-                         (int) currtime);
+            add_property((dbref) 0, "_sys/lastarchive", NULL, (int) currtime);
         last_archive_time = currtime;
         log_status("ARCHIVE: Scheduled by @tune\n");
         archive_done++;
@@ -278,8 +275,8 @@ auto_archive_now(void)
 time_t
 mintime(time_t a, time_t b)
 {
-	if (a < 0)
-		return b;
+    if (a < 0)
+        return b;
     return ((a > b) ? b : a);
 }
 
@@ -291,13 +288,13 @@ next_muckevent_time(void)
     nexttime = mintime(next_event_time(), nexttime);
     //log_status("next_event_time(): %d\r\n", nexttime);
     nexttime = mintime(next_dump_time(), nexttime);
-	//log_status("next_dump_time(): %d\r\n", nexttime);
+    //log_status("next_dump_time(): %d\r\n", nexttime);
     nexttime = mintime(next_clean_time(), nexttime);
-	//log_status("next_clean_time(): %d\r\n", nexttime);
+    //log_status("next_clean_time(): %d\r\n", nexttime);
     nexttime = mintime(next_cron_time(), nexttime);
-	//log_status("next_cron_time(): %d\r\n", nexttime);
+    //log_status("next_cron_time(): %d\r\n", nexttime);
     nexttime = mintime(next_archive_time(), nexttime);
-	//log_status("next_archive_time(): %d\r\n", nexttime);
+    //log_status("next_archive_time(): %d\r\n", nexttime);
 
     return (nexttime);
 }

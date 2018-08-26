@@ -36,7 +36,6 @@ extern char *alloc_string(const char *);
 
 int number(const char *s);
 int ifloat(const char *s);
-void putproperties(FILE * f, int obj);
 void getproperties(FILE * f, int obj);
 
 #ifdef DBDEBUG
@@ -46,9 +45,7 @@ short
 dbcheck(const char *file, int line, dbref item)
 {
     if (!OkObj(item)) {
-        log_status
-            ("DB FATAL ERROR! Attempt to access a bad object at %s:%d. Object was %d.\n",
-             file, line, item);
+        log_status("DB FATAL ERROR! Attempt to access a bad object at %s:%d. Object was %d.\n", file, line, item);
         abort();
     }
 
@@ -64,7 +61,8 @@ getparent(dbref obj)
     if (!OkObj(obj))
         return GLOBAL_ENVIRONMENT;
     do {
-        if (Typeof(obj) == TYPE_THING && (FLAGS(obj) & VEHICLE) && limit-- > 0) {
+        if (Typeof(obj) == TYPE_THING && (FLAGS(obj) & VEHICLE)
+            && limit-- > 0) {
             obj = DBFETCH(obj)->sp.thing.home;
             if (obj == NIL)
                 obj = GLOBAL_ENVIRONMENT;
@@ -83,7 +81,7 @@ getparent(dbref obj)
 void
 free_line(struct line *l)
 {
-    delete[] l->this_line;
+    delete[]l->this_line;
     delete l;
 }
 
@@ -152,8 +150,8 @@ db_grow(dbref newtop)
             db = newdb;
         } else {
             /* make the initial one */
-            int startsize = (newtop >= DB_INITIAL_SIZE) ?
-                newtop : DB_INITIAL_SIZE;
+            int startsize = (newtop >= DB_INITIAL_SIZE) ? newtop : DB_INITIAL_SIZE;
+
             if ((db = (struct object *)
                  malloc(startsize * sizeof(struct object))) == 0) {
                 fprintf(stderr, "PANIC: Unable to allocate new object.\n");
@@ -178,14 +176,6 @@ db_clear_object(dbref player, dbref i)
     o->exits = NOTHING;
     o->next = NOTHING;
     o->properties = 0;
-
-#ifdef DISKBASE
-    o->propsfpos = 0;
-    o->propstime = 0;
-    o->propsmode = PROPS_UNLOADED;
-    o->nextold = NOTHING;
-    o->prevold = NOTHING;
-#endif
 
     /* DBDIRTY(i); */
     /* flags you must initialize yourself */
@@ -243,6 +233,9 @@ new_program(dbref player, const char *name)
     DBFETCH(newprog)->sp.program.code = 0;
     DBFETCH(newprog)->sp.program.start = 0;
     DBFETCH(newprog)->sp.program.pubs = 0;
+#ifdef MCP_SUPPORT
+    DBFETCH(newprog)->sp.program.mcpbinds = 0;
+#endif /* MCP_SUPPORT */
     DBFETCH(newprog)->sp.program.fprofile = NULL;
     DBFETCH(newprog)->sp.program.proftime.tv_sec = 0;
     DBFETCH(newprog)->sp.program.proftime.tv_usec = 0;
@@ -267,11 +260,10 @@ putref(FILE * f, dbref ref)
 }
 
 void
-putfref(FILE * f, dbref ref, dbref ref2, dbref ref3, dbref ref4, dbref pow1,
-        dbref pow2)
+putfref(FILE * f, dbref ref, dbref ref2, dbref ref3, dbref ref4, dbref pow1, dbref pow2)
 {
-    if (fprintf(f, "%d %d %d %d %d %d\n", ref, ref2, ref3, ref4, pow1, pow2) ==
-        EOF) {
+    if (fprintf(f, "%d %d %d %d %d %d\n", ref, ref2, ref3, ref4, pow1, pow2)
+        == EOF) {
         fprintf(stderr, "PANIC: Unable write to db file.\n");
         abort();
     }
@@ -302,121 +294,9 @@ putstring(FILE * f, const char *s)
     }
 }
 
-void
-putproperties_rec(FILE * f, const char *dir, dbref obj)
-{
-    PropPtr pref;
-    PropPtr p, pptr;
-    char buf[BUFFER_LEN];
-    char name[BUFFER_LEN];
-
-    pref = first_prop_nofetch(obj, dir, &pptr, name);
-    while (pref) {
-        p = pref;
-        db_putprop(f, dir, p);
-        strcat(strcpy(buf, dir), name);
-        if (PropDir(p))
-            putproperties_rec(f, strcat(buf, "/"), obj);
-        pref = next_prop(pptr, pref, name);
-    }
-}
-
-/*** CHANGED:
-was: void putproperties(FILE *f, PropPtr p)
- is: void putproperties(FILE *f, dbref obj)
-***/
-void
-putproperties(FILE * f, dbref obj)
-{
-    putstring(f, "*Props*");
-    db_dump_props(f, obj);
-    /* putproperties_rec(f, "/", obj); */
-    putstring(f, "*End*");
-}
-
 extern FILE *input_file;
 extern FILE *delta_infile;
 extern FILE *delta_outfile;
-
-#ifdef DISKBASE
-
-int
-fetch_propvals(dbref obj, const char *dir)
-{
-    PropPtr p, pptr;
-
-    int cnt = 0;
-
-    char buf[BUFFER_LEN];
-
-    char name[BUFFER_LEN];
-
-    p = first_prop_nofetch(obj, dir, &pptr, name);
-    while (p > 0) {
-        cnt = (cnt || propfetch(obj, p));
-        if (PropDir(p)) {
-            strcpy(buf, dir);
-            strcat(buf, name);
-            strcat(buf, "/");
-            fetch_propvals(obj, buf);
-        }
-        p = next_prop(pptr, p, name);
-    }
-    return cnt;
-}
-
-void
-putprops_copy(FILE * f, dbref obj)
-{
-    char buf[BUFFER_LEN * 3];
-
-    char *ptr;
-
-    FILE *g;
-
-    if (DBFETCH(obj)->propsmode != PROPS_UNLOADED) {
-        if (fetch_propvals(obj, "/")) {
-            fseek(f, 0L, 2);
-        }
-        putproperties(f, obj);
-        return;
-    }
-    if (db_load_format < 7 || db_conversion_flag) {
-        if (fetchprops_priority(obj, 1) || fetch_propvals(obj, "/")) {
-            fseek(f, 0L, 2);
-        }
-        putproperties(f, obj);
-        return;
-    }
-    if (FLAGS(obj) & SAVED_DELTA) {
-        g = delta_infile;
-    } else {
-        g = input_file;
-    }
-    putstring(f, "*Props*");
-    if (DBFETCH(obj)->propsfpos) {
-        fseek(g, DBFETCH(obj)->propsfpos, 0);
-        ptr = fgets(buf, sizeof(buf), g);
-        if (!ptr) {
-            fprintf(stderr, "PANIC: Error reading prop from db file.\n");
-            abort();
-        }
-        for (;;) {
-            ptr = fgets(buf, sizeof(buf), g);
-            if (!ptr) {
-                fprintf(stderr, "PANIC: Error reading propvalue from db.\n");
-                abort();
-            }
-            if (!string_compare(ptr, "*End*\n"))
-                break;
-            fputs(buf, f);
-        }
-    }
-    putstring(f, "*End*");
-}
-
-#endif /* DISKBASE */
-
 
 void
 macrodump(struct macrotable *node, FILE * f)
@@ -451,8 +331,7 @@ foldtree(struct macrotable *center)
     for (; nextcent; nextcent = nextcent->left)
         count++;
     if (count > 1) {
-        for (nextcent = center, count /= 2; count--;
-             nextcent = nextcent->left) ;
+        for (nextcent = center, count /= 2; count--; nextcent = nextcent->left) ;
         if (center->left)
             center->left->right = NULL;
         center->left = nextcent;
@@ -461,8 +340,7 @@ foldtree(struct macrotable *center)
     for (count = 0, nextcent = center; nextcent; nextcent = nextcent->right)
         count++;
     if (count > 1) {
-        for (nextcent = center, count /= 2; count--;
-             nextcent = nextcent->right) ;
+        for (nextcent = center, count /= 2; count--; nextcent = nextcent->right) ;
         if (center->right)
             center->right->left = NULL;
         foldtree(center->right);
@@ -480,8 +358,8 @@ macrochain(struct macrotable *lastnode, FILE * f)
     line2 = file_line(f);
 
     newmacro = (struct macrotable *) new_macro(line, line2, getref(f));
-    delete[] line;
-    delete[] line2;
+    delete[]line;
+    delete[]line2;
 
     if (!macrotop)
         macrotop = (struct macrotable *) newmacro;
@@ -519,10 +397,7 @@ log_program_text(struct line *first, dbref player, dbref i)
         return;
     }
 
-    fprintf(f,
-            "{{{ PROGRAM %s, SAVED AT %s BY %s\n",
-            strcpy(buf1, unparse_object(player, i)),
-            ctime(&lt), strcpy(buf2, unparse_object(player, player))
+    fprintf(f, "{{{ PROGRAM %s, SAVED AT %s BY %s\n", strcpy(buf1, unparse_object(player, i)), ctime(&lt), strcpy(buf2, unparse_object(player, player))
         );
 
     while (first) {
@@ -565,59 +440,65 @@ write_program(struct line *first, dbref i)
     fclose(f);
 }
 
-int
-db_write_object(FILE * f, dbref i)
+void
+db_write_header(FILE * f)
 {
-    struct object *o = DBFETCH(i);
+    putstring(f, "***NeonMuck V2 DUMP Format***");
+
+    putref(f, db_top);
+    putref(f, DB_PARMSINFO + (db_hash_passwords ? DB_NEWPASSES : 0)
+           + (db_hash_passwords ? ((HVER_CURRENT << HVER_SHIFT) & HVER_MASK) : 0)
+        );
+    putref(f, tune_count_parms());
+    tune_save_parms_to_file(f);
+}
+
+void
+db_write_footer(FILE * f)
+{
+    fseek(f, 0L, 2);
+    putstring(f, "***END OF DUMP***");
+
+    fflush(f);
+}
+
+int
+db_write_object(FILE * f, struct object *o)
+{
     int j;
 
-#ifdef DISKBASE
-    int tmppos;
-#endif
-
-    putstring(f, NAME(i));
+    putstring(f, o->name);
     putref(f, o->location);
     putref(f, o->contents);
     putref(f, o->next);
     /* write non-internal flags */
-    if (Typeof(i) != TYPE_GARBAGE)
-        putfref(f, (FLAGS(i) & ~DUMP_MASK), (FLAG2(i) & ~DUM2_MASK),
-                (FLAG3(i) & ~DUM3_MASK), (FLAG4(i) & ~DUM4_MASK),
-                (POWERS(i) & ~POWERS_DUMP_MASK),
-                (POWER2(i) & ~POWER2_DUMP_MASK));
+    if ((o->flags & TYPE_MASK) != TYPE_GARBAGE)
+        putfref(f, (o->flags & ~DUMP_MASK), (o->flag2 & ~DUM2_MASK),
+                (o->flag3 & ~DUM3_MASK), (o->flag4 & ~DUM4_MASK), (o->powers & ~POWERS_DUMP_MASK), (o->power2 & ~POWER2_DUMP_MASK));
     else
-        putfref(f, (FLAGS(i) & ~DUMP_MASK), (FLAG2(i) & ~DUM2_MASK),
-                (FLAG3(i) & ~DUM3_MASK), (FLAG4(i) & ~DUM4_MASK), 0, 0);
+        putfref(f, (o->flags & ~DUMP_MASK), (o->flag2 & ~DUM2_MASK), (o->flag3 & ~DUM3_MASK), (o->flag4 & ~DUM4_MASK), 0, 0);
 
     puttimestampEx(f, (int) o->ts.created, o->ts.dcreated);
     puttimestampEx(f, (int) o->ts.lastused, o->ts.dlastused);
     putref(f, o->ts.usecount);
     puttimestampEx(f, (int) o->ts.modified, o->ts.dmodified);
 
+    putstring(f, "*Props*");
+    db_dump_props(f, o);
+    putstring(f, "*End*");
 
-#ifdef DISKBASE
-
-    tmppos = ftell(f) + 1;
-    putprops_copy(f, i);
-    o->propsfpos = tmppos;
-    undirtyprops(i);
-
-#else /* !DISKBASE */
-    putproperties(f, i);
-#endif /* DISKBASE */
-
-    switch (Typeof(i)) {
+    switch (o->flags & TYPE_MASK) {
         case TYPE_THING:
             putref(f, o->sp.thing.home);
             putref(f, o->exits);
-            putref(f, OWNER(i));
+            putref(f, o->owner);
             putref(f, o->sp.thing.value);
             break;
 
         case TYPE_ROOM:
             putref(f, o->sp.room.dropto);
             putref(f, o->exits);
-            putref(f, OWNER(i));
+            putref(f, o->owner);
             break;
 
         case TYPE_EXIT:
@@ -625,7 +506,7 @@ db_write_object(FILE * f, dbref i)
             for (j = 0; j < o->sp.exit.ndest; j++) {
                 putref(f, (o->sp.exit.dest)[j]);
             }
-            putref(f, OWNER(i));
+            putref(f, o->owner);
             break;
 
         case TYPE_PLAYER:
@@ -636,46 +517,151 @@ db_write_object(FILE * f, dbref i)
             break;
 
         case TYPE_PROGRAM:
-            putref(f, OWNER(i));
+            putref(f, o->owner);
             break;
     }
 
     return 0;
 }
 
-int deltas_count = 0;
 
-#ifndef CLUMP_LOAD_SIZE
-#define CLUMP_LOAD_SIZE 20
+#ifdef THREADED_DB_DUMP
+
+struct db_wthread_data {
+    struct object *db;
+    dbref top;
+};
+
+#ifdef WIN_VC
+DWORD WINAPI
+db_wthread(void *ptr)
+#else
+void *
+db_wthread(void *ptr)
+#endif
+{
+    struct db_wthread_data *dat = (struct db_wthread_data *) ptr;
+    struct object *db_c = (struct object *) dat->db;
+    int db_ctop = dat->top;
+
+
+    FILE *f = fopen("data/thread.db", "w");
+
+    db_write_header(f);
+    for (dbref i = db_ctop; i-- > 0;) {
+        if (fprintf(f, "#%d\n", i) < 0) {
+            fprintf(stderr, "PANIC: Error writing changed objects.\n");
+            abort();
+        }
+        db_write_object(f, &db_c[i]);
+    }
+
+    db_write_footer(f);
+    fclose(f);
+
+    delete dat;
+
+#ifdef WIN_VC
+# ifndef __cplusplus
+    /* Supposedly, when using C++ and WINAPI, you just return from the thread function. */
+    ExitThread(0);
+# endif
+#else
+    pthread_exit(NULL);
+#endif
+    return NULL;
+}
+
+int
+db_write_threaded(void)
+{
+    struct object *db_c = new object[db_top];
+    dbref db_ctop = db_top;
+    char tmpfile[BUFFER_LEN];
+    FILE *f;
+
+    log_status("DB_THREAD: Start memory copy...\r\n");
+    for (dbref i = db_top; i-- > 0;) {
+        db_c[i] = db[i];
+        db_c[i].name = alloc_string(db[i].name);
+        db_c[i].properties = copy_prop(i);
+        switch (Typeof(i)) {
+            case TYPE_PLAYER:
+                db_c[i].sp.player.password = alloc_string(db[i].sp.player.password);
+                break;
+            case TYPE_EXIT:
+                if (db[i].sp.exit.ndest) {
+                    db_c[i].sp.exit.dest = new dbref[db[i].sp.exit.ndest];
+
+                    for (int j = 0; j < db[i].sp.exit.ndest; j++)
+                        db_c[i].sp.exit.dest[j] = db[i].sp.exit.dest[j];
+                }
+                break;
+        }
+        FLAGS(i) &= ~OBJECT_CHANGED; /* clear changed flag */
+    }
+
+    struct db_wthread_data *dat = new db_wthread_data;
+
+    dat->db = db_c;
+    dat->top = db_ctop;
+#ifdef WIN_VC
+    CreateThread(NULL, 0, mysql_query_thread, (void *) tr, 0, NULL);
+#else
+    pthread_t thread1;
+    pthread_attr_t attr;
+
+    pthread_attr_init(&attr);
+    pthread_attr_setstacksize(&attr, 64000000L);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+    int thid = pthread_create(&thread1, &attr, db_wthread, (void *) dat);
+
+    pthread_attr_destroy(&attr);
 #endif
 
+    log_status("DB_THREAD: End memory copy. Started thread #%d.\r\n", thid);
+
+    sprintf(tmpfile, "%s.#%d#", MACRO_FILE, thid);
+
+    if ((f = fopen(tmpfile, "w")) != NULL) {
+        macrodump(macrotop, f);
+        fclose(f);
+#ifdef WIN_VC
+        if (unlink(MACRO_FILE))
+            perror(MACRO_FILE);
+#endif
+        if (rename(tmpfile, MACRO_FILE) < 0)
+            perror(tmpfile);
+    } else {
+        char buf[BUFFER_LEN];
+
+        perror(tmpfile);
+        sprintf(buf, SYSRED "[WARN] Error opening the MUF macros file %s for writing.", tmpfile);
+        ansi_wall_wizards(buf);
+    }
+
+    if (tp_periodic_program_purge)
+        free_unused_programs();
+
+    return 0;
+}
+#endif
 
 /* mode == 1 for dumping all objects.  mode == 0 for deltas only.  */
 
 void
-db_write_list(FILE * f, int mode)
+db_write_list(FILE * f)
 {
     dbref i;
 
     for (i = db_top; i-- > 0;) {
-        if (mode == 1 || (FLAGS(i) & OBJECT_CHANGED)) {
-            if (fprintf(f, "#%d\n", i) < 0) {
-                fprintf(stderr, "PANIC: Error writing changed objects.\n");
-                abort();
-            }
-            db_write_object(f, i);
-#ifdef DISKBASE
-            if (mode == 1) {
-                FLAGS(i) &= ~SAVED_DELTA; /* clear delta flag */
-            } else {
-                FLAGS(i) |= SAVED_DELTA; /* set delta flag */
-                deltas_count++;
-            }
-#endif
-
-
-            FLAGS(i) &= ~OBJECT_CHANGED; /* clear changed flag */
+        if (fprintf(f, "#%d\n", i) < 0) {
+            fprintf(stderr, "PANIC: Error writing changed objects.\n");
+            abort();
         }
+        db_write_object(f, DBFETCH(i));
+
+        FLAGS(i) &= ~OBJECT_CHANGED; /* clear changed flag */
     }
 }
 
@@ -683,52 +669,11 @@ db_write_list(FILE * f, int mode)
 dbref
 db_write(FILE * f)
 {
-    putstring(f, "***NeonMuck V2 DUMP Format***");
-
-    putref(f, db_top);
-    putref(f, DB_PARMSINFO
-#ifdef COMPRESS
-           + (db_decompression_flag ? 0 : DB_COMPRESSED)
-#endif
-           + (db_hash_passwords ? DB_NEWPASSES : 0)
-           +
-           (db_hash_passwords ? ((HVER_CURRENT << HVER_SHIFT) & HVER_MASK) : 0)
-        );
-    putref(f, tune_count_parms());
-    tune_save_parms_to_file(f);
-
-#ifdef COMPRESS
-    if (!db_decompression_flag) {
-        save_compress_words_to_file(f);
-    }
-#endif
-
-    db_write_list(f, 1);
-
-    fseek(f, 0L, 2);
-    putstring(f, "***END OF DUMP***");
-
-    fflush(f);
-    deltas_count = 0;
+    db_write_header(f);
+    db_write_list(f);
+    db_write_footer(f);
     return (db_top);
 }
-
-
-
-dbref
-db_write_deltas(FILE * f)
-{
-    fseek(f, 0L, 2);            /* seek end of file */
-    putstring(f, "***NeonMuck V2 Deltas Dump Format***");
-    db_write_list(f, 0);
-
-    fseek(f, 0L, 2);
-    putstring(f, "***END OF DUMP***");
-    fflush(f);
-    return (db_top);
-}
-
-
 
 dbref
 parse_dbref(const char *s)
@@ -872,11 +817,9 @@ extern const char *pcompress(const char *);
 #ifdef ARCHAIC_DATABASES
 extern const char *old_uncompress(const char *);
 #endif /* ARCHAIC_DATABASES */
+#endif
 
-#define alloc_compressed(x) alloc_string(pcompress(x))
-#else
 #define alloc_compressed(x) alloc_string(x)
-#endif /* COMPRESS */
 
 /* returns true for numbers of form [ + | - ] <series of digits> */
 int
@@ -984,15 +927,6 @@ getproperties(FILE * f, dbref obj)
     char buf[BUFFER_LEN], *p;
     int datalen;
 
-#ifdef DISKBASE
-    /* if no props, then don't bother looking. */
-    if (!DBFETCH(obj)->propsfpos)
-        return;
-
-    /* seek to the proper file position. */
-    fseek(f, DBFETCH(obj)->propsfpos, 0);
-#endif
-
     /* get rid of first line */
     fgets(buf, sizeof(buf), f);
 
@@ -1001,8 +935,7 @@ getproperties(FILE * f, dbref obj)
         fgets(buf, sizeof(buf), f);
         while (1) {
             /* fgets reads in \n too! */
-            if (!strcmp(buf, "***Property list end ***\n") ||
-                !strcmp(buf, "*End*\n"))
+            if (!strcmp(buf, "***Property list end ***\n") || !strcmp(buf, "*End*\n"))
                 break;
             p = index(buf, PROP_DELIMITER);
             *(p++) = '\0';
@@ -1028,65 +961,6 @@ getproperties(FILE * f, dbref obj)
     }
 }
 
-#ifdef DISKBASE
-void
-skipproperties(FILE * f, dbref obj)
-{
-    char buf[BUFFER_LEN * 3];
-    int islisten = 0;
-    int iscommand = 0;
-
-    /* get rid of first line */
-    fgets(buf, sizeof(buf), f);
-
-    fgets(buf, sizeof(buf), f);
-    while (strcmp(buf, "***Property list end ***\n") && strcmp(buf, "*End*\n")) {
-        if (!islisten) {
-            if (string_prefix(buf, "_listen"))
-                islisten = 1;
-            if (string_prefix(buf, "_olisten"))
-                islisten = 1;
-            if (string_prefix(buf, "~listen"))
-                islisten = 1;
-            if (string_prefix(buf, "~olisten"))
-                islisten = 1;
-            if (string_prefix(buf, "@listen"))
-                islisten = 1;
-            if (string_prefix(buf, "@olisten"))
-                islisten = 1;
-        }
-        if (!iscommand) {
-            if (string_prefix(buf, "_command"))
-                iscommand = 1;
-            if (string_prefix(buf, "_ocommand"))
-                iscommand = 1;
-            if (string_prefix(buf, "~command"))
-                iscommand = 1;
-            if (string_prefix(buf, "~ocommand"))
-                iscommand = 1;
-            if (string_prefix(buf, "@command"))
-                iscommand = 1;
-            if (string_prefix(buf, "@ocommand"))
-                iscommand = 1;
-        }
-        fgets(buf, sizeof(buf), f);
-    }
-    if (islisten) {
-        FLAGS(obj) |= LISTENER;
-    } else {
-        FLAGS(obj) &= ~LISTENER;
-    }
-    if (iscommand) {
-        FLAG2(obj) |= F2COMMAND;
-    } else {
-        FLAG2(obj) &= ~F2COMMAND;
-    }
-}
-
-#endif
-
-
-
 void
 db_free_object(dbref i)
 {
@@ -1094,24 +968,20 @@ db_free_object(dbref i)
 
     o = DBFETCH(i);
     if (NAME(i) && Typeof(i) != TYPE_GARBAGE)
-        delete[] NAME(i);
+        delete[]NAME(i);
 
-#ifdef DISKBASE
-    unloadprops_with_prejudice(i);
-#else
     if (o->properties) {
         delete_proplist(o->properties);
     }
-#endif
 
     if (Typeof(i) == TYPE_EXIT && o->sp.exit.dest) {
-        delete[] o->sp.exit.dest;
+        delete[]o->sp.exit.dest;
     } else if (Typeof(i) == TYPE_PLAYER) {
         if (o->sp.player.password) {
-            delete[] o->sp.player.password;
+            delete[]o->sp.player.password;
         }
         if (o->sp.player.descrs) {
-            delete[] o->sp.player.descrs;
+            delete[]o->sp.player.descrs;
             o->sp.player.descrs = NULL;
             o->sp.player.descr_count = 0;
         }
@@ -1132,7 +1002,7 @@ db_free(void)
     if (db) {
         for (i = 0; i < db_top; i++)
             db_free_object(i);
-        free((void *) db); //TODO: Update this later for C++. -hinoserm
+        free((void *) db);      //TODO: Update this later for C++. -hinoserm
         db = 0;
         db_top = 0;
     }
@@ -1305,6 +1175,7 @@ db_read_object_old(FILE * f, struct object *o, dbref objno)
             } else {
                 o->sp.exit.ndest = 1;
                 o->sp.exit.dest = new dbref[1];
+
                 (o->sp.exit.dest)[0] = o->location;
             }
             o->location = NOTHING;
@@ -1324,11 +1195,7 @@ db_read_object_old(FILE * f, struct object *o, dbref objno)
             o->next = recyclable;
             recyclable = objno;
 
-#ifdef DISKBASE
-            dirtyprops(objno);
-#endif
-
-            delete[] NAME(objno);
+            delete[]NAME(objno);
             NAME(objno) = "<garbage>";
             SETDESC(objno, "<recyclable>");
             break;
@@ -1428,6 +1295,7 @@ db_read_object_new(FILE * f, struct object *o, dbref objno)
         case TYPE_EXIT:
             o->sp.exit.ndest = getref(f);
             o->sp.exit.dest = new dbref[o->sp.exit.ndest];
+
             for (j = 0; j < o->sp.exit.ndest; j++) {
                 (o->sp.exit.dest)[j] = getref(f);
             }
@@ -1450,8 +1318,7 @@ db_read_object_new(FILE * f, struct object *o, dbref objno)
 
 /* Reads in Foxen, Foxen[234], WhiteFire, Mage or Lachesis DB Formats */
 void
-db_read_object_foxen(FILE * f, struct object *o, dbref objno,
-                     int dtype, int read_before)
+db_read_object_foxen(FILE * f, struct object *o, dbref objno, int dtype, int read_before)
 {
     dbref f2, f3, f4, p1, p2;
 
@@ -1549,16 +1416,7 @@ db_read_object_foxen(FILE * f, struct object *o, dbref objno,
     if (c == '*') {
         if (verboseload)
             fprintf(stderr, "[properties] ");
-#ifdef DISKBASE
-        o->propsfpos = ftell(f);
-        if (o->propsmode == PROPS_CHANGED) {
-            getproperties(f, objno);
-        } else {
-            skipproperties(f, objno);
-        }
-#else
         getproperties(f, objno);
-#endif
 
         prop_flag++;
     } else {
@@ -1632,6 +1490,7 @@ db_read_object_foxen(FILE * f, struct object *o, dbref objno,
             o->sp.exit.ndest = prop_flag ? getref(f) : j;
             if (o->sp.exit.ndest) /* only allocate space for linked exits */
                 o->sp.exit.dest = new dbref[o->sp.exit.ndest];
+
             for (j = 0; j < o->sp.exit.ndest; j++) {
                 (o->sp.exit.dest)[j] = getref(f);
             }
@@ -1679,8 +1538,7 @@ db_read_object_foxen(FILE * f, struct object *o, dbref objno,
 
                             hashbuf[0] = '\0';
                             db_hash_split(p, NULL, hashbuf, NULL);
-                            db_hash_password(HTYPE_CURRENT, hashbuf, hashbuf,
-                                             NULL);
+                            db_hash_password(HTYPE_CURRENT, hashbuf, hashbuf, NULL);
                             o->sp.player.password = alloc_string(hashbuf);
                         } else {
                             // Preserve new tagged methods
@@ -1728,6 +1586,9 @@ db_read_object_foxen(FILE * f, struct object *o, dbref objno,
             o->sp.program.siz = 0;
             o->sp.program.start = 0;
             o->sp.program.pubs = 0;
+#ifdef MCP_SUPPORT
+            o->sp.program.mcpbinds = 0;
+#endif /* MCP_SUPPORT */
             o->sp.program.proftime.tv_sec = 0;
             o->sp.program.proftime.tv_usec = 0;
             o->sp.program.profstart = 0;
@@ -1741,7 +1602,7 @@ db_read_object_foxen(FILE * f, struct object *o, dbref objno,
 #endif /* ARCHAIC_DATABASES */
             break;
         case TYPE_GARBAGE:
-            delete[] NAME(objno);
+            delete[]NAME(objno);
             NAME(objno) = "<garbage>";
 
             if (verboseload)
@@ -1798,8 +1659,7 @@ db_read(FILE * f)
 #ifdef ARCHAIC_DATABASES
         if (!strcmp(special, "**TinyMUCK DUMP Format***")) {
             db_load_format = 1;
-        } else if (!strcmp(special, "**Lachesis TinyMUCK DUMP Format***") ||
-                   !strcmp(special, "**WhiteFire TinyMUCK DUMP Format***")) {
+        } else if (!strcmp(special, "**Lachesis TinyMUCK DUMP Format***") || !strcmp(special, "**WhiteFire TinyMUCK DUMP Format***")) {
             db_load_format = 2;
         } else if (!strcmp(special, "**Mage TinyMUCK DUMP Format***")) {
             db_load_format = 3;
@@ -1816,11 +1676,8 @@ db_read(FILE * f)
         } else
 #endif /* ARCHAIC_DATABASES */
         if (!strcmp(special, "**Foxen5 TinyMUCK DUMP Format***") ||
-                !strcmp(special, "**Foxen6 TinyMUCK DUMP Format***") ||
-                !strcmp(special, "**Foxen7 TinyMUCK DUMP Format***") ||
-                !strcmp(special, "**NeonMuck V2 DUMP Format***")) {
-            db_load_format =
-                !strcmp(special, "**Foxen7 TinyMUCK DUMP Format***") ? 8 : 7;
+                !strcmp(special, "**Foxen6 TinyMUCK DUMP Format***") || !strcmp(special, "**Foxen7 TinyMUCK DUMP Format***") || !strcmp(special, "**NeonMuck V2 DUMP Format***")) {
+            db_load_format = !strcmp(special, "**Foxen7 TinyMUCK DUMP Format***") ? 8 : 7;
             i = getref(f);
             dbflags = getref(f);
             if (dbflags & DB_PARMSINFO) {
@@ -1831,19 +1688,16 @@ db_read(FILE * f)
 #ifdef COMPRESS
                 init_compress_from_file(f);
 #else
-                fprintf(stderr,
-                        "This server is not compiled to read compressed databases.\n");
+                fprintf(stderr, "This server is not compiled to read compressed databases.\n");
                 return -1;
 #endif
             }
 
-            if ((db_hash_passwords =
-                 (dbflags & DB_NEWPASSES || db_load_format == 8)))
+            if ((db_hash_passwords = (dbflags & DB_NEWPASSES || db_load_format == 8)))
                 db_hash_convert = 0;
             else if (db_hash_convert)
                 db_hash_passwords = 1;
-            db_hash_ver = db_hash_passwords ?
-                ((dbflags & HVER_MASK) >> HVER_SHIFT) : HVER_NONE;
+            db_hash_ver = db_hash_passwords ? ((dbflags & HVER_MASK) >> HVER_SHIFT) : HVER_NONE;
 
             db_grow(i);
 #ifdef ARCHAIC_DATABASES
@@ -1859,17 +1713,15 @@ db_read(FILE * f)
 #endif /* ARCHAIC_DATABASES */
         } else if (!strcmp(special, "***Foxen5 Deltas Dump Extention***") ||
                    !strcmp(special, "***Foxen6 Deltas Dump Extention***") ||
-                   !strcmp(special, "***Foxen7 Deltas Dump Extention***") ||
-                   !strcmp(special, "***NeonMuck V2 Deltas Dump Format***")) {
-            db_load_format =
-                !strcmp(special, "***Foxen7 Deltas Dump Extention***") ? 8 : 7;
+                   !strcmp(special, "***Foxen7 Deltas Dump Extention***") || !strcmp(special, "***NeonMuck V2 Deltas Dump Format***")) {
+            db_load_format = !strcmp(special, "***Foxen7 Deltas Dump Extention***") ? 8 : 7;
             doing_deltas = 1;
         }
         if (doing_deltas && !db) {
             fprintf(stderr, "Can't read a deltas file without a dbfile.\n");
             return -1;
         }
-        delete[] special;
+        delete[]special;
         if (!doing_deltas)
             main_db_format = db_load_format;
         c = getc(f);            /* get next char */
@@ -1909,13 +1761,11 @@ db_read(FILE * f)
                     case 6:
                     case 7:
                     case 8:
-                        db_read_object_foxen(f, o, thisref,
-                                             db_load_format, doing_deltas);
+                        db_read_object_foxen(f, o, thisref, db_load_format, doing_deltas);
                         break;
                 }
 #else /* !ARCHAIC_DATABASES */
-                db_read_object_foxen(f, o, thisref, db_load_format,
-                                     doing_deltas);
+                db_read_object_foxen(f, o, thisref, db_load_format, doing_deltas);
 #endif /* !ARCHAIC_DATABASES */
 
                 if (Typeof(thisref) == TYPE_PLAYER) {
@@ -1926,45 +1776,30 @@ db_read(FILE * f)
             case LOOKUP_TOKEN:
                 special = getstring(f);
                 if (strcmp(special, "**END OF DUMP***")) {
-                    delete[] special;
+                    delete[]special;
                     return -1;
                 } else {
-                    delete[] special;
+                    delete[]special;
                     special = getstring(f);
 #ifdef ARCHAIC_DATABASES
-                    if (!special || strcmp(special,
-                                           "***Foxen Deltas Dump Extention***"))
-                    {
-                        if (!special
-                            || strcmp(special,
-                                      "***Foxen2 Deltas Dump Extention***")) {
-                            if (!special
-                                || strcmp(special,
-                                          "***Foxen4 Deltas Dump Extention***"))
-                            {
+                    if (!special || strcmp(special, "***Foxen Deltas Dump Extention***")) {
+                        if (!special || strcmp(special, "***Foxen2 Deltas Dump Extention***")) {
+                            if (!special || strcmp(special, "***Foxen4 Deltas Dump Extention***")) {
 #endif /* ARCHAIC_DATABASES */
-                                if (!special
-                                    || strcmp(special,
-                                              "***Foxen5 Deltas Dump Extention***")
-                                    || strcmp(special,
-                                              "***Foxen6 Deltas Dump Extention***")
-                                    || strcmp(special,
-                                              "***Foxen7 Deltas Dump Extention***")
-                                    || strcmp(special,
-                                              "***NeonMuck V2 Deltas Dump Format***"))
-                                {
+                                if (!special || strcmp(special, "***Foxen5 Deltas Dump Extention***")
+                                    || strcmp(special, "***Foxen6 Deltas Dump Extention***")
+                                    || strcmp(special, "***Foxen7 Deltas Dump Extention***")
+                                    || strcmp(special, "***NeonMuck V2 Deltas Dump Format***")) {
                                     if (special)
-                                        delete[] special;
-                                    if ((main_db_format == 7
-                                         || main_db_format == 8)
+                                        delete[]special;
+                                    if ((main_db_format == 7 || main_db_format == 8)
                                         && (dbflags & DB_PARMSINFO)) {
                                         rewind(f);
-                                        delete[] getstring(f);
+                                        delete[]getstring(f);
                                         getref(f);
                                         getref(f);
                                         parmcnt = getref(f);
-                                        tune_load_parms_from_file(f, NOTHING,
-                                                                  parmcnt);
+                                        tune_load_parms_from_file(f, NOTHING, parmcnt);
                                     }
                                     for (i = 0; i < db_top; i++) {
                                         if (Typeof(i) == TYPE_GARBAGE) {
@@ -1979,23 +1814,24 @@ db_read(FILE * f)
                                     autostart_progs();
                                     return db_top;
                                 } else {
-                                    delete[] special;
-                                    db_load_format = !strcmp(special, "***Foxen7 Deltas Dump Extention***") ? 8 : 7;
+                                    delete[]special;
+                                    db_load_format = !strcmp(special, "***Foxen7 Deltas Dump Extention***")
+                                        ? 8 : 7;
                                     doing_deltas = 1;
                                 }
 #ifdef ARCHAIC_DATABASES
                             } else {
-                                delete[] special;
+                                delete[]special;
                                 db_load_format = 6;
                                 doing_deltas = 1;
                             }
                         } else {
-                            delete[] special;
+                            delete[]special;
                             db_load_format = 5;
                             doing_deltas = 1;
                         }
                     } else {
-                        delete[] special;
+                        delete[]special;
                         db_load_format = 4;
                         doing_deltas = 1;
                     }
@@ -2219,8 +2055,8 @@ db_hash_compare(const char *hash, const char *password)
     char buf[BUFFER_LEN];
     char hbuf[BUFFER_LEN];
     char sbuf[BUFFER_LEN];
-	char salt[9];
-	int res = 0, tag = 0, i = 0;
+    char salt[9];
+    int res = 0, tag = 0, i = 0;
 
     sbuf[0] = '\0';
     salt[0] = '\0';

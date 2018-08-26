@@ -54,9 +54,9 @@ mfn_pmatch(MFUNARGS)
     int result;
 
     if (!*argv[0]) {
-	ref = -1; 
+        ref = -1;
     } else if (!string_compare(argv[0], "me")) {
-        ref = player;	
+        ref = player;
     } else {
         ref = lookup_player(argv[0]);
         if (ref == NOTHING) {
@@ -249,8 +249,7 @@ mfn_contents(MFUNARGS)
         } else if (!string_compare(argv[1], "Thing")) {
             typchk = TYPE_THING;
         } else {
-            ABORT_MPI("CONTENTS",
-                      "Type must be 'player', 'room', 'thing', 'program', or 'exit'. (2).");
+            ABORT_MPI("CONTENTS", "Type must be 'player', 'room', 'thing', 'program', or 'exit'. (2).");
         }
     }
     strcpy(buf, "");
@@ -261,8 +260,7 @@ mfn_contents(MFUNARGS)
         if ((typchk == NOTYPE || Typeof(obj) == typchk) &&
             (ownroom || controls(perms, obj) ||
              !((FLAGS(obj) & DARK) || (FLAGS(getloc(obj)) & DARK) ||
-               (Typeof(obj) == TYPE_PROGRAM && !(FLAGS(obj) & LINK_OK)))) &&
-            !(Typeof(obj) == TYPE_ROOM && typchk != TYPE_ROOM)) {
+               (Typeof(obj) == TYPE_PROGRAM && !(FLAGS(obj) & LINK_OK)))) && !(Typeof(obj) == TYPE_ROOM && typchk != TYPE_ROOM)) {
             ref2str(obj, buf2);
             nextlen = strlen(buf2);
             if ((outlen + nextlen) >= (BUFFER_LEN - 3))
@@ -535,8 +533,7 @@ mfn_sublist(MFUNARGS)
 
     *buf = '\0';
     pflag = 0;
-    for (i = which; ((i <= end) && (incr == 1)) ||
-         ((i >= end) && (incr == -1)); i += incr) {
+    for (i = which; ((i <= end) && (incr == 1)) || ((i >= end) && (incr == -1)); i += incr) {
         if (pflag) {
             strcat(buf, sepbuf);
         } else {
@@ -590,8 +587,7 @@ mfn_lmatch(MFUNARGS)
     if (!*argv[2])
         ABORT_MPI("LMATCH", "List delimiter cannot be a null string.");
     len = strlen(argv[2]);
-    while (*ptr && !(string_prefix(ptr, argv[1]) &&
-                     (!ptr[len2] || string_prefix(ptr + len2, argv[2])))) {
+    while (*ptr && !(string_prefix(ptr, argv[1]) && (!ptr[len2] || string_prefix(ptr + len2, argv[2])))) {
         if (string_prefix(ptr, argv[1]) && *ptr && i2 == 0)
             i2 = i;
         while (*ptr && !string_prefix(ptr, argv[2]))
@@ -644,8 +640,7 @@ mfn_with(MFUNARGS)
     for (cnt = 2; cnt < argc; cnt++) {
         ptr = MesgParse(argv[cnt], argv[cnt]);
         if (!ptr) {
-            sprintf(buf, "%s %cWITH%c (%d)", get_mvar("how"),
-                    MFUN_LEADCHAR, MFUN_ARGEND, cnt);
+            sprintf(buf, "%s %cWITH%c (%d)", get_mvar("how"), MFUN_LEADCHAR, MFUN_ARGEND, cnt);
             notify(player, buf);
             return NULL;
         }
@@ -748,8 +743,7 @@ mfn_for(MFUNARGS)
     incr = atoi(dptr);
 
     *buf = '\0';
-    for (i = start; ((incr >= 0 && i <= end) || (incr < 0 && i >= end));
-         i += incr) {
+    for (i = start; ((incr >= 0 && i <= end) || (incr < 0 && i >= end)); i += incr) {
         sprintf(tmp, "%d", i);
         dptr = MesgParse(argv[4], buf);
         CHECKRETURN(dptr, "FOR", "arg 5 (repeated command)");
@@ -1233,7 +1227,7 @@ mfn_smatch(MFUNARGS)
 const char *
 mfn_strlen(MFUNARGS)
 {
-    sprintf(buf, "%d", (int)strlen(argv[0]));
+    sprintf(buf, "%d", (int) strlen(argv[0]));
     return buf;
 }
 
@@ -1250,8 +1244,7 @@ mfn_awake(MFUNARGS)
 {
     dbref obj = mesg_dbref_local(descr, player, what, perms, argv[0]);
 
-    if (obj == PERMDENIED || obj == AMBIGUOUS || obj == UNKNOWN
-        || obj == NOTHING || obj == HOME)
+    if (obj == PERMDENIED || obj == AMBIGUOUS || obj == UNKNOWN || obj == NOTHING || obj == HOME)
         return ("0");
 
     if (Typeof(obj) == TYPE_THING && (FLAGS(obj) & ZOMBIE)) {
@@ -1344,8 +1337,7 @@ mfn_debugif(MFUNARGS)
 
     CHECKRETURN(ptr, "DEBUGIF", "arg 1");
     if (truestr(argv[0])) {
-        ptr = mesg_parse(descr, player, what, perms, argv[1],
-                         buf, BUFFER_LEN, (mesgtyp | MPI_ISDEBUG));
+        ptr = mesg_parse(descr, player, what, perms, argv[1], buf, BUFFER_LEN, (mesgtyp | MPI_ISDEBUG));
     } else {
         ptr = MesgParse(argv[1], buf);
     }
@@ -1377,8 +1369,7 @@ mfn_timing(MFUNARGS)
 
     gettimeofday(&start_time, (struct timezone *) 0);
 
-    ptr = mesg_parse(descr, player, what, perms, argv[0],
-                     buf, BUFFER_LEN, mesgtyp);
+    ptr = mesg_parse(descr, player, what, perms, argv[0], buf, BUFFER_LEN, mesgtyp);
     CHECKRETURN(ptr, "DEBUG", "arg 1");
 
     gettimeofday(&end_time, (struct timezone *) 0);
@@ -1402,7 +1393,7 @@ mfn_delay(MFUNARGS)
     char *argchr, *cmdchr;
     int i = atoi(argv[0]);
 
-    if (i < 1 || i > 31557600) /* 10 years */
+    if (i < 1 || i > 31557600)  /* 10 years */
         i = 1;
 #ifdef WIZZED_DELAY
     if (!Wizperms(perms))
@@ -1410,9 +1401,7 @@ mfn_delay(MFUNARGS)
 #endif
     cmdchr = get_mvar("cmd");
     argchr = get_mvar("arg");
-    i = add_mpi_event(i, descr, player, getloc(player), perms, argv[1], cmdchr,
-                      argchr, (mesgtyp & MPI_ISLISTENER),
-                      (!(mesgtyp & MPI_ISPRIVATE)));
+    i = add_mpi_event(i, descr, player, getloc(player), perms, argv[1], cmdchr, argchr, (mesgtyp & MPI_ISLISTENER), (!(mesgtyp & MPI_ISPRIVATE)));
     sprintf(buf, "%d", i);
     return buf;
 }
@@ -1470,9 +1459,7 @@ mfn_muf(MFUNARGS)
     ptr = get_mvar("how");
     strcpy(match_cmdname, ptr);
     strcat(match_cmdname, "(MPI)");
-    tmpfr =
-        interp(descr, player, DBFETCH(player)->location, obj, perms, PREEMPT,
-               STD_HARDUID, 0);
+    tmpfr = interp(descr, player, DBFETCH(player)->location, obj, perms, PREEMPT, STD_HARDUID, 0);
     if (tmpfr) {
         rv = interp_loop(player, obj, tmpfr, 1);
     }
@@ -1539,16 +1526,13 @@ mfn_force(MFUNARGS)
                 ABORT_MPI("FORCE", "Cannot force a dark puppet.");
             if ((FLAGS(OWNER(obj)) & ZOMBIE))
                 ABORT_MPI("FORCE", tp_noperm_mesg);
-            if (loc != NOTHING && (FLAGS(loc) & ZOMBIE) &&
-                Typeof(loc) == TYPE_ROOM)
-                ABORT_MPI("FORCE",
-                          "Cannot force a Puppet in a no-puppets room.");
+            if (loc != NOTHING && (FLAGS(loc) & ZOMBIE) && Typeof(loc) == TYPE_ROOM)
+                ABORT_MPI("FORCE", "Cannot force a Puppet in a no-puppets room.");
             for (ptr2 = objname; *ptr && !isspace(*ptr);)
                 *(ptr2++) = *(ptr++);
             *ptr2 = '\0';
             if (lookup_player(objname) != NOTHING)
-                ABORT_MPI("FORCE",
-                          "Cannot force a thing named after a player.");
+                ABORT_MPI("FORCE", "Cannot force a thing named after a player.");
         }
         if (!(FLAGS(obj) & XFORCIBLE)) {
             ABORT_MPI("FORCE", tp_noperm_mesg);
@@ -1632,7 +1616,7 @@ mfn_instr(MFUNARGS)
     for (ptr = argv[0]; *ptr && !string_prefix(ptr, argv[1]); ptr++) ;
     if (!*ptr)
         return "0";
-    sprintf(buf, "%d", (int)(ptr - argv[0] + 1));
+    sprintf(buf, "%d", (int) (ptr - argv[0] + 1));
     return buf;
 }
 
@@ -1651,8 +1635,7 @@ mfn_lmember(MFUNARGS)
     if (!*argv[2])
         ABORT_MPI("LMEMBER", "List delimiter cannot be a null string.");
     len = strlen(argv[2]);
-    while (*ptr && !(string_prefix(ptr, argv[1]) &&
-                     (!ptr[len2] || string_prefix(ptr + len2, argv[2])))) {
+    while (*ptr && !(string_prefix(ptr, argv[1]) && (!ptr[len2] || string_prefix(ptr + len2, argv[2])))) {
         while (*ptr && !string_prefix(ptr, argv[2]))
             ptr++;
         if (*ptr)

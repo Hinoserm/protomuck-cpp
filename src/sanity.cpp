@@ -86,33 +86,26 @@ sane_dump_object(dbref player, const char *arg)
 
     switch (TYPEOF(d)) {
         case TYPE_THING:
-            SanPrint(player, "  Home:           %s",
-                     unparse(DBFETCH(d)->sp.thing.home));
-            SanPrint(player, "  Value:          %d",
-                     DBFETCH(d)->sp.thing.value);
+            SanPrint(player, "  Home:           %s", unparse(DBFETCH(d)->sp.thing.home));
+            SanPrint(player, "  Value:          %d", DBFETCH(d)->sp.thing.value);
             break;
 
         case TYPE_ROOM:
-            SanPrint(player, "  Drop-to:        %s",
-                     unparse(DBFETCH(d)->sp.room.dropto));
+            SanPrint(player, "  Drop-to:        %s", unparse(DBFETCH(d)->sp.room.dropto));
             break;
 
         case TYPE_PLAYER:
-            SanPrint(player, "  Home:           %s",
-                     unparse(DBFETCH(d)->sp.player.home));
-            SanPrint(player, "  Pennies:        %d",
-                     DBFETCH(d)->sp.player.pennies);
+            SanPrint(player, "  Home:           %s", unparse(DBFETCH(d)->sp.player.home));
+            SanPrint(player, "  Pennies:        %d", DBFETCH(d)->sp.player.pennies);
             if (player < 0) {
-                SanPrint(player, "  Password:       %s",
-                         DBFETCH(d)->sp.player.password);
+                SanPrint(player, "  Password:       %s", DBFETCH(d)->sp.player.password);
             }
             break;
 
         case TYPE_EXIT:
             SanPrint(player, "  Links:");
             for (i = 0; i < DBFETCH(d)->sp.exit.ndest; i++)
-                SanPrint(player, "    %s",
-                         unparse(DBFETCH(d)->sp.exit.dest[i]));
+                SanPrint(player, "    %s", unparse(DBFETCH(d)->sp.exit.dest[i]));
             break;
 
         case TYPE_PROGRAM:
@@ -200,8 +193,7 @@ check_next_chain(dbref player, dbref obj)
     while (obj != NOTHING && valid_ref(obj)) {
         for (i = orig; i != NOTHING; i = NEXTOBJ(i)) {
             if (i == NEXTOBJ(obj)) {
-                violate(player, obj,
-                        "has a 'next' field that forms an illegal loop in an object chain");
+                violate(player, obj, "has a 'next' field that forms an illegal loop in an object chain");
                 return;
             }
             if (i == obj) {
@@ -237,24 +229,21 @@ find_orphan_objects(dbref player)
     for (i = 0; i < db_top; i++) {
         if (EXITS(i) != NOTHING) {
             if (FLAGS(EXITS(i)) & SANEBIT) {
-                violate(player, EXITS(i),
-                        "is referred to by more than one object's Next, Contents, or Exits field");
+                violate(player, EXITS(i), "is referred to by more than one object's Next, Contents, or Exits field");
             } else {
                 FLAGS(EXITS(i)) |= SANEBIT;
             }
         }
         if (CONTENTS(i) != NOTHING) {
             if (FLAGS(CONTENTS(i)) & SANEBIT) {
-                violate(player, CONTENTS(i),
-                        "is referred to by more than one object's Next, Contents, or Exits field");
+                violate(player, CONTENTS(i), "is referred to by more than one object's Next, Contents, or Exits field");
             } else {
                 FLAGS(CONTENTS(i)) |= SANEBIT;
             }
         }
         if (NEXTOBJ(i) != NOTHING) {
             if (FLAGS(NEXTOBJ(i)) & SANEBIT) {
-                violate(player, NEXTOBJ(i),
-                        "is referred to by more than one object's Next, Contents, or Exits field");
+                violate(player, NEXTOBJ(i), "is referred to by more than one object's Next, Contents, or Exits field");
             } else {
                 FLAGS(NEXTOBJ(i)) |= SANEBIT;
             }
@@ -263,8 +252,7 @@ find_orphan_objects(dbref player)
 
     for (i = 0; i < db_top; i++) {
         if (!(FLAGS(i) & SANEBIT)) {
-            violate(player, i,
-                    "appears to be an orphan object, that is not referred to by any other object");
+            violate(player, i, "appears to be an orphan object, that is not referred to by any other object");
         }
     }
 
@@ -284,8 +272,7 @@ check_room(dbref player, dbref obj)
     if (!valid_ref(i) && i != HOME && i != NIL) {
         violate(player, obj, "has its dropto set to an invalid object");
     } else if (i >= 0 && TYPEOF(i) != TYPE_THING && TYPEOF(i) != TYPE_ROOM) {
-        violate(player, obj,
-                "has its dropto set to a non-room, non-thing object");
+        violate(player, obj, "has its dropto set to a non-room, non-thing object");
     }
 }
 
@@ -300,10 +287,8 @@ check_thing(dbref player, dbref obj)
     if (!valid_obj(i) && i != NIL) {
         violate(player, obj, "has its home set to an invalid object");
     } else if (i != NIL)
-        if (TYPEOF(i) != TYPE_ROOM &&
-            TYPEOF(i) != TYPE_THING && TYPEOF(i) != TYPE_PLAYER) {
-            violate(player, obj,
-                    "has its home set to an object that is not a room, thing, or player");
+        if (TYPEOF(i) != TYPE_ROOM && TYPEOF(i) != TYPE_THING && TYPEOF(i) != TYPE_PLAYER) {
+            violate(player, obj, "has its home set to an object that is not a room, thing, or player");
         }
 }
 
@@ -314,10 +299,8 @@ check_exit(dbref player, dbref obj)
     int i;
 
     for (i = 0; i < DBFETCH(obj)->sp.exit.ndest; i++) {
-        if (!valid_ref((DBFETCH(obj)->sp.exit.dest)[i]) &&
-            (DBFETCH(obj)->sp.exit.dest)[i] != HOME) {
-            violate(player, obj,
-                    "has an invalid object as one of its link destinations");
+        if (!valid_ref((DBFETCH(obj)->sp.exit.dest)[i]) && (DBFETCH(obj)->sp.exit.dest)[i] != HOME) {
+            violate(player, obj, "has an invalid object as one of its link destinations");
         }
     }
 }
@@ -349,8 +332,7 @@ void
 check_garbage(dbref player, dbref obj)
 {
     if (NEXTOBJ(obj) != NOTHING && TYPEOF(NEXTOBJ(obj)) != TYPE_GARBAGE) {
-        violate(player, obj,
-                "has a non-garbage object as the 'next' object in the garbage chain");
+        violate(player, obj, "has a non-garbage object as the 'next' object in the garbage chain");
     }
 }
 
@@ -361,29 +343,21 @@ check_contents_list(dbref player, dbref obj)
     dbref i;
     int limit;
 
-    if (TYPEOF(obj) != TYPE_PROGRAM &&
-        TYPEOF(obj) != TYPE_EXIT && TYPEOF(obj) != TYPE_GARBAGE) {
-        for (i = CONTENTS(obj), limit = db_top;
-             valid_obj(i) &&
-             --limit &&
-             LOCATION(i) == obj && TYPEOF(i) != TYPE_EXIT; i = NEXTOBJ(i)) ;
+    if (TYPEOF(obj) != TYPE_PROGRAM && TYPEOF(obj) != TYPE_EXIT && TYPEOF(obj) != TYPE_GARBAGE) {
+        for (i = CONTENTS(obj), limit = db_top; valid_obj(i) && --limit && LOCATION(i) == obj && TYPEOF(i) != TYPE_EXIT; i = NEXTOBJ(i)) ;
         if (i != NOTHING) {
             if (!limit) {
                 check_next_chain(player, CONTENTS(obj));
-                violate(player, obj,
-                        "is the containing object, and has the loop in its contents chain");
+                violate(player, obj, "is the containing object, and has the loop in its contents chain");
             } else {
                 if (!valid_obj(i)) {
-                    violate(player, obj,
-                            "has an invalid object in its contents list");
+                    violate(player, obj, "has an invalid object in its contents list");
                 } else {
                     if (TYPEOF(i) == TYPE_EXIT) {
-                        violate(player, obj,
-                                "has an exit in its contents list (it shoudln't)");
+                        violate(player, obj, "has an exit in its contents list (it shoudln't)");
                     }
                     if (LOCATION(i) != obj) {
-                        violate(player, obj,
-                                "has an object in its contents lists that thinks it is located elsewhere");
+                        violate(player, obj, "has an object in its contents lists that thinks it is located elsewhere");
                     }
                 }
             }
@@ -391,11 +365,9 @@ check_contents_list(dbref player, dbref obj)
     } else {
         if (CONTENTS(obj) != NOTHING) {
             if (TYPEOF(obj) == TYPE_EXIT) {
-                violate(player, obj,
-                        "is an exit/action whose contents aren't #-1");
+                violate(player, obj, "is an exit/action whose contents aren't #-1");
             } else if (TYPEOF(obj) == TYPE_GARBAGE) {
-                violate(player, obj,
-                        "is a garbage object whose contents aren't #-1");
+                violate(player, obj, "is a garbage object whose contents aren't #-1");
             } else {
                 violate(player, obj, "is a program whose contents aren't #-1");
             }
@@ -410,38 +382,29 @@ check_exits_list(dbref player, dbref obj)
     dbref i;
     int limit;
 
-    if (TYPEOF(obj) != TYPE_PROGRAM &&
-        TYPEOF(obj) != TYPE_EXIT && TYPEOF(obj) != TYPE_GARBAGE) {
-        for (i = EXITS(obj), limit = db_top;
-             valid_obj(i) &&
-             --limit &&
-             LOCATION(i) == obj && TYPEOF(i) == TYPE_EXIT; i = NEXTOBJ(i)) ;
+    if (TYPEOF(obj) != TYPE_PROGRAM && TYPEOF(obj) != TYPE_EXIT && TYPEOF(obj) != TYPE_GARBAGE) {
+        for (i = EXITS(obj), limit = db_top; valid_obj(i) && --limit && LOCATION(i) == obj && TYPEOF(i) == TYPE_EXIT; i = NEXTOBJ(i)) ;
         if (i != NOTHING) {
             if (!limit) {
                 check_next_chain(player, CONTENTS(obj));
-                violate(player, obj,
-                        "is the containing object, and has the loop in its exits chain");
+                violate(player, obj, "is the containing object, and has the loop in its exits chain");
             } else if (!valid_obj(i)) {
-                violate(player, obj,
-                        "has an invalid object in it's exits list");
+                violate(player, obj, "has an invalid object in it's exits list");
             } else {
                 if (TYPEOF(i) != TYPE_EXIT) {
                     violate(player, obj, "has a non-exit in it's exits list");
                 }
                 if (LOCATION(i) != obj) {
-                    violate(player, obj,
-                            "has an exit in its exits lists that thinks it is located elsewhere");
+                    violate(player, obj, "has an exit in its exits lists that thinks it is located elsewhere");
                 }
             }
         }
     } else {
         if (EXITS(obj) != NOTHING) {
             if (TYPEOF(obj) == TYPE_EXIT) {
-                violate(player, obj,
-                        "is an exit/action whose exits list isn't #-1");
+                violate(player, obj, "is an exit/action whose exits list isn't #-1");
             } else if (TYPEOF(obj) == TYPE_GARBAGE) {
-                violate(player, obj,
-                        "is a garbage object whose exits list isn't #-1");
+                violate(player, obj, "is a garbage object whose exits list isn't #-1");
             } else {
                 violate(player, obj, "is a program whose exits list isn't #-1");
             }
@@ -472,22 +435,17 @@ check_object(dbref player, dbref obj)
         /* 
          * check location 
          */
-        if (!valid_obj(LOCATION(obj)) &&
-            !(obj == GLOBAL_ENVIRONMENT && LOCATION(obj) == NOTHING)
+        if (!valid_obj(LOCATION(obj)) && !(obj == GLOBAL_ENVIRONMENT && LOCATION(obj) == NOTHING)
             ) {
             violate(player, obj, "has an invalid object as it's location");
         }
     }
 
-    if (LOCATION(obj) != NOTHING &&
-        (TYPEOF(LOCATION(obj)) == TYPE_GARBAGE ||
-         TYPEOF(LOCATION(obj)) == TYPE_EXIT ||
-         TYPEOF(LOCATION(obj)) == TYPE_PROGRAM))
+    if (LOCATION(obj) != NOTHING && (TYPEOF(LOCATION(obj)) == TYPE_GARBAGE || TYPEOF(LOCATION(obj)) == TYPE_EXIT || TYPEOF(LOCATION(obj)) == TYPE_PROGRAM))
         violate(player, obj, "thinks it is located in a non-container object");
 
     if ((TYPEOF(obj) == TYPE_GARBAGE) && (LOCATION(obj) != NOTHING))
-        violate(player, obj,
-                "is a garbage object with a location that isn't #-1");
+        violate(player, obj, "is a garbage object with a location that isn't #-1");
 
     check_contents_list(player, obj);
     check_exits_list(player, obj);
@@ -512,8 +470,7 @@ check_object(dbref player, dbref obj)
             check_garbage(player, obj);
             break;
         default:
-            violate(player, obj,
-                    "has an unknown object type, and its flags may also be corrupt");
+            violate(player, obj, "has an unknown object type, and its flags may also be corrupt");
             break;
     }
 }
@@ -595,8 +552,7 @@ cut_bad_recyclable(void)
     loop = recyclable;
     prev = NOTHING;
     while (loop != NOTHING) {
-        if (!valid_ref(loop) || TYPEOF(loop) != TYPE_GARBAGE ||
-            FLAGS(loop) & SANEBIT) {
+        if (!valid_ref(loop) || TYPEOF(loop) != TYPE_GARBAGE || FLAGS(loop) & SANEBIT) {
             SanFixed(loop, "Recyclable object %s is not TYPE_GARBAGE");
             if (prev != NOTHING) {
                 DBFETCH(prev)->next = NOTHING;
@@ -620,8 +576,7 @@ cut_bad_contents(dbref obj)
     loop = CONTENTS(obj);
     prev = NOTHING;
     while (loop != NOTHING) {
-        if (!valid_obj(loop) || FLAGS(loop) & SANEBIT ||
-            TYPEOF(loop) == TYPE_EXIT || LOCATION(loop) != obj || loop == obj) {
+        if (!valid_obj(loop) || FLAGS(loop) & SANEBIT || TYPEOF(loop) == TYPE_EXIT || LOCATION(loop) != obj || loop == obj) {
             if (!valid_obj(loop)) {
                 SanFixed(obj, "Contents chain for %s cut at invalid dbref");
             } else if (TYPEOF(loop) == TYPE_EXIT) {
@@ -629,11 +584,9 @@ cut_bad_contents(dbref obj)
             } else if (loop == obj) {
                 SanFixed(obj, "Contents chain for %s cut at self-reference");
             } else if (LOCATION(loop) != obj) {
-                SanFixed2(obj, loop,
-                          "Contents chain for %s cut at misplaced object %s");
+                SanFixed2(obj, loop, "Contents chain for %s cut at misplaced object %s");
             } else if (FLAGS(loop) & SANEBIT) {
-                SanFixed2(obj, loop,
-                          "Contents chain for %s cut at already chained object %s");
+                SanFixed2(obj, loop, "Contents chain for %s cut at already chained object %s");
             } else {
                 SanFixed2(obj, loop, "Contents chain for %s cut at %s");
             }
@@ -660,18 +613,15 @@ cut_bad_exits(dbref obj)
     loop = EXITS(obj);
     prev = NOTHING;
     while (loop != NOTHING) {
-        if (!valid_obj(loop) || FLAGS(loop) & SANEBIT ||
-            TYPEOF(loop) != TYPE_EXIT || LOCATION(loop) != obj) {
+        if (!valid_obj(loop) || FLAGS(loop) & SANEBIT || TYPEOF(loop) != TYPE_EXIT || LOCATION(loop) != obj) {
             if (!valid_obj(loop)) {
                 SanFixed(obj, "Exits chain for %s cut at invalid dbref");
             } else if (TYPEOF(loop) != TYPE_EXIT) {
                 SanFixed2(obj, loop, "Exits chain for %s cut at non-exit %s");
             } else if (LOCATION(loop) != obj) {
-                SanFixed2(obj, loop,
-                          "Exits chain for %s cut at misplaced exit %s");
+                SanFixed2(obj, loop, "Exits chain for %s cut at misplaced exit %s");
             } else if (FLAGS(loop) & SANEBIT) {
-                SanFixed2(obj, loop,
-                          "Exits chain for %s cut at already chained exit %s");
+                SanFixed2(obj, loop, "Exits chain for %s cut at already chained exit %s");
             } else {
                 SanFixed2(obj, loop, "Exits chain for %s cut at %s");
             }
@@ -697,8 +647,7 @@ hacksaw_bad_chains(void)
 
     cut_bad_recyclable();
     for (loop = 0; loop < db_top; loop++) {
-        if (TYPEOF(loop) != TYPE_ROOM && TYPEOF(loop) != TYPE_THING &&
-            TYPEOF(loop) != TYPE_PLAYER) {
+        if (TYPEOF(loop) != TYPE_ROOM && TYPEOF(loop) != TYPE_THING && TYPEOF(loop) != TYPE_PLAYER) {
             cut_all_chains(loop);
         } else {
             cut_bad_contents(loop);
@@ -737,14 +686,11 @@ create_lostandfound(dbref *player, dbref *room)
     PUSH(*room, DBFETCH(GLOBAL_ENVIRONMENT)->contents);
     SanFixed(*room, "Using %s to resolve unknown location");
 
-    while (lookup_player(player_name) != NOTHING &&
-           strlen(player_name) < PLAYER_NAME_LIMIT) {
+    while (lookup_player(player_name) != NOTHING && strlen(player_name) < PLAYER_NAME_LIMIT) {
         sprintf(player_name, "lost+found%d", ++temp);
     }
     if (strlen(player_name) >= PLAYER_NAME_LIMIT) {
-        log2file("logs/sanfixed",
-                 "WARNING: Unable to get lost+found player, using %s",
-                 unparse(MAN)
+        log2file("logs/sanfixed", "WARNING: Unable to get lost+found player, using %s", unparse(MAN)
             );
         *player = MAN;
     } else {
@@ -757,7 +703,7 @@ create_lostandfound(dbref *player, dbref *room)
         EXITS(*player) = NOTHING;
         DBFETCH(*player)->sp.player.pennies = tp_start_pennies;
         DBFETCH(*player)->sp.player.password = NULL;
-        set_password(*player,rand_password());
+        set_password(*player, rand_password());
         DBFETCH(*player)->sp.player.curr_prog = NOTHING;
         DBFETCH(*player)->sp.player.insert_mode = 0;
 #ifdef IGNORE_SUPPORT
@@ -766,9 +712,7 @@ create_lostandfound(dbref *player, dbref *room)
 
         PUSH(*player, DBFETCH(*room)->contents);
         add_player(*player);
-        log2file("logs/sanfixed", "Using %s (with password %s) to resolve "
-                 "unknown owner", unparse(*player),
-                 DBFETCH(*player)->sp.player.password);
+        log2file("logs/sanfixed", "Using %s (with password %s) to resolve " "unknown owner", unparse(*player), DBFETCH(*player)->sp.player.password);
     }
     OWNER(*room) = *player;
     DBDIRTY(*room);
@@ -801,8 +745,7 @@ fix_thing(dbref obj)
 
     i = DBFETCH(obj)->sp.thing.home;
 
-    if (!valid_obj(i) || (TYPEOF(i) != TYPE_ROOM && TYPEOF(i) != TYPE_THING &&
-                          TYPEOF(i) != TYPE_PLAYER)) {
+    if (!valid_obj(i) || (TYPEOF(i) != TYPE_ROOM && TYPEOF(i) != TYPE_THING && TYPEOF(i) != TYPE_PLAYER)) {
         SanFixed2(obj, OWNER(obj), "Setting the home on %s to %s, it's owner");
         DBFETCH(obj)->sp.thing.home = OWNER(obj);
         DBDIRTY(obj);
@@ -815,14 +758,12 @@ fix_exit(dbref obj)
     int i, j;
 
     for (i = 0; i < DBFETCH(obj)->sp.exit.ndest;) {
-        if (!valid_obj((DBFETCH(obj)->sp.exit.dest)[i]) &&
-            (DBFETCH(obj)->sp.exit.dest)[i] != HOME) {
+        if (!valid_obj((DBFETCH(obj)->sp.exit.dest)[i]) && (DBFETCH(obj)->sp.exit.dest)[i] != HOME) {
             SanFixed(obj, "Removing invalid destination from %s");
             DBFETCH(obj)->sp.exit.ndest--;
             DBDIRTY(obj);
             for (j = i; j < DBFETCH(obj)->sp.exit.ndest; j++) {
-                (DBFETCH(obj)->sp.exit.dest)[i] =
-                    (DBFETCH(obj)->sp.exit.dest)[i + 1];
+                (DBFETCH(obj)->sp.exit.dest)[i] = (DBFETCH(obj)->sp.exit.dest)[i + 1];
             }
         } else {
             i++;
@@ -863,10 +804,7 @@ find_misplaced_objects(void)
 
     for (loop = 0; loop < db_top; loop++) {
         if (TYPEOF(loop) != TYPE_ROOM &&
-            TYPEOF(loop) != TYPE_THING &&
-            TYPEOF(loop) != TYPE_PLAYER &&
-            TYPEOF(loop) != TYPE_EXIT &&
-            TYPEOF(loop) != TYPE_PROGRAM && TYPEOF(loop) != TYPE_GARBAGE) {
+            TYPEOF(loop) != TYPE_THING && TYPEOF(loop) != TYPE_PLAYER && TYPEOF(loop) != TYPE_EXIT && TYPEOF(loop) != TYPE_PROGRAM && TYPEOF(loop) != TYPE_GARBAGE) {
             SanFixedRef(loop, "Object #%d is of unknown type");
             sanity_violated = 1;
             continue;
@@ -882,8 +820,7 @@ find_misplaced_objects(void)
                     char name[32] = "Unnamed";
                     int temp = 0;
 
-                    while (lookup_player(name) != NOTHING &&
-                           strlen(name) < PLAYER_NAME_LIMIT) {
+                    while (lookup_player(name) != NOTHING && strlen(name) < PLAYER_NAME_LIMIT) {
                         sprintf(name, "Unnamed%d", ++temp);
                     }
                     NAME(loop) = alloc_string(name);
@@ -909,15 +846,10 @@ find_misplaced_objects(void)
                                                TYPEOF(LOCATION(loop)) ==
                                                TYPE_GARBAGE
                                                || TYPEOF(LOCATION(loop)) ==
-                                               TYPE_EXIT
-                                               || TYPEOF(LOCATION(loop)) ==
-                                               TYPE_PROGRAM
-                                               || (TYPEOF(loop) == TYPE_PLAYER
-                                                   && TYPEOF(LOCATION(loop)) ==
-                                                   TYPE_PLAYER))) {
+                                               TYPE_EXIT || TYPEOF(LOCATION(loop)) == TYPE_PROGRAM || (TYPEOF(loop) == TYPE_PLAYER && TYPEOF(LOCATION(loop))
+                                                                                                       == TYPE_PLAYER))) {
                 if (TYPEOF(loop) == TYPE_PLAYER) {
-                    if (valid_obj(LOCATION(loop)) &&
-                        TYPEOF(LOCATION(loop)) == TYPE_PLAYER) {
+                    if (valid_obj(LOCATION(loop)) && TYPEOF(LOCATION(loop)) == TYPE_PLAYER) {
                         dbref loop1;
 
                         loop1 = LOCATION(loop);
@@ -925,9 +857,7 @@ find_misplaced_objects(void)
                             CONTENTS(loop1) = DBFETCH(loop)->next;
                             DBDIRTY(loop1);
                         } else
-                            for (loop1 = CONTENTS(loop1);
-                                 loop1 != NOTHING;
-                                 loop1 = DBFETCH(loop1)->next) {
+                            for (loop1 = CONTENTS(loop1); loop1 != NOTHING; loop1 = DBFETCH(loop1)->next) {
                                 if (DBFETCH(loop1)->next == loop) {
                                     DBFETCH(loop1)->next = DBFETCH(loop)->next;
                                     DBDIRTY(loop1);
@@ -954,14 +884,12 @@ find_misplaced_objects(void)
             }
         } else {
             if (OWNER(loop) != NOTHING) {
-                SanFixedRef(loop,
-                            "Set owner of recycled object #%d to NOTHING");
+                SanFixedRef(loop, "Set owner of recycled object #%d to NOTHING");
                 OWNER(loop) = NOTHING;
                 DBDIRTY(loop);
             }
             if (LOCATION(loop) != NOTHING) {
-                SanFixedRef(loop,
-                            "Set location of recycled object #%d to NOTHING");
+                SanFixedRef(loop, "Set location of recycled object #%d to NOTHING");
                 LOCATION(loop) = NOTHING;
                 DBDIRTY(loop);
             }
@@ -1004,14 +932,12 @@ adopt_orphans(void)
                 case TYPE_PROGRAM:
                     DBFETCH(loop)->next = DBFETCH(LOCATION(loop))->contents;
                     DBFETCH(LOCATION(loop))->contents = loop;
-                    SanFixed2(loop, LOCATION(loop),
-                              "Orphaned object %s added to contents of %s");
+                    SanFixed2(loop, LOCATION(loop), "Orphaned object %s added to contents of %s");
                     break;
                 case TYPE_EXIT:
                     DBFETCH(loop)->next = DBFETCH(LOCATION(loop))->exits;
                     DBFETCH(LOCATION(loop))->exits = loop;
-                    SanFixed2(loop, LOCATION(loop),
-                              "Orphaned exit %s added to exits of %s");
+                    SanFixed2(loop, LOCATION(loop), "Orphaned exit %s added to exits of %s");
                     break;
                 case TYPE_GARBAGE:
                     DBFETCH(loop)->next = recyclable;
@@ -1030,14 +956,12 @@ void
 clean_global_environment(void)
 {
     if (DBFETCH(GLOBAL_ENVIRONMENT)->next != NOTHING) {
-        SanFixed(GLOBAL_ENVIRONMENT,
-                 "Removed the global environment %s from a chain");
+        SanFixed(GLOBAL_ENVIRONMENT, "Removed the global environment %s from a chain");
         DBFETCH(GLOBAL_ENVIRONMENT)->next = NOTHING;
         DBDIRTY(GLOBAL_ENVIRONMENT);
     }
     if (LOCATION(GLOBAL_ENVIRONMENT) != NOTHING) {
-        SanFixed2(GLOBAL_ENVIRONMENT, LOCATION(GLOBAL_ENVIRONMENT),
-                  "Removed the global environment %s from %s");
+        SanFixed2(GLOBAL_ENVIRONMENT, LOCATION(GLOBAL_ENVIRONMENT), "Removed the global environment %s from %s");
         LOCATION(GLOBAL_ENVIRONMENT) = NOTHING;
         DBDIRTY(GLOBAL_ENVIRONMENT);
     }
@@ -1076,26 +1000,20 @@ sanfix(dbref player)
 
     if (player > NOTHING) {
         if (!sanity_violated) {
-            notify_nolisten(player, "Database repair complete, please re-run"
-                            " @sanity.  For details of repairs, check logs/sanfixed.",
-                            1);
+            notify_nolisten(player, "Database repair complete, please re-run" " @sanity.  For details of repairs, check logs/sanfixed.", 1);
         } else {
-            notify_nolisten(player, "Database repair complete, however the "
-                            "database is still corrupt.  Please re-run @sanity.",
-                            1);
+            notify_nolisten(player, "Database repair complete, however the " "database is still corrupt.  Please re-run @sanity.", 1);
         }
     } else {
         fprintf(stderr, "Database repair complete, ");
         if (!sanity_violated)
             fprintf(stderr, "please re-run sanity check.\n");
         else
-            fprintf(stderr, "however the database is still corrupt.\n"
-                    "Please re-run sanity check for details and fix it by hand.\n");
+            fprintf(stderr, "however the database is still corrupt.\n" "Please re-run sanity check for details and fix it by hand.\n");
         fprintf(stderr, "For details of repairs made, check logs/sanfixed.\n");
     }
     if (sanity_violated) {
-        log2file("logs/sanfixed",
-                 "WARNING: The database is still corrupted, please repair by hand");
+        log2file("logs/sanfixed", "WARNING: The database is still corrupted, please repair by hand");
     }
 }
 
@@ -1120,8 +1038,7 @@ sanechange(dbref player, const char *command)
     }
     if (player > NOTHING) {
         if (!Boy(player)) {
-            notify(player,
-                   "Only the Man may alter the basic structure of the universe!");
+            notify(player, "Only the Man may alter the basic structure of the universe!");
             return;
         }
         results = sscanf(command, "%s %s %s", which, field, value);
@@ -1155,15 +1072,13 @@ sanechange(dbref player, const char *command)
         strcpy(buf2, unparse(EXITS(d)));
         EXITS(d) = v;
         DBDIRTY(d);
-        SanPrint(player, MARK "Setting #%d's Exits list start to %s", d,
-                 unparse(v));
+        SanPrint(player, MARK "Setting #%d's Exits list start to %s", d, unparse(v));
 
     } else if (!string_compare(field, "contents")) {
         strcpy(buf2, unparse(CONTENTS(d)));
         CONTENTS(d) = v;
         DBDIRTY(d);
-        SanPrint(player, MARK "Setting #%d's Contents list start to %s", d,
-                 unparse(v));
+        SanPrint(player, MARK "Setting #%d's Contents list start to %s", d, unparse(v));
 
     } else if (!string_compare(field, "location")) {
         strcpy(buf2, unparse(LOCATION(d)));
@@ -1268,7 +1183,7 @@ extract_prop(FILE * f, const char *dir, PropPtr p)
                 return;
             if (PropDataLok(p) == TRUE_BOOLEXP)
                 return;
-            ptr2 = unparse_boolexp((dbref) 1, PropDataLok(p), 0);
+            ptr2 = unparse_boolexp(tbuf, (dbref) 1, PropDataLok(p), 0);
             break;
     }
     while (*ptr2)
@@ -1342,19 +1257,16 @@ extract_object(FILE * f, dbref d)
 
     switch (TYPEOF(d)) {
         case TYPE_THING:
-            fprintf(f, "  Home:           %s\n",
-                    unparse(DBFETCH(d)->sp.thing.home));
+            fprintf(f, "  Home:           %s\n", unparse(DBFETCH(d)->sp.thing.home));
             fprintf(f, "  Value:          %d\n", DBFETCH(d)->sp.thing.value);
             break;
 
         case TYPE_ROOM:
-            fprintf(f, "  Drop-to:        %s\n",
-                    unparse(DBFETCH(d)->sp.room.dropto));
+            fprintf(f, "  Drop-to:        %s\n", unparse(DBFETCH(d)->sp.room.dropto));
             break;
 
         case TYPE_PLAYER:
-            fprintf(f, "  Home:           %s\n",
-                    unparse(DBFETCH(d)->sp.player.home));
+            fprintf(f, "  Home:           %s\n", unparse(DBFETCH(d)->sp.player.home));
             fprintf(f, "  Pennies:        %d\n", DBFETCH(d)->sp.player.pennies);
             break;
 
@@ -1519,22 +1431,16 @@ hack_it_up(void)
             case 'h':
             case '?':
                 printf("\n");
-                printf
-                    ("s                           Run Sanity checks on database\n");
-                printf
-                    ("f                           Automatically fix the database\n");
+                printf("s                           Run Sanity checks on database\n");
+                printf("f                           Automatically fix the database\n");
                 printf("p <dbref>                   Print an object\n");
                 printf("q                           Quit\n");
                 printf("w <file>                    Write database to file.\n");
-                printf
-                    ("c <dbref> <field> <value>   Change a field on an object.\n");
+                printf("c <dbref> <field> <value>   Change a field on an object.\n");
                 printf("                              (\"c ? ?\" for list)\n");
-                printf
-                    ("x <dbref> [<filename>]      Extract all objects belonging to <dbref>\n");
-                printf
-                    ("y <dbref> [<filename>]      Extract the single object <dbref>\n");
-                printf
-                    ("?                           Help! (Displays this screen.\n");
+                printf("x <dbref> [<filename>]      Extract all objects belonging to <dbref>\n");
+                printf("y <dbref> [<filename>]      Extract the single object <dbref>\n");
+                printf("?                           Help! (Displays this screen.\n");
                 break;
         }
     }

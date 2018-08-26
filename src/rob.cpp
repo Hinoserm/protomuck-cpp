@@ -46,15 +46,10 @@ do_give(int descr, dbref player, const char *recipient, int amount)
         default:
             if (!Mage(OWNER(player)) && !(POWERS(player) & POW_NO_PAY)) {
                 if (Typeof(who) != TYPE_PLAYER) {
-                    anotify_nolisten2(player,
-                                      CFAIL
-                                      "You can only give to other players.");
+                    anotify_nolisten2(player, CFAIL "You can only give to other players.");
                     return;
-                } else if (DBFETCH(who)->sp.player.pennies + amount >
-                           tp_max_pennies) {
-                    anotify_fmt(player, SYSRED
-                                "That player doesn't need that many %s!",
-                                tp_pennies);
+                } else if (DBFETCH(who)->sp.player.pennies + amount > tp_max_pennies) {
+                    anotify_fmt(player, SYSRED "That player doesn't need that many %s!", tp_pennies);
                     return;
                 }
             }
@@ -63,33 +58,24 @@ do_give(int descr, dbref player, const char *recipient, int amount)
 
     /* try to do the give */
     if (!payfor(player, amount)) {
-        anotify_fmt(player, CFAIL "You don't have that many %s to give!",
-                    tp_pennies);
+        anotify_fmt(player, CFAIL "You don't have that many %s to give!", tp_pennies);
     } else {
         /* he can do it */
         switch (Typeof(who)) {
             case TYPE_PLAYER:
                 DBFETCH(who)->sp.player.pennies += amount;
-                sprintf(buf, CSUCC "You give %d %s to %s.",
-                        amount, amount == 1 ? tp_penny : tp_pennies, NAME(who));
+                sprintf(buf, CSUCC "You give %d %s to %s.", amount, amount == 1 ? tp_penny : tp_pennies, NAME(who));
                 anotify_nolisten2(player, buf);
-                sprintf(buf, CNOTE "%s gives you %d %s.",
-                        NAME(player), amount,
-                        amount == 1 ? tp_penny : tp_pennies);
+                sprintf(buf, CNOTE "%s gives you %d %s.", NAME(player), amount, amount == 1 ? tp_penny : tp_pennies);
                 anotify_nolisten2(who, buf);
                 break;
             case TYPE_THING:
                 DBFETCH(who)->sp.thing.value += amount;
-                sprintf(buf, CSUCC "You change the value of %s to %d %s.",
-                        NAME(who),
-                        DBFETCH(who)->sp.thing.value,
-                        DBFETCH(who)->sp.thing.value ==
-                        1 ? tp_penny : tp_pennies);
+                sprintf(buf, CSUCC "You change the value of %s to %d %s.", NAME(who), DBFETCH(who)->sp.thing.value, DBFETCH(who)->sp.thing.value == 1 ? tp_penny : tp_pennies);
                 anotify_nolisten2(player, buf);
                 break;
             default:
-                anotify_fmt(player, CFAIL "You can't give %s to that!",
-                            tp_pennies);
+                anotify_fmt(player, CFAIL "You can't give %s to that!", tp_pennies);
                 break;
         }
         DBDIRTY(who);

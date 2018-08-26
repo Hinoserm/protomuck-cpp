@@ -1,3 +1,8 @@
+#include <sstream>
+#include <iomanip>
+#include <cctype>
+#include <stdexcept>
+
 #include "copyright.h"
 #include "config.h"
 #include "db.h"
@@ -6,6 +11,7 @@
 #include "params.h"
 #include "interface.h"
 #include "interp.h"
+#include "strings.h"
 
 /* String utilities */
 
@@ -19,7 +25,7 @@ static hash_tab color_list[COLOR_HASH_SIZE];
 void
 clear_color_hash(void)
 {
-	kill_hash(color_list, COLOR_HASH_SIZE, 0);
+    kill_hash(color_list, COLOR_HASH_SIZE, 0);
 }
 
 int
@@ -235,7 +241,7 @@ init_color_hash(void)
     add_hash_int("XT/DOLLY", 228, color_list, COLOR_HASH_SIZE);
     add_hash_int("XT/PORTAFINO", 229, color_list, COLOR_HASH_SIZE);
     add_hash_int("XT/CUMULUS", 230, color_list, COLOR_HASH_SIZE);
-    add_hash_int("XT/WHITE", 231, color_list, COLOR_HASH_SIZE);    
+    add_hash_int("XT/WHITE", 231, color_list, COLOR_HASH_SIZE);
     add_hash_int("XT/BLACKHOLE", 232, color_list, COLOR_HASH_SIZE);
     add_hash_int("XT/OUTERSPACE", 233, color_list, COLOR_HASH_SIZE);
     add_hash_int("XT/OBSIDIAN", 234, color_list, COLOR_HASH_SIZE);
@@ -624,84 +630,81 @@ string_match(const char *src, const char *sub)
 
 #define MUSH_TAB "    "
 
-char *
-mushformat_substitute(const char *str)
-{
-    char c;
-    //char d;
-    //char prn[3];
-    static char buf[BUFFER_LEN * 2];
-    char orig[BUFFER_LEN];
-    char *result;
-
-    //prn[0] = '%';
-    //prn[2] = '\0';
-
-    strcpy(orig, str);
-    str = orig;
-
-    result = buf;
-    while (*str) {
-        if (*str == '%') {
-            *result = '\0';
-            //prn[1] = c = *(++str);
-            c = *(++str);
-            if (!c) {
-                *(result++) = '%';
-                continue;
-            } else if (c == '%') {
-                *(result++) = '%';
-                str++;
-            } else {
-                c = (isupper(c)) ? c : toupper(c);
-                switch (c) {
-                    case 'T': /* tab */
-                        strcatn(result, sizeof(buf) - (result - buf),
-                                MUSH_TAB);
-                        break;
-                    case 'B': /* single whitespace, kinda pointless */
-                        strcatn(result, sizeof(buf) - (result - buf),
-                                " ");
-                        break;
-                    case 'R': /* carriage return */
-                        if (*--result == '\r') {
-                            result++;
-                            /* necessary to make \r\r work */
-                            strcatn(result, sizeof(buf) - (result - buf),
-                                    " \r");
-                        } else {
-                            result++;
-                            strcatn(result, sizeof(buf) - (result - buf),
-                                    "\r");
-                        }
-                        break;
-                    default:
-                        /* if strict_mush_escapes is tuned off, don't gobble
-                           unhandled % escapes */
-                        if ( !tp_strict_mush_escapes )
-                            *(result++) = '%';
-                        *result = *str;
-                        result[1] = '\0';
-                        break;
-                }
-                result += strlen(result);
-                str++;
-                if ((result - buf) > (BUFFER_LEN - 2)) {
-                    buf[BUFFER_LEN - 1] = '\0';
-                    return buf;
-                }
-            }
-        } else {
-            if ((result - buf) > (BUFFER_LEN - 2)) {
-                buf[BUFFER_LEN - 1] = '\0';
-                return buf;
-            }
-            *result++ = *str++;
-        }
-    }
-    *result = '\0';
-    return buf;
-}
+//char *
+//mushformat_substitute(const char *str)
+//{
+//    char c;
+//
+//    //char d;
+//    //char prn[3];
+//    static char buf[BUFFER_LEN * 2];
+//    char orig[BUFFER_LEN];
+//    char *result;
+//
+//    //prn[0] = '%';
+//    //prn[2] = '\0';
+//
+//    strcpy(orig, str);
+//    str = orig;
+//
+//    result = buf;
+//    while (*str) {
+//        if (*str == '%') {
+//            *result = '\0';
+//            //prn[1] = c = *(++str);
+//            c = *(++str);
+//            if (!c) {
+//                *(result++) = '%';
+//                continue;
+//            } else if (c == '%') {
+//                *(result++) = '%';
+//                str++;
+//            } else {
+//                c = (isupper(c)) ? c : toupper(c);
+//                switch (c) {
+//                    case 'T':  /* tab */
+//                        strcatn(result, sizeof(buf) - (result - buf), MUSH_TAB);
+//                        break;
+//                    case 'B':  /* single whitespace, kinda pointless */
+//                        strcatn(result, sizeof(buf) - (result - buf), " ");
+//                        break;
+//                    case 'R':  /* carriage return */
+//                        if (*--result == '\r') {
+//                            result++;
+//                            /* necessary to make \r\r work */
+//                            strcatn(result, sizeof(buf) - (result - buf), " \r");
+//                        } else {
+//                            result++;
+//                            strcatn(result, sizeof(buf) - (result - buf), "\r");
+//                        }
+//                        break;
+//                    default:
+//                        /* if strict_mush_escapes is tuned off, don't gobble
+//                           unhandled % escapes */
+//                        if (!tp_strict_mush_escapes)
+//                            *(result++) = '%';
+//                        *result = *str;
+//                        result[1] = '\0';
+//                        break;
+//                }
+//                result += strlen(result);
+//                str++;
+//                if ((result - buf) > (BUFFER_LEN - 2)) {
+//                    buf[BUFFER_LEN - 1] = '\0';
+//                    return buf;
+//                }
+//            }
+//        } else {
+//            if ((result - buf) > (BUFFER_LEN - 2)) {
+//                buf[BUFFER_LEN - 1] = '\0';
+//                return buf;
+//            }
+//            *result++ = *str++;
+//        }
+//    }
+//    *result = '\0';
+//    return buf;
+//}
 
 /*
  * pronoun_substitute()
@@ -771,10 +774,8 @@ pronoun_substitute(int descr, dbref player, const char *str)
                 mywhere = player;
                 d = (isupper(c)) ? c : toupper(c);
 
-                snprintf(globprop, sizeof(globprop), "_pronouns/%.64s/%s",
-                         sexstr, prn);
-                if (d == 'A' || d == 'S' || d == 'O' || d == 'P' || d == 'R'
-                    || d == 'N') {
+                snprintf(globprop, sizeof(globprop), "_pronouns/%.64s/%s", sexstr, prn);
+                if (d == 'A' || d == 'S' || d == 'O' || d == 'P' || d == 'R' || d == 'N') {
                     self_sub = get_property_class(mywhere, prn);
                 } else {
                     self_sub = envpropstr(&mywhere, prn);
@@ -786,8 +787,7 @@ pronoun_substitute(int descr, dbref player, const char *str)
                     self_sub = get_property_class(0, globprop);
                 }
                 if (!self_sub && (sex == GENDER_UNASSIGNED)) {
-                    snprintf(globprop, sizeof(globprop),
-                             "_pronouns/_default/%s", prn);
+                    snprintf(globprop, sizeof(globprop), "_pronouns/_default/%s", prn);
 
                     if (!(self_sub = get_property_class(player, globprop)))
                         self_sub = get_property_class(0, globprop);
@@ -806,11 +806,9 @@ pronoun_substitute(int descr, dbref player, const char *str)
                     result += strlen(result);
                     str++;
                     if (temp_sub) {
-                        if (((result - buf) + strlen(temp_sub + 2)) >
-                            (BUFFER_LEN - 2))
+                        if (((result - buf) + strlen(temp_sub + 2)) > (BUFFER_LEN - 2))
                             return buf;
-                        strcatn(result, sizeof(buf) - (result - buf),
-                                temp_sub + 2);
+                        strcatn(result, sizeof(buf) - (result - buf), temp_sub + 2);
                         if (isupper(temp_sub[1]) && islower(*result))
                             *result = toupper(*result);
                         result += strlen(result);
@@ -818,29 +816,27 @@ pronoun_substitute(int descr, dbref player, const char *str)
                     }
                 } else if (sex == GENDER_UNASSIGNED) {
                     switch (c) {
-                        case 'n':
-                        case 'N':
-                        case 'o':
-                        case 'O':
-                        case 's':
-                        case 'S':
-                        case 'r':
-                        case 'R':
-                            strcatn(result, sizeof(buf) - (result - buf),
-                                    PNAME(player));
-                            break;
-                        case 'a':
-                        case 'A':
-                        case 'p':
-                        case 'P':
-                            strcatn(result, sizeof(buf) - (result - buf),
-                                    PNAME(player));
-                            strcatn(result, sizeof(buf) - (result - buf), "'s");
-                            break;
-                        default:
-                            result[0] = *str;
-                            result[1] = 0;
-                            break;
+                    case 'n':
+                    case 'N':
+                    case 'o':
+                    case 'O':
+                    case 's':
+                    case 'S':
+                    case 'r':
+                    case 'R':
+                        strcatn(result, sizeof(buf) - (result - buf), PNAME(player));
+                        break;
+                    case 'a':
+                    case 'A':
+                    case 'p':
+                    case 'P':
+                        strcatn(result, sizeof(buf) - (result - buf), PNAME(player));
+                        strcatn(result, sizeof(buf) - (result - buf), "'s");
+                        break;
+                    default:
+                        result[0] = *str;
+                        result[1] = 0;
+                        break;
                     }
                     str++;
                     result += strlen(result);
@@ -850,40 +846,34 @@ pronoun_substitute(int descr, dbref player, const char *str)
                     }
                 } else {
                     switch (c) {
-                        case 'a':
-                        case 'A':
-                            strcatn(result, sizeof(buf) - (result - buf),
-                                    absolute[sex]);
-                            break;
-                        case 's':
-                        case 'S':
-                            strcatn(result, sizeof(buf) - (result - buf),
-                                    subjective[sex]);
-                            break;
-                        case 'p':
-                        case 'P':
-                            strcatn(result, sizeof(buf) - (result - buf),
-                                    possessive[sex]);
-                            break;
-                        case 'o':
-                        case 'O':
-                            strcatn(result, sizeof(buf) - (result - buf),
-                                    objective[sex]);
-                            break;
-                        case 'r':
-                        case 'R':
-                            strcatn(result, sizeof(buf) - (result - buf),
-                                    reflexive[sex]);
-                            break;
-                        case 'n':
-                        case 'N':
-                            strcatn(result, sizeof(buf) - (result - buf),
-                                    PNAME(player));
-                            break;
-                        default:
-                            *result = *str;
-                            result[1] = '\0';
-                            break;
+                    case 'a':
+                    case 'A':
+                        strcatn(result, sizeof(buf) - (result - buf), absolute[sex]);
+                        break;
+                    case 's':
+                    case 'S':
+                        strcatn(result, sizeof(buf) - (result - buf), subjective[sex]);
+                        break;
+                    case 'p':
+                    case 'P':
+                        strcatn(result, sizeof(buf) - (result - buf), possessive[sex]);
+                        break;
+                    case 'o':
+                    case 'O':
+                        strcatn(result, sizeof(buf) - (result - buf), objective[sex]);
+                        break;
+                    case 'r':
+                    case 'R':
+                        strcatn(result, sizeof(buf) - (result - buf), reflexive[sex]);
+                        break;
+                    case 'n':
+                    case 'N':
+                        strcatn(result, sizeof(buf) - (result - buf), PNAME(player));
+                        break;
+                    default:
+                        *result = *str;
+                        result[1] = '\0';
+                        break;
                     }
                     if (isupper(c) && islower(*result)) {
                         *result = toupper(*result);
@@ -907,7 +897,6 @@ pronoun_substitute(int descr, dbref player, const char *str)
     *result = '\0';
     return buf;
 }
-
 
 /*
  * pronoun_substitute()
@@ -1067,8 +1056,8 @@ alloc_string(const char *string)
     char *s;
     int len;
 
-    /* NULL, "" -> NULL */
-    if (!string || !*string)
+    /* NULL -> NULL */
+    if (!string)
         return 0;
 
     len = strlen(string) + 1;
@@ -1106,12 +1095,18 @@ alloc_prog_string_exact(const char *s, int length, int wclength)
 {
     struct shared_string *ss;
 
-    if (s == NULL || *s == '\0' || length == 0)
+    if (s == NULL || (*s == '\0' && length < 0) || length == 0)
         return (NULL);
 
     if (length < 0) {
         length = strlen(s);
     }
+
+    if (length > BUFFER_LEN) {
+        length = BUFFER_LEN - 1; //For Safety.  This should be removed when string handling is improved.
+        fprintf(stderr, "MUF String would have exceeded BUFFER_LEN\n");
+    }
+
     if (!(ss = new shared_string[length])) {
         fprintf(stderr, "PANIC: alloc_prog_string() Out of Memory.\n");
         abort();
@@ -1122,6 +1117,7 @@ alloc_prog_string_exact(const char *s, int length, int wclength)
     ss->wclength = wclength;
 #endif
     memcpy(ss->data, s, ss->length + 1);
+    ss->data[ss->length] = '\0'; //For Safety
     return (ss);
 }
 
@@ -1135,8 +1131,9 @@ string_dup(const char *s)
     int len = 1 + strlen(s);
 
     p = new char[len];
+
     if (p)
-        (void) memcpy(p, s, len);
+        memcpy(p, s, len);
     return (p);
 }
 #endif
@@ -1148,7 +1145,6 @@ intostr(char *buf, int i)
     return (buf);
 }
 
-
 /*
  * Encrypt one string with another one.
  */
@@ -1157,6 +1153,7 @@ intostr(char *buf, int i)
 
 static char enarr[256];
 static int charset_count[] = { 96, 0 };
+
 static int initialized_crypt = 0;
 
 void
@@ -1174,7 +1171,6 @@ init_crypt(void)
     enarr[127] = '\r';
     initialized_crypt = 1;
 }
-
 
 const char *
 strencrypt(const char *data, const char *key)
@@ -1204,8 +1200,7 @@ strencrypt(const char *data, const char *key)
     seed3 = seed2 = ((seed2 ^ (seed ^ (RANDOM() >> 24))) & 0x3f);
 
     count = seed + 11;
-    for (upt = (const unsigned char *) data, ups = (unsigned char *) buf, cp =
-         key; *upt; upt++) {
+    for (upt = (const unsigned char *) data, ups = (unsigned char *) buf, cp = key; *upt; upt++) {
         count = (((*cp) ^ count) + (seed ^ seed2)) & 0xff;
         seed2 = ((seed2 + 1) & 0x3f);
         if (!*(++cp))
@@ -1234,8 +1229,6 @@ strencrypt(const char *data, const char *key)
     *ptr++ = '\0';
     return linebuf;
 }
-
-
 
 const char *
 strdecrypt(const char *data, const char *key)
@@ -1297,42 +1290,42 @@ strdecrypt(const char *data, const char *key)
  * personal prefs, global defaults are set on #0.
  */
 const char *
-color_lookup(dbref player, const char *color, const char *defcolor,
-             int intrecurse, char *color_buffer)
+color_lookup(dbref player, const char *color, const char *defcolor, int intrecurse, char *color_buffer)
 {
     const char *tempcolor;
     char buf[BUFFER_LEN];
     int index = 0;
-    hash_data *hd = NULL; 
+    hash_data *hd = NULL;
     char temp_buffer[8];
-    int search_more = 1; /* Set to false to block unnecessary searches */
+    int search_more = 1;        /* Set to false to block unnecessary searches */
+
     color_buffer[0] = '\0';
     temp_buffer[0] = '\0';
 
     if ((!color) || (!*color))
         return defcolor;
-    if (player != NOTHING && OkObj(player)) {
+    if (player != NOTHING && OkObj(player) && Typeof(player) != TYPE_GARBAGE) {
         if (!strcasecmp("SUCC", color) || !strcasecmp("CSUCC", color)) {
             tempcolor = GETMESG(player, "_/COLORS/SUCC");
-            if (!tempcolor)
+            if (!tempcolor && OkObj(OWNER(player)))
                 tempcolor = GETMESG(OWNER(player), "_/COLORS/SUCC");
             if (!tempcolor)
                 tempcolor = GETMESG(0, "_/COLORS/SUCC");
-            if (!tempcolor) 
+            if (!tempcolor)
                 tempcolor = CCSUCC;
             color = tempcolor;
         } else if (!strcasecmp("FAIL", color) || !strcasecmp("CFAIL", color)) {
             tempcolor = GETMESG(player, "_/COLORS/FAIL");
-            if (!tempcolor)
+            if (!tempcolor && OkObj(OWNER(player)))
                 tempcolor = GETMESG(OWNER(player), "_/COLORS/FAIL");
             if (!tempcolor)
                 tempcolor = GETMESG(0, "_/COLORS/FAIL");
-            if (!tempcolor) 
+            if (!tempcolor)
                 tempcolor = CCFAIL;
             color = tempcolor;
         } else if (!strcasecmp("INFO", color) || !strcasecmp("CINFO", color)) {
             tempcolor = GETMESG(player, "_/COLORS/INFO");
-            if (!tempcolor)
+            if (!tempcolor && OkObj(OWNER(player)))
                 tempcolor = GETMESG(OWNER(player), "_/COLORS/INFO");
             if (!tempcolor)
                 tempcolor = GETMESG(0, "_/COLORS/INFO");
@@ -1341,7 +1334,7 @@ color_lookup(dbref player, const char *color, const char *defcolor,
             color = tempcolor;
         } else if (!strcasecmp("NOTE", color) || !strcasecmp("CNOTE", color)) {
             tempcolor = GETMESG(player, "_/COLORS/NOTE");
-            if (!tempcolor)
+            if (!tempcolor && OkObj(OWNER(player)))
                 tempcolor = GETMESG(OWNER(player), "_/COLORS/NOTE");
             if (!tempcolor)
                 tempcolor = GETMESG(0, "_/COLORS/NOTE");
@@ -1350,7 +1343,7 @@ color_lookup(dbref player, const char *color, const char *defcolor,
             color = tempcolor;
         } else if (!strcasecmp("MOVE", color) || !strcasecmp("CMOVE", color)) {
             tempcolor = GETMESG(player, "_/COLORS/MOVE");
-            if (!tempcolor)
+            if (!tempcolor && OkObj(OWNER(player)))
                 tempcolor = GETMESG(OWNER(player), "_/COLORS/MOVE");
             if (!tempcolor)
                 tempcolor = GETMESG(0, "_/COLORS/MOVE");
@@ -1361,23 +1354,21 @@ color_lookup(dbref player, const char *color, const char *defcolor,
             strcpy(buf, "_/COLORS/");
             strcat(buf, color);
             tempcolor = GETMESG(player, buf);
-            if (!tempcolor)
+            if (!tempcolor && OkObj(OWNER(player)))
                 tempcolor = GETMESG(OWNER(player), buf);
             if (!tempcolor)
                 tempcolor = GETMESG(0, buf);
             if (tempcolor)
                 color = tempcolor;
             else
-                search_more = 0; 
+                search_more = 0;
         }
 
         if (intrecurse < 5 && search_more) {
-            (void) intrecurse++;
-            return color_lookup(player, color, defcolor, intrecurse, 
-                                color_buffer );
+            return color_lookup(player, color, defcolor, intrecurse + 1, color_buffer);
         }
-    }                           /* End of player != NOTHING check. Too lazy to indent all that. */
-
+    }
+    /* End of player != NOTHING check. */
     if (!strcasecmp("NORMAL", color)) {
         return ANSINORMAL;
     } else if (!strcasecmp("BOLD", color) || !strcasecmp("BRIGHT", color)) {
@@ -1386,7 +1377,8 @@ color_lookup(dbref player, const char *color, const char *defcolor,
         return ANSIDIM;
     } else if (!strcasecmp("ITALIC", color) || !strcasecmp("ITALICS", color)) {
         return ANSIITALIC;
-    } else if (!strcasecmp("UNDERLINE", color) || !strcasecmp("UNDERSCORE", color)) {
+    } else if (!strcasecmp("UNDERLINE", color)
+               || !strcasecmp("UNDERSCORE", color)) {
         return ANSIUNDERLINE;
     } else if (!strcasecmp("FLASH", color) || !strcasecmp("BLINK", color)) {
         return ANSIFLASH;
@@ -1394,7 +1386,8 @@ color_lookup(dbref player, const char *color, const char *defcolor,
         return ANSIFLASH2;
     } else if (!strcasecmp("INVERT", color) || !strcasecmp("REVERSE", color)) {
         return ANSIINVERT;
-    } else if (!strcasecmp("INVISIBLE", color) || !strcasecmp("HIDDEN", color)) {
+    } else if (!strcasecmp("INVISIBLE", color)
+               || !strcasecmp("HIDDEN", color)) {
         return ANSIINVISIBLE;
     } else if (!strcasecmp("BLACK", color)) {
         return ANSIBLACK;
@@ -1478,33 +1471,32 @@ color_lookup(dbref player, const char *color, const char *defcolor,
         return ANSIHWHITE;
     } else if (!strcasecmp("STRIKE", color)) {
         return ANSI_STRIKE;
-    } else if ( (hd = find_hash(color, color_list, COLOR_HASH_SIZE)) ){
-       /* Color found in color lookup table */
-        sprintf( temp_buffer, "%d", hd->ival);
-        if (intrecurse < 5) {
-            intrecurse++;
-            return color_lookup(player, temp_buffer, defcolor, intrecurse,
-                                color_buffer);
-        }
-    } else if ( number(color) || (!strncasecmp("B",color,1) && number(color+1)) ) {
+    } else if ((hd = find_hash(color, color_list, COLOR_HASH_SIZE))) {
+        /* Color found in color lookup table */
+        sprintf(temp_buffer, "%d", hd->ival);
+        if (intrecurse < 5)
+            return color_lookup(player, temp_buffer, defcolor, intrecurse + 1, color_buffer);
+
+    } else if (number(color)
+               || (!strncasecmp("B", color, 1) && number(color + 1))) {
         /* we have received a 256 color index */
-        if (!strncasecmp("B",color,1) && number(color+1))
-            index = atoi(color+1)+300;
-        else 
+        if (!strncasecmp("B", color, 1) && number(color + 1))
+            index = atoi(color + 1) + 300;
+        else
             index = atoi(color);
 
-        if ( index >= 0 && index < 256 ) {
+        if (index >= 0 && index < 256) {
             /* Index is 0 - 255,  forground */
             sprintf(color_buffer, "\033[38;5;%dm", index);
             return ANSI_256;
-        } else if ( index >= 300 && index < 556 ) {
+        } else if (index >= 300 && index < 556) {
             /* Index is 300 - 555, i.e., background (0-255) */
             sprintf(color_buffer, "\033[48;5;%dm", index - 300);
             return ANSI_256;
-        } else if ( index == 256 ) {
+        } else if (index == 256) {
             /* Special case */
             return ANSI_256_RESET;
-        } 
+        }
     }
 
     return defcolor;
@@ -1532,14 +1524,13 @@ parse_ansi(dbref player, char *buf, const char *from, const char *defcolor)
             if (*from)
                 from++;
             if (*cbuf) {
-                if ((ansi = color_lookup(player, cbuf, defcolor, 1, 
-                      color_buffer ))) {
+                if ((ansi = color_lookup(player, cbuf, defcolor, 1, color_buffer))) {
                     if (!strcmp(ansi, ANSI_256)) {
                         /* Copy 256 color from buffer */
                         color_ptr = color_buffer;
                         while (*color_ptr) {
                             *(to++) = (*(color_ptr++));
-                        } 
+                        }
                     } else {
                         /* Otherwise, 'ansi' contains the color code */
                         while (*ansi)
@@ -1627,7 +1618,7 @@ strip_ansi(char *buf, const char *input)
                 is++;
             }
         } else {
-            *os++ = *is++;
+            *(os++) = *(is++);
         }
     }
     *os = '\0';
@@ -1641,29 +1632,29 @@ strip_256_ansi(char *buf, const char *input)
 {
     const char *is = input;
     char *os = buf;
+
     buf[0] = '\0';
-   
+
     while (*is) {
-        if ( *is == ESCAPE_CHAR ) {
-            if ( string_prefix(is, "\033[38;5;" ) || 
-                 string_prefix(is, "\033[48;5;") ) {
+        if (*is == ESCAPE_CHAR) {
+            if (string_prefix(is, "\033[38;5;") || string_prefix(is, "\033[48;5;")) {
                 /* strip this code */
                 is++;
                 is++;
-                while ( isdigit(*is) || *is == ';')
+                while (isdigit(*is) || *is == ';')
                     is++;
                 if (*is == 'm')
                     is++;
-           } else {
-               *os++ = *is++;
-           }
+            } else {
+                *(os++) = *(is++);
+            }
         } else {
-           *os++ = *is++;
+            *(os++) = *(is++);
         }
     }
- 
+
     *os = '\0';
- 
+
     return buf;
 }
 
@@ -1744,7 +1735,7 @@ escape_ansi(char *buf, const char *input)
         if (*is == ESCAPE_CHAR) {
             *os++ = '\\';
             *os++ = '[';
-            (void) *is++;
+            is++;
         } else {
             *os++ = *is++;
         }
@@ -1764,79 +1755,79 @@ parse_mush_ansi(char *buf, char *from)
 
     to = buf;
     while (*from) {
-        if (*from == '%' && (*(from+1) != '\0')) {
-            (void) *from++;
+        if (*from == '%' && (*(from + 1) != '\0')) {
+            from++;
             color = (*(from++));
             if (color == 'c') {
                 color = (*(from++));
                 switch (color) {
-                    case 'x':
-                        ansi = ANSICBLACK;
-                        break;
-                    case 'r':
-                        ansi = ANSICRED;
-                        break;
-                    case 'g':
-                        ansi = ANSICGREEN;
-                        break;
-                    case 'y':
-                        ansi = ANSICYELLOW;
-                        break;
-                    case 'b':
-                        ansi = ANSICBLUE;
-                        break;
-                    case 'm':
-                        ansi = ANSICPURPLE;
-                        break;
-                    case 'c':
-                        ansi = ANSICCYAN;
-                        break;
-                    case 'w':
-                        ansi = ANSICWHITE;
-                        break;
-                    case 'X':
-                        ansi = ANSIBBLACK;
-                        break;
-                    case 'R':
-                        ansi = ANSIBRED;
-                        break;
-                    case 'G':
-                        ansi = ANSIBGREEN;
-                        break;
-                    case 'Y':
-                        ansi = ANSIBBROWN;
-                        break;
-                    case 'B':
-                        ansi = ANSIBBLUE;
-                        break;
-                    case 'M':
-                        ansi = ANSIBPURPLE;
-                        break;
-                    case 'C':
-                        ansi = ANSIBCYAN;
-                        break;
-                    case 'W':
-                        ansi = ANSIBGRAY;
-                        break;
-                    case 'i':
-                    case 'I':
-                        ansi = ANSIINVERT;
-                        break;
-                    case 'f':
-                    case 'F':
-                        ansi = ANSIFLASH;
-                        break;
-                    case 'h':
-                    case 'H':
-                        ansi = ANSIBOLD;
-                        break;
-                    case 'u':
-                    case 'U':
-                        ansi = ANSIUNDERLINE;
-                        break;
-                    default:
-                        ansi = ANSINORMAL;
-                        break;
+                case 'x':
+                    ansi = ANSICBLACK;
+                    break;
+                case 'r':
+                    ansi = ANSICRED;
+                    break;
+                case 'g':
+                    ansi = ANSICGREEN;
+                    break;
+                case 'y':
+                    ansi = ANSICYELLOW;
+                    break;
+                case 'b':
+                    ansi = ANSICBLUE;
+                    break;
+                case 'm':
+                    ansi = ANSICPURPLE;
+                    break;
+                case 'c':
+                    ansi = ANSICCYAN;
+                    break;
+                case 'w':
+                    ansi = ANSICWHITE;
+                    break;
+                case 'X':
+                    ansi = ANSIBBLACK;
+                    break;
+                case 'R':
+                    ansi = ANSIBRED;
+                    break;
+                case 'G':
+                    ansi = ANSIBGREEN;
+                    break;
+                case 'Y':
+                    ansi = ANSIBBROWN;
+                    break;
+                case 'B':
+                    ansi = ANSIBBLUE;
+                    break;
+                case 'M':
+                    ansi = ANSIBPURPLE;
+                    break;
+                case 'C':
+                    ansi = ANSIBCYAN;
+                    break;
+                case 'W':
+                    ansi = ANSIBGRAY;
+                    break;
+                case 'i':
+                case 'I':
+                    ansi = ANSIINVERT;
+                    break;
+                case 'f':
+                case 'F':
+                    ansi = ANSIFLASH;
+                    break;
+                case 'h':
+                case 'H':
+                    ansi = ANSIBOLD;
+                    break;
+                case 'u':
+                case 'U':
+                    ansi = ANSIUNDERLINE;
+                    break;
+                default:
+                    ansi = ANSINORMAL;
+                    break;
                 }
                 if (*ansi)
                     while (*ansi)
@@ -1864,15 +1855,15 @@ unparse_mush_ansi(char *buf, char *from)
     to = buf;
     while (*from) {
         if (*from == '%') {
-            (void) *from++;
+            from++;
             color = (*(from++));
             if (color == 'c') {
                 color = (*(from++));
                 /* switch (color) {
-                    default: */
-                        ansi = "";
-                        /* break;
-                } */
+                   default: */
+                ansi = "";
+                /* break;
+                   } */
                 if (*ansi)
                     while (*ansi)
                         *(to++) = (*(ansi++));
@@ -1885,7 +1876,6 @@ unparse_mush_ansi(char *buf, char *from)
     *to = '\0';
     return buf;
 }
-
 
 /* mush_tct: Escapes MUSH ANSI tags. I.e., %cr -> %%cr */
 char *
@@ -1934,8 +1924,7 @@ parse_tilde_ansi(char *buf, char *from)
                 char attr;
 
                 /* ~&### pattern */
-                if ((!from[1]) || (!from[2]) ||
-                    (!TildeAnsiDigit(from[1])) || (!TildeAnsiDigit(from[2])))
+                if ((!from[1]) || (!from[2]) || (!TildeAnsiDigit(from[1])) || (!TildeAnsiDigit(from[2])))
                     continue;
 
                 /* Check for bold or not in first digit. */
@@ -1948,32 +1937,32 @@ parse_tilde_ansi(char *buf, char *from)
                 /* second position, foreground color */
                 ansi = NULL;
                 switch (*from) {
-                    case '0':
-                        ansi = (char *)(isbold ? ANSIGLOOM : ANSIBLACK);
-                        break;
-                    case '1':
-                        ansi = (char *)(isbold ? ANSIRED : ANSICRIMSON);
-                        break;
-                    case '2':
-                        ansi = (char *)(isbold ? ANSIGREEN : ANSIFOREST);
-                        break;
-                    case '3':
-                        ansi = (char *)(isbold ? ANSIYELLOW : ANSIBROWN);
-                        break;
-                    case '4':
-                        ansi = (char *)(isbold ? ANSIBLUE : ANSINAVY);
-                        break;
-                    case '5':
-                        ansi = (char *)(isbold ? ANSIPURPLE : ANSIVIOLET);
-                        break;
-                    case '6':
-                        ansi = (char *)(isbold ? ANSICYAN : ANSIAQUA);
-                        break;
-                    case '7':
-                        ansi = (char *)(isbold ? ANSIWHITE : ANSIGRAY);
-                        break;
-                    case '-':
-                        break;
+                case '0':
+                    ansi = (char *) (isbold ? ANSIGLOOM : ANSIBLACK);
+                    break;
+                case '1':
+                    ansi = (char *) (isbold ? ANSIRED : ANSICRIMSON);
+                    break;
+                case '2':
+                    ansi = (char *) (isbold ? ANSIGREEN : ANSIFOREST);
+                    break;
+                case '3':
+                    ansi = (char *) (isbold ? ANSIYELLOW : ANSIBROWN);
+                    break;
+                case '4':
+                    ansi = (char *) (isbold ? ANSIBLUE : ANSINAVY);
+                    break;
+                case '5':
+                    ansi = (char *) (isbold ? ANSIPURPLE : ANSIVIOLET);
+                    break;
+                case '6':
+                    ansi = (char *) (isbold ? ANSICYAN : ANSIAQUA);
+                    break;
+                case '7':
+                    ansi = (char *) (isbold ? ANSIWHITE : ANSIGRAY);
+                    break;
+                case '-':
+                    break;
                 }
                 if (ansi && (((to - buf) + strlen(ansi)) < BUFFER_LEN))
                     while (*ansi)
@@ -1982,16 +1971,16 @@ parse_tilde_ansi(char *buf, char *from)
                 /* Take care of other first position attribute possibiliies. */
                 ansi = NULL;
                 switch (attr) {
-                    case '2':  /* Need both to set invert, like old lib-ansi.muf */
-                    case '8':
-                        ansi = ANSIINVERT;
-                        break;
-                    case '5':  /* set for blinking foreground */
-                        ansi = ANSIFLASH;
-                        break;
+                case '2':      /* Need both to set invert, like old lib-ansi.muf */
+                case '8':
+                    ansi = ANSIINVERT;
+                    break;
+                case '5':      /* set for blinking foreground */
+                    ansi = ANSIFLASH;
+                    break;
 
-                    case '-':  /* leave alone */
-                        break;
+                case '-':      /* leave alone */
+                    break;
                 }
                 if (ansi && (((to - buf) + strlen(ansi)) < BUFFER_LEN))
                     while (*ansi)
@@ -2003,32 +1992,32 @@ parse_tilde_ansi(char *buf, char *from)
                 /* third and last position, background color */
                 ansi = NULL;
                 switch (*from) {
-                    case '0':
-                        ansi = ANSIBBLACK;
-                        break;
-                    case '1':
-                        ansi = ANSIBRED;
-                        break;
-                    case '2':
-                        ansi = ANSIBGREEN;
-                        break;
-                    case '3':
-                        ansi = ANSIBBROWN;
-                        break;
-                    case '4':
-                        ansi = ANSIBBLUE;
-                        break;
-                    case '5':
-                        ansi = ANSIBPURPLE;
-                        break;
-                    case '6':
-                        ansi = ANSIBCYAN;
-                        break;
-                    case '7':
-                        ansi = ANSIBGRAY;
-                        break;
-                    case '-':
-                        break;
+                case '0':
+                    ansi = ANSIBBLACK;
+                    break;
+                case '1':
+                    ansi = ANSIBRED;
+                    break;
+                case '2':
+                    ansi = ANSIBGREEN;
+                    break;
+                case '3':
+                    ansi = ANSIBBROWN;
+                    break;
+                case '4':
+                    ansi = ANSIBBLUE;
+                    break;
+                case '5':
+                    ansi = ANSIBPURPLE;
+                    break;
+                case '6':
+                    ansi = ANSIBCYAN;
+                    break;
+                case '7':
+                    ansi = ANSIBGRAY;
+                    break;
+                case '-':
+                    break;
                 }
                 if (ansi && (((to - buf) + strlen(ansi)) < BUFFER_LEN))
                     while (*ansi)
@@ -2041,18 +2030,18 @@ parse_tilde_ansi(char *buf, char *from)
                 /* The single letter attributes */
                 ansi = NULL;
                 switch (*from) {
-                    case 'r':  /* RESET to normal colors. */
-                    case 'R':
-                        ansi = ANSINORMAL;
-                        break;
-                    case 'c':  /* this used to clear the screen, its retained */
-                    case 'C':  /* for parsing only, doesnt actually do it.    */
-                        ansi = "CLS";
-                        break;
-                    case 'b':  /* this is for BELL.. or CTRL-G */
-                    case 'B':
-                        ansi = "BEEP";
-                        break;
+                case 'r':      /* RESET to normal colors. */
+                case 'R':
+                    ansi = ANSINORMAL;
+                    break;
+                case 'c':      /* this used to clear the screen, its retained */
+                case 'C':      /* for parsing only, doesnt actually do it.    */
+                    ansi = "CLS";
+                    break;
+                case 'b':      /* this is for BELL.. or CTRL-G */
+                case 'B':
+                    ansi = "BEEP";
+                    break;
                 }
                 if (ansi && (((to - buf) + strlen(ansi)) < BUFFER_LEN))
                     while (*ansi)
@@ -2081,15 +2070,13 @@ tilde_striplen(const char *word)
 
     from = word;
     /* Technically, this test should never even have to be done. */
-    if ((*(from + 0) == '~') && (*(from + 1) == '&') &&
-        (*(from + 3) == '~') && (*(from + 4) == '&'))
+    if ((*(from + 0) == '~') && (*(from + 1) == '&') && (*(from + 3) == '~') && (*(from + 4) == '&'))
         return 4;
     else if ((*(from + 0) == '~') && (*(from + 1) == '&')) {
         from += 2;
         if (*from) {
             if (TildeAnsiDigit(*from)) { /* Eat 3 digit pattern */
-                if (from[1] && from[2] &&
-                    TildeAnsiDigit(from[1]) && TildeAnsiDigit(from[2]))
+                if (from[1] && from[2] && TildeAnsiDigit(from[1]) && TildeAnsiDigit(from[2]))
                     from += 3;
             } else
                 from++;         /* Eat 1 character pattern */
@@ -2111,8 +2098,7 @@ unparse_tilde_ansi(char *buf, char *from)
 
     to = buf;
     while (*from) {
-        if ((*(from + 0) == '~') && (*(from + 1) == '&') &&
-            (*(from + 2) == '~') && (*(from + 3) == '&')) {
+        if ((*(from + 0) == '~') && (*(from + 1) == '&') && (*(from + 2) == '~') && (*(from + 3) == '&')) {
             from += 2;
             *(to++) = (*(from++));
             *(to++) = (*(from++));
@@ -2143,7 +2129,8 @@ tilde_tct(const char *in, char out[BUFFER_LEN])
 
     if (in && (*in))
         while (*in && (p - out < (BUFFER_LEN - 3)))
-            if (((*(p++) = (*(in++))) == '~') && ((*(p++) = (*(in++))) == '&')) {
+            if (((*(p++) = (*(in++))) == '~')
+                && ((*(p++) = (*(in++))) == '&')) {
                 *(p++) = '~';
                 *(p++) = '&';
             }
@@ -2157,10 +2144,8 @@ is_valid_pose_separator(char ch)
     return (ch == '\'') || (ch == ' ') || (ch == ',') || (ch == '-');
 }
 
-
 void
-prefix_message(char *Dest, const char *Src, const char *Prefix,
-               int BufferLength, int SuppressIfPresent)
+prefix_message(char *Dest, const char *Src, const char *Prefix, int BufferLength, int SuppressIfPresent)
 {
     int PrefixLength = strlen(Prefix);
     int CheckForHangingEnter = 0;
@@ -2205,7 +2190,6 @@ prefix_message(char *Dest, const char *Src, const char *Prefix,
 
     *Dest = '\0';
 }
-
 
 int
 is_prop_prefix(const char *Property, const char *Prefix)
@@ -2314,7 +2298,6 @@ strcpyn(char *buf, size_t bufsize, const char *src)
   3. This notice may not be removed or altered from any source distribution.
 */
 
-
 /* partial change history:
  *
  * 2004-10-10 mbp: Lift out character type dependencies into macros.
@@ -2331,146 +2314,142 @@ strcpyn(char *buf, size_t bufsize, const char *src)
 
 /* #include "strnatcmp.h" */
 
-
 /* These are defined as macros to make it easier to adapt this code to
  * different characters types or comparison functions. */
 static inline int
 nat_isdigit(nat_char a)
 {
-     return isdigit((unsigned char) a);
+    return isdigit((unsigned char) a);
 }
-
 
 static inline int
 nat_isspace(nat_char a)
 {
-     return isspace((unsigned char) a);
+    return isspace((unsigned char) a);
 }
-
 
 static inline nat_char
 nat_toupper(nat_char a)
 {
-     return toupper((unsigned char) a);
+    return toupper((unsigned char) a);
 }
-
-
 
 static int
 compare_right(nat_char const *a, nat_char const *b)
 {
-     int bias = 0;
-     
-     /* The longest run of digits wins.  That aside, the greatest
-	value wins, but we can't know that it will until we've scanned
-	both numbers to know that they have the same magnitude, so we
-	remember it in BIAS. */
-     for (;; a++, b++) {
-	  if (!nat_isdigit(*a)  &&  !nat_isdigit(*b))
-	       return bias;
-	  else if (!nat_isdigit(*a))
-	       return -1;
-	  else if (!nat_isdigit(*b))
-	       return +1;
-	  else if (*a < *b) {
-	       if (!bias)
-		    bias = -1;
-	  } else if (*a > *b) {
-	       if (!bias)
-		    bias = +1;
-	  } else if (!*a  &&  !*b)
-	       return bias;
-     }
+    int bias = 0;
 
-     return 0;
+    /* The longest run of digits wins.  That aside, the greatest
+       value wins, but we can't know that it will until we've scanned
+       both numbers to know that they have the same magnitude, so we
+       remember it in BIAS. */
+    for (;; a++, b++) {
+        if (!nat_isdigit(*a) && !nat_isdigit(*b))
+            return bias;
+        else if (!nat_isdigit(*a))
+            return -1;
+        else if (!nat_isdigit(*b))
+            return +1;
+        else if (*a < *b) {
+            if (!bias)
+                bias = -1;
+        } else if (*a > *b) {
+            if (!bias)
+                bias = +1;
+        } else if (!*a && !*b)
+            return bias;
+    }
+
+    return 0;
 }
-
 
 static int
 compare_left(nat_char const *a, nat_char const *b)
 {
-     /* Compare two left-aligned numbers: the first to have a
-        different value wins. */
-     for (;; a++, b++) {
-	  if (!nat_isdigit(*a)  &&  !nat_isdigit(*b))
-	       return 0;
-	  else if (!nat_isdigit(*a))
-	       return -1;
-	  else if (!nat_isdigit(*b))
-	       return +1;
-	  else if (*a < *b)
-	       return -1;
-	  else if (*a > *b)
-	       return +1;
-     }
-	  
-     return 0;
+    /* Compare two left-aligned numbers: the first to have a
+       different value wins. */
+    for (;; a++, b++) {
+        if (!nat_isdigit(*a) && !nat_isdigit(*b))
+            return 0;
+        else if (!nat_isdigit(*a))
+            return -1;
+        else if (!nat_isdigit(*b))
+            return +1;
+        else if (*a < *b)
+            return -1;
+        else if (*a > *b)
+            return +1;
+    }
+
+    return 0;
 }
 
-
-static int strnatcmp0(nat_char const *a, nat_char const *b, int fold_case)
+static int
+strnatcmp0(nat_char const *a, nat_char const *b, int fold_case)
 {
-     int ai, bi;
-     nat_char ca, cb;
-     int fractional, result;
-     
-     /* assert(a && b); */
-     ai = bi = 0;
-     while (1) {
-	  ca = a[ai]; cb = b[bi];
+    int ai, bi;
+    nat_char ca, cb;
+    int fractional, result;
 
-	  /* skip over leading spaces or zeros */
-	  while (nat_isspace(ca))
-	       ca = a[++ai];
+    /* assert(a && b); */
+    ai = bi = 0;
+    while (1) {
+        ca = a[ai];
+        cb = b[bi];
 
-	  while (nat_isspace(cb))
-	       cb = b[++bi];
+        /* skip over leading spaces or zeros */
+        while (nat_isspace(ca))
+            ca = a[++ai];
 
-	  /* process run of digits */
-	  if (nat_isdigit(ca)  &&  nat_isdigit(cb)) {
-	       fractional = (ca == '0' || cb == '0');
+        while (nat_isspace(cb))
+            cb = b[++bi];
 
-	       if (fractional) {
-		    if ((result = compare_left(a+ai, b+bi)) != 0)
-			 return result;
-	       } else {
-		    if ((result = compare_right(a+ai, b+bi)) != 0)
-			 return result;
-	       }
-	  }
+        /* process run of digits */
+        if (nat_isdigit(ca) && nat_isdigit(cb)) {
+            fractional = (ca == '0' || cb == '0');
 
-	  if (!ca && !cb) {
-	       /* The strings compare the same.  Perhaps the caller
-                  will want to call strcmp to break the tie. */
-	       return 0;
-	  }
+            if (fractional) {
+                if ((result = compare_left(a + ai, b + bi)) != 0)
+                    return result;
+            } else {
+                if ((result = compare_right(a + ai, b + bi)) != 0)
+                    return result;
+            }
+        }
 
-	  if (fold_case) {
-	       ca = nat_toupper(ca);
-	       cb = nat_toupper(cb);
-	  }
-	  
-	  if (ca < cb)
-	       return -1;
-	  else if (ca > cb)
-	       return +1;
+        if (!ca && !cb) {
+            /* The strings compare the same.  Perhaps the caller
+               will want to call strcmp to break the tie. */
+            return 0;
+        }
 
-	  ++ai; ++bi;
-     }
+        if (fold_case) {
+            ca = nat_toupper(ca);
+            cb = nat_toupper(cb);
+        }
+
+        if (ca < cb)
+            return -1;
+        else if (ca > cb)
+            return +1;
+
+        ++ai;
+        ++bi;
+    }
 }
 
-
-
-int strnatcmp(nat_char const *a, nat_char const *b) {
-     return strnatcmp0(a, b, 0);
+int
+strnatcmp(nat_char const *a, nat_char const *b)
+{
+    return strnatcmp0(a, b, 0);
 }
-
 
 /* Compare, recognizing numeric string and ignoring case. */
-int strnatcasecmp(nat_char const *a, nat_char const *b) {
-     return strnatcmp0(a, b, 1);
+int
+strnatcasecmp(nat_char const *a, nat_char const *b)
+{
+    return strnatcmp0(a, b, 1);
 }
-
 
 #ifdef UTF8_SUPPORT
 /* mbstowcs and mblen take a passed in locale parameter under Windows, and
@@ -2491,7 +2470,6 @@ wcharlen(struct shared_string *ss)
     return ss->wclength;
 }
 
-
 /* count the number of bytes representing 'slice' wide characters in 'buf'.
    'buflen' is the strlen of buf, passed in to avoid recalculation. */
 int
@@ -2507,7 +2485,7 @@ wcharlen_slice(char *buf, int slice, int buflen)
     /* initialize shift state */
     mblen(NULL, 0);
 
-    while ( iter != slice && *cursor != '\0'  ) {
+    while (iter != slice && *cursor != '\0') {
         iter++;
         result = mblen(cursor, buflen - wcharlen);
 
@@ -2526,3 +2504,187 @@ wcharlen_slice(char *buf, int slice, int buflen)
 }
 #endif /* UTF8_SUPPORT */
 
+std::string
+strToHex(const std::string & in, bool uppercase)
+{
+    //std::stringstream out;
+    size_t len = in.length();
+    char obuf[(len * 2) + 1];
+
+    len = strtohex(obuf, (len * 2) + 1, in.c_str(), len, uppercase);
+
+    std::string out(obuf, len);
+
+    //Too slow:
+    //out << std::hex << std::setfill('0') << (uppercase ? std::uppercase : std::nouppercase) << obuf;
+
+    //for (size_t i = 0; i < len; i++) {
+    //    out << std::setw(2) << static_cast < unsigned int >(static_cast < unsigned char >(in[i]));
+    //}
+
+    return out;
+}
+
+std::string
+hexToStr(const std::string & in)
+{
+    //std::stringstream out;
+
+    size_t len = in.length();
+
+    if (len % 2 != 0)
+        throw std::runtime_error("Invalid string length.");
+
+    for (size_t i = 0; i < len; i++) {
+        if (!isxdigit(in[i])) {
+            std::stringstream err;
+            err << "Invalid hex digit '" << in[i] << "' at position " << i << ".";
+            throw std::runtime_error(err.str());
+        }
+    }
+
+    char obuf[(len / 2) + 1];
+
+    len = hextostr(obuf, (len / 2) + 1, in.c_str(), len);
+    std::string out(obuf, len);
+
+    return out;
+
+    /* Too slow: */
+    /* for (size_t i = 0; i < len; i++) {
+       int c;
+
+       std::stringstream tmp(in.substr(i * 2, 2));
+       tmp >> std::hex >> c;
+       out << static_cast < char >(c);
+       }
+
+       return out.str(); */
+}
+
+size_t
+escapestr(char *obuf, const size_t olen, const char *ibuf, const size_t ilen, bool *truncated)
+{
+    if (truncated)
+        *truncated = false;
+
+    // Output Bounds Checking
+    if (!obuf || !olen)
+        return 0;
+
+    // Input Bounds Checking and Special Edge Case Handling
+    if (!ibuf || !ilen || olen == 1) {
+        obuf[0] = '\0';
+        return 0;
+    }
+    // Main Loop
+    size_t rlen = olen, o = 0;
+
+    for (size_t i = 0; i < ilen; i++) {
+        unsigned char cur = ibuf[i];
+
+        // Prepare Character Output Data
+        size_t clen = 0;
+
+        switch (cur) { // This section is for one-off characters
+        //case '\0':    // NUL
+        //    cur = '0';
+        //    clen = 2;
+        //    break;              
+        case '\a':      // BEL
+            cur = 'a';
+            clen = 2;
+            break;              
+        case '\b':      // BS
+            cur = 'b';
+            clen = 2;
+            break;              
+        case '\t':      // TAB
+            cur = 't';
+            clen = 2;
+            break;              
+        case '\n':      // LF
+            cur = 'n';
+            clen = 2;
+            break;              
+        case '\v':      // VT
+            cur = 'v';
+            clen = 2;
+            break;              
+        case '\f':      // FF
+            cur = 'f';
+            clen = 2;
+            break;              
+        case '\r':      // CR
+            cur = 'r';
+            clen = 2;
+            break;              
+        case '\x1B':    // ESC
+            cur = '[';
+            clen = 2;
+            break;              
+        case '\\':
+            cur = '\\';
+            clen = 2;
+            break;              // Backslash
+            // This section handles ranges not covered above
+            // It must cover all characters in the 0x00 to 0xFF range
+        default:
+            // Handle Control Codes and Upper Undefined Range
+            if (cur < 0x20 || cur > 0x7E)
+                clen = 4;
+            // Handle Space and all Graphical Characters
+            else
+                clen = 1;
+            break;
+        }
+
+        // This triggers if the remaining length <= the character output size and a null terminator,
+        // unless it's the last input character and there's exactly enough room left for it to fit.
+        // Recommended to not modify this unless you are absolutely sure why it works this way.
+        // To future modifiers: As per De Morgan's laws, both of these expressions will work equivalently:
+        //     rlen <= (clen + 1) && !(rlen == (clen + 1) && i+1 >= ilen)
+        //     rlen <= (clen + 1) && (rlen != (clen + 1) || i+1 < ilen)
+        if (rlen <= (clen + 1) && !(rlen == (clen + 1) && i + 1 >= ilen)) {
+            obuf[o++] = '_';    // Append the ellipsis marker
+            if (truncated)
+                *truncated = true;
+            break;
+        }
+        // Uses character output length from above to choose output method
+        switch (clen) {
+        case 1:
+            // Single Character
+            obuf[o++] = cur;
+            rlen -= 1;
+            break;
+        case 2:
+            // Character Escape
+            obuf[o++] = '\\';
+            obuf[o++] = cur;
+            rlen -= 2;
+            break;
+        case 4:
+            // Hex Escape
+            obuf[o++] = '\\';
+            obuf[o++] = 'x';
+            obuf[o++] = "0123456789ABCDEF"[(cur >> 4) & 0x0F];
+            obuf[o++] = "0123456789ABCDEF"[cur & 0x0F];
+            rlen -= 4;
+            break;
+        case 0:
+        default:
+            fprintf(stderr, "Encountered an unreachable point at %s:%i\r\n", __FILE__, __LINE__);
+            abort();
+            // If this is ever triggered, someone broke the "Prepare Character Output Data" switch statement.
+            // Most likely, either someone was altering the handled characters, added a new value up there, or removed an old value down here.
+            // If that switch doesn't have a handled value for cur's full range of 0x00 to 0xFF, it'll return 0 and trigger this error.
+            // If the switch up there set a value that isn't handled down here, it'll trigger this error.
+            break;
+        }
+    }
+    // Add the null terminator
+    obuf[o] = '\0';
+    // Return the length of the output data, not counting the null terminator
+    return o;
+}

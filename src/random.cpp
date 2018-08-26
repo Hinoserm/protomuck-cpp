@@ -2,6 +2,8 @@
 /* Attributions as given, modified by Jonah 'Points' Safar */
 
 #include "config.h"
+#include "strings.h"
+
 
 /*****************************************************************/
 
@@ -21,6 +23,10 @@
  * needed on buffers full of bytes, and then call MD5Final, which
  * will fill a supplied 16-byte array with the digest.
  */
+
+#ifdef USE_SSL
+# include <openssl/md5.h>
+#else
 
 struct xMD5Context {
     word32 buf[4];
@@ -44,9 +50,7 @@ byteSwap(word32 *buf, unsigned words)
     byte *p = (byte *) buf;
 
     do {
-        *buf++ =
-            (word32) ((unsigned) p[3] << 8 | p[2]) << 16 | ((unsigned) p[1] << 8
-                                                            | p[0]);
+        *buf++ = (word32) ((unsigned) p[3] << 8 | p[2]) << 16 | ((unsigned) p[1] << 8 | p[0]);
         p += 4;
     } while (--words);
 }
@@ -83,7 +87,7 @@ xMD5Update(struct xMD5Context *ctx, const byte *buf, int len)
         ctx->bytes[1]++;        /* Carry from low to high */
 
     t = 64 - (t & 0x3f);        /* Space available in ctx->in (at least 1) */
-    if ((unsigned) t > (unsigned)len) {
+    if ((unsigned) t > (unsigned) len) {
         bcopy(buf, (byte *) ctx->in + 64 - (unsigned) t, len);
         return;
     }
@@ -164,7 +168,7 @@ xMD5Final(byte digest[16], struct xMD5Context *ctx)
 void
 xMD5Transform(word32 buf[4], word32 const in[16])
 {
-    register word32 a, b, c, d;
+    word32 a, b, c, d;
 
     a = buf[0];
     b = buf[1];
@@ -246,16 +250,38 @@ xMD5Transform(word32 buf[4], word32 const in[16])
 }
 
 
+#endif /* USE_SSL */
+
+
 /* dest buffer MUST be at least 16 bytes long. */
 void
 MD5hash(void *dest, const void *orig, int len)
 {
+#ifndef USE_SSL
     struct xMD5Context context;
 
     xMD5Init(&context);
-    if (len>0) xMD5Update(&context, (const byte *) orig, len);
+    if (len > 0)
+        xMD5Update(&context, (const byte *) orig, len);
     xMD5Final((byte *) dest, &context);
+#else
+    MD5_CTX ctx;
+    MD5_Init(&ctx);
+    MD5_Update(&ctx, orig, len);
+    MD5_Final((unsigned char *)dest, &ctx);
+#endif /* USE_SSL */
 }
+
+/* dest buffer MUST be at least 25 chars long. */
+void
+MD5hex(char *dest, const char *orig, int len)
+{
+    unsigned char tmp[16];
+
+    MD5hash(tmp, orig, len);
+    strtohex(dest, 41, (const char *)tmp, 16);
+}
+
 
 
 /*
@@ -316,8 +342,7 @@ Base64Decode(void *outbuf, size_t outbuflen, const char *inbuf)
 void
 Base64Encode(char *outbuf, const void *inbuf, size_t inlen)
 {
-    const char b64[] =
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    const char b64[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     const unsigned char *inb = (unsigned char *) inbuf;
     unsigned char *out = 0;     /* this fixes the "possible uninitalized use" warn, but it's probably bad to do. */
     size_t numb;
@@ -375,38 +400,26 @@ Base64Encode(char *outbuf, const void *inbuf, size_t inlen)
     }
 }
 
-/* dest buffer MUST be at least 25 chars long. */
-void
-MD5hex(void *dest, const void *orig, int len)
-{
-    unsigned char *tmp = new unsigned char[16];
-
-    MD5hash(tmp, orig, len);
-    unsigned char i;
-    int j;
-    for (j=0; j<=15; ++j) {
-        i = (unsigned char)tmp[j];
-        sprintf((char *)dest+(j*2), "%.2X", (unsigned char)i);
-    }
-    delete[] tmp;
-}
-
 // Needs a buffer of at least ((((ilen+3)/4)*3)*2)+1 chars long
 int
 base64tohex(char *dest, int olen, const char *orig, int ilen)
 {
-    int tlen = (((ilen+3)/4)*3)+1;
-    if (olen < ((tlen-1)*2)+1) return 0;
-    
+    int tlen = (((ilen + 3) / 4) * 3) + 1;
+
+    if (olen < ((tlen - 1) * 2) + 1)
+        return 0;
+
     unsigned char *tmp = new unsigned char[tlen];
+
     Base64Decode(tmp, tlen, orig);
     unsigned char i;
     int j, k;
-    for (j=0, k=0; (j<tlen) && (k<olen); j++, k+=2) {
+
+    for (j = 0, k = 0; (j < tlen) && (k < olen); j++, k += 2) {
         i = tmp[j];
-        sprintf(dest+k, "%.2X", i);
+        sprintf(dest + k, "%.2X", i);
     }
-    delete[] tmp;
+    delete[]tmp;
     return strlen(dest);
 }
 
@@ -415,70 +428,77 @@ int
 hextobase64(char *dest, int olen, const char *orig, int ilen)
 {
     int odd = ilen % 2;
-    int tlen = (ilen/2)+1;
-    if (olen < ((((tlen+(odd*2))+2)/3)*4)+1) return 0;
+    int tlen = (ilen / 2) + 1;
+
+    if (olen < ((((tlen + (odd * 2)) + 2) / 3) * 4) + 1)
+        return 0;
 
     char *tmp = new char[tlen];
     unsigned char i = 0;
     int j, k;
-    for (j=0, k=0; (j<ilen) && (k<olen) && (orig[j]!=0x00); j++) {
-        i = (orig[j] >=
-            'A' ? ((orig[j] & 0xdf) - 'A') +
-            10 : (orig[j] - '0'));
-        i*=16; j++;
-        if ((j>=ilen) || (orig[j]==0x00)) {
+
+    for (j = 0, k = 0; (j < ilen) && (k < olen) && (orig[j] != 0x00); j++) {
+        i = (orig[j] >= 'A' ? ((orig[j] & 0xdf) - 'A') + 10 : (orig[j] - '0'));
+        i *= 16;
+        j++;
+        if ((j >= ilen) || (orig[j] == 0x00)) {
             tmp[k] = i;
             k++;
             break;
         }
-        i = (orig[j] >=
-            'A' ? ((orig[j] & 0xdf) - 'A') +
-            10 : (orig[j] - '0'));
+        i = (orig[j] >= 'A' ? ((orig[j] & 0xdf) - 'A') + 10 : (orig[j] - '0'));
         tmp[k] = i;
         k++;
     }
     tmp[k] = 0x00;
-    Base64Encode(dest, tmp, tlen-1);
-    delete[] tmp;
+    Base64Encode(dest, tmp, tlen - 1);
+    delete[]tmp;
     return k;
 }
 
+#define HI_NIBBLE(b) (((b) >> 4) & 0x0F)
+#define LO_NIBBLE(b) ((b) & 0x0F)
+
 // Needs a buffer of at least (ilen*2)+1 chars long
 int
-strtohex(char *dest, int olen, const char *orig, int ilen)
+strtohex(char *dest, int olen, const char *orig, int ilen, bool uppercase)
 {
-    int tlen = (ilen*2)+1;
-    if (olen < tlen) return 0;
-    unsigned char i;
-    int j, k;
-    for (j=0, k=0; (j<ilen) && (k<olen); j++, k+=2) {
-        i = ((const unsigned char *)orig)[j];
-        sprintf(dest+k, "%.2X", i);
+    if (olen < (ilen * 2) + 1)
+        return 0;
+
+    const char *hexbase = (uppercase ? "0123456789ABCDEF" : "0123456789abcdef");
+    char *start = dest;
+
+    for (int i = 0; i < ilen; i++) {
+        *dest++ = hexbase[HI_NIBBLE(orig[i])];
+        *dest++ = hexbase[LO_NIBBLE(orig[i])];
     }
-    return k;
+
+    *dest = 0;
+    
+    return (dest - start);
 }
 
 // Needs a buffer of at least ((ilen+1)/2)+1 chars long
 int
 hextostr(char *dest, int olen, const char *orig, int ilen)
 {
-    if (olen < ((ilen+1)/2)+1) return 0;
+    if (olen < ((ilen + 1) / 2) + 1)
+        return 0;
 
     unsigned char i = 0;
     int j, k;
-    for (j=0, k=0; (j<ilen) && (k<olen) && (orig[j]!=0x00); j++) {
-        i = (orig[j] >=
-            'A' ? ((orig[j] & 0xdf) - 'A') +
-            10 : (orig[j] - '0'));
-        i*=16; j++;
-        if ((j>=ilen) || (orig[j]==0x00)) {
+
+    for (j = 0, k = 0; (j < ilen) && (k < olen) && (orig[j] != 0x00); j++) {
+        i = (orig[j] >= 'A' ? ((orig[j] & 0xdf) - 'A') + 10 : (orig[j] - '0'));
+        i *= 16;
+        j++;
+        if ((j >= ilen) || (orig[j] == 0x00)) {
             dest[k] = i;
             k++;
             break;
         }
-        i += (orig[j] >=
-            'A' ? ((orig[j] & 0xdf) - 'A') +
-            10 : (orig[j] - '0'));
+        i += (orig[j] >= 'A' ? ((orig[j] & 0xdf) - 'A') + 10 : (orig[j] - '0'));
         dest[k] = i;
         k++;
     }

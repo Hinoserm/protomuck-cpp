@@ -78,6 +78,7 @@ remove_socket_from_queue(struct muf_socket *oldSock)
         curr->next = NULL;
         curr->theSock = NULL;
         delete curr;
+
         socket_list = temp;
     } else {                    /* need to search through the list */
         while (curr && curr->theSock != oldSock) {
@@ -117,6 +118,7 @@ muf_socket_sendevent(struct muf_socket_queue *curr)
 {
     char littleBuf[50];
     struct inst temp1;
+
 #if defined(SSL_SOCKETS) && defined(USE_SSL)
     struct inst temp2;
     stk_array *arr;
@@ -126,24 +128,22 @@ muf_socket_sendevent(struct muf_socket_queue *curr)
         curr->theSock->readWaiting = 1;
 #if defined(SSL_SOCKETS) && defined(USE_SSL)
         /* Warn the user that SSL has shut down. -brevantes */
-        if (curr->theSock->sslStatus != 1 ) {
+        if (curr->theSock->sslStatus != 1) {
             /* Don't notify us if the connection is already closed. */
-            if (curr->theSock->connected
-                && (curr->theSock->sslStatus != 0
-                    && strcmp(curr->theSock->sslError, "SSL_ERROR_SYSCALL"))) {
+            if (curr->theSock->connected && (curr->theSock->sslStatus != 0 && strcmp(curr->theSock->sslError, "SSL_ERROR_SYSCALL"))) {
                 arr = new_array_dictionary();
                 array_set_strkey_strval(&arr, "ssl_error", curr->theSock->sslError);
                 array_set_strkey_intval(&arr, "ssl_return", curr->theSock->sslStatus);
                 sprintf(littleBuf, "SOCKET.SSLERR.%d", curr->theSock->socknum);
-    
+
                 temp2.type = PROG_ARRAY;
                 temp2.data.array = arr;
-    
+
                 muf_event_add(curr->fr, littleBuf, &temp2, 1);
                 CLEAR(&temp2);
             }
             curr->theSock->sslStatus = 1;
-            delete[] curr->theSock->sslError;
+            delete[]curr->theSock->sslError;
         }
 #endif
         temp1.type = PROG_SOCKET;
@@ -154,7 +154,7 @@ muf_socket_sendevent(struct muf_socket_queue *curr)
 #ifdef WIN_VC
             char errval = 0;
 #else
-			int errval = 0;
+            int errval = 0;
 #endif
             socklen_t slen = sizeof(errval);
 
@@ -162,8 +162,7 @@ muf_socket_sendevent(struct muf_socket_queue *curr)
             curr->theSock->readWaiting = 0;
             curr->theSock->last_time = time(NULL);
 
-            getsockopt(curr->theSock->socknum, SOL_SOCKET, SO_ERROR, &errval,
-                       &slen);
+            getsockopt(curr->theSock->socknum, SOL_SOCKET, SO_ERROR, &errval, &slen);
             curr->theSock->connected = (!errval ? 1 : -1);
         } else {
             sprintf(littleBuf, "SOCKET.READ.%d", curr->theSock->socknum);
@@ -200,8 +199,7 @@ handle_ssl_error(struct muf_socket *mufSock, int *IOreturn)
     char littleBuf[50];
     const int ssl_error = SSL_get_error(mufSock->ssl_session, *IOreturn);
 
-    if (ssl_error != SSL_ERROR_WANT_READ
-        && ssl_error != SSL_ERROR_WANT_WRITE) {
+    if (ssl_error != SSL_ERROR_WANT_READ && ssl_error != SSL_ERROR_WANT_WRITE) {
 
         /* If we got this far, the SSL channel is dead. */
         SSL_free(mufSock->ssl_session);
@@ -225,10 +223,10 @@ handle_ssl_error(struct muf_socket *mufSock, int *IOreturn)
         /* The IO return will be <=0 after the failed operation, need to set it
          * to something more compliant with how nbsockrecv is documented. */
         /* if (oper1->data.sock->connected == 1) //What?  oper1 is nowhere to be found here. -Hino
-            *IOreturn = 1;
-        else */
-            *IOreturn = 0;
-    /* Return 1 if we handled a fatal error, otherwise 0. */
+         *IOreturn = 1;
+         else */
+        *IOreturn = 0;
+        /* Return 1 if we handled a fatal error, otherwise 0. */
         return 1;
     }
     return 0;
@@ -238,7 +236,7 @@ handle_ssl_error(struct muf_socket *mufSock, int *IOreturn)
 void
 ssl_read_loop(struct muf_socket *mufSock, int *readme, char *mystring)
 {
-   *readme = SSL_read(mufSock->ssl_session, mystring, 1);
+    *readme = SSL_read(mufSock->ssl_session, mystring, 1);
     while (*readme <= 0) {
         if (handle_ssl_error(mufSock, readme))
             break;
@@ -262,8 +260,8 @@ ssl_write_loop(struct muf_socket *mufSock, int *result, char *buf)
 void
 prim_socksend(PRIM_PROTOTYPE)
 {
-	int result;
-	char buf[BUFFER_LEN];
+    int result;
+    char buf[BUFFER_LEN];
 
     /* socket string<message> */
 
@@ -283,14 +281,13 @@ prim_socksend(PRIM_PROTOTYPE)
          * (MS Telnet). 
          */
 #if defined(SSL_SOCKETS) && defined(USE_SSL)
-         /* In a similar vein, only send if SSL negotiation is finished. */
-         if (oper[1].data.sock->ssl_session
-             && !SSL_is_init_finished(oper[1].data.sock->ssl_session)) {
-             result = -1;
+        /* In a similar vein, only send if SSL negotiation is finished. */
+        if (oper[1].data.sock->ssl_session && !SSL_is_init_finished(oper[1].data.sock->ssl_session)) {
+            result = -1;
 
-             PushInt(result);
-             return;
-         }
+            PushInt(result);
+            return;
+        }
 #endif
 
 #ifdef WIN_VC
@@ -313,9 +310,7 @@ prim_socksend(PRIM_PROTOTYPE)
             result = writesocket(oper[1].data.sock->socknum, buf, strlen(buf));
 
         if (tp_log_sockets)
-            log2filetime("logs/sockets", "#%d by %s SOCKSEND:  %d\n", program,
-                         unparse_object(PSafe, PSafe),
-                         oper[1].data.sock->socknum);
+            log2filetime("logs/sockets", "#%d by %s SOCKSEND:  %d\n", program, unparse_object(PSafe, PSafe), oper[1].data.sock->socknum);
 
         if (result < 1)
             result = 0;
@@ -338,29 +333,29 @@ prim_nbsockrecv(PRIM_PROTOTYPE)
     struct timeval t_val;
     int charCount = 0;
     int ssl_buffer = 0;
-	char buf[BUFFER_LEN];
+    char buf[BUFFER_LEN];
 
     if (oper[0].type != PROG_SOCKET)
         abort_interp("Socket argument expected!");
     if (oper[0].data.sock->listening)
         abort_interp("NBSOCKRECV does not work with Listening SOCKETS.");
 
- #if defined(SSL_SOCKETS) && defined(USE_SSL)
+#if defined(SSL_SOCKETS) && defined(USE_SSL)
     if ((oper[0].data.sock->ssl_session))
         ssl_buffer = SSL_pending(oper[0].data.sock->ssl_session);
- #endif
+#endif
 
     sockval = oper[0].data.sock->socknum;
 
     /* In order to keep this from hanging on certain packets,
-        * we need to change the socket to non-blocking
-        */
+     * we need to change the socket to non-blocking
+     */
     make_nonblocking(sockval);
 
     if (oper[0].data.sock->rawmode) {
 #if defined(SSL_SOCKETS) && defined(USE_SSL)
         if (oper[0].data.sock->ssl_session) {
-            if ((readme = SSL_read(oper[0].data.sock->ssl_session, buf, BUFFER_LEN-2)) <= 0) {
+            if ((readme = SSL_read(oper[0].data.sock->ssl_session, buf, BUFFER_LEN - 2)) <= 0) {
                 sprintf(buf, "SSL_ERROR: %d", SSL_get_error(oper[0].data.sock->ssl_session, readme));
 #if defined(WIN32)
                 make_blocking(sockval);
@@ -368,7 +363,7 @@ prim_nbsockrecv(PRIM_PROTOTYPE)
             }
         } else
 #endif
-            readme = readsocket(sockval, buf, BUFFER_LEN-2);
+            readme = readsocket(sockval, buf, BUFFER_LEN - 2);
         if (readme > -1)
             buf[readme] = '\0';
         oper[0].data.sock->readWaiting = 0;
@@ -378,6 +373,7 @@ prim_nbsockrecv(PRIM_PROTOTYPE)
     } else {
         mystring = new char[3];
         bigbuf = new char[BUFFER_LEN];
+
         memset(bigbuf, '\0', BUFFER_LEN); /* clear buffer out */
         bufpoint = bigbuf;
 
@@ -390,33 +386,32 @@ prim_nbsockrecv(PRIM_PROTOTYPE)
         FD_SET(oper[0].data.sock->socknum, &reads);
 
         select(oper[0].data.sock->socknum + 1, &reads, NULL, NULL, &t_val);
-        if ( (FD_ISSET(oper[0].data.sock->socknum, &reads))
-             || ssl_buffer > 0) {
- #if defined(SSL_SOCKETS) && defined(USE_SSL)
+        if ((FD_ISSET(oper[0].data.sock->socknum, &reads))
+            || ssl_buffer > 0) {
+#if defined(SSL_SOCKETS) && defined(USE_SSL)
             if (oper[0].data.sock->ssl_session)
                 ssl_read_loop(oper[0].data.sock, &readme, mystring);
             else
- #endif
+#endif
                 readme = readsocket(oper[0].data.sock->socknum, mystring, 1);
 
             conRead = readme;
             while (readme > 0 && charCount < BUFFER_LEN) {
-                if ((*mystring == '\0') || (((*mystring == '\n') ||
-                                             (*mystring == '\r'))))
+                if ((*mystring == '\0') || (((*mystring == '\n') || (*mystring == '\r'))))
                     break;
-                gotmessage = 1;     /* indicates the socket sent -something- */
+                gotmessage = 1; /* indicates the socket sent -something- */
                 ++charCount;
                 /* if (isascii(*mystring)) -- Commented this out to test 8-bit support on the stack -Hinoserm */
                 *bufpoint++ = *mystring;
- #if defined(SSL_SOCKETS) && defined(USE_SSL)
+#if defined(SSL_SOCKETS) && defined(USE_SSL)
                 if (oper[0].data.sock->ssl_session)
-                   ssl_read_loop(oper[0].data.sock, &readme, mystring);
+                    ssl_read_loop(oper[0].data.sock, &readme, mystring);
                 else
- #endif
+#endif
                     readme = readsocket(oper[0].data.sock->socknum, mystring, 1);
             }
             if (*mystring == '\n' && oper[0].data.sock->usequeue) {
-                gotmessage = 1;     /* needed to catch enter presses for sockqueue */
+                gotmessage = 1; /* needed to catch enter presses for sockqueue */
                 if (charCount == 0)
                     charCount = 1;
                 bigbuf[0] = '\n';
@@ -427,19 +422,20 @@ prim_nbsockrecv(PRIM_PROTOTYPE)
 
                 if (!theSock->raw_input) { /* No Queue. Allocate one. */
                     theSock->raw_input = new char[BUFFER_LEN];
+
                     theSock->raw_input_at = theSock->raw_input;
                 }
                 p = theSock->raw_input_at;
                 pend = theSock->raw_input + BUFFER_LEN - 1;
-                gotmessage = 0;     /* now it determines if we send or not. */
+                gotmessage = 0; /* now it determines if we send or not. */
                 for (q = bigbuf, qend = bigbuf + charCount; q < qend; ++q) {
                     if (*q == '\n' || *q == '\r' || p == pend) { /* EOL, or full */
                         *p = '\0';
                         if (p > theSock->raw_input) /* have string */
                             strcpy(bigbuf, theSock->raw_input);
-                        else        /* empty string */
+                        else    /* empty string */
                             strcpy(bigbuf, "");
-                        delete[] theSock->raw_input;
+                        delete[]theSock->raw_input;
                         theSock->raw_input = NULL;
                         theSock->raw_input_at = NULL;
                         p = NULL;
@@ -457,14 +453,14 @@ prim_nbsockrecv(PRIM_PROTOTYPE)
                             *p++ = *q; /* Changed this a bit to test -Hinoserm */
                     } else if (p < pend && theSock->usequeue) /* && isascii(*q) used to be in here -Hinoserm */
                         *p++ = *q;
-                }                   /* for */
+                }               /* for */
                 if (p > theSock->raw_input)
                     theSock->raw_input_at = p;
                 if (!gotmessage)
                     strcpy(bigbuf, "");
-            }                       /* if usequeues */
-        }                           /* if FD_ISSET */
-        if (gotmessage) {           /* update */
+            }                   /* if usequeues */
+        }                       /* if FD_ISSET */
+        if (gotmessage) {       /* update */
             oper[0].data.sock->last_time = time(NULL);
             oper[0].data.sock->commands += 1;
         }
@@ -476,15 +472,15 @@ prim_nbsockrecv(PRIM_PROTOTYPE)
         CHECKOFLOW(2);
         PushInt(conRead);
         PushString(bigbuf);
-        delete[] mystring;
-        delete[] bigbuf;
+        delete[]mystring;
+        delete[]bigbuf;
     }
 }
 
 void
 prim_nbsockrecv_char(PRIM_PROTOTYPE)
 {
-    int readme;
+    int readme = 0;
     int sockval = 0;
     fd_set reads;
     struct timeval t_val;
@@ -535,7 +531,7 @@ prim_nbsockrecv_char(PRIM_PROTOTYPE)
 void
 prim_sockclose(PRIM_PROTOTYPE)
 {
-	int result;
+    int result;
 
     if (oper[0].type != PROG_SOCKET)
         abort_interp("Socket argument expected!");
@@ -560,9 +556,7 @@ prim_sockclose(PRIM_PROTOTYPE)
         else
             result = 0;
         if (tp_log_sockets)
-            log2filetime("logs/sockets", "#%d by %s SOCKCLOSE:  %d\n", program,
-                         unparse_object(PSafe, PSafe),
-                         oper[0].data.sock->socknum);
+            log2filetime("logs/sockets", "#%d by %s SOCKCLOSE:  %d\n", program, unparse_object(PSafe, PSafe), oper[0].data.sock->socknum);
         oper[0].data.sock->connected = 0;
         remove_socket_from_queue(oper[0].data.sock);
     }
@@ -573,7 +567,7 @@ prim_sockclose(PRIM_PROTOTYPE)
 void
 prim_sockshutdown(PRIM_PROTOTYPE)
 {
-	int tmp, result;
+    int tmp, result;
 
     if (oper[1].type != PROG_SOCKET)
         abort_interp("Socket argument expected. (1)");
@@ -594,9 +588,7 @@ prim_sockshutdown(PRIM_PROTOTYPE)
         else
             result = 0;
         if (tp_log_sockets)
-            log2filetime("logs/sockets", "#%d by %s SOCKSHUTDOWN:  %d\n",
-                         program, unparse_object(PSafe, PSafe),
-                         oper[1].data.sock->socknum);
+            log2filetime("logs/sockets", "#%d by %s SOCKSHUTDOWN:  %d\n", program, unparse_object(PSafe, PSafe), oper[1].data.sock->socknum);
         if (tmp == 2) {
 #if defined(SSL_SOCKETS) && defined(USE_SSL)
             /* Alynna - Must be done twice to enact a bidirectional shutdown,
@@ -645,10 +637,10 @@ prim_nbsockopen(PRIM_PROTOTYPE)
         make_nonblocking(mysock);
         if (connect(mysock, (struct sockaddr *) &name, sizeof(name)) == -1)
 #if defined(BRAINDEAD_OS) || defined(WIN32)
-			if (errnosocket == 10035)
-				strcpy(myresult, "Operation now in progress");
-			else
-				sprintf(myresult, "ERROR: %d", errnosocket);
+            if (errnosocket == 10035)
+                strcpy(myresult, "Operation now in progress");
+            else
+                sprintf(myresult, "ERROR: %d", errnosocket);
 #else
             strcpy(myresult, strerror(errnosocket));
 #endif
@@ -680,8 +672,8 @@ prim_nbsockopen(PRIM_PROTOTYPE)
         result->data.sock->rawmode = 0;
         result->data.sock->readWaiting = 0;
 #ifdef IPV6
-	result->data.sock->ipv6 = 0;
-	result->data.sock->host6 = NULL;
+        result->data.sock->ipv6 = 0;
+        result->data.sock->host6 = NULL;
 #endif
 #if defined(SSL_SOCKETS) && defined(USE_SSL)
         result->data.sock->ssl_session = NULL;
@@ -691,10 +683,7 @@ prim_nbsockopen(PRIM_PROTOTYPE)
         add_socket_to_queue(result->data.sock, fr);
         if (tp_log_sockets)
             log2filetime("logs/sockets",
-                         "#%d by %s SOCKOPEN:  %s:%d -> %d\n", program,
-                         unparse_object(PSafe, PSafe),
-                         oper[1].data.string->data, oper[0].data.number,
-                         result->data.sock->socknum);
+                         "#%d by %s SOCKOPEN:  %s:%d -> %d\n", program, unparse_object(PSafe, PSafe), oper[1].data.string->data, oper[0].data.number, result->data.sock->socknum);
     }
 
     copyinst(result, &arg[(*top)++]);
@@ -735,7 +724,7 @@ prim_nbsock6open(PRIM_PROTOTYPE)
         mysock = socket(AF_INET6, SOCK_STREAM, 6); /* Open a TCP socket */
 
         make_nonblocking(mysock);
-        if (connect(mysock, (void*)&name, sizeof(struct sockaddr_in6)) == -1)
+        if (connect(mysock, (void *) &name, sizeof(struct sockaddr_in6)) == -1)
 #if defined(BRAINDEAD_OS) || defined(WIN32)
             sprintf(myresult, "ERROR: %d", errnosocket);
 #else
@@ -761,8 +750,8 @@ prim_nbsock6open(PRIM_PROTOTYPE)
         result->data.sock->port = oper[0].data.number; /* remote port # */
         result->data.sock->hostname = alloc_string(oper[1].data.string->data);
         result->data.sock->host = -1;
-        result->data.sock->host6 = (void*)myhost->h_addr;
-	    result->data.sock->ipv6 = 1;
+        result->data.sock->host6 = (void *) myhost->h_addr;
+        result->data.sock->ipv6 = 1;
         result->data.sock->username = alloc_string(unparse_object(PSafe, PSafe));
         result->data.sock->connected_at = time(NULL);
         result->data.sock->last_time = time(NULL);
@@ -778,10 +767,7 @@ prim_nbsock6open(PRIM_PROTOTYPE)
         add_socket_to_queue(result->data.sock, fr);
         if (tp_log_sockets)
             log2filetime("logs/sockets",
-                         "#%d by %s SOCKOPEN:  %s:%d -> %d\n", program,
-                         unparse_object(PSafe, PSafe),
-                         oper[1].data.string->data, oper[0].data.number,
-                         result->data.sock->socknum);
+                         "#%d by %s SOCKOPEN:  %s:%d -> %d\n", program, unparse_object(PSafe, PSafe), oper[1].data.string->data, oper[0].data.number, result->data.sock->socknum);
     }
 
     copyinst(result, &arg[(*top)++]);
@@ -808,35 +794,31 @@ prim_socksecure(PRIM_PROTOTYPE)
         /* Do we have an existing SSL session on this socket? */
         if (oper[0].data.sock->ssl_session) {
             /* Is this an SSL initialization in progress? */
-            if ( !SSL_is_init_finished(oper[0].data.sock->ssl_session) ) {
+            if (!SSL_is_init_finished(oper[0].data.sock->ssl_session)) {
                 ssl_error = SSL_connect(oper[0].data.sock->ssl_session);
                 if (ssl_error <= 0) {
-                    ssl_error =
-                        SSL_get_error(oper[0].data.sock->ssl_session, ssl_error);
+                    ssl_error = SSL_get_error(oper[0].data.sock->ssl_session, ssl_error);
                     result = ssl_error;
                 } else
                     result = 0;
-            /* Assume user wants to renegotiate. */
+                /* Assume user wants to renegotiate. */
             } else {
                 ssl_error = SSL_renegotiate(oper[0].data.sock->ssl_session);
                 if (ssl_error <= 0) {
-                    ssl_error =
-                        SSL_get_error(oper[0].data.sock->ssl_session, ssl_error);
+                    ssl_error = SSL_get_error(oper[0].data.sock->ssl_session, ssl_error);
                     result = ssl_error;
                 } else
-                result = 0;
+                    result = 0;
             }
         } else {
 #if defined(WIN32)
             make_blocking(oper[0].data.sock->socknum);
 #endif
             oper[0].data.sock->ssl_session = SSL_new(ssl_ctx_client);
-            SSL_set_fd(oper[0].data.sock->ssl_session,
-                       oper[0].data.sock->socknum);
+            SSL_set_fd(oper[0].data.sock->ssl_session, oper[0].data.sock->socknum);
             ssl_error = SSL_connect(oper[0].data.sock->ssl_session);
             if (ssl_error <= 0) {
-                ssl_error =
-                    SSL_get_error(oper[0].data.sock->ssl_session, ssl_error);
+                ssl_error = SSL_get_error(oper[0].data.sock->ssl_session, ssl_error);
                 result = ssl_error;
             } else
                 result = 0;
@@ -875,7 +857,7 @@ void
 prim_sockcheck(PRIM_PROTOTYPE)
 {
     /* socket -- i */
-	int result;
+    int result;
 
     if (oper[0].type != PROG_SOCKET)
         abort_interp("Socket argument expected!");
@@ -987,10 +969,7 @@ prim_lsockopen(PRIM_PROTOTYPE)
 #endif
     add_socket_to_queue(result->data.sock, fr);
     if (tp_log_sockets)
-        log2filetime("logs/sockets",
-                     "#%d by %s LSOCKOPEN: Port:%d -> %d\n", program,
-                     unparse_object(PSafe, PSafe), oper[0].data.number,
-                     result->data.sock->socknum);
+        log2filetime("logs/sockets", "#%d by %s LSOCKOPEN: Port:%d -> %d\n", program, unparse_object(PSafe, PSafe), oper[0].data.number, result->data.sock->socknum);
 
     copyinst(result, &arg[(*top)++]);
     PushString(myresult);
@@ -1020,15 +999,15 @@ prim_lsock6open(PRIM_PROTOTYPE)
         abort_interp("Invalid queue size (between 5 and 20).");
     sockdescr = socket(AF_INET6, SOCK_STREAM, 0); /* get the socket descr */
     my_addr.sin6_family = AF_INET6;
-    my_addr.sin6_port = (int)htons(oper[0].data.number); /* set bind port # */
-    /* my_addr.sin6_port = oper[0].data.number; */ /* set bind port # */
-    my_addr.sin6_addr = bind6; /* what am I bound to? */
+    my_addr.sin6_port = (int) htons(oper[0].data.number); /* set bind port # */
+    /* my_addr.sin6_port = oper[0].data.number; *//* set bind port # */
+    my_addr.sin6_addr = bind6;  /* what am I bound to? */
     /* memmove(&my_addr.sin6_addr, &bind6, sizeof(struct in6_addr)); */
     /* Make sure is able to reuse the port */
     setsockopt(sockdescr, SOL_SOCKET, SO_REUSEADDR, (char *) &yes, sizeof(int));
     setsockopt(sockdescr, IPPROTO_IPV6, IPV6_V6ONLY, (char *) &yes, sizeof(int));
     /* Bind to the port */
-    errors = bind(sockdescr, (void*)&my_addr, sizeof(struct sockaddr_in6));
+    errors = bind(sockdescr, (void *) &my_addr, sizeof(struct sockaddr_in6));
     if (errors == -1) {
         /* Error binding to port. */
 #if defined(BRAINDEAD_OS) || defined(WIN32)
@@ -1091,10 +1070,7 @@ prim_lsock6open(PRIM_PROTOTYPE)
 #endif
     add_socket_to_queue(result->data.sock, fr);
     if (tp_log_sockets)
-        log2filetime("logs/sockets",
-                     "#%d by %s LSOCKOPEN: Port:%d -> %d\n", program,
-                     unparse_object(PSafe, PSafe), oper[0].data.number,
-                     result->data.sock->socknum);
+        log2filetime("logs/sockets", "#%d by %s LSOCKOPEN: Port:%d -> %d\n", program, unparse_object(PSafe, PSafe), oper[0].data.number, result->data.sock->socknum);
 
     copyinst(result, &arg[(*top)++]);
     PushString(myresult);
@@ -1112,6 +1088,7 @@ prim_sockaccept(PRIM_PROTOTYPE)
     char username[10];
     char myresult[255];
     struct sockaddr_in remoteaddr; /* client's address */
+
 #ifdef IPV6
     struct sockaddr_in6 remoteaddr6; /* client's address */
 #endif
@@ -1134,69 +1111,66 @@ prim_sockaccept(PRIM_PROTOTYPE)
         PushInt(newsock);
         return;
     }
-
 #ifdef IPV6
-if (oper[0].data.sock->ipv6) {
-    /* connection is waiting - ipv6 */
-    addr_len = sizeof(remoteaddr6);
-    sockdescr = oper[0].data.sock->socknum;
-    newsock =
-        accept(sockdescr, (struct sockaddr *) &remoteaddr6, (socklen_t *) &addr_len);
-    if (newsock == -1) {        /* some kind of error */
+    if (oper[0].data.sock->ipv6) {
+        /* connection is waiting - ipv6 */
+        addr_len = sizeof(remoteaddr6);
+        sockdescr = oper[0].data.sock->socknum;
+        newsock = accept(sockdescr, (struct sockaddr *) &remoteaddr6, (socklen_t *) &addr_len);
+        if (newsock == -1) {    /* some kind of error */
 #if defined(BRAINDEAD_OS) || defined(WIN32) || defined(__CYGWIN__)
-        sprintf(myresult, "ERROR: ERRORNOSOCKET");
+            sprintf(myresult, "ERROR: ERRORNOSOCKET");
 #else
-        strcpy(myresult, strerror(errnosocket));
+            strcpy(myresult, strerror(errnosocket));
 #endif
-        PushString(myresult);
-        return;
-    }
+            PushString(myresult);
+            return;
+        }
 
-    make_nonblocking(newsock);
-    check_maxd(newsock);
+        make_nonblocking(newsock);
+        check_maxd(newsock);
 
-    /* We have the new socket, now initialize muf_socket struct */
-    oper[0].data.sock->commands += 1;
-    result = new inst;
-    result->type = PROG_SOCKET;
-    result->data.sock = new muf_socket;
-    hu = host_getinfo6(remoteaddr6.sin6_addr, oper[0].data.sock->port, remoteaddr6.sin6_port);
-    result->data.sock->host = -1;
-    result->data.sock->host6 = &remoteaddr6.sin6_addr;
-    result->data.sock->ipv6 = 1;
-    sprintf(username, "%d", ntohs(remoteaddr6.sin6_port));
-} else {
+        /* We have the new socket, now initialize muf_socket struct */
+        oper[0].data.sock->commands += 1;
+        result = new inst;
+        result->type = PROG_SOCKET;
+        result->data.sock = new muf_socket;
+        hu = host_getinfo6(remoteaddr6.sin6_addr, oper[0].data.sock->port, remoteaddr6.sin6_port);
+        result->data.sock->host = -1;
+        result->data.sock->host6 = &remoteaddr6.sin6_addr;
+        result->data.sock->ipv6 = 1;
+        sprintf(username, "%d", ntohs(remoteaddr6.sin6_port));
+    } else {
 #endif
-    /* connection is waiting - ipv4 */
-    addr_len = sizeof(remoteaddr);
-    sockdescr = oper[0].data.sock->socknum;
-    newsock =
-        accept(sockdescr, (struct sockaddr *) &remoteaddr, (socklen_t *) &addr_len);
-    if (newsock == -1) {        /* some kind of error */
+        /* connection is waiting - ipv4 */
+        addr_len = sizeof(remoteaddr);
+        sockdescr = oper[0].data.sock->socknum;
+        newsock = accept(sockdescr, (struct sockaddr *) &remoteaddr, (socklen_t *) &addr_len);
+        if (newsock == -1) {    /* some kind of error */
 #if defined(BRAINDEAD_OS) || defined(WIN32) || defined(__CYGWIN__)
-        sprintf(myresult, "ERROR: ERRORNOSOCKET");
+            sprintf(myresult, "ERROR: ERRORNOSOCKET");
 #else
-        strcpy(myresult, strerror(errnosocket));
+            strcpy(myresult, strerror(errnosocket));
 #endif
-        PushString(myresult);
-        return;
-    }
+            PushString(myresult);
+            return;
+        }
 
-    make_nonblocking(newsock);
-    check_maxd(newsock);
+        make_nonblocking(newsock);
+        check_maxd(newsock);
 
-    /* We have the new socket, now initialize muf_socket struct */
-    oper[0].data.sock->commands += 1;
-    result = new inst;
-    result->type = PROG_SOCKET;
-    result->data.sock = new muf_socket;
-    hu =  host_getinfo(remoteaddr.sin_addr.s_addr, oper[0].data.sock->port, remoteaddr.sin_port);
-    result->data.sock->host = ntohl(remoteaddr.sin_addr.s_addr);
-    sprintf(username, "%d", ntohs(remoteaddr.sin_port));
+        /* We have the new socket, now initialize muf_socket struct */
+        oper[0].data.sock->commands += 1;
+        result = new inst;
+        result->type = PROG_SOCKET;
+        result->data.sock = new muf_socket;
+        hu = host_getinfo(remoteaddr.sin_addr.s_addr, oper[0].data.sock->port, remoteaddr.sin_port);
+        result->data.sock->host = ntohl(remoteaddr.sin_addr.s_addr);
+        sprintf(username, "%d", ntohs(remoteaddr.sin_port));
 #ifdef IPV6
-    result->data.sock->host6 = (void*)&in6addr_any;
-    result->data.sock->ipv6 = 0;
-}
+        result->data.sock->host6 = (void *) &in6addr_any;
+        result->data.sock->ipv6 = 0;
+    }
 #endif
     /* END ipv6/ipv4 segregated block */
     result->data.sock->hostname = alloc_string(hu->h->name);
@@ -1225,10 +1199,7 @@ if (oper[0].data.sock->ipv6) {
 #endif
     add_socket_to_queue(result->data.sock, fr);
     if (tp_log_sockets)
-        log2filetime("logs/sockets",
-                     "#%d by %s SOCKACCEPT: Port:%d -> %d\n", program,
-                     unparse_object(PSafe, PSafe), oper[0].data.number,
-                     result->data.sock->socknum);
+        log2filetime("logs/sockets", "#%d by %s SOCKACCEPT: Port:%d -> %d\n", program, unparse_object(PSafe, PSafe), oper[0].data.number, result->data.sock->socknum);
     oper[0].data.sock->readWaiting = 0;
     copyinst(result, &arg[(*top)++]);
     CLEAR(result);
@@ -1248,6 +1219,7 @@ prim_ssl_sockaccept(PRIM_PROTOTYPE)
     char username[10];
     char myresult[255];
     struct sockaddr_in remoteaddr; /* client's address */
+
 #ifdef IPV6
     struct sockaddr_in6 remoteaddr6; /* client's address */
 #endif
@@ -1272,97 +1244,91 @@ prim_ssl_sockaccept(PRIM_PROTOTYPE)
         PushInt(newsock);
         return;
     }
-
 #ifdef IPV6
-if (oper[0].data.sock->ipv6) {
-    /* connection is waiting - ipv6 */
-    addr_len = sizeof(remoteaddr6);
-    sockdescr = oper[0].data.sock->socknum;
-    newsock =
-        accept(sockdescr, (struct sockaddr *) &remoteaddr6, (socklen_t *) &addr_len);
-    if (newsock == -1) {        /* some kind of error */
+    if (oper[0].data.sock->ipv6) {
+        /* connection is waiting - ipv6 */
+        addr_len = sizeof(remoteaddr6);
+        sockdescr = oper[0].data.sock->socknum;
+        newsock = accept(sockdescr, (struct sockaddr *) &remoteaddr6, (socklen_t *) &addr_len);
+        if (newsock == -1) {    /* some kind of error */
 #if defined(BRAINDEAD_OS) || defined(WIN32) || defined(__CYGWIN__)
-        sprintf(myresult, "ERROR: ERRORNOSOCKET");
+            sprintf(myresult, "ERROR: ERRORNOSOCKET");
 #else
-        strcpy(myresult, strerror(errnosocket));
+            strcpy(myresult, strerror(errnosocket));
 #endif
-        PushString(myresult);
-        return;
-    }
-
-    make_nonblocking(newsock);
-    check_maxd(newsock);
-
-    ssl_session = SSL_new(ssl_ctx);
-    SSL_set_fd(ssl_session, newsock);
-
-    if ((ssl_error = SSL_accept(ssl_session)) <= 0) {
-        ssl_error = SSL_get_error(ssl_session, ssl_error);
-        if (ssl_error != SSL_ERROR_WANT_READ
-            && ssl_error != SSL_ERROR_WANT_WRITE) {
-            sprintf(myresult, "SSLerr: %d", ssl_error);
-            SSL_free(ssl_session);
             PushString(myresult);
             return;
         }
-    }
 
-    /* We have the new socket, now initialize muf_socket struct */
-    oper[0].data.sock->commands += 1;
-    result = new inst;
-    result->type = PROG_SOCKET;
-    result->data.sock = new muf_socket;
-    hu = host_getinfo6(remoteaddr6.sin6_addr, oper[0].data.sock->port, remoteaddr6.sin6_port);
-    result->data.sock->host = -1;
-    result->data.sock->host6 = &remoteaddr6.sin6_addr;
-    result->data.sock->ipv6 = 1;
-    sprintf(username, "%d", ntohs(remoteaddr6.sin6_port));
-} else {
+        make_nonblocking(newsock);
+        check_maxd(newsock);
+
+        ssl_session = SSL_new(ssl_ctx);
+        SSL_set_fd(ssl_session, newsock);
+
+        if ((ssl_error = SSL_accept(ssl_session)) <= 0) {
+            ssl_error = SSL_get_error(ssl_session, ssl_error);
+            if (ssl_error != SSL_ERROR_WANT_READ && ssl_error != SSL_ERROR_WANT_WRITE) {
+                sprintf(myresult, "SSLerr: %d", ssl_error);
+                SSL_free(ssl_session);
+                PushString(myresult);
+                return;
+            }
+        }
+
+        /* We have the new socket, now initialize muf_socket struct */
+        oper[0].data.sock->commands += 1;
+        result = new inst;
+        result->type = PROG_SOCKET;
+        result->data.sock = new muf_socket;
+        hu = host_getinfo6(remoteaddr6.sin6_addr, oper[0].data.sock->port, remoteaddr6.sin6_port);
+        result->data.sock->host = -1;
+        result->data.sock->host6 = &remoteaddr6.sin6_addr;
+        result->data.sock->ipv6 = 1;
+        sprintf(username, "%d", ntohs(remoteaddr6.sin6_port));
+    } else {
 #endif
-    /* connection is waiting - ipv4 */
-    addr_len = sizeof(remoteaddr);
-    sockdescr = oper[0].data.sock->socknum;
-    newsock =
-        accept(sockdescr, (struct sockaddr *) &remoteaddr, (socklen_t *) &addr_len);
-    if (newsock == -1) {        /* some kind of error */
+        /* connection is waiting - ipv4 */
+        addr_len = sizeof(remoteaddr);
+        sockdescr = oper[0].data.sock->socknum;
+        newsock = accept(sockdescr, (struct sockaddr *) &remoteaddr, (socklen_t *) &addr_len);
+        if (newsock == -1) {    /* some kind of error */
 #if defined(BRAINDEAD_OS) || defined(WIN32) || defined(__CYGWIN__)
-        sprintf(myresult, "ERROR: ERRORNOSOCKET");
+            sprintf(myresult, "ERROR: ERRORNOSOCKET");
 #else
-        strcpy(myresult, strerror(errnosocket));
+            strcpy(myresult, strerror(errnosocket));
 #endif
-        PushString(myresult);
-        return;
-    }
-
-    make_nonblocking(newsock);
-    check_maxd(newsock);
-    ssl_session = SSL_new(ssl_ctx);
-    SSL_set_fd(ssl_session, newsock);
-
-    if ((ssl_error = SSL_accept(ssl_session)) <= 0) {
-        ssl_error = SSL_get_error(ssl_session, ssl_error);
-        if (ssl_error != SSL_ERROR_WANT_READ
-            && ssl_error != SSL_ERROR_WANT_WRITE) {
-            sprintf(myresult, "SSLerr: %d", ssl_error);
-            SSL_free(ssl_session);
             PushString(myresult);
             return;
         }
-    }
 
-    /* We have the new socket, now initialize muf_socket struct */
-    oper[0].data.sock->commands += 1;
-    result =  new inst;
-    result->type = PROG_SOCKET;
-    result->data.sock = new muf_socket;
-    hu =  host_getinfo(remoteaddr.sin_addr.s_addr, oper[0].data.sock->port,
-                       remoteaddr.sin_port);
-    result->data.sock->host = ntohl(remoteaddr.sin_addr.s_addr);
-    sprintf(username, "%d", ntohs(remoteaddr.sin_port));
+        make_nonblocking(newsock);
+        check_maxd(newsock);
+        ssl_session = SSL_new(ssl_ctx);
+        SSL_set_fd(ssl_session, newsock);
+
+        if ((ssl_error = SSL_accept(ssl_session)) <= 0) {
+            ssl_error = SSL_get_error(ssl_session, ssl_error);
+            if (ssl_error != SSL_ERROR_WANT_READ && ssl_error != SSL_ERROR_WANT_WRITE) {
+                sprintf(myresult, "SSLerr: %d", ssl_error);
+                SSL_free(ssl_session);
+                PushString(myresult);
+                return;
+            }
+        }
+
+        /* We have the new socket, now initialize muf_socket struct */
+        oper[0].data.sock->commands += 1;
+        result = new inst;
+        result->type = PROG_SOCKET;
+        result->data.sock = new muf_socket;
+        hu = host_getinfo(remoteaddr.sin_addr.s_addr, oper[0].data.sock->port, remoteaddr.sin_port);
+        result->data.sock->host = ntohl(remoteaddr.sin_addr.s_addr);
+        sprintf(username, "%d", ntohs(remoteaddr.sin_port));
 #ifdef IPV6
-    result->data.sock->host6 = (void*)&in6addr_any;
-    result->data.sock->ipv6 = 0;
-}
+        result->data.sock->host6 = (void *) &in6addr_any;
+        result->data.sock->ipv6 = 0;
+    }
 #endif
     /* END ipv6/ipv4 segregated block */
     result->data.sock->hostname = alloc_string(hu->h->name);
@@ -1389,10 +1355,7 @@ if (oper[0].data.sock->ipv6) {
 #endif
     add_socket_to_queue(result->data.sock, fr);
     if (tp_log_sockets)
-        log2filetime("logs/sockets",
-                     "#%d by %s SOCKACCEPT: Port:%d -> %d\n", program,
-                     unparse_object(PSafe, PSafe), oper[0].data.number,
-                     result->data.sock->socknum);
+        log2filetime("logs/sockets", "#%d by %s SOCKACCEPT: Port:%d -> %d\n", program, unparse_object(PSafe, PSafe), oper[0].data.number, result->data.sock->socknum);
     oper[0].data.sock->readWaiting = 0;
 
     copyinst(result, &arg[(*top)++]);
@@ -1420,25 +1383,23 @@ prim_get_sockinfo(PRIM_PROTOTYPE)
 #ifdef IPV6
     array_set_strkey_intval(&nw, "IPV6", theSock->ipv6);
     if (theSock->ipv6)
-        array_set_strkey_strval(&nw, "HOST", ip_address_prototype((void*)theSock->host6->s6_addr,16));
+        array_set_strkey_strval(&nw, "HOST", ip_address_prototype((void *) theSock->host6->s6_addr, 16));
     else
-		array_set_strkey_strval(&nw, "HOST", ip_address_prototype(&theSock->host,4));
+        array_set_strkey_strval(&nw, "HOST", ip_address_prototype(&theSock->host, 4));
 #else
-	array_set_strkey_strval(&nw, "HOST", host_as_hex(theSock->host));
+    array_set_strkey_strval(&nw, "HOST", host_as_hex(theSock->host));
 #endif
-        
-    array_set_strkey_intval(&nw, "CONNECTED_AT", (int)theSock->connected_at);
-    array_set_strkey_intval(&nw, "LAST_TIME", (int)theSock->last_time);
+
+    array_set_strkey_intval(&nw, "CONNECTED_AT", (int) theSock->connected_at);
+    array_set_strkey_intval(&nw, "LAST_TIME", (int) theSock->last_time);
     array_set_strkey_intval(&nw, "COMMANDS", theSock->commands);
     array_set_strkey_intval(&nw, "PORT", theSock->port);
     array_set_strkey_intval(&nw, "SIMPLEQUEUE", theSock->usequeue);
     array_set_strkey_intval(&nw, "TELNETQUEUE", theSock->usesmartqueue);
     array_set_strkey_intval(&nw, "RAWMODE", theSock->rawmode);
     array_set_strkey_intval(&nw, "READWAITING", theSock->readWaiting);
-    array_set_strkey_strval(&nw, "HOSTNAME",
-                            theSock->hostname ? theSock->hostname : "");
-    array_set_strkey_strval(&nw, "USERNAME",
-                            theSock->username ? theSock->username : "");
+    array_set_strkey_strval(&nw, "HOSTNAME", theSock->hostname ? theSock->hostname : "");
+    array_set_strkey_strval(&nw, "USERNAME", theSock->username ? theSock->username : "");
     PushArrayRaw(nw);
 }
 
@@ -1449,8 +1410,8 @@ prim_socket_setuser(PRIM_PROTOTYPE)
     char pad_char[] = "";
     struct muf_socket *theSock;
     struct descriptor_data *d;
-	dbref ref;
-	int result;
+    dbref ref;
+    int result;
 
     /* (SOCKET) ref pass -- bool */
     if (oper[2].type != PROG_SOCKET)
@@ -1480,31 +1441,19 @@ prim_socket_setuser(PRIM_PROTOTYPE)
 #ifdef IPV6
     if (theSock->ipv6) {
 #if defined(SSL_SOCKETS) && defined (USE_SSL)
-    if (theSock->ssl_session)
-        d = initializesock(theSock->socknum,
-                           host_getinfo6(*theSock->host6, theSock->port,
-                                        htons(atoi(theSock->username))), CT_SSL,
-                           theSock->port, 0);
-    else
+        if (theSock->ssl_session)
+            d = initializesock(theSock->socknum, host_getinfo6(*theSock->host6, theSock->port, htons(atoi(theSock->username))), CT_SSL, theSock->port, 0);
+        else
 #endif
-        d = initializesock(theSock->socknum,
-                           host_getinfo6(*theSock->host6, theSock->port,
-                                        htons(atoi(theSock->username))),
-                           CT_MUCK, theSock->port, 0);
+            d = initializesock(theSock->socknum, host_getinfo6(*theSock->host6, theSock->port, htons(atoi(theSock->username))), CT_MUCK, theSock->port, 0);
     } else {
 #endif
 #if defined(SSL_SOCKETS) && defined (USE_SSL)
-    if (theSock->ssl_session)
-        d = initializesock(theSock->socknum,
-                           host_getinfo(htonl(theSock->host), theSock->port,
-                                        htons(atoi(theSock->username))), CT_SSL,
-                           theSock->port, 0);
-    else
+        if (theSock->ssl_session)
+            d = initializesock(theSock->socknum, host_getinfo(htonl(theSock->host), theSock->port, htons(atoi(theSock->username))), CT_SSL, theSock->port, 0);
+        else
 #endif
-        d = initializesock(theSock->socknum,
-                           host_getinfo(htonl(theSock->host), theSock->port,
-                                        htons(atoi(theSock->username))),
-                           CT_MUCK, theSock->port, 0);
+            d = initializesock(theSock->socknum, host_getinfo(htonl(theSock->host), theSock->port, htons(atoi(theSock->username))), CT_MUCK, theSock->port, 0);
 
 #ifdef IPV6
     }
@@ -1515,9 +1464,7 @@ prim_socket_setuser(PRIM_PROTOTYPE)
     if (tp_log_connects && result)
         log2filetime(CONNECT_LOG,
                      "SOCKET_SETUSER: %2d %s %s(%s) %s P#%d\n",
-                     theSock->socknum, unparse_object(ref, ref),
-                     theSock->hostname, theSock->username,
-                     host_as_hex(theSock->host), theSock->port);
+                     theSock->socknum, unparse_object(ref, ref), theSock->hostname, theSock->username, host_as_hex(theSock->host), theSock->port);
     if (result)
         theSock->is_player = 1;
     PushInt(result);
@@ -1544,24 +1491,16 @@ prim_socktodescr(PRIM_PROTOTYPE)
     make_nonblocking(theSock->socknum);
     /* Now add the descriptor to the MUCK's descriptor list */
 #ifdef IPV6
-    if (theSock->ipv6) 
-    d = initializesock(theSock->socknum,
-                       host_getinfo6(*theSock->host6, theSock->port,
-                                     htons(atoi(theSock->username))), CT_INBOUND,
-                       theSock->port, 0);
+    if (theSock->ipv6)
+        d = initializesock(theSock->socknum, host_getinfo6(*theSock->host6, theSock->port, htons(atoi(theSock->username))), CT_INBOUND, theSock->port, 0);
     else
 #endif
-    d = initializesock(theSock->socknum,
-                       host_getinfo(htonl(theSock->host), theSock->port,
-                                    htons(atoi(theSock->username))), CT_INBOUND,
-                       theSock->port, 0);
+        d = initializesock(theSock->socknum, host_getinfo(htonl(theSock->host), theSock->port, htons(atoi(theSock->username))), CT_INBOUND, theSock->port, 0);
 
-   
+
     /* now the descriptor is queued with the rest of the MUCK's d's */
     if (tp_log_sockets)
-        log2filetime("logs/sockets",
-                     "#%d by %s SOCKTODESCR: %d", program,
-                     unparse_object(PSafe, PSafe), theSock->socknum);
+        log2filetime("logs/sockets", "#%d by %s SOCKTODESCR: %d", program, unparse_object(PSafe, PSafe), theSock->socknum);
     theSock->is_player = -1;
     PushInt(d->descriptor);
 }
@@ -1584,7 +1523,7 @@ prim_set_sockopt(PRIM_PROTOTYPE)
         theSock->usequeue = 0;
         theSock->usesmartqueue = 0;
         theSock->rawmode = 0;
-        delete[] theSock->raw_input;
+        delete[]theSock->raw_input;
         theSock->raw_input = NULL;
         theSock->raw_input_at = NULL;
         result = 1;
@@ -1605,195 +1544,219 @@ prim_set_sockopt(PRIM_PROTOTYPE)
         theSock->rawmode = 1;
         theSock->usesmartqueue = 0;
         theSock->usequeue = 0;
-        delete[] theSock->raw_input;
+        delete[]theSock->raw_input;
         theSock->raw_input = NULL;
         theSock->raw_input_at = NULL;
-		result = 1;
+        result = 1;
     } else
         result = 0;
     PushInt(result);
 }
 
-void muf_udp_clean_byport(int portnum)
+void
+muf_udp_clean_byport(int portnum)
 {
- int i, j, x;
- i=0; x=udp_count+1;
- while (i<=x) 
-  if (udp_sockets[i].portnum == portnum) {
-   if (tp_log_sockets) log2filetime("logs/sockets", "UDPCLOSE: entry %d, port %d, descr %d\n", i, udp_sockets[i].portnum, udp_sockets[i].socket);
-   closesocket(udp_sockets[i].socket);
+    int i, j, x;
+
+    i = 0;
+    x = udp_count + 1;
+    while (i <= x)
+        if (udp_sockets[i].portnum == portnum) {
+            if (tp_log_sockets)
+                log2filetime("logs/sockets", "UDPCLOSE: entry %d, port %d, descr %d\n", i, udp_sockets[i].portnum, udp_sockets[i].socket);
+            closesocket(udp_sockets[i].socket);
 #ifdef IPV6
-   close(udp_sockets[i].socket6);
+            close(udp_sockets[i].socket6);
 #endif
-   udp_count--;
-   j=i; while (j<=x) {
-    udp_sockets[j] = udp_sockets[j+1];
-    j++;
-   } 
-  } 
- else i++;
+            udp_count--;
+            j = i;
+            while (j <= x) {
+                udp_sockets[j] = udp_sockets[j + 1];
+                j++;
+            }
+        } else
+            i++;
 }
 
-void udp_socket_clean(struct frame *fr)
+void
+udp_socket_clean(struct frame *fr)
 {
- int i, j, x;
- i=0; x=udp_count+1;
- while (i<=x) 
-  if (udp_sockets[i].fr == fr) {
-   if (tp_log_sockets) log2filetime("logs/sockets", "UDP.socket_clean: entry %d, port %d, descr %d\n", i, udp_sockets[i].portnum, udp_sockets[i].socket);
-   udp_count--;
-   closesocket(udp_sockets[i].socket);
+    int i, j, x;
+
+    i = 0;
+    x = udp_count + 1;
+    while (i <= x)
+        if (udp_sockets[i].fr == fr) {
+            if (tp_log_sockets)
+                log2filetime("logs/sockets", "UDP.socket_clean: entry %d, port %d, descr %d\n", i, udp_sockets[i].portnum, udp_sockets[i].socket);
+            udp_count--;
+            closesocket(udp_sockets[i].socket);
 #ifdef IPV6
-   closesocket(udp_sockets[i].socket6);
+            closesocket(udp_sockets[i].socket6);
 #endif
-   j=i; 
-   while (j<=x) {
-    udp_sockets[j] = udp_sockets[j+1];
-    j++;
-   } 
-  } 
- else i++;
+            j = i;
+            while (j <= x) {
+                udp_sockets[j] = udp_sockets[j + 1];
+                j++;
+            }
+        } else
+            i++;
 }
 
 
-int muf_udp_portinuse(int portnum)
+int
+muf_udp_portinuse(int portnum)
 {
- int i;
- for(i=0; i<=udp_count+1; ++i) 
-  if (udp_sockets[i].portnum == portnum) return 1;
- return 0;
+    int i;
+
+    for (i = 0; i <= udp_count + 1; ++i)
+        if (udp_sockets[i].portnum == portnum)
+            return 1;
+    return 0;
 }
 
 void
 prim_udpopen(PRIM_PROTOTYPE)
 {
- struct sockaddr_in sa;
-#ifdef IPV6
- struct sockaddr_in6 sa6;
- int yes = 1;
-#endif
- int tmp, result;
-
- /* Some standard checks */
- if (oper[0].type != PROG_INTEGER)
-  abort_interp("Integer expected (1)");
- if ((oper[0].data.number < 1024) || (oper[0].data.number > 65535))
-  abort_interp("Port number must be between 1024 and 65535.");
- if (udp_count>31)
-  abort_interp("Out of UDP ports! (32)");
-
- /* leave with FALSE if port in use */
- if (muf_udp_portinuse(oper[0].data.number)) {
-  result=0; PushInt(result);
-  return;
- } else {
-
- /* Ready to open */
- tmp = socket(AF_INET, SOCK_DGRAM, 0);
- make_nonblocking(tmp);
- sa.sin_family = AF_INET;
- sa.sin_port = htons(oper[0].data.number);
- sa.sin_addr.s_addr = bind_to;
- if (bind(tmp, (struct sockaddr *)&sa, sizeof(sa)) == -1) {
-  /* The only real possible error here is 'port in use', so return zero if there was an error */
-  result=0; PushInt(result); 
-  return;
- }
- /* add it to the recvto mainloop */
- check_maxd(tmp);
- udp_sockets[udp_count].socket = tmp;
- udp_sockets[udp_count].fr = fr;
- udp_sockets[udp_count].portnum = oper[0].data.number;
- if (tp_log_sockets) log2filetime("logs/sockets", "UDP4OPEN: entry %d, port %d, descr %d\n", udp_count, udp_sockets[udp_count].portnum, udp_sockets[udp_count].socket);
+    struct sockaddr_in sa;
 
 #ifdef IPV6
- /* Open an ipv6 one too! */
- tmp = socket(AF_INET6, SOCK_DGRAM, 0);
- setsockopt(tmp, IPPROTO_IPV6, IPV6_V6ONLY,(char *)&yes, sizeof(yes));
- make_nonblocking(tmp);
- sa6.sin6_family = AF_INET6;
- sa6.sin6_port = htons(oper[0].data.number);
- sa6.sin6_addr = bind6;
- if (bind(tmp, (struct sockaddr *)&sa6, sizeof(sa6)) == -1) {
-  /* The only real possible error here is 'port in use', so return zero if there was an error */
-  result=0; PushInt(result); 
-  return;
- }
- /* add it to the recvto mainloop */
- check_maxd(tmp);
- udp_sockets[udp_count].socket6 = tmp;
- if (tp_log_sockets) log2filetime("logs/sockets", "UDP6OPEN: entry %d, port %d, descr %d\n", udp_count, udp_sockets[udp_count].portnum, udp_sockets[udp_count].socket6);
+    struct sockaddr_in6 sa6;
+    int yes = 1;
+#endif
+    int tmp, result;
+
+    /* Some standard checks */
+    if (oper[0].type != PROG_INTEGER)
+        abort_interp("Integer expected (1)");
+    if ((oper[0].data.number < 1024) || (oper[0].data.number > 65535))
+        abort_interp("Port number must be between 1024 and 65535.");
+    if (udp_count > 31)
+        abort_interp("Out of UDP ports! (32)");
+
+    /* leave with FALSE if port in use */
+    if (muf_udp_portinuse(oper[0].data.number)) {
+        result = 0;
+        PushInt(result);
+        return;
+    } else {
+
+        /* Ready to open */
+        tmp = socket(AF_INET, SOCK_DGRAM, 0);
+        make_nonblocking(tmp);
+        sa.sin_family = AF_INET;
+        sa.sin_port = htons(oper[0].data.number);
+        sa.sin_addr.s_addr = bind_to;
+        if (bind(tmp, (struct sockaddr *) &sa, sizeof(sa)) == -1) {
+            /* The only real possible error here is 'port in use', so return zero if there was an error */
+            result = 0;
+            PushInt(result);
+            return;
+        }
+        /* add it to the recvto mainloop */
+        check_maxd(tmp);
+        udp_sockets[udp_count].socket = tmp;
+        udp_sockets[udp_count].fr = fr;
+        udp_sockets[udp_count].portnum = oper[0].data.number;
+        if (tp_log_sockets)
+            log2filetime("logs/sockets", "UDP4OPEN: entry %d, port %d, descr %d\n", udp_count, udp_sockets[udp_count].portnum, udp_sockets[udp_count].socket);
+
+#ifdef IPV6
+        /* Open an ipv6 one too! */
+        tmp = socket(AF_INET6, SOCK_DGRAM, 0);
+        setsockopt(tmp, IPPROTO_IPV6, IPV6_V6ONLY, (char *) &yes, sizeof(yes));
+        make_nonblocking(tmp);
+        sa6.sin6_family = AF_INET6;
+        sa6.sin6_port = htons(oper[0].data.number);
+        sa6.sin6_addr = bind6;
+        if (bind(tmp, (struct sockaddr *) &sa6, sizeof(sa6)) == -1) {
+            /* The only real possible error here is 'port in use', so return zero if there was an error */
+            result = 0;
+            PushInt(result);
+            return;
+        }
+        /* add it to the recvto mainloop */
+        check_maxd(tmp);
+        udp_sockets[udp_count].socket6 = tmp;
+        if (tp_log_sockets)
+            log2filetime("logs/sockets", "UDP6OPEN: entry %d, port %d, descr %d\n", udp_count, udp_sockets[udp_count].portnum, udp_sockets[udp_count].socket6);
 #endif
 
- udp_count++;
- result=1; PushInt(result);
- }
+        udp_count++;
+        result = 1;
+        PushInt(result);
+    }
 }
 
 void
 prim_udpclose(PRIM_PROTOTYPE)
 {
-int result;
+    int result;
 
- /* Some standard checks */
- if (oper[0].type != PROG_INTEGER)
-  abort_interp("Integer expected (1)");
- if ((oper[0].data.number < 1024) || (oper[0].data.number > 65535))
-  abort_interp("Port number must be between 1024 and 65535.");
- if (udp_count<0)
-  abort_interp("Insanity!  UDP socket count is negative!");
+    /* Some standard checks */
+    if (oper[0].type != PROG_INTEGER)
+        abort_interp("Integer expected (1)");
+    if ((oper[0].data.number < 1024) || (oper[0].data.number > 65535))
+        abort_interp("Port number must be between 1024 and 65535.");
+    if (udp_count < 0)
+        abort_interp("Insanity!  UDP socket count is negative!");
 
- /* leave with FALSE if port not in use */
- if (!muf_udp_portinuse(oper[0].data.number)) {
-  result=0; PushInt(result);
- } else {
- /* Ready to close */
- muf_udp_clean_byport(oper[0].data.number); 
- result=1; PushInt(result);
- }
+    /* leave with FALSE if port not in use */
+    if (!muf_udp_portinuse(oper[0].data.number)) {
+        result = 0;
+        PushInt(result);
+    } else {
+        /* Ready to close */
+        muf_udp_clean_byport(oper[0].data.number);
+        result = 1;
+        PushInt(result);
+    }
 }
 
 void
 prim_udpsend(PRIM_PROTOTYPE)
 {
 
- struct hostent *myhost;
- struct sockaddr_in sa;
- unsigned int tmp;
- int result;
- 
- /* A bunch of sanity checks */
- if (oper[0].type != PROG_INTEGER)
-    abort_interp("Integer argument expected.");
- if ((oper[0].data.number < 1) || (oper[0].data.number > 65535))
-    abort_interp("Invalid port number.");
- if (oper[1].type != PROG_STRING)
-    abort_interp("String argument expected. (1)");
- if (!oper[1].data.string)
-    abort_interp("Host cannot be an empty string.");
- if (oper[2].type != PROG_STRING)
-    abort_interp("UDP data to be sent must be a string. (3)");
+    struct hostent *myhost;
+    struct sockaddr_in sa;
+    unsigned int tmp;
+    int result;
 
- /* make some sense of the hostname, or return FALSE */
- myhost = gethostbyname(oper[1].data.string->data);
- if (!myhost) {
-    result=0; PushInt(result);
-    return;
- }
- /* Make the socket */
- tmp = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
- sa.sin_family = AF_INET;
- sa.sin_port = htons(oper[0].data.number);
- sa.sin_addr.s_addr = *myhost->h_addr;
- bcopy((char *) myhost->h_addr, (char *) &sa.sin_addr, myhost->h_length);
- 
- /* ship it out, shut it down. */
- sendto(tmp, DoNullInd(oper[2].data.string), oper[2].data.string ? oper[2].data.string->length : 0, 0, (struct sockaddr *)&sa, sizeof(sa)); 
- if (tp_log_sockets) log2filetime("logs/sockets", "UDPSEND: host %s, port %d\n", myhost->h_name, htons(sa.sin_port));
- closesocket(tmp);
- 
- /* Yay! Return TRUE */    
- result = 1; PushInt(result); 
+    /* A bunch of sanity checks */
+    if (oper[0].type != PROG_INTEGER)
+        abort_interp("Integer argument expected.");
+    if ((oper[0].data.number < 1) || (oper[0].data.number > 65535))
+        abort_interp("Invalid port number.");
+    if (oper[1].type != PROG_STRING)
+        abort_interp("String argument expected. (1)");
+    if (!oper[1].data.string)
+        abort_interp("Host cannot be an empty string.");
+    if (oper[2].type != PROG_STRING)
+        abort_interp("UDP data to be sent must be a string. (3)");
+
+    /* make some sense of the hostname, or return FALSE */
+    myhost = gethostbyname(oper[1].data.string->data);
+    if (!myhost) {
+        result = 0;
+        PushInt(result);
+        return;
+    }
+    /* Make the socket */
+    tmp = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    sa.sin_family = AF_INET;
+    sa.sin_port = htons(oper[0].data.number);
+    sa.sin_addr.s_addr = *myhost->h_addr;
+    bcopy((char *) myhost->h_addr, (char *) &sa.sin_addr, myhost->h_length);
+
+    /* ship it out, shut it down. */
+    sendto(tmp, DoNullInd(oper[2].data.string), oper[2].data.string ? oper[2].data.string->length : 0, 0, (struct sockaddr *) &sa, sizeof(sa));
+    if (tp_log_sockets)
+        log2filetime("logs/sockets", "UDPSEND: host %s, port %d\n", myhost->h_name, htons(sa.sin_port));
+    closesocket(tmp);
+
+    /* Yay! Return TRUE */
+    result = 1;
+    PushInt(result);
 
 }
 
@@ -1801,44 +1764,47 @@ void
 prim_udp6send(PRIM_PROTOTYPE)
 {
 #ifndef IPV6
- abort_interp("IPv6 not supported.  Recompile, reformat, reinstall.");
+    abort_interp("IPv6 not supported.  Recompile, reformat, reinstall.");
 #else
- struct hostent *myhost;
- struct sockaddr_in6 sa6;
- unsigned int tmp; 
- 
- /* A bunch of sanity checks */
- if (oper[0].type != PROG_INTEGER)
-    abort_interp("Integer argument expected.");
- if ((oper[0].data.number < 1) || (oper[0].data.number > 65535))
-    abort_interp("Invalid port number.");
- if (oper[1].type != PROG_STRING)
-    abort_interp("String argument expected. (1)");
- if (!oper[1].data.string)
-    abort_interp("Host cannot be an empty string.");
- if (oper[2].type != PROG_STRING)
-    abort_interp("UDP data to be sent must be a string. (3)");
+    struct hostent *myhost;
+    struct sockaddr_in6 sa6;
+    unsigned int tmp;
 
- /* make some sense of the hostname, or return FALSE */
- myhost = gethostbyname2(oper[1].data.string->data, AF_INET6);
- if (!myhost) {
-    result=0; PushInt(result);
-    return;
- }
- /* Make the socket */
- tmp = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
- sa6.sin6_family = AF_INET6;
- sa6.sin6_port = htons(oper[0].data.number);
- /* sa6.sin6_addr = *myhost->h_addr; */
- bcopy((char *) myhost->h_addr, (char *) &sa6.sin6_addr, myhost->h_length);
- 
- /* ship it out, shut it down. */
- sendto(tmp, oper[2].data.string->data, oper[2].data.string->length, 0, (struct sockaddr *)&sa6, sizeof(sa6)); 
- if (tp_log_sockets) log2filetime("logs/sockets", "UDPSEND: host %s, port %d\n", myhost->h_name, htons(sa6.sin6_port));
- close(tmp);
- 
- /* Yay! Return TRUE */    
- result = 1; PushInt(result); 
+    /* A bunch of sanity checks */
+    if (oper[0].type != PROG_INTEGER)
+        abort_interp("Integer argument expected.");
+    if ((oper[0].data.number < 1) || (oper[0].data.number > 65535))
+        abort_interp("Invalid port number.");
+    if (oper[1].type != PROG_STRING)
+        abort_interp("String argument expected. (1)");
+    if (!oper[1].data.string)
+        abort_interp("Host cannot be an empty string.");
+    if (oper[2].type != PROG_STRING)
+        abort_interp("UDP data to be sent must be a string. (3)");
+
+    /* make some sense of the hostname, or return FALSE */
+    myhost = gethostbyname2(oper[1].data.string->data, AF_INET6);
+    if (!myhost) {
+        result = 0;
+        PushInt(result);
+        return;
+    }
+    /* Make the socket */
+    tmp = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
+    sa6.sin6_family = AF_INET6;
+    sa6.sin6_port = htons(oper[0].data.number);
+    /* sa6.sin6_addr = *myhost->h_addr; */
+    bcopy((char *) myhost->h_addr, (char *) &sa6.sin6_addr, myhost->h_length);
+
+    /* ship it out, shut it down. */
+    sendto(tmp, oper[2].data.string->data, oper[2].data.string->length, 0, (struct sockaddr *) &sa6, sizeof(sa6));
+    if (tp_log_sockets)
+        log2filetime("logs/sockets", "UDPSEND: host %s, port %d\n", myhost->h_name, htons(sa6.sin6_port));
+    close(tmp);
+
+    /* Yay! Return TRUE */
+    result = 1;
+    PushInt(result);
 #endif
 }
 
@@ -1846,35 +1812,35 @@ void
 prim_dns(PRIM_PROTOTYPE)
 {
 
- struct hostent *myhost;
- char bufip[16], bufname[256];
- struct in_addr sa;
- char buf[BUFFER_LEN];
- 
- /* A bunch of sanity checks */
- if (oper[0].type != PROG_STRING)
-    abort_interp("String argument expected. (1)");
- if (!oper[0].data.string)
-    abort_interp("Host cannot be an empty string.");
- memset(bufip,0,16);
- memset(bufname,0,256);
- memset(buf,0,16);
+    struct hostent *myhost;
+    char bufip[16], bufname[256];
+    struct in_addr sa;
+    char buf[BUFFER_LEN];
 
- /* make some sense of the hostname, or return FALSE */
- myhost = gethostbyname(oper[0].data.string->data);
- if (!myhost) {
-    bufip[0] = '\0';
-    bufname[0] = '\0';
-    PushString(bufname);
-    PushString(bufip);
-    return;
- } else {
-    bcopy((char *)myhost->h_name,bufname,strlen(myhost->h_name));
-    bcopy((char *)myhost->h_addr,(char *)&sa,myhost->h_length);
-    bcopy(inet_ntoa(sa),bufip,16);
-    PushString(bufname); 
-    PushString(bufip); 
- }
+    /* A bunch of sanity checks */
+    if (oper[0].type != PROG_STRING)
+        abort_interp("String argument expected. (1)");
+    if (!oper[0].data.string)
+        abort_interp("Host cannot be an empty string.");
+    memset(bufip, 0, 16);
+    memset(bufname, 0, 256);
+    memset(buf, 0, 16);
+
+    /* make some sense of the hostname, or return FALSE */
+    myhost = gethostbyname(oper[0].data.string->data);
+    if (!myhost) {
+        bufip[0] = '\0';
+        bufname[0] = '\0';
+        PushString(bufname);
+        PushString(bufip);
+        return;
+    } else {
+        bcopy((char *) myhost->h_name, bufname, strlen(myhost->h_name));
+        bcopy((char *) myhost->h_addr, (char *) &sa, myhost->h_length);
+        bcopy(inet_ntoa(sa), bufip, 16);
+        PushString(bufname);
+        PushString(bufip);
+    }
 }
 
 #endif /* MUF_SOCKETS */

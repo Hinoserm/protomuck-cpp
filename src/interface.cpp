@@ -11,6 +11,10 @@
 #include "tune.h"
 #include "props.h"
 #include "match.h"
+#ifdef MCP_SUPPORT
+# include "mcp.h"
+# include "mcpgui.h"
+#endif
 #include "reg.h"
 #include "mpi.h"
 #include "reg.h"
@@ -37,8 +41,8 @@ int crt_connect_count = 0;
 
 char restart_message[BUFFER_LEN];
 char shutdown_message[BUFFER_LEN];
-int shutdown_flag = 0;
-int restart_flag = 0;
+std::atomic_int shutdown_flag = 0;
+std::atomic_int restart_flag = 0;
 int total_loggedin_connects = 0;
 
 time_t delayed_shutdown = 0;
@@ -66,7 +70,7 @@ static char **save_argv;
 extern char **environ;
 #endif /* USE_PS */
 
-extern struct frame* aForceFrameStack[9];
+extern struct frame *aForceFrameStack[9];
 
 static const char *connect_fail = "Incorrect login.\r\n";
 static const char *flushed_message = "<Flushed>\r\n";
@@ -121,6 +125,7 @@ void shovechars(void);
 void mccp_start(struct descriptor_data *d, int version);
 void mccp_end(struct descriptor_data *d);
 bool mccp_process_compressed(struct descriptor_data *d);
+
 #define UMIN(a,b) ((a)<(b)?(a):(b))
 #endif
 
@@ -128,8 +133,7 @@ void telopt_init(struct telopt *t);
 void telopt_clean(struct telopt *t);
 
 #if defined(DESCRFILE_SUPPORT) || defined(NEWHTTPD)
-long descr_sendfile(struct descriptor_data *d, int start, int stop,
-                    const char *filename, int pid);
+long descr_sendfile(struct descriptor_data *d, int start, int stop, const char *filename, int pid);
 void descr_sendfileblock(struct descriptor_data *d);
 void descr_fsenddisc(struct descriptor_data *d);
 #endif /* DESCRFILE_SUPPORT */
@@ -166,19 +170,21 @@ static int ssl_numsocks;
 SSL_CTX *ssl_ctx;
 SSL_CTX *ssl_ctx_client;
 static int ssl_sock;
+
 #ifdef IPV6
 static int ssl_sock6;
 #endif
 #endif
 
 bool db_conversion_flag = 0;
-bool db_decompression_flag = 0;
+bool db_decompression_flag = 1;
 bool db_hash_convert = 0;
 bool wizonly_mode = 0;
 bool verboseload = 0;
 
 /* binding support */
 int bind_to;
+
 #ifdef IPV6
 struct in6_addr bind6 = IN6ADDR_ANY_INIT;
 #endif
@@ -225,7 +231,7 @@ save_ps_display_args(int argc, char *argv[])
         ps_buffer_size = end_of_area - argv[0];
 
         /* move the environment out of the way */
-        new_environ = (char **)malloc(sizeof(char *) * (i + 1));
+        new_environ = (char **) malloc(sizeof(char *) * (i + 1));
         for (i = 0; environ[i] != NULL; i++)
             new_environ[i] = strdup(environ[i]);
         new_environ[i] = NULL;
@@ -272,8 +278,7 @@ void
 set_ps_display(const char *status)
 {
     /* Update ps_buffer to contain both fixed part and activity */
-    strncpy(ps_buffer + ps_buffer_fixed_size, status,
-            ps_buffer_size - ps_buffer_fixed_size);
+    strncpy(ps_buffer + ps_buffer_fixed_size, status, ps_buffer_size - ps_buffer_fixed_size);
 
     /* Transmit new setting to kernel, if necessary */
 
@@ -298,48 +303,29 @@ set_ps_display(const char *status)
 void
 show_program_usage(char *prog)
 {
-    fprintf(stderr,
-            "Usage: %s [<options>] [infile [dumpfile [portnum [portnum ...]]]]\n",
-            prog);
+    fprintf(stderr, "Usage: %s [<options>] [infile [dumpfile [portnum [portnum ...]]]]\n", prog);
     fprintf(stderr, "   Arguments:\n");
-    fprintf(stderr,
-            "       infile            db loaded at startup. optional with -dbin.\n");
-    fprintf(stderr,
-            "       outfile           output db to save to. optional with -dbout.\n");
-    fprintf(stderr,
-            "       portnum           port num to listen for conns on. (%d ports max)\n",
-            MAX_LISTEN_SOCKS);
+    fprintf(stderr, "       infile            db loaded at startup. optional with -dbin.\n");
+    fprintf(stderr, "       outfile           output db to save to. optional with -dbout.\n");
+    fprintf(stderr, "       portnum           port num to listen for conns on. (%d ports max)\n", MAX_LISTEN_SOCKS);
     fprintf(stderr, "   Options:\n");
-    fprintf(stderr,
-            "       -dbin INFILE      uses INFILE as the database to load at startup.\n");
-    fprintf(stderr,
-            "       -dbout OUTFILE    uses OUTFILE as the output database to save to.\n");
-    fprintf(stderr,
-            "       -port NUMBER      sets the port number to listen for connections on.\n");
-    fprintf(stderr,
-            "       -bind IP          bind ProtoMUCK to a specific IP\n");
+    fprintf(stderr, "       -dbin INFILE      uses INFILE as the database to load at startup.\n");
+    fprintf(stderr, "       -dbout OUTFILE    uses OUTFILE as the output database to save to.\n");
+    fprintf(stderr, "       -port NUMBER      sets the port number to listen for connections on.\n");
+    fprintf(stderr, "       -bind IP          bind ProtoMUCK to a specific IP\n");
 #ifdef IPV6
-    fprintf(stderr,
-            "       -bind6 IP         Enable ipv6 on this IP address\n");
+    fprintf(stderr, "       -bind6 IP         Enable ipv6 on this IP address\n");
 #endif
-    fprintf(stderr,
-            "       -gamedir PATH     changes directory to PATH before starting up.\n");
-    fprintf(stderr,
-            "       -convert          load db, save in current format, and quit.\n");
-    fprintf(stderr,
-            "       -pwconvert        convert passwords to hashed format on next save.\n");
-    fprintf(stderr,
-            "       -decompress       when saving db, save in uncompressed format.\n");
-    fprintf(stderr,
-            "       -nosanity         don't do db sanity checks at startup time.\n");
-    fprintf(stderr,
-            "       -insanity         load db, then enter interactive sanity editor.\n");
-    fprintf(stderr,
-            "       -sanfix           attempt to auto-fix a corrupt db after loading.\n");
+    fprintf(stderr, "       -gamedir PATH     changes directory to PATH before starting up.\n");
+    fprintf(stderr, "       -convert          load db, save in current format, and quit.\n");
+    fprintf(stderr, "       -pwconvert        convert passwords to hashed format on next save.\n");
+    fprintf(stderr, "       -decompress       when saving db, save in uncompressed format.\n");
+    fprintf(stderr, "       -nosanity         don't do db sanity checks at startup time.\n");
+    fprintf(stderr, "       -insanity         load db, then enter interactive sanity editor.\n");
+    fprintf(stderr, "       -sanfix           attempt to auto-fix a corrupt db after loading.\n");
     fprintf(stderr, "       -wizonly          only allow wizards to login.\n");
     fprintf(stderr, "       -godpasswd PASS   reset God(#1)'s password to PASS.  Implies -convert\n");
-	fprintf(stderr,
-            "       -version          display this server's version.\n");
+    fprintf(stderr, "       -version          display this server's version.\n");
     fprintf(stderr, "       -verboseload      show messages while loading.\n");
     fprintf(stderr, "       -help             display this message.\n");
     exit(1);
@@ -405,14 +391,14 @@ main(int argc, char **argv)
 #endif
 
 #if defined(MALLOC_PROFILING) && defined(HAVE_PTHREAD_H)
-	/* initializing the mutex lock for CrT */
-	CrT_pthread_init();
+    /* initializing the mutex lock for CrT */
+    CrT_pthread_init();
 #endif
 
-if (mysql_library_init(0, NULL, NULL)) {
-    fprintf(stderr, "could not initialize MySQL library\n");
-    exit(1);
-}
+    if (mysql_library_init(0, NULL, NULL)) {
+        fprintf(stderr, "could not initialize MySQL library\n");
+        exit(1);
+    }
 
     strcpy(restart_message, "\r\nServer restarting, be back in a few!\r\n");
     strcpy(shutdown_message, "\r\nServer shutting down, be back in a few!\r\n");
@@ -422,7 +408,7 @@ if (mysql_library_init(0, NULL, NULL)) {
     init_color_hash();
 
     for (i = 0; i < DESCR_MAX; i++)
-       descr_table[i] = -1;
+        descr_table[i] = -1;
 
     nomore_options = 0;
     sanity_skip = 0;
@@ -451,8 +437,7 @@ if (mysql_library_init(0, NULL, NULL)) {
             } else if (!strcmp(argv[i], "-pwconvert")) {
                 db_hash_convert = 1;
             } else if (!strcmp(argv[i], "-version")) {
-                printf("ProtoMUCK %s (%s -- %s)\n", PROTOBASE, VERSION,
-                       NEONVER);
+                printf("ProtoMUCK %s (%s -- %s)\n", PROTOBASE, VERSION, NEONVER);
                 exit(0);
             } else if (!strcmp(argv[i], "-dbin")) {
                 if (i + 1 >= argc) {
@@ -549,22 +534,21 @@ if (mysql_library_init(0, NULL, NULL)) {
 
 #ifndef WIN_VC
 #ifdef UTF8_SUPPORT
-    if (!setlocale(LC_CTYPE, "en_US.UTF-8") || !setlocale(LC_COLLATE, "en_US.UTF-8")) {
-        fprintf(stdout, "Unable to change locale to UTF-8, aborting.\n");
-        fprintf(stdout, "Make sure your OS supports it!\n");
-        exit(1);
-    }
+        if (!setlocale(LC_CTYPE, "en_US.UTF-8")
+            || !setlocale(LC_COLLATE, "en_US.UTF-8")) {
+            fprintf(stdout, "Unable to change locale to UTF-8, aborting.\n");
+            fprintf(stdout, "Make sure your OS supports it!\n");
+            exit(1);
+        }
 #endif /* UTF8_SUPPORT */
 
 
 #ifdef DETACH
 #if defined(__CYGWIN__) || defined(WIN32) || defined(WIN_VC)
 # ifdef __CYGWIN__
-        fprintf(stdout, "ProtoMUCK-Cygwin %s now detaching from console.\n",
-                PROTOBASE);
+        fprintf(stdout, "ProtoMUCK-Cygwin %s now detaching from console.\n", PROTOBASE);
 # else
-        fprintf(stdout, "ProtoMUCK-Win32 %s now detaching from console.\n",
-                PROTOBASE);
+        fprintf(stdout, "ProtoMUCK-Win32 %s now detaching from console.\n", PROTOBASE);
 # endif
 #endif
         /* Go into the background unless improper mode to */
@@ -584,8 +568,7 @@ if (mysql_library_init(0, NULL, NULL)) {
             fclose(ffd);
         }
 
-        log_status_nowall("INIT: ProtoMUCK %s starting as pid %d.\n", PROTOBASE,
-                          getpid());
+        log_status_nowall("INIT: ProtoMUCK %s starting as pid %d.\n", PROTOBASE, getpid());
 
 #ifdef WIN32
         fprintf(stderr, "ProtoMUCK-Win32 %s(%s-compat)\n", PROTOBASE, VERSION);
@@ -619,7 +602,7 @@ if (mysql_library_init(0, NULL, NULL)) {
             setpgrp();          /* System V's way */
 #elif defined(BSD) || defined(USE_BSDPGRP)
             setpgrp(0, getpid()); /* BSDism */
-#elif !defined(WIN_VC) /* anyone else, default to POSIX (WinNT, Linux) */
+#elif !defined(WIN_VC)          /* anyone else, default to POSIX (WinNT, Linux) */
             setsid();
 #endif
 # ifdef  TIOCNOTTY              /* we can force this, POSIX / BSD */
@@ -635,10 +618,15 @@ if (mysql_library_init(0, NULL, NULL)) {
 
     /* Initialize the array of pointers used for tracking
      * PIDs during FORCE recursion */
-    for ( ; nCurPtr < 9; ++nCurPtr )
-    {
+    for (; nCurPtr < 9; ++nCurPtr) {
         aForceFrameStack[nCurPtr] = NULL;
     }
+
+#ifdef MCP_SUPPORT
+    /* Initialize MCP and any server-side packages. */
+    mcp_initialize();
+    gui_initialize();
+#endif
 
     /* initialize udp sockets */
 #ifdef UDP_SOCKETS
@@ -666,9 +654,9 @@ if (mysql_library_init(0, NULL, NULL)) {
     if ((tp_textport > 1) && (tp_textport < 65536)) {
         listener_port[numsocks++] = tp_textport;
 #ifdef IPV6
-	is_ipv6[numsocks-1] = 0;
+        is_ipv6[numsocks - 1] = 0;
         listener_port[numsocks++] = tp_textport;
-	is_ipv6[numsocks-1] = 1;
+        is_ipv6[numsocks - 1] = 1;
 #endif
     }
 /* Only open a web port if support was #defined in config.h */
@@ -676,18 +664,18 @@ if (mysql_library_init(0, NULL, NULL)) {
     if ((tp_wwwport > 1) && (tp_wwwport < 65536)) { /* hinoserm */
         listener_port[numsocks++] = tp_wwwport; /* hinoserm */
 #ifdef IPV6
-	is_ipv6[numsocks-1] = 0;
+        is_ipv6[numsocks - 1] = 0;
         listener_port[numsocks++] = tp_wwwport;
-	is_ipv6[numsocks-1] = 1;
+        is_ipv6[numsocks - 1] = 1;
 #endif
     }
 #endif  /* NEWHTTPD */               /* hinoserm */
     if ((tp_puebloport > 1) && (tp_puebloport < 65536)) {
         listener_port[numsocks++] = tp_puebloport;
 #ifdef IPV6
-	is_ipv6[numsocks-1] = 0;
+        is_ipv6[numsocks - 1] = 0;
         listener_port[numsocks++] = tp_puebloport;
-	is_ipv6[numsocks-1] = 1;
+        is_ipv6[numsocks - 1] = 1;
 #endif
     }
 #ifdef USE_SSL
@@ -702,12 +690,11 @@ if (mysql_library_init(0, NULL, NULL)) {
     if (!numsocks) {
         listener_port[numsocks++] = TINYPORT;
 #ifdef IPV6
-	is_ipv6[numsocks-1] = 0;
+        is_ipv6[numsocks - 1] = 0;
         listener_port[numsocks++] = TINYPORT;
-	is_ipv6[numsocks-1] = 1;
+        is_ipv6[numsocks - 1] = 1;
 #endif
     }
-
 #ifdef USE_PS
     {
         char buf[BUFFER_LEN];
@@ -717,7 +704,7 @@ if (mysql_library_init(0, NULL, NULL)) {
         for (i = 0; i < numsocks; i++) {
             if (get_ctype(listener_port[i]) == CT_MUCK) {
                 snprintf(tbuf, 8, "%d ", listener_port[i]);
-                strncat(buf, tbuf, BUFFER_LEN);
+                strncat(buf, tbuf, 8);
             }
         }
 
@@ -766,6 +753,10 @@ if (mysql_library_init(0, NULL, NULL)) {
             close_sockets(shutdown_message);
         }
 
+        extern std::condition_variable mysql_cv;
+
+        mysql_cv.notify_all(); /* Wake up the mysql threads so they can gracefully shut down */
+
         do_dequeue(-1, (dbref) 1, "all");
 
         host_shutdown();
@@ -797,10 +788,10 @@ if (mysql_library_init(0, NULL, NULL)) {
         purge_try_pool();       /* 3rd time is needed to... oh... wait... */
         purge_try_pool();       /* 2nd time is needed to completely purge */
         purge_mfns();
-		db_free();
+        db_free();
         cleanup_game();
         tune_freeparms();
-		clear_color_hash();
+        clear_color_hash();
 #ifdef COMPRESS
         free_compress_dictionary();
 #endif /* COMPRESS */
@@ -1006,9 +997,9 @@ html_escape2(char *msg, int addbr)
     strcpy(buf2, msg);
     if (strlen(buf2) >= (BUFFER_LEN - 18))
         buf2[BUFFER_LEN - 18] = '\0';
-    strcpy(buff, "<CODE>");
+    strcpy(buff, "<PRE>"); //Used to be <CODE>
     strcat(buff, html_escape(buf2));
-    strcat(buff, "</CODE>");
+    strcat(buff, "</PRE>"); //Used to be </CODE>
     if (addbr) {
         strcat(buff, "<BR>");
     }
@@ -1194,8 +1185,11 @@ queue_ansi(struct descriptor_data *d, const char *msg)
         }
     }
 
+#ifdef MCP_SUPPORT
+    mcp_frame_output_inband(&d->mcpframe, buf);
+#else
     queue_string(d, buf);
-
+#endif
     return strlen(buf);
 }
 
@@ -1204,8 +1198,7 @@ queue_html(struct descriptor_data *d, char *msg)
 {
     char buf[BUFFER_LEN];
 
-    if ((d->connected
-         && OkObj(d->player)) ? (Html(d->player)) : (d->type == CT_PUEBLO)) {
+    if ((d->connected && OkObj(d->player)) ? (Html(d->player)) : (d->type == CT_PUEBLO)) {
         strncpy(buf, msg, BUFFER_LEN);
         return queue_ansi(d, buf);
     } else {
@@ -1219,8 +1212,7 @@ queue_unhtml(struct descriptor_data *d, char *msg)
 {
     char buf[BUFFER_LEN];
 
-    if ((d->connected
-         && OkObj(d->player)) ? (Html(d->player)) : (d->type == CT_PUEBLO)) {
+    if ((d->connected && OkObj(d->player)) ? (Html(d->player)) : (d->type == CT_PUEBLO)) {
 /*		if(strlen(msg) >= (BUFFER_LEN/6)) { */
         strncpy(buf, html_escape2(msg, 0), BUFFER_LEN);
 /*		} else {
@@ -1280,11 +1272,10 @@ notify_nolisten(dbref player, const char *msg, int isprivate)
             }
         }
         if (tp_zombies) {
-            if ((Typeof(player) == TYPE_THING) && (FLAGS(player) & ZOMBIE) &&
-                !(FLAGS(OWNER(player)) & ZOMBIE) && !(FLAGS(player) & QUELL)) {
+            if ((Typeof(player) == TYPE_THING) && (FLAGS(player) & ZOMBIE) && !(FLAGS(OWNER(player)) & ZOMBIE)
+                && !(FLAGS(player) & QUELL)) {
                 ref = getloc(player);
-                if (Mage(OWNER(player)) || ref == NOTHING ||
-                    Typeof(ref) != TYPE_ROOM || !(FLAGS(ref) & ZOMBIE)) {
+                if (Mage(OWNER(player)) || ref == NOTHING || Typeof(ref) != TYPE_ROOM || !(FLAGS(ref) & ZOMBIE)) {
                     if (isprivate || getloc(player) != getloc(OWNER(player))) {
                         char pbuf[BUFFER_LEN];
                         const char *prefix;
@@ -1295,20 +1286,14 @@ notify_nolisten(dbref player, const char *msg, int isprivate)
                             char ch = *match_args;
 
                             *match_args = '\0';
-                            prefix = do_parse_mesg(-1, player, player, prefix,
-                                                   "(@Pecho)", pbuf,
-                                                   MPI_ISPRIVATE);
+                            prefix = do_parse_mesg(-1, player, player, prefix, "(@Pecho)", pbuf, MPI_ISPRIVATE);
                             *match_args = ch;
                         }
                         if (!prefix || !*prefix) {
                             prefix = NAME(player);
-                            sprintf(buf2, "%s> %.*s", prefix,
-                                    (int) (BUFFER_LEN - (strlen(prefix) + 3)),
-                                    buf);
+                            sprintf(buf2, "%s> %.*s", prefix, (int) (BUFFER_LEN - (strlen(prefix) + 3)), buf);
                         } else {
-                            sprintf(buf2, "%s %.*s", prefix,
-                                    (int) (BUFFER_LEN - (strlen(prefix) + 2)),
-                                    buf);
+                            sprintf(buf2, "%s %.*s", prefix, (int) (BUFFER_LEN - (strlen(prefix) + 2)), buf);
                         }
                         darr = get_player_descrs(OWNER(player), &dcount);
 
@@ -1378,11 +1363,10 @@ notify_html_nolisten(dbref player, const char *msg, int isprivate)
                 retval++;
         }
         if (tp_zombies) {
-            if ((Typeof(player) == TYPE_THING) && (FLAGS(player) & ZOMBIE) &&
-                !(FLAGS(OWNER(player)) & ZOMBIE) && !(FLAGS(player) & QUELL)) {
+            if ((Typeof(player) == TYPE_THING) && (FLAGS(player) & ZOMBIE) && !(FLAGS(OWNER(player)) & ZOMBIE)
+                && !(FLAGS(player) & QUELL)) {
                 ref = getloc(player);
-                if (Mage(OWNER(player)) || ref == NOTHING ||
-                    Typeof(ref) != TYPE_ROOM || !(FLAGS(ref) & ZOMBIE)) {
+                if (Mage(OWNER(player)) || ref == NOTHING || Typeof(ref) != TYPE_ROOM || !(FLAGS(ref) & ZOMBIE)) {
                     if (isprivate || getloc(player) != getloc(OWNER(player))) {
                         char pbuf[BUFFER_LEN];
                         const char *prefix;
@@ -1393,20 +1377,14 @@ notify_html_nolisten(dbref player, const char *msg, int isprivate)
                             char ch = *match_args;
 
                             *match_args = '\0';
-                            prefix = do_parse_mesg(-1, player, player, prefix,
-                                                   "(@Pecho)", pbuf,
-                                                   MPI_ISPRIVATE);
+                            prefix = do_parse_mesg(-1, player, player, prefix, "(@Pecho)", pbuf, MPI_ISPRIVATE);
                             *match_args = ch;
                         }
                         if (!prefix || !*prefix) {
                             prefix = NAME(player);
-                            sprintf(buf2, "%s> %.*s", prefix,
-                                    (int) (BUFFER_LEN - (strlen(prefix) + 3)),
-                                    buf);
+                            sprintf(buf2, "%s> %.*s", prefix, (int) (BUFFER_LEN - (strlen(prefix) + 3)), buf);
                         } else {
-                            sprintf(buf2, "%s %.*s", prefix,
-                                    (int) (BUFFER_LEN - (strlen(prefix) + 2)),
-                                    buf);
+                            sprintf(buf2, "%s %.*s", prefix, (int) (BUFFER_LEN - (strlen(prefix) + 2)), buf);
                         }
                         darr = get_player_descrs(OWNER(player), &dcount);
 
@@ -1434,8 +1412,7 @@ notify_from_echo(dbref from, dbref player, const char *msg, int isprivate)
     if (ignorance(from, player))
         return 0;
 #endif
-    return notify_listeners(dbref_first_descr(from), from, NOTHING, player,
-                            getloc(from), msg, isprivate);
+    return notify_listeners(dbref_first_descr(from), from, NOTHING, player, getloc(from), msg, isprivate);
 }
 
 int
@@ -1445,8 +1422,7 @@ notify_html_from_echo(dbref from, dbref player, const char *msg, int isprivate)
     if (ignorance(from, player))
         return 0;
 #endif
-    return notify_html_listeners(dbref_first_descr(from), from, NOTHING,
-                                 player, getloc(from), msg, isprivate);
+    return notify_html_listeners(dbref_first_descr(from), from, NOTHING, player, getloc(from), msg, isprivate);
 }
 
 int
@@ -1503,8 +1479,7 @@ anotify_from_echo(dbref from, dbref player, const char *msg, int isprivate)
     if (ignorance(from, player))
         return 0;
 #endif
-    return ansi_notify_listeners(dbref_first_descr(from), from, NOTHING,
-                                 player, getloc(from), msg, isprivate);
+    return ansi_notify_listeners(dbref_first_descr(from), from, NOTHING, player, getloc(from), msg, isprivate);
 }
 
 
@@ -1536,8 +1511,7 @@ timeval_sub(struct timeval now, struct timeval then)
 int
 msec_diff(struct timeval now, struct timeval then)
 {
-    return ((now.tv_sec - then.tv_sec) * 1000
-            + (now.tv_usec - then.tv_usec) / 1000);
+    return ((now.tv_sec - then.tv_sec) * 1000 + (now.tv_usec - then.tv_usec) / 1000);
 }
 
 struct timeval
@@ -1565,8 +1539,7 @@ update_quotas(struct timeval last, struct timeval current)
         for (d = descriptor_list; d; d = d->next) {
             if (d->connected) {
                 cmds_per_time = ((FLAGS(d->player) & INTERACTIVE)
-                                 ? (tp_commands_per_time *
-                                    8) : tp_commands_per_time);
+                                 ? (tp_commands_per_time * 8) : tp_commands_per_time);
             } else {
                 cmds_per_time = tp_commands_per_time;
             }
@@ -1644,30 +1617,28 @@ sockwrite(struct descriptor_data *d, const char *str, int len)
 {
 
     /* 
-    WARNING: It is not acceptable to use sockwrite() directly except in extremely specific cases,
-             where buffering may result in unexpected results.  Please use queue_write(), which
-             has the same function parameters as sockwrite().  -Hinoserm
-    */
+       WARNING: It is not acceptable to use sockwrite() directly except in extremely specific cases,
+       where buffering may result in unexpected results.  Please use queue_write(), which
+       has the same function parameters as sockwrite().  -Hinoserm
+     */
 #ifdef MCCP_ENABLED
     if (d->mccp) {
-        d->mccp->z->next_in = (unsigned char *)str;
+        d->mccp->z->next_in = (unsigned char *) str;
         d->mccp->z->avail_in = len;
 
         //while (d->out_compress->avail_in)
         //{
-			d->mccp->z->avail_out = COMPRESS_BUF_SIZE - (d->mccp->z->next_out - d->mccp->buf);
+        d->mccp->z->avail_out = COMPRESS_BUF_SIZE - (d->mccp->z->next_out - d->mccp->buf);
 
-            if (d->mccp->z->avail_out)
+        if (d->mccp->z->avail_out) {
 
-            {
+            if (deflate(d->mccp->z, Z_SYNC_FLUSH) != Z_OK)
 
-                if (deflate(d->mccp->z, Z_SYNC_FLUSH) != Z_OK)
+                return -1;
 
-                    return -1;
+        }
 
-            }
-
-            mccp_process_compressed(d);
+        mccp_process_compressed(d);
         //}
 
         return len - d->mccp->z->avail_in;
@@ -1675,11 +1646,11 @@ sockwrite(struct descriptor_data *d, const char *str, int len)
     } else
 #endif /* MCCP_ENABLED */
 #ifdef USE_SSL
-        if (d->ssl_session)
-            return SSL_write(d->ssl_session, str, len);
-        else
+    if (d->ssl_session)
+        return SSL_write(d->ssl_session, str, len);
+    else
 #endif
-            return writesocket(d->fd, str, len);
+        return writesocket(d->fd, str, len);
 }
 
 void
@@ -1689,10 +1660,10 @@ goodbye_user(struct descriptor_data *d)
     anotify_descriptor(d->descriptor, tp_leave_message);
     anotify_descriptor(d->descriptor, "\r\n\r\n");
     /*
-    queue_write(d, "\r\n", 2);
-    queue_write(d, tp_leave_message, strlen(tp_leave_message));
-    queue_write(d, "\r\n\r\n", 4);
-    */
+       queue_write(d, "\r\n", 2);
+       queue_write(d, tp_leave_message, strlen(tp_leave_message));
+       queue_write(d, "\r\n\r\n", 4);
+     */
 }
 
 void
@@ -1714,14 +1685,16 @@ time_t startup_systime = 0;
 #ifdef EXPERIMENTAL_THREADING
 
 #ifdef WIN_VC
-DWORD WINAPI threaded_output_handler(void *ptr)
+DWORD WINAPI
+threaded_output_handler(void *ptr)
 #else
-void *threaded_output_handler(void *ptr)
+void *
+threaded_output_handler(void *ptr)
 #endif
 {
-	fd_set output_set;
+    fd_set output_set;
     struct timeval timeout;
-	struct descriptor_data *d, *dnext;
+    struct descriptor_data *d, *dnext;
     struct descriptor_data *newd;
     int avail_descriptors;
 
@@ -1733,31 +1706,31 @@ void *threaded_output_handler(void *ptr)
 
         for (d = descriptor_list; d; d = dnext) {
             dnext = d->next;
-			if (d->output.head) /* Prepare write pool */
-				FD_SET(d->fd, &output_set);
-#ifdef MCCP_ENABLED /* If MCCP is enabled, and data is waiting to be sent out of the compression buffer */
-			else if (d->mccp && COMPRESS_BUF_SIZE - d->mccp->z->avail_out)
-				FD_SET(d->fd, &output_set);
+            if (d->output.head) /* Prepare write pool */
+                FD_SET(d->fd, &output_set);
+#ifdef MCCP_ENABLED             /* If MCCP is enabled, and data is waiting to be sent out of the compression buffer */
+            else if (d->mccp && COMPRESS_BUF_SIZE - d->mccp->z->avail_out)
+                FD_SET(d->fd, &output_set);
 #endif
-			
-#ifdef USE_SSL
-			if (d->ssl_session) {
-				/* SSL may want to write even if the output queue is empty */
-				if (!SSL_is_init_finished(d->ssl_session))
-					FD_CLR(d->fd, &output_set);
-				if (SSL_want_write(d->ssl_session))
-					FD_SET(d->fd, &output_set);
-			}
-#endif
-		}
 
-		if (select(maxd, (fd_set *) 0, &output_set, (fd_set *) 0, &timeout) < 0) {
+#ifdef USE_SSL
+            if (d->ssl_session) {
+                /* SSL may want to write even if the output queue is empty */
+                if (!SSL_is_init_finished(d->ssl_session))
+                    FD_CLR(d->fd, &output_set);
+                if (SSL_want_write(d->ssl_session))
+                    FD_SET(d->fd, &output_set);
+            }
+#endif
+        }
+
+        if (select(maxd, (fd_set *) 0, &output_set, (fd_set *) 0, &timeout) < 0) {
             if (errnosocket != EINTR) { /* select() returned crit error */
                 perror("select");
                 //return;
             }
         } else {                /* select returned >= 0 */
-			for (d = descriptor_list; d; d = dnext) {
+            for (d = descriptor_list; d; d = dnext) {
                 dnext = d->next;
                 if (FD_ISSET(d->fd, &output_set)) {
                     if (!process_output(d)) /* send text */
@@ -1767,18 +1740,18 @@ void *threaded_output_handler(void *ptr)
                         d->booted = 1;
 #endif
                 }
-			}
-		}
-	}
+            }
+        }
+    }
 #ifdef WIN_VC
 # ifndef __cplusplus
-	/* Supposedly, when using C++ and WINAPI, you just return from the thread function. */
-	ExitThread(0);
+    /* Supposedly, when using C++ and WINAPI, you just return from the thread function. */
+    ExitThread(0);
 # endif
 #else
     pthread_exit(NULL);
 #endif
-	return NULL;
+    return NULL;
 }
 #endif /* EXPERIMENTAL_THREADING */
 
@@ -1802,6 +1775,7 @@ shovechars(void)
     int openfiles_max;
     int i;
     char buf[2048], buf2[256];
+
 #ifdef USE_SSL
     int ssl_status_ok = 1;
 #endif
@@ -1819,7 +1793,7 @@ shovechars(void)
 
     time(&startup_systime);
 #ifdef THREADED_SQL_SUPPORT
-	thread_fd = eventfd(0, 0);
+    thread_fd = eventfd(0, 0);
 #endif
 
 #ifdef USE_SSL
@@ -1834,20 +1808,17 @@ shovechars(void)
     }
     if (ssl_status_ok) {
         SSL_CTX_set_default_passwd_cb(ssl_ctx, pem_passwd_cb);
-        SSL_CTX_set_default_passwd_cb_userdata(ssl_ctx,
-                                               (void *) tp_ssl_keyfile_passwd);
+        SSL_CTX_set_default_passwd_cb_userdata(ssl_ctx, (void *)
+                                               tp_ssl_keyfile_passwd);
 
-        if (!SSL_CTX_use_PrivateKey_file
-            (ssl_ctx, SSL_KEY_FILE, SSL_FILETYPE_PEM)) {
-            log_status("SSLX: Could not load private key file %s\n",
-                       SSL_KEY_FILE);
+        if (!SSL_CTX_use_PrivateKey_file(ssl_ctx, SSL_KEY_FILE, SSL_FILETYPE_PEM)) {
+            log_status("SSLX: Could not load private key file %s\n", SSL_KEY_FILE);
             ssl_status_ok = 0;
         }
     }
     if (ssl_status_ok) {
         if (!SSL_CTX_check_private_key(ssl_ctx)) {
-            log_status
-                ("SSLX: Private key does not check out and appears to be invalid.\n");
+            log_status("SSLX: Private key does not check out and appears to be invalid.\n");
             ssl_status_ok = 0;
         }
     }
@@ -1868,9 +1839,9 @@ shovechars(void)
 
     for (i = 0; i < numsocks; i++) {
 #ifdef IPV6
-	if (is_ipv6[i])
+        if (is_ipv6[i])
             sock[i] = make_socket6(listener_port[i]);
-	else
+        else
 #endif
             sock[i] = make_socket(listener_port[i]); /* fixes the socket blocking problem at startup. */
     }
@@ -1897,11 +1868,11 @@ shovechars(void)
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
 
     result = pthread_create(&thread1, &attr, threaded_output_handler, NULL);
- 
+
     pthread_attr_destroy(&attr);
 
     if (result) {
-		perror("Unable to start output thread");
+        perror("Unable to start output thread");
     }
 # endif
 #endif /* EXPERIMENTAL_THREADING */
@@ -1917,7 +1888,7 @@ shovechars(void)
         purge_free_frames();
         untouchprops_incremental(1);
 
-        if (delayed_shutdown && current_systime >= delayed_shutdown ) {
+        if (delayed_shutdown && current_systime >= delayed_shutdown) {
             log_status("Countdown reached, shutting down.\n");
             shutdown_flag = 1;
         }
@@ -1925,8 +1896,8 @@ shovechars(void)
         if (shutdown_flag)
             break;              /* Get out of game loop */
 
-		timeout.tv_sec = 10L;
-		timeout.tv_usec = 0L;
+        timeout.tv_sec = 10L;
+        timeout.tv_usec = 0L;
         next_slice = msec_add(last_slice, tp_command_time_msec);
         slice_timeout = timeval_sub(next_slice, current_time);
 
@@ -1943,14 +1914,9 @@ shovechars(void)
             /* booted = 3 means immediate clean drop */
             /* booted = 4 means safeboot -hinoserm */
             if (d->booted) {
-                if ((d->booted != 3 && (d->booted != 4 || (d->booted == 4
-                                                           &&
-                                                           !(descr_running_queue
-                                                             (d->descriptor)
-                                                             || d->output.
-                                                             lines))))
-                    || (d->type == CT_MUF
-                        && !descr_running_queue(d->descriptor))
+                if ((d->booted != 3 && (d->booted != 4 || (d->booted == 4 && !(descr_running_queue(d->descriptor)
+                                                                               || d->output.lines))))
+                    || (d->type == CT_MUF && !descr_running_queue(d->descriptor))
                     || (d->type == CT_INBOUND && d->booted == 1)) {
 #ifdef NEWHTTPD
                     if (!(d->flags & DF_HALFCLOSE)) {
@@ -1962,8 +1928,8 @@ shovechars(void)
 #ifdef NEWHTTPD
                     }
 #endif /* NEWHTTPD */
-                    
-#ifdef NEWHTTPD                 
+
+#ifdef NEWHTTPD
                     if (!d->connected && (d->type != CT_HTTP)) /* quit from login screen (hinoserm changed) */
 #else /* !NEWHTTPD */
                     if (!d->connected)
@@ -1993,7 +1959,7 @@ shovechars(void)
 #ifndef EXPERIMENTAL_THREADING
             if (d->output.head) /* Prepare write pool */
                 FD_SET(d->fd, &output_set);
-# ifdef MCCP_ENABLED /* If MCCP is enabled, and data is waiting to be sent out of the compression buffer */
+# ifdef MCCP_ENABLED            /* If MCCP is enabled, and data is waiting to be sent out of the compression buffer */
             else if (d->mccp && COMPRESS_BUF_SIZE - d->mccp->z->avail_out)
                 FD_SET(d->fd, &output_set);
 # endif
@@ -2051,19 +2017,18 @@ shovechars(void)
 #ifdef IPV6
                 FD_SET(udp_sockets[i].socket6, &input_set);
 #endif
-	}
+            }
 #endif
 
 #ifdef THREADED_SQL_SUPPORT
-	    FD_SET(thread_fd, &input_set);
+        FD_SET(thread_fd, &input_set);
 #endif
-		tmptq = next_muckevent_time();
-		if ((tmptq >= 0L) && (timeout.tv_sec > tmptq)) {
-			timeout.tv_sec = (long)tmptq + (tp_pause_min / 1000);
-			timeout.tv_usec = (tp_pause_min % 1000) * 1000L;
-		}
-
-		//log_status("SELECT(): %d, %d\r\n", timeout.tv_sec, timeout.tv_usec);
+        tmptq = next_muckevent_time();
+        if ((tmptq >= 0L) && (timeout.tv_sec > tmptq)) {
+            timeout.tv_sec = (long) tmptq + (tp_pause_min / 1000);
+            timeout.tv_usec = (tp_pause_min % 1000) * 1000L;
+        }
+        //log_status("SELECT(): %d, %d\r\n", timeout.tv_sec, timeout.tv_usec);
 
         gettimeofday(&sel_in, NULL);
         if (select(maxd, &input_set, &output_set, (fd_set *) 0, &timeout) < 0) {
@@ -2073,11 +2038,12 @@ shovechars(void)
             }
         } else {                /* select returned >= 0 */
 #ifdef THREADED_SQL_SUPPORT
-			if (FD_ISSET(thread_fd, &input_set)) {
-				uint64_t u;
-				read(thread_fd, &u, sizeof(uint64_t));
-				//log_status("Threaded Event Detected: %d\r\n", u);
-			}
+            if (FD_ISSET(thread_fd, &input_set)) {
+                uint64_t u;
+
+                read(thread_fd, &u, sizeof(uint64_t));
+                //log_status("Threaded Event Detected: %d\r\n", u);
+            }
 #endif
 
             time(&current_systime);
@@ -2100,25 +2066,23 @@ shovechars(void)
             for (i = 0; i < numsocks; i++) { /* check for new connects */
                 if (FD_ISSET(sock[i], &input_set)) { /* new connect */
 #ifdef IPV6
-		if (is_ipv6[i]) {
-		    newd = new_connection6(listener_port[i], sock[i]);
-		    if (newd) newd->flags += DF_IPV6;
-		} else
+                    if (is_ipv6[i]) {
+                        newd = new_connection6(listener_port[i], sock[i]);
+                        if (newd)
+                            newd->flags += DF_IPV6;
+                    } else
 #endif
-		    newd = new_connection(listener_port[i], sock[i]);
+                        newd = new_connection(listener_port[i], sock[i]);
                     if (!newd) { /* connection error */
                         if (errnosocket
 #if !defined(WIN32) && !defined(WIN_VC)
-                            && errno != EINTR
-                            && errno != EMFILE && errno != ENFILE
+                            && errno != EINTR && errno != EMFILE && errno != ENFILE
 #endif
                             ) {
 #if defined(WIN32) || defined(WIN_VC)
-                            log_status("new_connection: error #%d\n",
-                                       errnosocket);
+                            log_status("new_connection: error #%d\n", errnosocket);
 #else
-                            log_status("new_connection: %s\n",
-                                       strerror(errnosocket));
+                            log_status("new_connection: %s\n", strerror(errnosocket));
 #endif
                         }
                     }
@@ -2139,15 +2103,12 @@ shovechars(void)
             if (FD_ISSET(ssl_sock, &input_set)) {
                 if (!(newd = new_connection(ssl_listener_port, ssl_sock))) {
 #ifndef WIN32
-                    if (errno
-                        && errno != EINTR
-                        && errno != EMFILE && errno != ENFILE) {
+                    if (errno && errno != EINTR && errno != EMFILE && errno != ENFILE) {
                         perror("new_connection");
                         /* return; */
                     }
 #else
-                    if (WSAGetLastError() != WSAEINTR
-                        && WSAGetLastError() != EMFILE) {
+                    if (WSAGetLastError() != WSAEINTR && WSAGetLastError() != EMFILE) {
                         perror("new_connection");
                         /* return; */
                     }
@@ -2164,15 +2125,12 @@ shovechars(void)
             if (FD_ISSET(ssl_sock6, &input_set)) {
                 if (!(newd = new_connection6(ssl_listener_port, ssl_sock6))) {
 #ifndef WIN32
-                    if (errno
-                        && errno != EINTR
-                        && errno != EMFILE && errno != ENFILE) {
+                    if (errno && errno != EINTR && errno != EMFILE && errno != ENFILE) {
                         perror("new_connection");
                         /* return; */
                     }
 #else
-                    if (WSAGetLastError() != WSAEINTR
-                        && WSAGetLastError() != EMFILE) {
+                    if (WSAGetLastError() != WSAEINTR && WSAGetLastError() != EMFILE) {
                         perror("new_connection");
                         /* return; */
                     }
@@ -2183,18 +2141,16 @@ shovechars(void)
                     cnt = SSL_accept(newd->ssl_session);
                     newd->type = CT_SSL;
                     newd->flags += DF_SSL;
-		    newd->flags += DF_IPV6;
+                    newd->flags += DF_IPV6;
                 }
             }
-
 #endif
 #endif
 
 #ifdef MUF_SOCKETS
             for (curr = socket_list; curr; curr = curr->next) {
                 if (FD_ISSET(curr->theSock->socknum, &input_set)
-                    || (!curr->theSock->connected
-                        && FD_ISSET(curr->theSock->socknum, &output_set))) {
+                    || (!curr->theSock->connected && FD_ISSET(curr->theSock->socknum, &output_set))) {
 #if defined(SSL_SOCKETS) && defined(USE_SSL)
                     /* Don't fire an event during SSL (re)negotiation. */
                     if (curr->theSock->ssl_session) {
@@ -2202,8 +2158,7 @@ shovechars(void)
                             && SSL_want_nothing(curr->theSock->ssl_session)) {
                             muf_socket_sendevent(curr);
                         }
-                    }
-                    else
+                    } else
 #endif
                         muf_socket_sendevent(curr);
                 }
@@ -2211,11 +2166,9 @@ shovechars(void)
                 else
                     /* This feeds in buffered SSL data, without requiring socket
                      * activity to trigger the event. */
-                    if (curr->theSock->ssl_session
-                        && SSL_pending(curr->theSock->ssl_session) > 0
-                        && SSL_want_nothing(curr->theSock->ssl_session)) {
-                        muf_socket_sendevent(curr);
-                    }
+                if (curr->theSock->ssl_session && SSL_pending(curr->theSock->ssl_session) > 0 && SSL_want_nothing(curr->theSock->ssl_session)) {
+                    muf_socket_sendevent(curr);
+                }
 #endif
             }
 #endif
@@ -2236,19 +2189,14 @@ shovechars(void)
 
                     /* Get the data waiting */
                     memset(buf, 0, sizeof(buf));
-                    recvfrom(udp_sockets[i].socket, buf, sizeof(buf), 0,
-                                 (struct sockaddr *) &tmpaddr, &tmpsz);
+                    recvfrom(udp_sockets[i].socket, buf, sizeof(buf), 0, (struct sockaddr *) &tmpaddr, &tmpsz);
                     /* And dispatch the UDP event */
                     strncpy(buf2, inet_ntoa(tmpaddr.sin_addr), 16);
                     if (tp_log_sockets)
-                        log2filetime("logs/sockets",
-                                     "UDP.event: pid %d, from %s, port %d\n'",
-                                     udp_sockets[i].fr->pid, buf2,
-                                     udp_sockets[i].portnum);
+                        log2filetime("logs/sockets", "UDP.event: pid %d, from %s, port %d\n'", udp_sockets[i].fr->pid, buf2, udp_sockets[i].portnum);
                     array_set_strkey_intval(&nw, "pid", udp_sockets[i].fr->pid);
                     array_set_strkey_strval(&nw, "from", buf2);
-                    array_set_strkey_intval(&nw, "port",
-                                            udp_sockets[i].portnum);
+                    array_set_strkey_intval(&nw, "port", udp_sockets[i].portnum);
                     array_set_strkey_strval(&nw, "data", buf);
 #ifdef IPV6
                     array_set_strkey_intval(&nw, "ipv6", 0);
@@ -2263,7 +2211,7 @@ shovechars(void)
 #ifdef IPV6
             for (i = 0; i < udp_count; i++) {
                 if (FD_ISSET(udp_sockets[i].socket6, &input_set)) {
-		    log_status("UDP6 on %d", udp_sockets[i].socket6);
+                    log_status("UDP6 on %d", udp_sockets[i].socket6);
                     struct inst tmpi6;
                     stk_array *nw6 = new_array_dictionary();
                     struct sockaddr_in6 tmpaddr6;
@@ -2271,15 +2219,11 @@ shovechars(void)
 
                     /* Get the data waiting */
                     memset(buf, 0, sizeof(buf));
-                    recvfrom(udp_sockets[i].socket6, buf, sizeof(buf), 0,
-                                 (struct sockaddr *) &tmpaddr6, &tmpsz6);
+                    recvfrom(udp_sockets[i].socket6, buf, sizeof(buf), 0, (struct sockaddr *) &tmpaddr6, &tmpsz6);
                     /* And dispatch the UDP event */
                     strncpy(buf2, ip_address(tmpaddr6.sin6_addr.s6_addr), 64);
                     if (tp_log_sockets)
-                        log2filetime("logs/sockets",
-                                     "UDP6.event: pid %d, from %s, port %d\n'",
-                                     udp_sockets[i].fr->pid, buf2,
-                                     udp_sockets[i].portnum);
+                        log2filetime("logs/sockets", "UDP6.event: pid %d, from %s, port %d\n'", udp_sockets[i].fr->pid, buf2, udp_sockets[i].portnum);
                     array_set_strkey_intval(&nw6, "pid", udp_sockets[i].fr->pid);
                     array_set_strkey_strval(&nw6, "from", buf2);
                     array_set_strkey_intval(&nw6, "port", udp_sockets[i].portnum);
@@ -2303,8 +2247,7 @@ shovechars(void)
                     if (!process_input(d)) { /* handle the input */
                         d->booted = 1; /* read error */
                     } else {    /* There was input, manage idle stuff */
-                        if (OkObj(d->player) ?
-                            Typeof(d->player) == TYPE_PLAYER : 0) {
+                        if (OkObj(d->player) ? Typeof(d->player) == TYPE_PLAYER : 0) {
                             if (FLAG2(d->player) & F2TRUEIDLE)
                                 announce_unidle(d); /* really idle */
                             if (FLAG2(d->player) & F2IDLE)
@@ -2340,14 +2283,14 @@ shovechars(void)
 
                     tempd = least_idle_player_descr(d->player);
                     if (!tempd) {
-                        log_status("IMPOSSIBLE CONDITION: descr %d, tempd %p, player #%d\r\n", d->descriptor, (void *)tempd, d->player);
+                        log_status("IMPOSSIBLE CONDITION: descr %d, tempd %p, player #%d\r\n", d->descriptor, (void *) tempd, d->player);
                         tempd = d;
                     }
                     dr_idletime = now - tempd->last_time;
                     cnt++;
                     /* Check idle boot */
-                    if (tp_idleboot && (dr_idletime > tp_maxidle) &&
-                        !TMage(d->player) && !(POWERS(d->player) & POW_IDLE)) {
+                    if (tp_idleboot && (dr_idletime > tp_maxidle) && !TMage(d->player)
+                        && !(POWERS(d->player) & POW_IDLE)) {
                         idleboot_user(d);
                     }
                     if (FLAG2(d->player) & F2IDLE) { /* update DF_IDLE flag */
@@ -2355,10 +2298,12 @@ shovechars(void)
                             DR_RAW_ADD_FLAGS(d, DF_IDLE);
                     }
                     if (DBFETCH(d->player)->sp.player.last_descr == d->descriptor) { /* check for idling */
-                        int idx_idletime = get_property_value(d->player, "/_Prefs/IdleTime") * 60;
+                        int idx_idletime = get_property_value(d->player,
+                                                              "/_Prefs/IdleTime")
+                            * 60;
 
                         if (idx_idletime < 120)
-                            idx_idletime = (int)tp_idletime;
+                            idx_idletime = (int) tp_idletime;
                         if (d->idletime_set != idx_idletime)
                             pset_idletime(d->player, idx_idletime);
                         if ((dr_idletime >= tp_idletime)
@@ -2378,7 +2323,7 @@ shovechars(void)
                         int idx_idletime = 0;
 
                         if (!idx_idletime)
-                            idx_idletime = (int)tp_idletime;
+                            idx_idletime = (int) tp_idletime;
                         if (dr_idletime >= d->idletime_set) {
                             FLAG2(d->player) |= F2IDLE;
                             if (!(DR_RAW_FLAGS(d, DF_IDLE)))
@@ -2412,13 +2357,11 @@ shovechars(void)
                         if (get_property((dbref) 0, buff)) {
                             curidle = get_property_value((dbref) 0, buff);
                         } else {
-                            curidle = (int)tp_connidle;
+                            curidle = (int) tp_connidle;
                         }
                         if (curidle < 30)
                             curidle = 9999999;
-                        if ((now - d->connected_at) > curidle &&
-                            !(descr_running_queue(d->descriptor)) &&
-                            d->type != CT_INBOUND) {
+                        if ((now - d->connected_at) > curidle && !(descr_running_queue(d->descriptor)) && d->type != CT_INBOUND) {
                             d->booted = 1; /* don't drop if running program */
                         }
                     }
@@ -2457,6 +2400,7 @@ descr_sendfileblock(struct descriptor_data *d)
     if (d->dfile->size < 0) {
         fclose(d->dfile->fp);
         delete d->dfile;
+
         return;
     }
 
@@ -2493,13 +2437,13 @@ descr_sendfileblock(struct descriptor_data *d)
             }
         }
         delete d->dfile;
+
         d->dfile = NULL;
     }
 }
 
 long
-descr_sendfile(struct descriptor_data *d, int start, int stop,
-               const char *filename, int pid)
+descr_sendfile(struct descriptor_data *d, int start, int stop, const char *filename, int pid)
 {
     FILE *fp;
     long i, x;
@@ -2554,7 +2498,7 @@ descr_fsenddisc(struct descriptor_data *d)
     } else if (d->dfile->pid == -1)
         httpfcount--;           /* This is in newhttp.c/newhttp.h */
 #else
-	}
+    }
 #endif
 
     fclose(d->dfile->fp);
@@ -2577,14 +2521,16 @@ wall_and_flush(const char *msg)
     strcat(buf, "\r\n");
 
     for (d = descriptor_list; d; d = d->next) {
-        if (d->player != NOTHING) {
-            parse_ansi(d->player, abuf, buf, ANSINORMAL);
-            queue_ansi(d, abuf);
-        } else {
-            queue_ansi(d, buf);
-        }
-        if (!process_output(d)) {
-            d->booted = 1;
+        if (d->type != CT_HTTP) {
+            if (d->player != NOTHING) {
+                parse_ansi(d->player, abuf, buf, ANSINORMAL);
+                queue_ansi(d, abuf);
+            } else {
+                queue_ansi(d, buf);
+            }
+            if (!process_output(d)) {
+                d->booted = 1;
+            }
         }
     }
 }
@@ -2735,21 +2681,19 @@ host_as_hex(                    /* CrT */
 {
     static char buf[32];
 
-    sprintf(buf,
-            "%d.%d.%d.%d",
-            (addr >> 24) & 0xff,
-            (addr >> 16) & 0xff, (addr >> 8) & 0xff, addr & 0xff);
+    sprintf(buf, "%d.%d.%d.%d", (addr >> 24) & 0xff, (addr >> 16) & 0xff, (addr >> 8) & 0xff, addr & 0xff);
 
     return buf;
 }
 
 #ifdef IPV6
-struct in6_addr 
+struct in6_addr
 str2ip6(const char *ipstr)
 {
     struct in6_addr x;
+
     inet_pton(AF_INET6, ipstr, &x);
-    return x; 
+    return x;
 }
 #endif
 int
@@ -2768,6 +2712,7 @@ str2ip(const char *ipstr)
     return ((ip1 << 24) | (ip2 << 16) | (ip3 << 8) | ip4);
     /* return( htonl((ip1 << 24) | (ip2 << 16) | (ip3 << 8) | ip4) ); */
 }
+
 int
 get_ctype(int port)
 {
@@ -2829,7 +2774,7 @@ new_connection6(int port, int sock)
     int ctype;
     int result;
     struct huinfo *hu;
-    
+
     addr_len = sizeof(addr);
     newsock = accept(sock, (struct sockaddr *) &addr, (socklen_t *) &addr_len);
     ctype = get_ctype(port);
@@ -2837,50 +2782,43 @@ new_connection6(int port, int sock)
         return 0;
     } else {
         hu = host_getinfo6(addr.sin6_addr, port, addr.sin6_port);
-	/* log_status("Resolved to: %s\n",hu->h->name); */
-	/* Alynna: Fix this soon!
-        if (reg_site_is_blocked(ntohl(addr.sin6_addr.s6_addr)) == TRUE) {
-            log_status("*BLK6: %2d %s %s C#%d P#%d\n", newsock,
-                       hu->h->name, ntohs(addr.sin6_port),
-                       ++crt_connect_count, port);
-            shutdown(newsock, 2);
-            closesocket(newsock);
-            return 0;
-        }
-	*/
+        /* log_status("Resolved to: %s\n",hu->h->name); */
+        /* Alynna: Fix this soon!
+           if (reg_site_is_blocked(ntohl(addr.sin6_addr.s6_addr)) == TRUE) {
+           log_status("*BLK6: %2d %s %s C#%d P#%d\n", newsock,
+           hu->h->name, ntohs(addr.sin6_port),
+           ++crt_connect_count, port);
+           shutdown(newsock, 2);
+           closesocket(newsock);
+           return 0;
+           }
+         */
 #ifdef NEWHTTPD
         if (ctype != CT_HTTP) { /* hinoserm */
 #endif /* NEWHTTPD */
             show_status("ACT6: %2d %s %d C#%d P#%d %s\n", newsock,
-                        hu->h->name, addr.sin6_port,
-                        ++crt_connect_count, port,
-                        ctype == CT_MUCK ? "TEXT" :
-                        (ctype == CT_PUEBLO ? "PUEBLO" :
-                         (ctype == CT_MUF ? "MUF" :
+                        hu->h->name, addr.sin6_port, ++crt_connect_count, port, ctype == CT_MUCK ? "TEXT" : (ctype == CT_PUEBLO ? "PUEBLO" : (ctype == CT_MUF ? "MUF" :
 #ifdef USE_SSL
-                          (ctype == CT_SSL ? "SSL" :
+                                                                                                                                              (ctype == CT_SSL ? "SSL" :
 #endif /* USE_SSL */
-                           ("UNKNOWN")
+                                                                                                                                               ("UNKNOWN")
 #ifdef USE_SSL
-                          )
+                                                                                                                                              )
 #endif /* USE_SSL */
-                         ))
+                                                                                                             ))
                 );
             if (tp_log_connects)
                 log2filetime(CONNECT_LOG, "ACT6: %2d %s %d C#%d P#%d %s\n",
                              newsock, hu->h->name, addr.sin6_port,
-                             ++crt_connect_count, port,
-                             ctype == CT_MUCK ? "TEXT" :
-                             (ctype == CT_PUEBLO ? "PUEBLO" :
-                              (ctype == CT_MUF ? "MUF" :
+                             ++crt_connect_count, port, ctype == CT_MUCK ? "TEXT" : (ctype == CT_PUEBLO ? "PUEBLO" : (ctype == CT_MUF ? "MUF" :
 #ifdef USE_SSL
-                               (ctype == CT_SSL ? "SSL" :
+                                                                                                                      (ctype == CT_SSL ? "SSL" :
 #endif /* USE_SSL */
-                                ("UNKNOWN")
+                                                                                                                       ("UNKNOWN")
 #ifdef USE_SSL
-                               )
+                                                                                                                      )
 #endif /* USE_SSL */
-                              ))
+                                                                                     ))
                     );
 #ifdef NEWHTTPD
         }
@@ -2906,7 +2844,7 @@ new_connection(int port, int sock)
     int result;
     struct huinfo *hu;
     struct descriptor_data *d;
-    
+
     addr_len = sizeof(addr);
     newsock = accept(sock, (struct sockaddr *) &addr, (socklen_t *) &addr_len);
     ctype = get_ctype(port);
@@ -2916,15 +2854,12 @@ new_connection(int port, int sock)
         hu = host_getinfo(addr.sin_addr.s_addr, port, addr.sin_port);
 
         if (reg_site_is_blocked(ntohl(addr.sin_addr.s_addr)) == TRUE) {
-            log_status("*BLK: %2d %s(%d) %s C#%d P#%d\n", newsock,
-                       hu->h->name, ntohs(addr.sin_port),
-                       host_as_hex(ntohl(addr.sin_addr.s_addr)),
-                       ++crt_connect_count, port);
+            log_status("*BLK: %2d %s(%d) %s C#%d P#%d\n", newsock, hu->h->name, ntohs(addr.sin_port), host_as_hex(ntohl(addr.sin_addr.s_addr)), ++crt_connect_count, port);
             shutdown(newsock, 2);
             closesocket(newsock);
             return 0;
         }
-        
+
         result = get_property_value((dbref) 0, "~sys/concount");
         result++;
         add_property((dbref) 0, "~sys/concount", NULL, result);
@@ -2939,36 +2874,31 @@ new_connection(int port, int sock)
 #endif /* NEWHTTPD */
             show_status("ACPT: %2d %s(%d) %s C#%d P#%d %s\n", d->descriptor,
                         hu->h->name, ntohs(addr.sin_port),
-                        host_as_hex(ntohl(addr.sin_addr.s_addr)),
-                        ++crt_connect_count, port,
-                        ctype == CT_MUCK ? "TEXT" :
-                        (ctype == CT_PUEBLO ? "PUEBLO" :
-                         (ctype == CT_MUF ? "MUF" :
+                        host_as_hex(ntohl(addr.sin_addr.s_addr)), ++crt_connect_count, port, ctype == CT_MUCK ? "TEXT" : (ctype == CT_PUEBLO ? "PUEBLO" : (ctype == CT_MUF ? "MUF" :
 #ifdef USE_SSL
-                          (ctype == CT_SSL ? "SSL" :
+                                                                                                                                                           (ctype ==
+                                                                                                                                                            CT_SSL ? "SSL" :
 #endif /* USE_SSL */
-                           ("UNKNOWN")
+                                                                                                                                                            ("UNKNOWN")
 #ifdef USE_SSL
-                          )
+                                                                                                                                                           )
 #endif /* USE_SSL */
-                         ))
+                                                                                                                          ))
                 );
             if (tp_log_connects)
-                log2filetime(CONNECT_LOG, "ACPT: %2d %s(%d) %s C#%d P#%d %s\n",
+                log2filetime(CONNECT_LOG,
+                             "ACPT: %2d %s(%d) %s C#%d P#%d %s\n",
                              d->descriptor, hu->h->name, ntohs(addr.sin_port),
                              host_as_hex(ntohl(addr.sin_addr.s_addr)),
-                             ++crt_connect_count, port,
-                             ctype == CT_MUCK ? "TEXT" :
-                             (ctype == CT_PUEBLO ? "PUEBLO" :
-                              (ctype == CT_MUF ? "MUF" :
+                             ++crt_connect_count, port, ctype == CT_MUCK ? "TEXT" : (ctype == CT_PUEBLO ? "PUEBLO" : (ctype == CT_MUF ? "MUF" :
 #ifdef USE_SSL
-                               (ctype == CT_SSL ? "SSL" :
+                                                                                                                      (ctype == CT_SSL ? "SSL" :
 #endif /* USE_SSL */
-                                ("UNKNOWN")
+                                                                                                                       ("UNKNOWN")
 #ifdef USE_SSL
-                               )
+                                                                                                                      )
 #endif /* USE_SSL */
-                              ))
+                                                                                     ))
                     );
 #ifdef NEWHTTPD
         }
@@ -2984,49 +2914,41 @@ shutdownsock(struct descriptor_data *d)
 #ifdef NEWHTTPD
     if (d->http) {
         d->http->disconnect();
-    } else if (d->type != CT_HTTP) {   /* hinoserm */
+    } else if (d->type != CT_HTTP) { /* hinoserm */
 #endif /* NEWHTTPD */
         if (d->connected) {
             if (tp_log_connects)
                 log2filetime(CONNECT_LOG,
                              "DISC: %2d %s %s(%s) %s, %d cmds P#%d\n",
-                             d->descriptor, unparse_object(d->player,
-                                                           d->player),
-                             d->hu->h->name, d->hu->u->user,
-                             host_as_hex(d->hu->h->a), d->commands, d->cport);
-            show_status("DISC: %2d %s %s(%s) %s, %d cmds P#%d\n", d->descriptor,
-                        unparse_object(d->player, d->player), d->hu->h->name,
-                        d->hu->u->user, host_as_hex(d->hu->h->a), d->commands,
-                        d->cport);
+                             d->descriptor, unparse_object(d->player, d->player), d->hu->h->name, d->hu->u->user, host_as_hex(d->hu->h->a), d->commands, d->cport);
+            show_status("DISC: %2d %s %s(%s) %s, %d cmds P#%d\n",
+                        d->descriptor, unparse_object(d->player, d->player), d->hu->h->name, d->hu->u->user, host_as_hex(d->hu->h->a), d->commands, d->cport);
             announce_disconnect(d);
         } else if (d->type != CT_INBOUND) {
-            show_status("DISC: %2d %s(%s) %s, %d cmds P#%d (never connected)\n",
-                        d->descriptor, d->hu->h->name, d->hu->u->user,
-                        host_as_hex(d->hu->h->a), d->commands, d->cport);
+            show_status("DISC: %2d %s(%s) %s, %d cmds P#%d (never connected)\n", d->descriptor, d->hu->h->name, d->hu->u->user, host_as_hex(d->hu->h->a), d->commands, d->cport);
             if (tp_log_connects)
                 log2filetime(CONNECT_LOG,
                              "DISC: %2d %s(%s) %s, %d cmds P#%d (never connected)\n",
-                             d->descriptor, d->hu->h->name, d->hu->u->user,
-                             host_as_hex(d->hu->h->a), d->commands, d->cport);
+                             d->descriptor, d->hu->h->name, d->hu->u->user, host_as_hex(d->hu->h->a), d->commands, d->cport);
         }
 #ifdef NEWHTTPD
     }
 #endif /* NEWHTTPD */
 
 #ifdef MCCP_ENABLED
-	mccp_end(d);
+    mccp_end(d);
 #endif /* MCCP_ENABLED */
     bytesIn += d->input_len;
     bytesOut += d->output_len;
     commandTotal += d->commands;
 
-    if (d->connected && OkObj(d->player) && (Typeof(d->player) == TYPE_PLAYER)) {
+    if (d->connected && OkObj(d->player)
+        && (Typeof(d->player) == TYPE_PLAYER)) {
         forget_player_descr(d->player, d->descriptor);
         d->connected = 0;
         d->player = NOTHING;
         update_desc_count_table();
     }
-
 #ifdef USE_SSL
     if (d->ssl_session) {
         if (SSL_shutdown(d->ssl_session) < 1)
@@ -3041,6 +2963,9 @@ shutdownsock(struct descriptor_data *d)
     *d->prev = d->next;
     if (d->next)
         d->next->prev = d->prev;
+#ifdef MCP_SUPPORT
+    mcp_frame_clear(&d->mcpframe);
+#endif
 #ifdef NEWHTTPD
     if (d->http)
         delete d->http;
@@ -3051,37 +2976,68 @@ shutdownsock(struct descriptor_data *d)
 #endif /* DESCRFILE_SUPPORT */
     host_delete(d->hu);
 
-	telopt_clean(&d->telopt);
+    telopt_clean(&d->telopt);
 
     descr_table[d->descriptor] = -1;
     delete d;
+
     ndescriptors--;
 }
+
+#ifdef MCP_SUPPORT
+void
+SendText(McpFrame *mfr, const char *text)
+{
+    queue_string((struct descriptor_data *) mfr->descriptor, text);
+}
+
+void
+FlushText(McpFrame *mfr)
+{
+    struct descriptor_data *d = (struct descriptor_data *) mfr->descriptor;
+
+    if (d && !process_output(d)) {
+        d->booted = 1;
+    }
+}
+
+int
+mcpframe_to_descr(McpFrame *ptr)
+{
+    return ((struct descriptor_data *) ptr->descriptor)->descriptor;
+}
+
+int
+mcpframe_to_user(McpFrame *ptr)
+{
+    return ((struct descriptor_data *) ptr->descriptor)->player;
+}
+#endif
 
 int
 assign_descrnum(int s)
 {
-   int cnt;
-   int dnum = -1;
+    int cnt;
+    int dnum = -1;
 
-   for (cnt = 0; cnt < DESCR_MAX*2; cnt++) {
-      if (++descr_cnt > DESCR_MAX)
-         descr_cnt = 1;
-      
-      if (descr_table[descr_cnt] == -1) {
-         dnum = descr_cnt;
-         break;
-      }
-   }
+    for (cnt = 0; cnt < DESCR_MAX * 2; cnt++) {
+        if (++descr_cnt > DESCR_MAX)
+            descr_cnt = 1;
 
-   if (dnum == -1) {
-      perror("assign_descrnum");
-      panic("No numbers avail in descr_table.");      
-   }
+        if (descr_table[descr_cnt] == -1) {
+            dnum = descr_cnt;
+            break;
+        }
+    }
 
-   descr_table[dnum] = s;
-   
-   return dnum;
+    if (dnum == -1) {
+        perror("assign_descrnum");
+        panic("No numbers avail in descr_table.");
+    }
+
+    descr_table[dnum] = s;
+
+    return dnum;
 }
 
 struct descriptor_data *
@@ -3132,6 +3088,9 @@ initializesock(int s, struct huinfo *hu, int ctype, int cport, int welcome)
     d->commands = 0;
     d->last_time = d->connected_at;
     d->type = ctype;
+#ifdef MCP_SUPPORT
+    mcp_frame_init(&d->mcpframe, d);
+#endif
     d->cport = cport;
     d->hu = hu;
     d->linelen = 0;
@@ -3139,7 +3098,7 @@ initializesock(int s, struct huinfo *hu, int ctype, int cport, int welcome)
     d->prog = NULL;
     d->block = 0;
     d->interactive = 0;
-    d->idletime_set = (int)tp_idletime;
+    d->idletime_set = (int) tp_idletime;
 #ifdef NEWHTTPD
     d->http = NULL;
 #endif /* NEWHTTPD */
@@ -3156,9 +3115,9 @@ initializesock(int s, struct huinfo *hu, int ctype, int cport, int welcome)
         d->booted = 1;          /* Drop the connection ASAP */
 
     if (ctype == CT_MUCK && tp_ascii_descrs) {
-        d->encoding = 1; /* ASCII I/O */
+        d->encoding = 1;        /* ASCII I/O */
     } else {
-        d->encoding = 0; /* RAW I/O */
+        d->encoding = 0;        /* RAW I/O */
     }
     /* UTF-8 is a channel upgrade - never a default */
 
@@ -3172,16 +3131,16 @@ initializesock(int s, struct huinfo *hu, int ctype, int cport, int welcome)
         && ctype != CT_HTTP
 #endif /* NEWHTTPD */
         ) {
-        queue_write(d, "\xFF\xFB\x46",       3); /* IAC WILL MSSP */
+        queue_write(d, "\xFF\xFB\x46", 3); /* IAC WILL MSSP */
 #ifdef MCCP_ENABLED
-        queue_write(d, "\377\373\126\012",   4); /* IAC WILL TELOPT_COMPRESS2 (MCCP v2) */
+        queue_write(d, "\377\373\126\012", 4); /* IAC WILL TELOPT_COMPRESS2 (MCCP v2) */
 #endif
-        queue_write(d, "\xFF\xFD\x18",       3); /* IAC DO TERMTYPE */
-        queue_write(d, "\xFF\xFD\x1F",       3); /* IAC DO NAWS */
+        queue_write(d, "\xFF\xFD\x18", 3); /* IAC DO TERMTYPE */
+        queue_write(d, "\xFF\xFD\x1F", 3); /* IAC DO NAWS */
 #ifdef UTF8_SUPPORT
-        queue_write(d, "\xFF\xFD\052",       3); /* IAC DO CHARSET */
+        queue_write(d, "\xFF\xFD\052", 3); /* IAC DO CHARSET */
 #endif
-        announce_login(d); 
+        announce_login(d);
         welcome_user(d);
     }
     return d;
@@ -3234,11 +3193,12 @@ make_socket6(int port)
 
     inet_ntop(AF_INET6, bind6.s6_addr, ip, INET_ADDRSTRLEN);
 
-    log_status("IPv6 address: %.2x%.2x:%.2x%.2x:%.2x%.2x:%.2x%.2x:%.2x%.2x:%.2x%.2x:%.2x%.2x:%.2x%.2x\n", 
-		bind6.s6_addr[0], bind6.s6_addr[1], bind6.s6_addr[2], bind6.s6_addr[3],
-		bind6.s6_addr[4], bind6.s6_addr[5], bind6.s6_addr[6], bind6.s6_addr[7],
-		bind6.s6_addr[8], bind6.s6_addr[9], bind6.s6_addr[10], bind6.s6_addr[11],
-		bind6.s6_addr[12], bind6.s6_addr[13], bind6.s6_addr[14], bind6.s6_addr[15]);
+    log_status
+        ("IPv6 address: %.2x%.2x:%.2x%.2x:%.2x%.2x:%.2x%.2x:%.2x%.2x:%.2x%.2x:%.2x%.2x:%.2x%.2x\n",
+         bind6.s6_addr[0], bind6.s6_addr[1], bind6.s6_addr[2],
+         bind6.s6_addr[3], bind6.s6_addr[4], bind6.s6_addr[5],
+         bind6.s6_addr[6], bind6.s6_addr[7], bind6.s6_addr[8],
+         bind6.s6_addr[9], bind6.s6_addr[10], bind6.s6_addr[11], bind6.s6_addr[12], bind6.s6_addr[13], bind6.s6_addr[14], bind6.s6_addr[15]);
     log_status("Opening port: %s %d(ipv6)\n", ip, port); /* changed from fprintf */
     s = socket(AF_INET6, SOCK_STREAM, 0);
     log_status("        Sock: %d\n", s); /* changed from fprintf */
@@ -3296,7 +3256,7 @@ make_text_block(const char *s, int len, int wclen)
 void
 free_text_block(struct text_block *t)
 {
-    delete[] t->buf;
+    delete[]t->buf;
     delete t;
 }
 
@@ -3359,13 +3319,15 @@ queue_string(struct descriptor_data *d, const char *s)
     int result, len = strlen(s);
     const char *sp;
     char *filtered, *fp;
+
 #ifdef UTF8_SUPPORT
     const char *send = s + len - 1;
     char *fend;
 #endif
 
-    if (d->encoding == 1) { /* ASCII */
+    if (d->encoding == 1) {     /* ASCII */
         filtered = new char[len + 1];
+
         fp = filtered;
 #ifdef UTF8_SUPPORT
         fend = filtered + len;
@@ -3380,13 +3342,14 @@ queue_string(struct descriptor_data *d, const char *s)
         }
 #ifdef UTF8_SUPPORT
     } else if (d->encoding == 2) { /* UTF-8 */
-		/* each invalid byte of s potentially maps to three UTF-8 bytes */
-		wchar_t wctmp;
-		int wclen;
-        
-        filtered = new char [(len*3) + 1];
+        /* each invalid byte of s potentially maps to three UTF-8 bytes */
+        wchar_t wctmp;
+        int wclen;
+
+        filtered = new char[(len * 3) + 1];
+
         fp = filtered;
-        fend = filtered + (len*3);
+        fend = filtered + (len * 3);
 
         for (sp = s; *sp != '\0'; sp++) {
             wclen = mbtowc(&wctmp, sp, send - sp + 1);
@@ -3405,7 +3368,7 @@ queue_string(struct descriptor_data *d, const char *s)
             }
         }
 #endif
-    } else { /* RAW */
+    } else {                    /* RAW */
         result = queue_write(d, s, len);
         return result;
     }
@@ -3414,7 +3377,7 @@ queue_string(struct descriptor_data *d, const char *s)
 
     result = queue_write(d, filtered, fp - filtered);
 
-    delete[] filtered;
+    delete[]filtered;
 
     return result;
 }
@@ -3444,8 +3407,7 @@ process_output(struct descriptor_data *d)
 
         if (cnt < 0) {
 #ifdef DEBUGPROCESS
-            fprintf(stderr, "process_output: write failed errno %d %s\n", errnosocket,
-                    strerror(errnosocket));
+            fprintf(stderr, "process_output: write failed errno %d %s\n", errnosocket, strerror(errnosocket));
 #endif
             if (errnosocket == EWOULDBLOCK)
                 return 1;
@@ -3546,7 +3508,7 @@ freeqs(struct descriptor_data *d)
     d->input.head = 0;
     d->input.tail = &d->input.head;
 
-    delete[] d->raw_input;
+    delete[]d->raw_input;
     d->raw_input = NULL;
     d->raw_input_at = 0;
 #ifdef UTF8_SUPPORT
@@ -3574,6 +3536,16 @@ save_command(struct descriptor_data *d, const char *command, int len, int wclen)
         if (!(FLAGS(d->player) & INTERACTIVE))
             return 1;
     }
+#ifdef MCP_SUPPORT
+    if (d->connected && (DBFETCH(d->player)->sp.player.block)) {
+        char cmdbuf[BUFFER_LEN];
+
+        if (!mcp_frame_process_input(&d->mcpframe, command,
+                                     cmdbuf, sizeof(cmdbuf))) {
+            return 1;
+        }
+    }
+#endif
 */
     if (tp_allow_unidle) {      /* check for unidle word */
         if (!string_compare((char *) command, tp_unidle_command)) {
@@ -3593,15 +3565,16 @@ int
 process_input(struct descriptor_data *d)
 {
     char buf[MAX_COMMAND_LEN * 2];
-	char *p, *pend, *q, *qend;
-	int got;
+    char *p, *pend, *q, *qend;
+    int got;
+
 #ifdef UTF8_SUPPORT
-    wchar_t wctmp[1];   /* stores a single decoded wide character */
-    int wclen;          /* size in bytes of current wide character */
+    wchar_t wctmp[1];           /* stores a single decoded wide character */
+    int wclen;                  /* size in bytes of current wide character */
 #endif
-    int wcbuflen = -2; /* this never changes if UTF8_SUPPORT is disabled */
+    int wcbuflen = -2;          /* this never changes if UTF8_SUPPORT is disabled */
     struct frame *httpfr = NULL;
-	stk_array *httparr = NULL;
+    stk_array *httparr = NULL;
 
     if (d->type == CT_INBOUND)
         return -1;
@@ -3627,8 +3600,7 @@ process_input(struct descriptor_data *d)
 #endif
     {
 #ifdef DEBUGPROCESS
-        fprintf(stderr, "process_input: read failed errno %d %s\n", errnosocket,
-                strerror(errnosocket));
+        fprintf(stderr, "process_input: read failed errno %d %s\n", errnosocket, strerror(errnosocket));
 #endif
         return 0;
     }
@@ -3640,7 +3612,7 @@ process_input(struct descriptor_data *d)
         d->raw_input_at = d->raw_input;
 #ifdef UTF8_SUPPORT
         if (d->encoding == 0) {
-            wcbuflen = -1; /* invalid UTF-8 */
+            wcbuflen = -1;      /* invalid UTF-8 */
         } else {
             wcbuflen = 0;
         }
@@ -3650,10 +3622,10 @@ process_input(struct descriptor_data *d)
     }
 
     if (d->type == CT_HTTP && d->http->fr) {
-		httpfr = d->http->fr;
-		if (httpfr)
-		   httparr = new_array_packed(0, 0);
-	}
+        httpfr = d->http->fr;
+        if (httpfr)
+            httparr = new_array_packed(0, 0);
+    }
 
     p = d->raw_input_at;
     pend = d->raw_input + MAX_COMMAND_LEN - 1;
@@ -3661,20 +3633,20 @@ process_input(struct descriptor_data *d)
 #ifdef NEWHTTPD
         /* Begin messy webserver content handling junk! -hinoserm */
         if (d->type == CT_HTTP) {
-           if (d->http->header_complete) {
-		  if (d->http->fr && httpfr && httparr) {
-			  struct inst temp1;
-			  temp1.type = PROG_INTEGER;
-			  temp1.data.number = (unsigned char)*q;
-			  array_appenditem(&httparr, &temp1);
-			  CLEAR(&temp1);
-		  }
-           }
+            if (d->http->header_complete) {
+                if (d->http->fr && httpfr && httparr) {
+                    struct inst temp1;
 
+                    temp1.type = PROG_INTEGER;
+                    temp1.data.number = (unsigned char) *q;
+                    array_appenditem(&httparr, &temp1);
+                    CLEAR(&temp1);
+                }
+            }
 //            if (d->booted)
 //                break;          /* There's a reason for this. */
             /* Do content stuff. */
-			
+
 
             if (d->http->body.elen) {
                 if (d->http->processcontent(*q))
@@ -3691,11 +3663,11 @@ process_input(struct descriptor_data *d)
             if (p > d->raw_input) {
 #ifdef NEWHTTPD
                 if (d->type == CT_HTTP) { /* hinoserm */
-/* There's a reason why I don't do this with  */ /* hinoserm */
-/* the pre-existing queuing stuff. If I did,  */ /* hinoserm */
-/* the content data stuff wouldn't work. This */ /* hinoserm */
-/* might change if it becomes a problem.      */ /* hinoserm */
-                    d->http->process_input(d->raw_input); /* hinoserm */
+                    /* There's a reason why I don't do this with  *//* hinoserm */
+                    /* the pre-existing queuing stuff. If I did,  *//* hinoserm */
+                    /* the content data stuff wouldn't work. This *//* hinoserm */
+                    /* might change if it becomes a problem.      *//* hinoserm */
+                    d->http->process_input(d->raw_input, p - d->raw_input); /* hinoserm */
                 } else
 #endif /* NEWHTTPD */
                 if (save_command(d, d->raw_input, p - d->raw_input, wcbuflen) != -1)
@@ -3704,7 +3676,7 @@ process_input(struct descriptor_data *d)
                 /* BARE NEWLINE! */
 #ifdef NEWHTTPD
                 if (d->type == CT_HTTP) { /* hinoserm */
-                    d->http->process_input(""); /* hinoserm */
+                    d->http->process_input("", 0); /* hinoserm */
                 } else
 #endif /* NEWHTTPD */
                 if (p == d->raw_input) {
@@ -3720,7 +3692,7 @@ process_input(struct descriptor_data *d)
                     break;
                 case '\363':   /* Break */
                 case '\364':   /* Interrupt Processes */
-                    save_command(d, BREAK_COMMAND, sizeof(BREAK_COMMAND), -2);
+                    save_command(d, BREAK_COMMAND, strlen(BREAK_COMMAND) + 1, -2);
                     d->inIAC = 0;
                     break;
                 case '\365':   /* Abort output */
@@ -3740,28 +3712,29 @@ process_input(struct descriptor_data *d)
                     p = d->raw_input;
                     d->inIAC = 0;
                     break;
-                case TELOPT_SB:   /* SB */ /* Go ahead. Treat as NOP */
+                case TELOPT_SB: /* SB *//* Go ahead. Treat as NOP */
                     //if (d->telopt.sb_buf)
-                    delete[] d->telopt.sb_buf;
+                    delete[]d->telopt.sb_buf;
                     //d->telopt.sb_buf = (unsigned char *)malloc(TELOPT_MAX_BUF_LEN);
                     d->telopt.sb_buf = new unsigned char[TELOPT_MAX_BUF_LEN];
+
                     d->telopt.sb_buf_len = 0;
 
                     d->inIAC = 5;
                     break;
-                case TELOPT_WILL:   /* Will option offer */
+                case TELOPT_WILL: /* Will option offer */
                     d->inIAC = 2;
                     break;
-                case TELOPT_WONT:   /* won't option */
+                case TELOPT_WONT: /* won't option */
                     d->inIAC = 4;
                     break;
-                case TELOPT_DO:   /* DO option request */
+                case TELOPT_DO: /* DO option request */
                     d->inIAC = TELOPT_DO;
                     break;
-                case TELOPT_DONT:   /* DONT option request */
+                case TELOPT_DONT: /* DONT option request */
                     d->inIAC = TELOPT_DONT;
                     break;
-                case TELOPT_IAC:   /* IAC a second time */
+                case TELOPT_IAC: /* IAC a second time */
 #if 1
                     /* for future 8 bit clean code, perhaps */
                     /* the future, is NOW! -hinoserm */
@@ -3774,8 +3747,8 @@ process_input(struct descriptor_data *d)
                     break;
             }
         } else if (d->inIAC == 5) {
-            if (*q == '\xF0' && *(q-1) == '\xFF') {
-                d->telopt.sb_buf[d->telopt.sb_buf_len-1] = '\0';
+            if (*q == '\xF0' && *(q - 1) == '\xFF') {
+                d->telopt.sb_buf[d->telopt.sb_buf_len - 1] = '\0';
 
                 /* Begin processing the TELOPT data buffer */
                 if (d->telopt.sb_buf_len) {
@@ -3784,9 +3757,9 @@ process_input(struct descriptor_data *d)
                             if (d->telopt.sb_buf_len != 6)
                                 break;
 
-                            d->telopt.width  =  (d->telopt.sb_buf[1] <<8) | d->telopt.sb_buf[2];
-                            d->telopt.height =  (d->telopt.sb_buf[3] <<8) | d->telopt.sb_buf[4];
-                            
+                            d->telopt.width = (d->telopt.sb_buf[1] << 8) | d->telopt.sb_buf[2];
+                            d->telopt.height = (d->telopt.sb_buf[3] << 8) | d->telopt.sb_buf[4];
+
                             /* that was easy */
                             break;
                         case TELOPT_TERMTYPE:
@@ -3797,11 +3770,11 @@ process_input(struct descriptor_data *d)
                                 /* 
                                    The client requested our termtype.  Send it.
                                    It would not be proper to send our version number here.
-                                */
+                                 */
                                 queue_write(d, "\xFF\xFA\x00ProtoMUCK\xFF\xF0", 14);
                             } else if (!d->telopt.sb_buf[1]) {
                                 //if (d->telopt.termtype)
-                                delete[] d->telopt.termtype;
+                                delete[]d->telopt.termtype;
 
                                 if (d->telopt.sb_buf_len < 3) {
                                     /* If the other end sent a blank termtype, don't bother allocating it. */
@@ -3811,8 +3784,8 @@ process_input(struct descriptor_data *d)
                                     d->telopt.termtype = new char[d->telopt.sb_buf_len];
 
                                     /* Move the data into the termtype string, making sure to add a null at the end. */
-                                    memcpy(d->telopt.termtype, d->telopt.sb_buf + 2, d->telopt.sb_buf_len-2);
-                                    d->telopt.termtype[d->telopt.sb_buf_len-2] = '\0';
+                                    memcpy(d->telopt.termtype, d->telopt.sb_buf + 2, d->telopt.sb_buf_len - 2);
+                                    d->telopt.termtype[d->telopt.sb_buf_len - 2] = '\0';
 #ifdef MCCP_ENABLED
                                     /* Due to SimpleMU, we need to determine the termtype before we can enable MCCP. */
                                     if (d->telopt.mccp && !d->mccp)
@@ -3821,69 +3794,86 @@ process_input(struct descriptor_data *d)
 
                                     /* log_status("TELOPT_TERMTYPE(%d): %s\r\n", d->descriptor, d->telopt_termtype); */
                                 }
-                            } /* else { */
-                              /* An unsupported request/response happened */
-                              /* This is where we would implement other sub-negotiation types. */
-                         /* } */
+                            }
+
+
+                            /* else { */
+                            /* An unsupported request/response happened */
+                            /* This is where we would implement other sub-negotiation types. */
+                            /* } */
                             break;
 #ifdef UTF8_SUPPORT
                         case TELOPT_CHARSET: /* Check if the remote end says they can handle utf8 */
-							{ 
-								char buf2[MAX_COMMAND_LEN];
-								int spos, dpos, accepted_charsets = 0;
-								char sep;
-								//log_status("DBUG: (%d) IAC SB CHARSET REQUEST %x %x %s -- len: %d\n",
-								//    d->descriptor,d->telopt.sb_buf[1],d->telopt.sb_buf[2],d->telopt.sb_buf+3,d->telopt.sb_buf_len);
-								if (d->telopt.sb_buf_len < 3) /* By now we better have CHARSET REQUEST SEP */
-									break;
-								if (d->telopt.sb_buf[1] != '\001') /* REQUEST */
-									break;
-								if (d->telopt.sb_buf[2]) /* store the requested charset delimiter */
-									sep = d->telopt.sb_buf[2];
-								else break;
-								//log_status("DBUG: (%d) CHARSET REQUEST, buffer valid, sep is 0x%x\n",d->descriptor,sep);
-								spos = 3; dpos = 4;
-								strncpy(buf2,"\xFF\xFA\x2A\x02",dpos);  /* IAC SB CHARSET ACCEPTED */
-								/* I just love, scanning for lifeforms */
-								while (d->telopt.sb_buf[spos]) {
-									while (!(d->telopt.sb_buf[spos]==sep)) {
-											buf2[dpos] = d->telopt.sb_buf[spos];
-											dpos++; spos++;      
-											if (!d->telopt.sb_buf[spos]) break;
-									}
-									/* should now be IAC SB CHARSET ACCEPTED <charset> IAC SE */
-									buf2[dpos] = '\xFF'; buf2[dpos+1] = '\xF0'; buf2[dpos+2] = '\0'; dpos++; dpos++;
-									//log_status("DBUG: (%d) Found charset, created buffer %s\n",d->descriptor,buf2);
-									/* if utf8 is mentioned in this charset, enable unicode on this descr 
-									   OBTW: if both ASCII and UNICODE re requested, prefer unicode.
-									*/
-									if (strcasestr2(buf2,"ascii") || strcasestr2(buf2, "ANSI_X3.4-1968") || strcasestr2(buf2,"UTF-8")) {
-										if ((d->encoding < 2) && ((strcasestr2(buf2,"ascii")) || strcasestr2(buf2, "ANSI_X3.4-1968")))
-											d->encoding = 1;
-										else
-											d->encoding = 2;
-									}
-									queue_write(d, buf2, dpos+1);
-									accepted_charsets++;
-									//log_status("DBUG: (%d) IAC SB CHARSET ACCEPTED %s IAC SE, accepted: %d\n",
-									//    d->descriptor,buf2,accepted_charsets);
-									spos++; dpos = 4; // Reuse this buffer  
-								}
-								if (!accepted_charsets) {
-									/* IAC SB CHARSET REJECTED IAC SE */
-									queue_write(d, "\xFF\xFA\x2A\x03\xFF\xF0", 6);
-									//log_status("DBUG: (%d) IAC SB CHARSET REJECTED IAC SE, accepted: %d\n",
-									//    d->descriptor,accepted_charsets);
-								}
-							break;
-						}
+                        {
+                            char buf2[MAX_COMMAND_LEN];
+                            int spos, dpos, accepted_charsets = 0;
+                            char sep;
+
+                            //log_status("DBUG: (%d) IAC SB CHARSET REQUEST %x %x %s -- len: %d\n",
+                            //    d->descriptor,d->telopt.sb_buf[1],d->telopt.sb_buf[2],d->telopt.sb_buf+3,d->telopt.sb_buf_len);
+                            if (d->telopt.sb_buf_len < 3) /* By now we better have CHARSET REQUEST SEP */
+                                break;
+                            if (d->telopt.sb_buf[1] != '\001') /* REQUEST */
+                                break;
+                            if (d->telopt.sb_buf[2]) /* store the requested charset delimiter */
+                                sep = d->telopt.sb_buf[2];
+                            else
+                                break;
+                            //log_status("DBUG: (%d) CHARSET REQUEST, buffer valid, sep is 0x%x\n",d->descriptor,sep);
+                            spos = 3;
+                            dpos = 4;
+                            strncpy(buf2, "\xFF\xFA\x2A\x02", dpos); /* IAC SB CHARSET ACCEPTED */
+                            /* I just love, scanning for lifeforms */
+                            while (d->telopt.sb_buf[spos]) {
+                                while (!(d->telopt.sb_buf[spos] == sep)) {
+                                    buf2[dpos] = d->telopt.sb_buf[spos];
+                                    dpos++;
+                                    spos++;
+                                    if (!d->telopt.sb_buf[spos])
+                                        break;
+                                }
+                                /* should now be IAC SB CHARSET ACCEPTED <charset> IAC SE */
+                                buf2[dpos] = '\xFF';
+                                buf2[dpos + 1] = '\xF0';
+                                buf2[dpos + 2] = '\0';
+                                dpos++;
+                                dpos++;
+                                //log_status("DBUG: (%d) Found charset, created buffer %s\n",d->descriptor,buf2);
+                                /* if utf8 is mentioned in this charset, enable unicode on this descr 
+                                   OBTW: if both ASCII and UNICODE re requested, prefer unicode.
+                                 */
+                                if (strcasestr2(buf2, "ascii")
+                                    || strcasestr2(buf2, "ANSI_X3.4-1968")
+                                    || strcasestr2(buf2, "UTF-8")) {
+                                    if ((d->encoding < 2)
+                                        && ((strcasestr2(buf2, "ascii"))
+                                            || strcasestr2(buf2, "ANSI_X3.4-1968")))
+                                        d->encoding = 1;
+                                    else
+                                        d->encoding = 2;
+                                }
+                                queue_write(d, buf2, dpos + 1);
+                                accepted_charsets++;
+                                //log_status("DBUG: (%d) IAC SB CHARSET ACCEPTED %s IAC SE, accepted: %d\n",
+                                //    d->descriptor,buf2,accepted_charsets);
+                                spos++;
+                                dpos = 4; // Reuse this buffer  
+                            }
+                            if (!accepted_charsets) {
+                                /* IAC SB CHARSET REJECTED IAC SE */
+                                queue_write(d, "\xFF\xFA\x2A\x03\xFF\xF0", 6);
+                                //log_status("DBUG: (%d) IAC SB CHARSET REJECTED IAC SE, accepted: %d\n",
+                                //    d->descriptor,accepted_charsets);
+                            }
+                            break;
+                        }
 #endif
                         default:
                             break;
                     }
                 }
 
-                delete[] d->telopt.sb_buf; /* don't need the buffer anymore */
+                delete[]d->telopt.sb_buf; /* don't need the buffer anymore */
                 d->telopt.sb_buf = NULL;
                 d->telopt.sb_buf_len = 0;
 
@@ -3900,7 +3890,7 @@ process_input(struct descriptor_data *d)
             } else if (*q == TELOPT_MSSP) {
                 mssp_send(d);
             } else if (*q == TELOPT_NAWS) {
-                /* queue_write(d, "\xFF\xFD\x1F", 3); */ /* Oops, infinite loop */
+                /* queue_write(d, "\xFF\xFD\x1F", 3); *//* Oops, infinite loop */
             } else if (*q == TELOPT_CHARSET) {
                 //log_status("DBUG: (%d) IAC WILL CHARSET\n",d->descriptor);
                 /* Just have to wait for the DO now. */
@@ -3912,18 +3902,18 @@ process_input(struct descriptor_data *d)
             d->inIAC = 0;
         } else if (d->inIAC == TELOPT_DO) {
 #ifdef MCCP_ENABLED
-            if (*q == TELOPT_MCCP2) {        /* TELOPT_COMPRESS2 */
+            if (*q == TELOPT_MCCP2) { /* TELOPT_COMPRESS2 */
                 d->telopt.mccp = 2;
-					
+
                 /* Thanks to SimpleMU, we're required to know the termtype before we can enable MCCP. */
                 if (d->telopt.termtype && !d->mccp)
                     mccp_start(d, d->telopt.mccp);
             } else if (*q == TELOPT_MSSP) {
                 mssp_send(d);
             } else if (*q == TELOPT_NAWS) {
-            //} else if (*q == TELOPT_CHARSET) {
-            //    charset_send(d);
-            //    queue_write(d, "UTF-8\xFC", 6);
+                //} else if (*q == TELOPT_CHARSET) {
+                //    charset_send(d);
+                //    queue_write(d, "UTF-8\xFC", 6);
             } else {
                 /* Send back WONT in all cases */
                 queue_write(d, "\377\xFC", 2);
@@ -3937,25 +3927,25 @@ process_input(struct descriptor_data *d)
             d->inIAC = 0;
         } else if (d->inIAC == TELOPT_DONT) {
 #ifdef MCCP_ENABLED
-            if (*q == TELOPT_MCCP2) {        /* TELOPT_COMPRESS2 */
+            if (*q == TELOPT_MCCP2) { /* TELOPT_COMPRESS2 */
                 d->telopt.mccp = 0;
-				mccp_end(d);
+                mccp_end(d);
             } else if (*q == TELOPT_MSSP) {
             } else if (*q == TELOPT_NAWS) {
             } else {
                 /* Send back WONT in all cases */
-            //    queue_write(d, "\377\xFC", 2);
-            //    queue_write(d, q, 1);
+                //    queue_write(d, "\377\xFC", 2);
+                //    queue_write(d, q, 1);
             }
 #else
-	//		queue_write(d, "\377\374", 2);
-        //    queue_write(d, q, 1);
+            //  queue_write(d, "\377\374", 2);
+            //    queue_write(d, q, 1);
 #endif
             d->inIAC = 0;
         } else if (d->inIAC == 4) {
             /* ignore WON'T option */
             d->inIAC = 0;
-        } else if (*q == '\377') {
+        } else if (d->type != CT_HTTP && *q == '\377') {
             /* Got TELNET IAC, store for next byte */
             d->inIAC = 1;
         } else if (p < pend && !d->truncate) {
@@ -3968,9 +3958,9 @@ process_input(struct descriptor_data *d)
             } else if ((*q == 8 || *q == 127)
                        && (d->type == CT_MUCK || d->type == CT_PUEBLO
 #ifdef USE_SSL
-                                              || d->type == CT_SSL
+                           || d->type == CT_SSL
 #endif
-            )) {
+                       )) {
                 /* if BS or DEL, delete last character */
                 if (p > d->raw_input) {
                     p--;
@@ -3988,7 +3978,7 @@ process_input(struct descriptor_data *d)
                     if (!isascii(*p) && d->encoding == 2) { /* UTF-8 */
                         do {
                             p--;
-                        } while ( (*p >= '\x80') && (*p <= '\xbf') );
+                        } while ((*p >= '\x80') && (*p <= '\xbf'));
                     }
                     wcbuflen--;
 #endif
@@ -4009,9 +3999,9 @@ process_input(struct descriptor_data *d)
                     /* TODO: Consider filtering private use and block specifier
                      * (annotations, bidi) codes from user input... */
 
-                    if (wclen != -1 ) {
+                    if (wclen != -1) {
                         /* check for overrun */
-                        if (p + (wclen-1) < pend) {
+                        if (p + (wclen - 1) < pend) {
                             /* copy the multi-byte character to the buffer */
                             memcpy(p, q, wclen);
                             p = p + wclen;
@@ -4043,7 +4033,7 @@ process_input(struct descriptor_data *d)
                         }
                     }
 #endif
-                } else { /* RAW */
+                } else {        /* RAW */
                     /* any text from a raw source goes straight into the game,
                      * but is not considered for UTF-8 candidacy. */
                     *p++ = *q;
@@ -4059,7 +4049,7 @@ process_input(struct descriptor_data *d)
         d->raw_input_wclen = wcbuflen;
 #endif
     } else {
-        delete[] d->raw_input;
+        delete[]d->raw_input;
         d->raw_input = NULL;
         d->raw_input_at = 0;
 #ifdef UTF8_SUPPORT
@@ -4067,12 +4057,13 @@ process_input(struct descriptor_data *d)
 #endif
     }
     if (httpfr && httparr && array_count(httparr)) {
-		struct inst temp;
-		temp.type = PROG_ARRAY;
+        struct inst temp;
+
+        temp.type = PROG_ARRAY;
         temp.data.array = httparr;
-		muf_event_add(httpfr, "HTTP.INPUT_RAW", &temp, 0);
-		CLEAR(&temp);
-	}
+        muf_event_add(httpfr, "HTTP.INPUT_RAW", &temp, 0);
+        CLEAR(&temp);
+    }
     return 1;
 }
 
@@ -4098,8 +4089,7 @@ process_commands(void)
 
                     strcpy(match_args, "MUF");
                     strcpy(match_cmdname, "Queued Event.");
-                    tmpfr = interp(d->descriptor, NOTHING, NOTHING, mufprog,
-                                   (dbref) 0, FOREGROUND, STD_HARDUID, 0);
+                    tmpfr = interp(d->descriptor, NOTHING, NOTHING, mufprog, (dbref) 0, FOREGROUND, STD_HARDUID, 0);
                     if (tmpfr) {
                         interp_loop(NOTHING, mufprog, tmpfr, 1);
                     }
@@ -4110,17 +4100,23 @@ process_commands(void)
             if (d->quota > 0 && (t = d->input.head)) {
                 /* Added in the is_interface_command to seperate out checking
                  * for things like @q, WHO, QUIT, etc. -Akari */
-			
-                if ((d->connected && DBFETCH(d->player)->sp.player.block &&
-                     !is_interface_command(t->start))
+
+                if ((d->connected && DBFETCH(d->player)->sp.player.block && !is_interface_command(t->start))
                     || (!d->connected && d->block)) {
                     char *tmp = t->start;
+
+#ifdef MCP_SUPPORT
+                    /* dequote MCP quoting. */
+                    if (!strncmp(tmp, "#%\"", 3)) {
+                        tmp += 3;
+                    }
+#endif
+
                     /* If read_event_notify returns 0, it didn't handle
                      * the input. If tmp is an empty string, then we'll
                      * remove the empty line here. -Akari
                      */
-                    if (!read_event_notify(d->descriptor, d->player, tmp) &&
-                        !*tmp) {
+                    if (!read_event_notify(d->descriptor, d->player, tmp) && !*tmp) {
                         ++nprocessed;
                         d->input.head = t->nxt;
                         d->input.lines--;
@@ -4131,8 +4127,13 @@ process_commands(void)
                         free_text_block(t);
                     }
                 } else {
-
+#ifdef MCP_SUPPORT
+                    if (strncmp(t->start, "#$#", 3)) {
+                        d->quota--; /* Only count non-MCP messages for quota */
+                    }
+#else
                     d->quota--;
+#endif
                     nprocessed++;
                     if (!do_command(d, t)) {
                         if (valid_obj(tp_quit_prog)
@@ -4146,15 +4147,11 @@ process_commands(void)
                             strcpy(buf, command + sizeof(QUIT_COMMAND) - 1);
                             msg = buf;
                             full_command = strcpy(xbuf, msg);
-                            for (; *full_command && !isspace(*full_command);
-                                 full_command++) ;
+                            for (; *full_command && !isspace(*full_command); full_command++) ;
                             if (*full_command)
                                 full_command++;
                             strcpy(match_args, full_command);
-                            tmpfr = interp(d->descriptor, d->player,
-                                           DBFETCH(d->player)->location,
-                                           tp_quit_prog, (dbref) -5, FOREGROUND,
-                                           STD_REGUID, 0);
+                            tmpfr = interp(d->descriptor, d->player, DBFETCH(d->player)->location, tp_quit_prog, (dbref) -5, FOREGROUND, STD_REGUID, 0);
                             if (tmpfr) {
                                 interp_loop(d->player, tp_quit_prog, tmpfr, 0);
                             }
@@ -4185,6 +4182,15 @@ is_interface_command(const char *cmd)
 {
     const char *tmp = cmd;
 
+#ifdef MCP_SUPPORT
+    if (!strncmp(tmp, "#$\"", 3)) {
+        /* Dequote MCP quoting */
+        tmp += 3;
+    }
+    if (!strncmp(cmd, "#$#", 3)) { /* MCP Message */
+        return 1;
+    }
+#endif
     if (!string_compare(tmp, BREAK_COMMAND))
         return 1;
     if (!string_compare(tmp, QUIT_COMMAND))
@@ -4202,6 +4208,7 @@ do_command(struct descriptor_data *d, struct text_block *t)
     char cmdbuf[BUFFER_LEN];
 
     int len = t->nchars;
+
 #ifdef UTF8_SUPPORT
     int wclen = t->nwchars;
 #else
@@ -4214,7 +4221,14 @@ do_command(struct descriptor_data *d, struct text_block *t)
         return 1;               /* hinoserm */
 #endif /* NEWHTTPD */
 
+#ifdef MCP_SUPPORT
+    if (!mcp_frame_process_input(&d->mcpframe, command, cmdbuf, sizeof(cmdbuf))) {
+        d->quota++;
+        return 1;
+    }
+#else
     strcpy(cmdbuf, command);
+#endif
     command = cmdbuf;
 
     if (tp_use_self_on_command && d->connected)
@@ -4223,7 +4237,8 @@ do_command(struct descriptor_data *d, struct text_block *t)
     if (!string_compare(command, BREAK_COMMAND)) {
         if (!d->connected || !OkObj(d->player)) {
             return 0;           /* don't bother dealing with #-1 READ programs, just QUIT */
-        } else if (Wiz(d->player) || MLevel(d->player) >= tp_min_progbreak_lev) {
+        } else if (Wiz(d->player)
+                   || MLevel(d->player) >= tp_min_progbreak_lev) {
             if (dequeue_prog(d->player, 2)) {
                 anotify(d->player, CINFO "Foreground program aborted.");
                 if ((FLAGS(d->player) & INTERACTIVE))
@@ -4262,13 +4277,11 @@ do_command(struct descriptor_data *d, struct text_block *t)
                     strcpy(buf, command + sizeof(WHO_COMMAND) - 1);
                     msg = buf;
                     full_command = strcpy(xbuf, msg);
-                    for (; *full_command && !isspace(*full_command);
-                         full_command++) ;
+                    for (; *full_command && !isspace(*full_command); full_command++) ;
                     if (*full_command)
                         full_command++;
                     strcpy(match_args, full_command);
-                    tmpfr = interp(d->descriptor, -1, -1, tp_login_who_prog,
-                                   (dbref) -5, FOREGROUND, STD_REGUID, 0);
+                    tmpfr = interp(d->descriptor, -1, -1, tp_login_who_prog, (dbref) -5, FOREGROUND, STD_REGUID, 0);
                     if (tmpfr) {
                         interp_loop(-1, tp_login_who_prog, tmpfr, 0);
                     }
@@ -4303,8 +4316,7 @@ interact_warn(dbref player)
         sprintf(buf, CINFO "***  %s  ***",
                 (FLAGS(player) & READMODE) ?
                 "You are currently using a program.  Use \"@Q\" to return to a more reasonable state of control."
-                : (DBFETCH(player)->sp.player.
-                   insert_mode ?
+                : (DBFETCH(player)->sp.player.insert_mode ?
                    "You are currently inserting MUF program text.  Use \".\" to return to the editor, then \"quit\" if you wish to return to your regularly scheduled Muck universe."
                    : "You are currently using the MUF program editor."));
         anotify(player, buf);
@@ -4336,16 +4348,14 @@ check_connect(struct descriptor_data *d, const char *msg)
        if the string would get parsed by the connect handler. Note that the
        password will still get betrayed if the user typos the first two letters
        of "connect" or "ch", but this is still a vast improvement.
-           
+
        If you want to debug strings passed to the connection handler, define
        DEBUGLOGINS somewhere. This should not be done in "live" environments,
        as it makes hashing your player passwords pointless. -brevantes */
 
 #ifndef DEBUGLOGINS
-    if (tp_log_connects &&
-        !(
-            ((string_prefix("connect", command) && !string_prefix("c", command))
-            || !string_compare(command, "ch"))
+    if (tp_log_connects && !(((string_prefix("connect", command) && !string_prefix("c", command))
+                              || !string_compare(command, "ch"))
         ))
 #endif
         log2filetime(CONNECT_LOG, "%2d: %s\r\n", d->descriptor, msg);
@@ -4370,20 +4380,15 @@ check_connect(struct descriptor_data *d, const char *msg)
                 now = current_systime;
                 result = get_property_value(player, "@/Failed/Count") + 1;
                 SETMESG(player, "@/Failed/Host", d->hu->h->name);
-                add_property(player, "@/Failed/Time", NULL, (int)now);
+                add_property(player, "@/Failed/Time", NULL, (int) now);
                 add_property(player, "@/Failed/Count", NULL, result);
             }
             if (d->fails >= 3)
                 d->booted = 1;
             if (tp_log_connects)
                 log2filetime(CONNECT_LOG,
-                             "FAIL: %2d %s pw '%s' %s(%s) %s P#%d\n",
-                             d->descriptor, user, "<hidden>", d->hu->h->name,
-                             d->hu->u->user, host_as_hex(d->hu->h->a),
-                             d->cport);
-            show_status("FAIL: %2d %s pw '%s' %s(%s) %s P#%d\n", d->descriptor,
-                        user, "<hidden>", d->hu->h->name, d->hu->u->user,
-                        host_as_hex(d->hu->h->a), d->cport);
+                             "FAIL: %2d %s pw '%s' %s(%s) %s P#%d\n", d->descriptor, user, "<hidden>", d->hu->h->name, d->hu->u->user, host_as_hex(d->hu->h->a), d->cport);
+            show_status("FAIL: %2d %s pw '%s' %s(%s) %s P#%d\n", d->descriptor, user, "<hidden>", d->hu->h->name, d->hu->u->user, host_as_hex(d->hu->h->a), d->cport);
 
         } else if ((why = reg_user_is_suspended(player))) {
             queue_ansi(d, "\r\n");
@@ -4395,13 +4400,8 @@ check_connect(struct descriptor_data *d, const char *msg)
             queue_ansi(d, " for assistance if needed.\r\n");
             if (tp_log_connects)
                 log2filetime(CONNECT_LOG, "*LOK: %2d %s %s(%s) %s %s P#%d\n",
-                             d->descriptor, unparse_object(player, player),
-                             d->hu->h->name, d->hu->u->user,
-                             host_as_hex(d->hu->h->a), why, d->cport);
-            show_status("*LOK: %2d %s %s(%s) %s %s P#%d\n",
-                        d->descriptor, unparse_object(player, player),
-                        d->hu->h->name, d->hu->u->user,
-                        host_as_hex(d->hu->h->a), why, d->cport);
+                             d->descriptor, unparse_object(player, player), d->hu->h->name, d->hu->u->user, host_as_hex(d->hu->h->a), why, d->cport);
+            show_status("*LOK: %2d %s %s(%s) %s %s P#%d\n", d->descriptor, unparse_object(player, player), d->hu->h->name, d->hu->u->user, host_as_hex(d->hu->h->a), why, d->cport);
             d->booted = 1;
         } else if (reg_user_is_barred(d->hu->h->a, player) == TRUE) {
             char buf[1024];
@@ -4410,53 +4410,34 @@ check_connect(struct descriptor_data *d, const char *msg)
             queue_ansi(d, buf);
             if (tp_log_connects)
                 log2filetime(CONNECT_LOG, "*BAN: %2d %s %s(%s) %s P#%d\n",
-                             d->descriptor, unparse_object(player, player),
-                             d->hu->h->name, d->hu->u->user,
-                             host_as_hex(d->hu->h->a), d->cport);
-            show_status("*BAN: %2d %s %s(%s) %s P#%d\n",
-                        d->descriptor, unparse_object(player, player),
-                        d->hu->h->name, d->hu->u->user,
-                        host_as_hex(d->hu->h->a), d->cport);
+                             d->descriptor, unparse_object(player, player), d->hu->h->name, d->hu->u->user, host_as_hex(d->hu->h->a), d->cport);
+            show_status("*BAN: %2d %s %s(%s) %s P#%d\n", d->descriptor, unparse_object(player, player), d->hu->h->name, d->hu->u->user, host_as_hex(d->hu->h->a), d->cport);
             d->booted = 1;
-        } else if ((wizonly_mode ||
-                    (tp_playermax && con_players_curr >= tp_playermax_limit)) &&
-                   !TMage(player)
+        } else if ((wizonly_mode || (tp_playermax && con_players_curr >= tp_playermax_limit))
+                   && !TMage(player)
             ) {
             if (delayed_shutdown) {
-                queue_ansi(d,
-                           "Sorry, but the game currently shutting down. Try again later.");
+                queue_ansi(d, "Sorry, but the game currently shutting down. Try again later.");
             } else if (wizonly_mode) {
-                queue_ansi(d,
-                           "Sorry, but the game is in maintenance mode currently, and only wizards are allowed to connect.  Try again later.");
+                queue_ansi(d, "Sorry, but the game is in maintenance mode currently, and only wizards are allowed to connect.  Try again later.");
             } else {
                 queue_ansi(d, BOOT_MESG);
             }
             queue_ansi(d, "\r\n");
             d->booted = 1;
         } else {
-            if (!string_compare(command, "ch") &&
-                !(Arch(player) || POWERS(player) & POW_HIDE)) {
+            if (!string_compare(command, "ch") && !(Arch(player) || POWERS(player) & POW_HIDE)) {
                 queue_ansi(d, "Only wizards can connect hidden.\r\n");
                 d->fails++;
                 if (tp_log_connects)
                     log2filetime(CONNECT_LOG,
-                                 "FAIL[CH]: %2d %s pw '%s' %s(%s) %s P#%d\n",
-                                 d->descriptor, user, "<hidden>",
-                                 d->hu->h->name, d->hu->u->user,
-                                 host_as_hex(d->hu->h->a), d->cport);
-                show_status("FAIL[CH]: %2d %s pw '%s' %s(%s) %s P#%d\n",
-                            d->descriptor, user, "<hidden>", d->hu->h->name,
-                            d->hu->u->user, host_as_hex(d->hu->h->a), d->cport);
+                                 "FAIL[CH]: %2d %s pw '%s' %s(%s) %s P#%d\n", d->descriptor, user, "<hidden>", d->hu->h->name, d->hu->u->user, host_as_hex(d->hu->h->a), d->cport);
+                show_status("FAIL[CH]: %2d %s pw '%s' %s(%s) %s P#%d\n", d->descriptor, user, "<hidden>", d->hu->h->name, d->hu->u->user, host_as_hex(d->hu->h->a), d->cport);
             } else {
                 if (tp_log_connects)
                     log2filetime(CONNECT_LOG, "CONN: %2d %s %s(%s) %s P#%d\n",
-                                 d->descriptor, unparse_object(player, player),
-                                 d->hu->h->name, d->hu->u->user,
-                                 host_as_hex(d->hu->h->a), d->cport);
-                show_status("CONN: %2d %s %s(%s) %s P#%d\n",
-                            d->descriptor, unparse_object(player, player),
-                            d->hu->h->name, d->hu->u->user,
-                            host_as_hex(d->hu->h->a), d->cport);
+                                 d->descriptor, unparse_object(player, player), d->hu->h->name, d->hu->u->user, host_as_hex(d->hu->h->a), d->cport);
+                show_status("CONN: %2d %s %s(%s) %s P#%d\n", d->descriptor, unparse_object(player, player), d->hu->h->name, d->hu->u->user, host_as_hex(d->hu->h->a), d->cport);
                 d->connected = 1;
                 d->did_connect = 1;
                 d->connected_at = current_systime;
@@ -4495,26 +4476,18 @@ check_connect(struct descriptor_data *d, const char *msg)
     } else if (prop_command(d->descriptor, (dbref) NOTHING, command, msgargs, "@logincommand", 1)) { /* Check for replaced login commands */
     } else if (string_prefix("help", command)) { /* Connection Help */
         if (tp_log_connects)
-            log2filetime(CONNECT_LOG, "HELP: %2d %s(%s) %s %d cmds P#%d\n",
-                         d->descriptor, d->hu->h->name, d->hu->u->user,
-                         host_as_hex(d->hu->h->a), d->commands, d->cport);
-        show_status("HELP: %2d %s(%s) %s %d cmds P#%d\n",
-                    d->descriptor, d->hu->h->name, d->hu->u->user,
-                    host_as_hex(d->hu->h->a), d->commands, d->cport);
+            log2filetime(CONNECT_LOG, "HELP: %2d %s(%s) %s %d cmds P#%d\n", d->descriptor, d->hu->h->name, d->hu->u->user, host_as_hex(d->hu->h->a), d->commands, d->cport);
+        show_status("HELP: %2d %s(%s) %s %d cmds P#%d\n", d->descriptor, d->hu->h->name, d->hu->u->user, host_as_hex(d->hu->h->a), d->commands, d->cport);
         help_user(d);
     } else {
         if (tp_log_connects)
             log2filetime(CONNECT_LOG,
-                         "TYPO: %2d %s(%s) %s '%s' %d cmds P#%d\n",
-                         d->descriptor, d->hu->h->name, d->hu->u->user,
-                         host_as_hex(d->hu->h->a), command, d->commands,
-                         d->cport);
-        show_status("TYPO: %2d %s(%s) %s '%s' %d cmds P#%d\n",
-                    d->descriptor, d->hu->h->name, d->hu->u->user,
-                    host_as_hex(d->hu->h->a), command, d->commands, d->cport);
+                         "TYPO: %2d %s(%s) %s '%s' %d cmds P#%d\n", d->descriptor, d->hu->h->name, d->hu->u->user, host_as_hex(d->hu->h->a), command, d->commands, d->cport);
+        show_status("TYPO: %2d %s(%s) %s '%s' %d cmds P#%d\n", d->descriptor, d->hu->h->name, d->hu->u->user, host_as_hex(d->hu->h->a), command, d->commands, d->cport);
         welcome_user(d);
     }
 }
+
 void
 parse_connect(const char *msg, char *command, char *user, char *pass)
 {
@@ -4534,35 +4507,33 @@ parse_connect(const char *msg, char *command, char *user, char *pass)
     cnt = 0;
     while (*msg && isascii(*msg) && isspace(*msg)) /* space */
         msg++;
-    if ( tp_spaces_in_playernames ) {
+    if (tp_spaces_in_playernames) {
         p = user;
         cnt = 0;
         /* Determine if this is a quoted name */
-        if ( *msg && ++cnt < 80 && ( *msg == '\'' || *msg == '\"' ) ){
+        if (*msg && ++cnt < 80 && (*msg == '\'' || *msg == '\"')) {
             bInQuotes = 1;
-            msg++; /* Move past the quote */
-        }  
-        if ( bInQuotes ){
-            while (*msg && isascii(*msg) && ++cnt < BUFFER_LEN && 
-                   !(*msg == '\'' || *msg == '\"' )) 
-                *p++ = *msg++;
-            msg++; /* Move past the ending quote */
-            *p = '\0';  
+            msg++;              /* Move past the quote */
         }
-        else {
+        if (bInQuotes) {
+            while (*msg && isascii(*msg) && ++cnt < BUFFER_LEN && !(*msg == '\'' || *msg == '\"'))
+                *p++ = *msg++;
+            msg++;              /* Move past the ending quote */
+            *p = '\0';
+        } else {
             /* Unquoted name, just treat as normal */
             /* Unquoted name, find the last space in the input
                and assume everything after that is password. */
             cnt = 0;
             start = msg;
-            while (*msg && isascii(*msg) && cnt < BUFFER_LEN){
-                if (isspace(*msg)){
+            while (*msg && isascii(*msg) && cnt < BUFFER_LEN) {
+                if (isspace(*msg)) {
                     lastSpace = cnt;
                 }
                 cnt++;
                 msg++;
             }
-            if (lastSpace == -1){
+            if (lastSpace == -1) {
                 /* No space found, assume no password */
                 lastSpace = cnt;
             }
@@ -4571,21 +4542,21 @@ parse_connect(const char *msg, char *command, char *user, char *pass)
                space in the input. Everything in msg before it
                is name, everything after it is password */
             msg = start;
-            cnt = 0; 
+            cnt = 0;
             /* copying over name */
             while (*msg && isascii(*msg) && cnt < lastSpace) {
-                *p = *msg;    
+                *p = *msg;
                 ++msg;
                 ++p;
                 ++cnt;
             }
             *p = '\0';
         }
-    }
-    else {
+    } else {
         p = user;
         cnt = 0;
-        while (*msg && isascii(*msg) && !isspace(*msg) && (++cnt < BUFFER_LEN))
+        while (*msg && isascii(*msg) && !isspace(*msg)
+               && (++cnt < BUFFER_LEN))
             *p++ = *msg++;
         *p = '\0';
     }
@@ -4660,11 +4631,11 @@ close_sockets(const char *msg)
         closesocket(d->fd);
         freeqs(d);                       /****/
         *d->prev = d->next;              /****/
-        if (d->next)                                                                                                                                                                     /****/
+        if (d->next)                                                                                                                                                                                                     /****/
             d->next->prev = d->prev;     /****/
                                    /****/
 #ifdef MCCP_ENABLED
-	    mccp_end(d);
+        mccp_end(d);
 #endif
 #ifdef NEWHTTPD
         if (d->http)
@@ -4677,6 +4648,7 @@ close_sockets(const char *msg)
         host_delete(d->hu);
 
         delete d;                         /****/
+
         ndescriptors--;                  /****/
     }
     for (i = 0; i < numsocks; i++) {
@@ -4694,8 +4666,7 @@ get_descr(int descr, int player)
     struct descriptor_data *next = descriptor_list;
 
     while (next) {
-        if (((player > 0) && (next->player == player)) ||
-            ((descr > 0) && (next->descriptor == descr)))
+        if (((player > 0) && (next->player == player)) || ((descr > 0) && (next->descriptor == descr)))
             return next;
         next = next->next;
     }
@@ -4800,34 +4771,28 @@ do_dinfo(dbref player, const char *arg)
     }
 
     anotify_fmt(player, "%s" SYSAQUA " descr " SYSYELLOW "%d" SYSBLUE " (%s)",
-                d->connected ? ansi_unparse_object(player, d->player) : SYSGREEN
-                "[Connecting]", d->descriptor, ctype);
+                d->connected ? ansi_unparse_object(player, d->player) : SYSGREEN "[Connecting]", d->descriptor, ctype);
 
     if (d->flags)
         /* need to print out the flags */
         anotify_nolisten(player, descr_flag_description(d->descriptor), 1);
 
-	anotify_fmt(player, SYSAQUA "Termtype: " SYSCYAN "%s    Encoding: %s", 
-	    (d->telopt.termtype ? d->telopt.termtype : "<unknown>"),
-	    (d->encoding ? (d->encoding==1 ? "ASCII-7" : "UTF-8") : "RAW" ));
+    anotify_fmt(player, SYSAQUA "Termtype: " SYSCYAN "%s    Encoding: %s",
+                (d->telopt.termtype ? d->telopt.termtype : "<unknown>"), (d->encoding ? (d->encoding == 1 ? "ASCII-7" : "UTF-8") : "RAW"));
 
     if (Arch(player))
-        anotify_fmt(player, SYSAQUA "Host: " SYSCYAN "%s" SYSBLUE "@"
-                    SYSCYAN "%s", d->hu->u->user, d->hu->h->name);
+        anotify_fmt(player, SYSAQUA "Host: " SYSCYAN "%s" SYSBLUE "@" SYSCYAN "%s", d->hu->u->user, d->hu->h->name);
     else
         anotify_fmt(player, SYSAQUA "Host: " SYSCYAN "%s", d->hu->h->name);
 
-        anotify_fmt(player, SYSAQUA "IP: " SYSCYAN "%s" SYSYELLOW "(%d) " SYSNAVY
-	            "%X", hostToIPex(d->hu->h), d->hu->u->uport, d->hu->h->a);
+    anotify_fmt(player, SYSAQUA "IP: " SYSCYAN "%s" SYSYELLOW "(%d) " SYSNAVY "%X", hostToIPex(d->hu->h), d->hu->u->uport, d->hu->h->a);
 
-    anotify_fmt(player, SYSVIOLET "Online: " SYSPURPLE "%s  " SYSBROWN "Idle: "
-                SYSYELLOW "%s  " SYSCRIMSON "Commands: " SYSRED "%d",
-                time_format_1(now - d->connected_at),
-                time_format_2(now - d->last_time), d->commands);
+    anotify_fmt(player,
+                SYSVIOLET "Online: " SYSPURPLE "%s  " SYSBROWN "Idle: "
+                SYSYELLOW "%s  " SYSCRIMSON "Commands: " SYSRED "%d", time_format_1(now - d->connected_at), time_format_2(now - d->last_time), d->commands);
 
     if (d->connected)
-        anotify_fmt(player, SYSAQUA "Location: %s",
-                    ansi_unparse_object(player, DBFETCH(d->player)->location));
+        anotify_fmt(player, SYSAQUA "Location: %s", ansi_unparse_object(player, DBFETCH(d->player)->location));
 }
 
 void
@@ -4872,8 +4837,7 @@ do_dwall(dbref player, const char *name, const char *msg)
             notify(player, "dwall 14=@boo    -- spoof 'boo' to ds 14");
             notify(player, "dwall 14=!boo    -- same as @ with no 'mark'");
             notify(player, "dwall 14=#       -- this help list");
-            notify(player,
-                   "Use WHO or WHO! to find ds numbers for players online.");
+            notify(player, "Use WHO or WHO! to find ds numbers for players online.");
             return;
         case '!':
             sprintf(buf, "%s\r\n", msg + 1);
@@ -4960,20 +4924,20 @@ do_armageddon(dbref player, const char *msg)
 #endif
 
 #ifdef MALLOC_PROFILING
-        free_old_macros();
-        purge_all_free_frames();
-        purge_timenode_free_pool();
-        purge_for_pool();
-        purge_for_pool();       /* 2nd time is needed to completely purge */
-        purge_try_pool();       /* 3rd time is needed to... oh... wait... */
-        purge_try_pool();       /* 2nd time is needed to completely purge */
-        purge_mfns();
-		db_free();
-        cleanup_game();
-        tune_freeparms();
-		clear_color_hash();
+    free_old_macros();
+    purge_all_free_frames();
+    purge_timenode_free_pool();
+    purge_for_pool();
+    purge_for_pool();           /* 2nd time is needed to completely purge */
+    purge_try_pool();           /* 3rd time is needed to... oh... wait... */
+    purge_try_pool();           /* 2nd time is needed to completely purge */
+    purge_mfns();
+    db_free();
+    cleanup_game();
+    tune_freeparms();
+    clear_color_hash();
 #ifdef COMPRESS
-        free_compress_dictionary();
+    free_compress_dictionary();
 #endif /* COMPRESS */
 #endif /* MALLOC_PROFILING */
 
@@ -5050,32 +5014,22 @@ dump_users(struct descriptor_data *d, char *user)
             sprintf(dobuf, "%-43s", "Doing...");
         }
     }
-    sprintf(plyrbuf, "%-*s", (int)PLAYER_NAME_LIMIT + 6, "Player Name");
+    sprintf(plyrbuf, "%-*s", (int) PLAYER_NAME_LIMIT + 6, "Player Name");
     switch (wizwho) {
         case 0:{
             if (tp_who_doing) {
-                sprintf(buf,
-                        "%s%s%sOn For %sIdle  %s%-.43s\r\n",
-                        SYSGREEN, plyrbuf, SYSPURPLE, SYSYELLOW, SYSCYAN,
-                        dobuf);
+                sprintf(buf, "%s%s%sOn For %sIdle  %s%-.43s\r\n", SYSGREEN, plyrbuf, SYSPURPLE, SYSYELLOW, SYSCYAN, dobuf);
             } else {
-                sprintf(buf, "%s%s%sOn For %sIdle\r\n",
-                        SYSGREEN, plyrbuf, SYSPURPLE, SYSYELLOW);
+                sprintf(buf, "%s%s%sOn For %sIdle\r\n", SYSGREEN, plyrbuf, SYSPURPLE, SYSYELLOW);
             }
             break;
         }
         case 1:{
-            sprintf(buf,
-                    "%sDS  %s%s%sPort    %sOn For %sIdle %sHost\r\n",
-                    SYSRED, SYSGREEN, plyrbuf, SYSCYAN, SYSPURPLE,
-                    SYSYELLOW, SYSBLUE);
+            sprintf(buf, "%sDS  %s%s%sPort    %sOn For %sIdle %sHost\r\n", SYSRED, SYSGREEN, plyrbuf, SYSCYAN, SYSPURPLE, SYSYELLOW, SYSBLUE);
             break;
         }
         case 2:{
-            sprintf(buf,
-                    "%sDS  %s%s%sOutput[k]  %sInput[k]  %sCommands %sType\r\n",
-                    SYSRED, SYSGREEN, plyrbuf, SYSWHITE,
-                    SYSYELLOW, SYSCYAN, SYSBLUE);
+            sprintf(buf, "%sDS  %s%s%sOutput[k]  %sInput[k]  %sCommands %sType\r\n", SYSRED, SYSGREEN, plyrbuf, SYSWHITE, SYSYELLOW, SYSCYAN, SYSBLUE);
             break;
         }
     }
@@ -5134,22 +5088,18 @@ dump_users(struct descriptor_data *d, char *user)
             }
         }
         if ((!wizwho) && !((dlist->connected && OkObj(dlist->player)) ?
-                           !((FLAGS(dlist->player) & DARK) ||
-                             (FLAG2(dlist->player) & F2HIDDEN)) ||
-                           (FLAG2(dlist->player) & F2LIGHT) : 0)) {
+                           !((FLAGS(dlist->player) & DARK) || (FLAG2(dlist->player) & F2HIDDEN)) || (FLAG2(dlist->player) & F2LIGHT) : 0)) {
             sprintf(buf, "[%s]", plyrbuf);
             strcpy(plyrbuf, buf);
         }
-        if ((wizwho ? 1
-             : ((dlist->connected
-                 && OkObj(dlist->
-                          player)) ? (tp_who_hides_dark ?
-                                      !((FLAGS(dlist->player) & DARK)
-                                        || (FLAG2(dlist->player) & F2HIDDEN))
-                                      || (OkObj(d->player) && Wiz(d->player))
-                                      || (d->player == dlist->player)
-                                      || (FLAG2(dlist->player) & F2LIGHT) : 1) :
-                0)) && equalstr(user, plyrbuf)) {
+        if ((wizwho ? 1 : ((dlist->connected && OkObj(dlist->player)) ? (tp_who_hides_dark ? !((FLAGS(dlist->player) & DARK)
+                                                                                               || (FLAG2(dlist->player) & F2HIDDEN))
+                                                                         || (OkObj(d->player)
+                                                                             && Wiz(d->player))
+                                                                         || (d->player == dlist->player)
+                                                                         || (FLAG2(dlist->player) & F2LIGHT)
+                                                                         : 1) : 0))
+            && equalstr(user, plyrbuf)) {
             if ((OkObj(dlist->player)
                  && dlist->connected) ? (FLAG2(dlist->player) & F2IDLE) : 0) {
                 idleplyrs++;
@@ -5162,77 +5112,50 @@ dump_users(struct descriptor_data *d, char *user)
                 }
             }
             strcpy(buf, "");
-            sprintf(tbuf2, "%-*s", (int)PLAYER_NAME_LIMIT + (wizwho ? 5 : 1), plyrbuf);
+            sprintf(tbuf2, "%-*s", (int) PLAYER_NAME_LIMIT + (wizwho ? 5 : 1), plyrbuf);
             strcpy(plyrbuf, tbuf2);
             switch (wizwho) {
                 case 0:{
                     if (tp_who_doing) {
                         sprintf(buf, "%s%s %s%10s%s%s%4s%s %s%-.45s\r\n",
-                                SYSGREEN, plyrbuf, SYSPURPLE,
-                                time_format_1(current_systime -
-                                              dlist->connected_at),
-                                (1
-                                 ? ((DR_RAW_FLAGS(dlist, DF_IDLE)) ? " " : " ")
-                                 : " "), SYSYELLOW,
-                                time_format_2(current_systime -
-                                              dlist->last_time),
-                                ((dlist->connected
-                                  && OkObj(dlist->
-                                           player)) ? ((FLAGS(dlist->
-                                                              player) &
-                                                        INTERACTIVE)
-                                                       ? "*" : " ") : " "),
-                                SYSCYAN,
-                                GETDOING(dlist->player) ? GETDOING(dlist->
-                                                                   player) :
-                                "");
+                                SYSGREEN, plyrbuf, SYSPURPLE, time_format_1(current_systime - dlist->connected_at), (1 ? ((DR_RAW_FLAGS(dlist, DF_IDLE)) ? " " : " ")
+                                                                                                                     : " "), SYSYELLOW,
+                                time_format_2(current_systime - dlist->last_time), ((dlist->connected && OkObj(dlist->player))
+                                                                                    ? ((FLAGS(dlist->player) & INTERACTIVE)
+                                                                                       ? "*" : " ") : " "), SYSCYAN, GETDOING(dlist->player) ? GETDOING(dlist->player) : "");
                     } else {
                         sprintf(buf, "%s%s %s%10s%s%s%4s%s\r\n",
-                                SYSGREEN, plyrbuf, SYSPURPLE,
-                                time_format_1(current_systime -
-                                              dlist->connected_at),
-                                (1
-                                 ? ((DR_RAW_FLAGS(dlist, DF_IDLE)) ? "I" : " ")
-                                 : " "), SYSYELLOW,
-                                time_format_2(current_systime -
-                                              dlist->last_time),
-                                ((dlist->connected
-                                  && OkObj(dlist->
-                                           player)) ? ((FLAGS(dlist->
-                                                              player) &
-                                                        INTERACTIVE)
-                                                       ? "*" : " ") : " "));
+                                SYSGREEN, plyrbuf, SYSPURPLE, time_format_1(current_systime - dlist->connected_at), (1 ? ((DR_RAW_FLAGS(dlist, DF_IDLE)) ? "I" : " ")
+                                                                                                                     : " "), SYSYELLOW,
+                                time_format_2(current_systime - dlist->last_time), ((dlist->connected && OkObj(dlist->player))
+                                                                                    ? ((FLAGS(dlist->player) & INTERACTIVE)
+                                                                                       ? "*" : " ") : " "));
                     }
                     break;
                 }
                 case 1:{
-                    sprintf(buf, "%s%-3d %s%s%s%5d %s%9s%s%s%4s%s%s%s%s%s\r\n",
+                    sprintf(buf,
+                            "%s%-3d %s%s%s%5d %s%9s%s%s%4s%s%s%s%s%s\r\n",
                             SYSRED, dlist->descriptor, SYSGREEN, plyrbuf,
-                            SYSCYAN, dlist->cport, SYSPURPLE,
-                            time_format_1(current_systime -
-                                          dlist->connected_at),
-                            (1
-                             ? ((DR_RAW_FLAGS(dlist, DF_TRUEIDLE)) ? "I" : " ")
-                             : " "), SYSYELLOW,
-                            time_format_2(current_systime - dlist->last_time),
-                            ((dlist->connected
-                              && OkObj(dlist->
-                                       player)) ? ((FLAGS(dlist->
-                                                          player) & INTERACTIVE)
-                                                   ? "*" : " ") : " "), SYSBLUE,
-                            (d->connected && OkObj(d->player)
-                             && Arch(d->player)) ? dlist->hu->u->user : "",
-                            (d->connected && OkObj(d->player)
-                             && Arch(d->player)) ? "@" : "",
-                            dlist->hu->h->name);
+                            SYSCYAN, dlist->cport, SYSPURPLE, time_format_1(current_systime - dlist->connected_at), (1 ? ((DR_RAW_FLAGS(dlist, DF_TRUEIDLE)) ? "I" : " ")
+                                                                                                                     : " "), SYSYELLOW,
+                            time_format_2(current_systime - dlist->last_time), ((dlist->connected && OkObj(dlist->player))
+                                                                                ? ((FLAGS(dlist->player)
+                                                                                    & INTERACTIVE)
+                                                                                   ? "*" : " ") : " "), SYSBLUE, (d->connected && OkObj(d->player)
+                                                                                                                  && Arch(d->player)) ? dlist->hu->u->user : "", (d->connected
+                                                                                                                                                                  &&
+                                                                                                                                                                  OkObj(d->player)
+                                                                                                                                                                  &&
+                                                                                                                                                                  Arch(d->player)) ?
+                            "@" : "", dlist->hu->h->name);
                     break;
                 }
                 case 2:{
-                    sprintf(buf, "%s%-3d %s%s %s[%7d] %s[%7d] %s[%7d] %s%s\r\n",
+                    sprintf(buf,
+                            "%s%-3d %s%s %s[%7d] %s[%7d] %s[%7d] %s%s\r\n",
                             SYSRED, dlist->descriptor, SYSGREEN, plyrbuf,
-                            SYSWHITE, dlist->output_len / 1024, SYSYELLOW,
-                            dlist->input_len / 1024, SYSCYAN, dlist->commands,
-                            SYSBLUE, typbuf);
+                            SYSWHITE, dlist->output_len / 1024, SYSYELLOW, dlist->input_len / 1024, SYSCYAN, dlist->commands, SYSBLUE, typbuf);
                     break;
                 }
             }
@@ -5245,8 +5168,7 @@ dump_users(struct descriptor_data *d, char *user)
 
     sprintf(buf,
             "%s%d player%s connected.  %s(%d Active, %d Idle, Max was %d)\r\n",
-            SYSBLUE, players, ((players == 1) ? " is" : "s are"), SYSYELLOW,
-            (players - idleplyrs), idleplyrs, player_max);
+            SYSBLUE, players, ((players == 1) ? " is" : "s are"), SYSYELLOW, (players - idleplyrs), idleplyrs, player_max);
     queue_unhtml(d, buf);
     return;
 }
@@ -5276,8 +5198,7 @@ time_format_1(time_t dt)
     delta = gmtime(&dt);
 
     if (delta->tm_yday > 0)
-        sprintf(buf, "%dd %02d:%02d",
-                delta->tm_yday, delta->tm_hour, delta->tm_min);
+        sprintf(buf, "%dd %02d:%02d", delta->tm_yday, delta->tm_hour, delta->tm_min);
     else
         sprintf(buf, "%02d:%02d", delta->tm_hour, delta->tm_min);
     return buf;
@@ -5316,7 +5237,8 @@ announce_puppets(dbref player, const char *msg, const char *prop)
                 where = getloc(what);
                 if ((!Dark(where)) && (!Dark(player)) && (!Dark(what))) {
                     msg2 = msg;
-                    if ((ptr = (char *) get_property_class(what, prop)) && *ptr)
+                    if ((ptr = (char *) get_property_class(what, prop))
+                        && *ptr)
                         msg2 = ptr;
                     sprintf(buf, CMOVE "%.512s %.3000s", PNAME(what), msg2);
                     anotify_except(DBFETCH(where)->contents, what, buf, what);
@@ -5352,19 +5274,13 @@ announce_connect(int descr, dbref player)
      */
 
     /* queue up all _connect programs referred to by properties */
-    envpropqueue(descr, player, getloc(player), NOTHING, player, NOTHING,
-                 "@connect", "Connect", 1, 1);
-    envpropqueue(descr, player, getloc(player), NOTHING, player, NOTHING,
-                 "@oconnect", "Oconnect", 1, 0);
-    envpropqueue(descr, player, getloc(player), NOTHING, player, NOTHING,
-                 "~connect", "Connect", 1, 1);
-    envpropqueue(descr, player, getloc(player), NOTHING, player, NOTHING,
-                 "~oconnect", "Oconnect", 1, 0);
+    envpropqueue(descr, player, getloc(player), NOTHING, player, NOTHING, "@connect", "Connect", 1, 1);
+    envpropqueue(descr, player, getloc(player), NOTHING, player, NOTHING, "@oconnect", "Oconnect", 1, 0);
+    envpropqueue(descr, player, getloc(player), NOTHING, player, NOTHING, "~connect", "Connect", 1, 1);
+    envpropqueue(descr, player, getloc(player), NOTHING, player, NOTHING, "~oconnect", "Oconnect", 1, 0);
     if (tp_allow_old_trigs) {
-        envpropqueue(descr, player, getloc(player), NOTHING, player, NOTHING,
-                     "_connect", "Connect", 1, 1);
-        envpropqueue(descr, player, getloc(player), NOTHING, player, NOTHING,
-                     "_oconnect", "Oconnect", 1, 0);
+        envpropqueue(descr, player, getloc(player), NOTHING, player, NOTHING, "_connect", "Connect", 1, 1);
+        envpropqueue(descr, player, getloc(player), NOTHING, player, NOTHING, "_oconnect", "Oconnect", 1, 0);
     }
 
     exit = NOTHING;
@@ -5380,8 +5296,7 @@ announce_connect(int descr, dbref player)
     if (exit != NOTHING)
         do_move(descr, player, "connect", 1);
 
-    if (exit == NOTHING
-        || !((Typeof(exit) == TYPE_EXIT) && (FLAGS(exit) & STICKY))) {
+    if (exit == NOTHING || !((Typeof(exit) == TYPE_EXIT) && (FLAGS(exit) & STICKY))) {
         if (can_move(descr, player, "look", 1)) {
             do_move(descr, player, "look", 1);
         } else {
@@ -5417,8 +5332,7 @@ announce_disconnect(struct descriptor_data *d)
     dbref loc;
     char buf[BUFFER_LEN];
 
-    if (!d->connected || !OkObj(player) || (Typeof(player) != TYPE_PLAYER) ||
-        ((loc = getloc(player)) == NOTHING)
+    if (!d->connected || !OkObj(player) || (Typeof(player) != TYPE_PLAYER) || ((loc = getloc(player)) == NOTHING)
         )
         return;
 
@@ -5431,8 +5345,7 @@ announce_disconnect(struct descriptor_data *d)
             if (online(player) == 1)
                 sprintf(buf, CMOVE "%s has disconnected.", PNAME(player));
             else
-                sprintf(buf, CMOVE "%s has dropped a connection.",
-                        PNAME(player));
+                sprintf(buf, CMOVE "%s has dropped a connection.", PNAME(player));
             anotify_except(DBFETCH(loc)->contents, player, buf, player);
         }
     }
@@ -5452,26 +5365,21 @@ announce_disconnect(struct descriptor_data *d)
 
     /* trigger local disconnect action */
     /* queue up all _connect programs referred to by properties */
-    envpropqueue(d->descriptor, player, getloc(player), NOTHING,
-                 player, NOTHING, "@disconnect", "Disconnect", 1, 1);
-    envpropqueue(d->descriptor, player, getloc(player), NOTHING,
-                 player, NOTHING, "@odisconnect", "Odisconnect", 1, 0);
-    envpropqueue(d->descriptor, player, getloc(player), NOTHING,
-                 player, NOTHING, "~disconnect", "Disconnect", 1, 1);
-    envpropqueue(d->descriptor, player, getloc(player), NOTHING,
-                 player, NOTHING, "~odisconnect", "Odisconnect", 1, 0);
+    envpropqueue(d->descriptor, player, getloc(player), NOTHING, player, NOTHING, "@disconnect", "Disconnect", 1, 1);
+    envpropqueue(d->descriptor, player, getloc(player), NOTHING, player, NOTHING, "@odisconnect", "Odisconnect", 1, 0);
+    envpropqueue(d->descriptor, player, getloc(player), NOTHING, player, NOTHING, "~disconnect", "Disconnect", 1, 1);
+    envpropqueue(d->descriptor, player, getloc(player), NOTHING, player, NOTHING, "~odisconnect", "Odisconnect", 1, 0);
     if (tp_allow_old_trigs) {
-        envpropqueue(d->descriptor, player, getloc(player),
-                     NOTHING, player, NOTHING, "_disconnect",
-                     "Disconnect", 1, 1);
-        envpropqueue(d->descriptor, player, getloc(player),
-                     NOTHING, player, NOTHING,
-                     "_odisconnect", "Odisconnect", 1, 0);
+        envpropqueue(d->descriptor, player, getloc(player), NOTHING, player, NOTHING, "_disconnect", "Disconnect", 1, 1);
+        envpropqueue(d->descriptor, player, getloc(player), NOTHING, player, NOTHING, "_odisconnect", "Odisconnect", 1, 0);
     }
     if (!online(player)) {
         if (can_move(d->descriptor, player, "disconnect", 1)) {
             do_move(d->descriptor, player, "disconnect", 1);
         }
+#ifdef MCP_SUPPORT
+        gui_dlog_closeall_descr(d->descriptor);
+#endif
 
         if (!Hidden(player)) {
             announce_puppets(player, "falls asleep.", "_/pdcon");
@@ -5506,19 +5414,13 @@ announce_idle(struct descriptor_data *d)
     }
 
     /* queue up all _idle programs referred to by properties */
-    envpropqueue(d->descriptor, player, getloc(player), NOTHING, player,
-                 NOTHING, "@idle", "Idle", 1, 1);
-    envpropqueue(d->descriptor, player, getloc(player), NOTHING, player,
-                 NOTHING, "@oidle", "Oidle", 1, 0);
-    envpropqueue(d->descriptor, player, getloc(player), NOTHING, player,
-                 NOTHING, "~idle", "Idle", 1, 1);
-    envpropqueue(d->descriptor, player, getloc(player), NOTHING, player,
-                 NOTHING, "~oidle", "Oidle", 1, 0);
+    envpropqueue(d->descriptor, player, getloc(player), NOTHING, player, NOTHING, "@idle", "Idle", 1, 1);
+    envpropqueue(d->descriptor, player, getloc(player), NOTHING, player, NOTHING, "@oidle", "Oidle", 1, 0);
+    envpropqueue(d->descriptor, player, getloc(player), NOTHING, player, NOTHING, "~idle", "Idle", 1, 1);
+    envpropqueue(d->descriptor, player, getloc(player), NOTHING, player, NOTHING, "~oidle", "Oidle", 1, 0);
     if (tp_user_idle_propqueue) {
-        envpropqueue(d->descriptor, player, getloc(player), NOTHING, player,
-                     NOTHING, "_idle", "Idle", 1, 1);
-        envpropqueue(d->descriptor, player, getloc(player), NOTHING, player,
-                     NOTHING, "_oidle", "Oidle", 1, 0);
+        envpropqueue(d->descriptor, player, getloc(player), NOTHING, player, NOTHING, "_idle", "Idle", 1, 1);
+        envpropqueue(d->descriptor, player, getloc(player), NOTHING, player, NOTHING, "_oidle", "Oidle", 1, 0);
     }
 }
 
@@ -5550,19 +5452,13 @@ announce_unidle(struct descriptor_data *d)
     }
 
     /* queue up all _unidle programs referred to by properties */
-    envpropqueue(d->descriptor, player, getloc(player), NOTHING, player,
-                 NOTHING, "@unidle", "Unidle", 1, 1);
-    envpropqueue(d->descriptor, player, getloc(player), NOTHING, player,
-                 NOTHING, "@ounidle", "Ounidle", 1, 0);
-    envpropqueue(d->descriptor, player, getloc(player), NOTHING, player,
-                 NOTHING, "~unidle", "Unidle", 1, 1);
-    envpropqueue(d->descriptor, player, getloc(player), NOTHING, player,
-                 NOTHING, "~ounidle", "Ounidle", 1, 0);
+    envpropqueue(d->descriptor, player, getloc(player), NOTHING, player, NOTHING, "@unidle", "Unidle", 1, 1);
+    envpropqueue(d->descriptor, player, getloc(player), NOTHING, player, NOTHING, "@ounidle", "Ounidle", 1, 0);
+    envpropqueue(d->descriptor, player, getloc(player), NOTHING, player, NOTHING, "~unidle", "Unidle", 1, 1);
+    envpropqueue(d->descriptor, player, getloc(player), NOTHING, player, NOTHING, "~ounidle", "Ounidle", 1, 0);
     if (tp_user_idle_propqueue) {
-        envpropqueue(d->descriptor, player, getloc(player), NOTHING, player,
-                     NOTHING, "_unidle", "Unidle", 1, 1);
-        envpropqueue(d->descriptor, player, getloc(player), NOTHING, player,
-                     NOTHING, "_ounidle", "Ounidle", 1, 0);
+        envpropqueue(d->descriptor, player, getloc(player), NOTHING, player, NOTHING, "_unidle", "Unidle", 1, 1);
+        envpropqueue(d->descriptor, player, getloc(player), NOTHING, player, NOTHING, "_ounidle", "Ounidle", 1, 0);
     }
 }
 
@@ -5600,18 +5496,12 @@ announce_disclogin(struct descriptor_data *d)
         return;
     dequeue_prog_descr(d->descriptor, 2);
     /* queue up all _login programs referred to by properties */
-    propqueue(d->descriptor, player, 0, 0, 0, 0,
-              "@disclogin", "Disclogin", 1, 1);
-    propqueue(d->descriptor, player, 0, 0, 0, 0,
-              "@odisclogin", "Odisclogin", 1, 0);
-    propqueue(d->descriptor, player, 0, 0, 0, 0,
-              "~disclogin", "Disclogin", 1, 1);
-    propqueue(d->descriptor, player, 0, 0, 0, 0,
-              "~odisclogin", "Odisclogin", 1, 0);
-    propqueue(d->descriptor, player, 0, 0, 0, 0,
-              "_disclogin", "Disclogin", 1, 1);
-    propqueue(d->descriptor, player, 0, 0, 0, 0,
-              "_odisclogin", "Odisclogin", 1, 0);
+    propqueue(d->descriptor, player, 0, 0, 0, 0, "@disclogin", "Disclogin", 1, 1);
+    propqueue(d->descriptor, player, 0, 0, 0, 0, "@odisclogin", "Odisclogin", 1, 0);
+    propqueue(d->descriptor, player, 0, 0, 0, 0, "~disclogin", "Disclogin", 1, 1);
+    propqueue(d->descriptor, player, 0, 0, 0, 0, "~odisclogin", "Odisclogin", 1, 0);
+    propqueue(d->descriptor, player, 0, 0, 0, 0, "_disclogin", "Disclogin", 1, 1);
+    propqueue(d->descriptor, player, 0, 0, 0, 0, "_odisclogin", "Odisclogin", 1, 0);
 }
 
 
@@ -5702,7 +5592,8 @@ descr_index(int descr)
     int i;
 
     for (i = 0; i < MAX_SOCKETS; i++)
-        if (descr_lookup_table[i] && (descr_lookup_table[i]->descriptor == descr))
+        if (descr_lookup_table[i]
+            && (descr_lookup_table[i]->descriptor == descr))
             return i;
 
     return -1;
@@ -5740,6 +5631,7 @@ remember_player_descr(dbref player, int descr)
 
     if (!arr) {
         arr = new int[MAX_SOCKETS];
+
         arr[0] = index;
         count = 1;
     } else {
@@ -5781,7 +5673,7 @@ forget_player_descr(dbref player, int descr)
             //arr = (int *) realloc(arr, sizeof(int) * count);
         }
     } else {
-        delete[] arr;
+        delete[]arr;
         arr = NULL;
         count = 0;
     }
@@ -6296,8 +6188,7 @@ silent_disconnect(struct descriptor_data *d)
     dbref loc;
     char buf[BUFFER_LEN];
 
-    if (!d->connected || !OkObj(player) || (Typeof(player) != TYPE_PLAYER) ||
-        ((loc = getloc(player)) == NOTHING)
+    if (!d->connected || !OkObj(player) || (Typeof(player) != TYPE_PLAYER) || ((loc = getloc(player)) == NOTHING)
         )
         return;
 
@@ -6306,8 +6197,7 @@ silent_disconnect(struct descriptor_data *d)
             if (online(player) == 1)
                 sprintf(buf, CMOVE "%s has disconnected.", PNAME(player));
             else
-                sprintf(buf, CMOVE "%s has dropped a connection.",
-                        PNAME(player));
+                sprintf(buf, CMOVE "%s has dropped a connection.", PNAME(player));
             anotify_except(DBFETCH(loc)->contents, player, buf, player);
         }
     }
@@ -6381,7 +6271,7 @@ pset_user_suid(int c, dbref who)
     struct descriptor_data *d;
 
     if (who == NOTHING)
-	return 0;
+        return 0;
 
     d = descrdata_by_descr(c);
     if (!d)
@@ -6394,10 +6284,10 @@ pset_user_suid(int c, dbref who)
     /* If this descriptor is assigned to a player, silently disconnect this descriptor from the player. */
     if (d->player != NOTHING) {
         total_loggedin_connects--;
-	silent_disconnect(d);
-	transfer_descr_to_player(d->descriptor, d->player, who);
+        silent_disconnect(d);
+        transfer_descr_to_player(d->descriptor, d->player, who);
     }
-    
+
     d->player = who;
     silent_connect(d->descriptor, who);
     total_loggedin_connects++;
@@ -6411,6 +6301,7 @@ pset_user_suid(int c, dbref who)
     }
     return 1;
 }
+
 int
 dbref_first_descr(dbref c)
 {
@@ -6426,6 +6317,23 @@ dbref_first_descr(dbref c)
         return NOTHING;
     }
 }
+
+#ifdef MCP_SUPPORT
+McpFrame *
+descr_mcpframe(int c)
+{
+    struct descriptor_data *d;
+
+    d = descriptor_list;
+    while (d && d->connected) {
+        if (d->descriptor == c) {
+            return &d->mcpframe;
+        }
+        d = d->next;
+    }
+    return NULL;
+}
+#endif
 
 int
 pdescrflush(int c)
@@ -6495,10 +6403,7 @@ pdescr_logout(int c)
 
     d = descrdata_by_descr(c);
     if (d && d->descriptor == c && d->player != NOTHING) {
-        log_status("LOGOUT: %2d %s %s(%s) %s P#%d\n",
-                   d->descriptor, unparse_object(1, d->player),
-                   d->hu->h->name, d->hu->u->user,
-                   host_as_hex(d->hu->h->a), d->cport);
+        log_status("LOGOUT: %2d %s %s(%s) %s P#%d\n", d->descriptor, unparse_object(1, d->player), d->hu->h->name, d->hu->u->user, host_as_hex(d->hu->h->a), d->cport);
         announce_disconnect(d);
         d->connected = 0;
         d->player = NOTHING;
@@ -6527,9 +6432,7 @@ partial_pmatch(const char *name)
 
     d = descriptor_list;
     while (d) {
-        if (d->connected && (last != d->player) &&
-            (string_prefix(NAME(d->player), name) ||
-             lookup_alias(name,1) != NOTHING) ) {
+        if (d->connected && (last != d->player) && (string_prefix(NAME(d->player), name) || lookup_alias(name, 1) != NOTHING)) {
             if (last != NOTHING) {
                 last = AMBIGUOUS;
                 break;
@@ -6558,8 +6461,7 @@ welcome_user(struct descriptor_data *d)
             strcpy(buf, WELC_FILE);
         } else if (fname && (*fname == '#')) {
             if (tp_rand_screens > 0)
-                sprintf(buf, "data/welcome%d.txt",
-                        (rand() % tp_rand_screens) + 1);
+                sprintf(buf, "data/welcome%d.txt", (rand() % tp_rand_screens) + 1);
             else
                 strcpy(buf, WELC_HTML);
         } else if (fname) {
@@ -6577,7 +6479,9 @@ welcome_user(struct descriptor_data *d)
             strcpy(buf, WELC_HTML);
         }
         strcpy(buf, WELC_HTML);
-
+#ifdef MCP_SUPPORT
+        mcp_negotiation_start(&d->mcpframe, d);
+#endif
         if ((f = fopen(buf, "r")) == NULL) {
             queue_unhtml(d, DEFAULT_WELCOME_MESSAGE);
             perror("spit_file: welcome.html");
@@ -6594,11 +6498,9 @@ welcome_user(struct descriptor_data *d)
             fclose(f);
         }
         if (delayed_shutdown) {
-            queue_unhtml(d, MARK
-                         "<b>The game is currently shutting down, and only wizards can connect.</b>\r\n");
+            queue_unhtml(d, MARK "<b>The game is currently shutting down, and only wizards can connect.</b>\r\n");
         } else if (wizonly_mode) {
-            queue_unhtml(d, MARK
-                         "<b>Due to maintenance, only wizards can connect now.</b>\r\n");
+            queue_unhtml(d, MARK "<b>Due to maintenance, only wizards can connect now.</b>\r\n");
 
         } else if (tp_playermax && con_players_curr >= tp_playermax_limit) {
             queue_unhtml(d, WARN_MESG);
@@ -6615,8 +6517,7 @@ welcome_user(struct descriptor_data *d)
             strcpy(buf, WELC_FILE);
         } else if (fname && (*fname == '#')) {
             if (tp_rand_screens > 0)
-                sprintf(buf, "data/welcome%d.txt",
-                        (rand() % tp_rand_screens) + 1);
+                sprintf(buf, "data/welcome%d.txt", (rand() % tp_rand_screens) + 1);
             else
                 strcpy(buf, WELC_FILE);
         } else if (fname) {
@@ -6633,7 +6534,9 @@ welcome_user(struct descriptor_data *d)
         } else {
             strcpy(buf, WELC_FILE);
         }
-
+#ifdef MCP_SUPPORT
+        mcp_negotiation_start(&d->mcpframe, d);
+#endif
         if ((f = fopen(buf, "r")) == NULL) {
             queue_unhtml(d, DEFAULT_WELCOME_MESSAGE);
             perror("spit_file: welcome.txt");
@@ -6650,11 +6553,9 @@ welcome_user(struct descriptor_data *d)
             fclose(f);
         }
         if (delayed_shutdown) {
-            queue_unhtml(d, MARK
-                         "The game is currently shutting down, and only wizards can connect.\r\n");
+            queue_unhtml(d, MARK "The game is currently shutting down, and only wizards can connect.\r\n");
         } else if (wizonly_mode) {
-            queue_unhtml(d, MARK
-                         "Due to maintenance, only wizards can connect now.\r\n");
+            queue_unhtml(d, MARK "Due to maintenance, only wizards can connect now.\r\n");
         } else if (tp_playermax && con_players_curr >= tp_playermax_limit) {
             queue_unhtml(d, WARN_MESG);
             queue_unhtml(d, "\r\n");
@@ -6670,8 +6571,7 @@ help_user(struct descriptor_data *d)
     char buf[BUFFER_LEN];
 
     if ((f = fopen("data/connect.txt", "r")) == NULL) {
-        queue_ansi(d,
-                   "The help file is missing, the management has been notified.\r\n");
+        queue_ansi(d, "The help file is missing, the management has been notified.\r\n");
         perror("spit_file: connect.txt");
     } else {
         while (fgets(buf, sizeof buf, f)) {
@@ -6683,17 +6583,18 @@ help_user(struct descriptor_data *d)
 
 /* Any time we need to propagate a descr flag on every connection
  * a player has, this function will take care of it */
-void propagate_descr_flag(dbref player, object_flag_type flag, int set)
+void
+propagate_descr_flag(dbref player, object_flag_type flag, int set)
 {
     struct descriptor_data *d = NULL;
     int *darr = NULL;
     int dcount = 0;
-    int i = 0;  
-    
+    int i = 0;
+
     darr = get_player_descrs(player, &dcount);
-    for (i = 0; i < dcount; ++i ) {
+    for (i = 0; i < dcount; ++i) {
         d = descrdata_by_index(darr[i]);
-        if ( set ) {
+        if (set) {
             DR_RAW_ADD_FLAGS(d, flag);
         } else {
             DR_RAW_REM_FLAGS(d, flag);
@@ -6785,7 +6686,7 @@ ignorance(dbref src, dbref tgt)
 void
 do_compress(dbref player, int descr, const char *arg)
 {
-    struct descriptor_data *d = descrdata_by_descr(descr);   
+    struct descriptor_data *d = descrdata_by_descr(descr);
 
     if (!strcmp(arg, "off")) {
         if (d->mccp) {
@@ -6801,7 +6702,7 @@ do_compress(dbref player, int descr, const char *arg)
         } else {
             mccp_start(d, d->telopt.mccp);
             queue_ansi(d, "MCCP Compression Started.\r\n");
-        }                      
+        }
     } else
         queue_ansi(d, "Compression Help Goes Here\r\n");
 }
@@ -6814,13 +6715,13 @@ mccp_process_compressed(struct descriptor_data *d)
 
     if (!d->mccp)
         return TRUE;
-    
+
     // Try to write out some data..
     length = COMPRESS_BUF_SIZE - d->mccp->z->avail_out;
     if (length > 0) {
         int nWrite = 0;
-      
-        if ((nWrite = writesocket(d->fd, (const char *)d->mccp->buf, UMIN(length, 4096))) < 0) {
+
+        if ((nWrite = writesocket(d->fd, (const char *) d->mccp->buf, UMIN(length, 4096))) < 0) {
             if (errnosocket == EWOULDBLOCK)
                 nWrite = 0;
             else
@@ -6832,8 +6733,8 @@ mccp_process_compressed(struct descriptor_data *d)
                 d->mccp->z->next_out = d->mccp->buf;
                 d->mccp->z->avail_out = COMPRESS_BUF_SIZE;
             } else {
-                memmove(d->mccp->buf, d->mccp->buf + nWrite, (length-nWrite));
-                d->mccp->z->next_out = d->mccp->buf + (length-nWrite);
+                memmove(d->mccp->buf, d->mccp->buf + nWrite, (length - nWrite));
+                d->mccp->z->next_out = d->mccp->buf + (length - nWrite);
                 d->mccp->z->avail_out += nWrite;
             }
         }
@@ -6851,38 +6752,36 @@ mccp_start(struct descriptor_data *d, int version)
 
 #ifdef USE_SSL
     if (d->type == CT_SSL)
-        return; 
+        return;
 #endif
-   
+
     //m = (struct mccp *) malloc(sizeof(struct mccp));
     m = new mccp;
     m->z = NULL;
     m->buf = NULL;
     m->version = 0;
-    
+
     /* log_status("MCCP_START(%d)\r\n", d->descriptor); */
     opt = (d->telopt.termtype && !string_compare(d->telopt.termtype, "simplemu"));
     if (opt)
         setsockopt(d->fd, IPPROTO_TCP, TCP_NODELAY, (char *) &opt, sizeof(opt));
 
-        if (d->type != CT_HTTP) {
-	    if (version == 1)
-                sockwrite(d, "\377\372\125\373\360", 5); /* IAC SB COMPRESS WILL SE (MCCP v1) */
-	    else if (version == 2) 
-                sockwrite(d, "\377\372\126\377\360", 5); /* IAC SB COMPRESS2 IAC SE (MCCP v2) */ //ff fa 56 ff f0
+    if (d->type != CT_HTTP) {
+        if (version == 1)
+            sockwrite(d, "\377\372\125\373\360", 5); /* IAC SB COMPRESS WILL SE (MCCP v1) */
+        else if (version == 2)
+            sockwrite(d, "\377\372\126\377\360", 5); /* IAC SB COMPRESS2 IAC SE (MCCP v2) *///ff fa 56 ff f0
 
-        }
-    if (opt)  {
+    }
+    if (opt) {
         //This is a temporary fix for a bug related to SimpleMU.
 #ifdef WIN32
-        Sleep(20); //20ms
+        Sleep(20);              //20ms
 #else
         fsync(d->fd);
-        usleep(20000); //20ms
+        usleep(20000);          //20ms
 #endif
     }
-
-
     //s = (z_stream *) malloc(sizeof(z_stream));
     //m->buf = (unsigned char *) malloc(sizeof(unsigned char) * COMPRESS_BUF_SIZE);
     s = new z_stream;
@@ -6895,16 +6794,17 @@ mccp_start(struct descriptor_data *d, int version)
     s->avail_out = COMPRESS_BUF_SIZE;
 
     s->zalloc = NULL;
-    s->zfree  = NULL;
+    s->zfree = NULL;
     s->opaque = NULL;
 
     if (d->type == CT_HTTP) {
-        deflateInit2(s, Z_DEFAULT_COMPRESSION, Z_DEFLATED, 15+16, 8, Z_DEFAULT_STRATEGY);
+        deflateInit2(s, Z_DEFAULT_COMPRESSION, Z_DEFLATED, 15 + 16, 8, Z_DEFAULT_STRATEGY);
     } else {
         if (deflateInit(s, 9) != Z_OK) {
-            delete[] m->buf;
+            delete[]m->buf;
             delete m;
             delete s;
+
             d->mccp = NULL;
 
             return;
@@ -6939,7 +6839,7 @@ mccp_end(struct descriptor_data *d)
         mccp_process_compressed(d);
 
     deflateEnd(d->mccp->z);
-    delete[] d->mccp->buf;
+    delete[]d->mccp->buf;
     delete d->mccp->z;
     delete d->mccp;
 
@@ -6968,13 +6868,13 @@ void
 telopt_clean(struct telopt *t)
 {
     t->mccp = 0;
-    delete[] t->sb_buf;
+    delete[]t->sb_buf;
     t->sb_buf = NULL;
     t->sb_buf_len = 0;
     t->width = 0;
     t->height = 0;
 
-    delete[] t->termtype;
+    delete[]t->termtype;
     t->termtype = NULL;
 }
 
@@ -6990,7 +6890,7 @@ mssp_send(struct descriptor_data *d)
     PropPtr prptr;
 
     const char *dir = "/~mssp";
-    const dbref ref = (dbref)0;
+    const dbref ref = (dbref) 0;
 
     int sent_name = 0;
     int sent_players = 0;
@@ -7063,7 +6963,7 @@ mssp_send(struct descriptor_data *d)
     }
 
     if (!sent_uptime) {
-        sprintf(buf, "\x01%s\x02%d", "UPTIME", (int)startup_systime);
+        sprintf(buf, "\x01%s\x02%d", "UPTIME", (int) startup_systime);
         queue_write(d, buf, strlen(buf));
     }
 
@@ -7085,7 +6985,7 @@ mssp_send(struct descriptor_data *d)
 
     if (!sent_mccp) {
 #ifdef MCCP_ENABLED
-        sprintf(buf, "\x01%s\x02%d", "MCCP", 1);  
+        sprintf(buf, "\x01%s\x02%d", "MCCP", 1);
 #else
         sprintf(buf, "\x01%s\x02%d", "MCCP", 0);
 #endif
@@ -7102,133 +7002,140 @@ char module_error[BUFFER_LEN];
 void
 module_remember(struct module *m)
 {
-	if (modules)
-		modules->prev = m;
-	m->next = modules;
-	modules = m;
+    if (modules)
+        modules->prev = m;
+    m->next = modules;
+    modules = m;
 }
 
 char *
 module_load(const char *filename, dbref who)
 {
-	struct module *m = new module;
-	struct module *mo;
-	void *(*func)();
-	char *error;
+    struct module *m = new module;
+    struct module *mo;
+    void *(*func) ();
+    char *error;
 
-	dlerror();
-	m->handle = dlopen(filename, RTLD_NOW | RTLD_GLOBAL);
+    dlerror();
+    m->handle = dlopen(filename, RTLD_NOW | RTLD_GLOBAL);
 
-	if (!m->handle && (error = dlerror()) != NULL) {
-		delete m;
-		log_status("MODULE_LOAD(%s): ERROR %s\r\n", filename, error); 
-		return error;
-	}
+    if (!m->handle && (error = dlerror()) != NULL) {
+        delete m;
 
-	func = dlsym(m->handle, "__get_module_info");
+        log_status("MODULE_LOAD(%s): ERROR %s\r\n", filename, error);
+        return error;
+    }
 
-	if ((error = dlerror()) != NULL)  {
-		dlclose(m->handle);
-		delete m;
-		log_status("MODULE_LOAD(%s): ERROR %s\r\n", filename, error);
-		return error;
-	}
+    func = dlsym(m->handle, "__get_module_info");
 
-	if (!(m->info = (*func)(m))) {
-		dlclose(m->handle);
-		delete m;
-		log_status("MODULE_LOAD(%s): ERROR %s\r\n", filename, module_error);
-		return module_error;
-	}
+    if ((error = dlerror()) != NULL) {
+        dlclose(m->handle);
+        delete m;
 
-	mo = modules;
-	while (mo) {
+        log_status("MODULE_LOAD(%s): ERROR %s\r\n", filename, error);
+        return error;
+    }
+
+    if (!(m->info = (*func) (m))) {
+        dlclose(m->handle);
+        delete m;
+
+        log_status("MODULE_LOAD(%s): ERROR %s\r\n", filename, module_error);
+        return module_error;
+    }
+
+    mo = modules;
+    while (mo) {
         if (mo->handle == m->handle) {
-			strcpy(module_error, "module is already loaded");
-			break;
-		} else if (!string_compare(mo->info->name, m->info->name)) {
-			strcpy(module_error, "module with same name is already loaded");
-			dlclose(m->handle);
-			break;
-		}
-		mo = mo->next;
-	}
+            strcpy(module_error, "module is already loaded");
+            break;
+        } else if (!string_compare(mo->info->name, m->info->name)) {
+            strcpy(module_error, "module with same name is already loaded");
+            dlclose(m->handle);
+            break;
+        }
+        mo = mo->next;
+    }
 
-	if (mo) {
-		log_status("MODULE_LOAD(%s): ERROR %s\r\n", m->info->name, module_error);
-		delete m;
-		return module_error;
-	}
+    if (mo) {
+        log_status("MODULE_LOAD(%s): ERROR %s\r\n", m->info->name, module_error);
+        delete m;
 
-	/* for (i = 0; mr->info->requires[i].name; i++) {
-		
-	} */
+        return module_error;
+    }
+
+    /* for (i = 0; mr->info->requires[i].name; i++) {
+
+       } */
 
 
-	m->prims = NULL;
-	func = dlsym(m->handle, "__get_prim_list");
+    m->prims = NULL;
+    func = dlsym(m->handle, "__get_prim_list");
 
-	if ((error = dlerror()) == NULL)  {	
-		m->prims = (*func)();
+    if ((error = dlerror()) == NULL) {
+        m->prims = (*func) ();
 
-		if (m->prims) {
-			int i;
-			for (i = 0; m->prims[i].name; i++) {
-				m->prims[i].mod = m;
-				m->prims[i].func = dlsym(m->handle, m->prims[i].sym);
+        if (m->prims) {
+            int i;
 
-				if ((error = dlerror()) != NULL)  {
-					sprintf(module_error, "Bad Primitive (%s): %s", m->prims[i].name,  error);
-					log_status("MODULE_LOAD(%s): ERROR %s\r\n", m->info->name, module_error);
+            for (i = 0; m->prims[i].name; i++) {
+                m->prims[i].mod = m;
+                m->prims[i].func = dlsym(m->handle, m->prims[i].sym);
 
-					dlclose(m->handle);
-					delete m;
-					return module_error;
-				}
+                if ((error = dlerror()) != NULL) {
+                    sprintf(module_error, "Bad Primitive (%s): %s", m->prims[i].name, error);
+                    log_status("MODULE_LOAD(%s): ERROR %s\r\n", m->info->name, module_error);
 
-				log_status("MODULE(%s) Has PRIM_%s\r\n", filename, m->prims[i].name);
-			}
-		}
-	}
+                    dlclose(m->handle);
+                    delete m;
 
-	strcpy(module_error, "");
+                    return module_error;
+                }
 
-	m->progs = NULL;
-	m->prev = NULL;
-	m->next = NULL;
+                log_status("MODULE(%s) Has PRIM_%s\r\n", filename, m->prims[i].name);
+            }
+        }
+    }
 
-	module_remember(m);
+    strcpy(module_error, "");
 
-	return NULL;
+    m->progs = NULL;
+    m->prev = NULL;
+    m->next = NULL;
+
+    module_remember(m);
+
+    return NULL;
 }
 
 void
 module_free(struct module *m)
 {
 
-	if (m->progs) {
-		struct mod_proglist *mpr = m->progs;
+    if (m->progs) {
+        struct mod_proglist *mpr = m->progs;
 
-		while (mpr) {
-			struct mod_proglist *ompr = mpr->next;
-			/* TODO: this needs to safely deal with loaded muf programs --hinoserm */
-			uncompile_program(mpr->prog);
+        while (mpr) {
+            struct mod_proglist *ompr = mpr->next;
 
-			//free((void *)mpr);
-			mpr = ompr;
-		}
-	}
+            /* TODO: this needs to safely deal with loaded muf programs --hinoserm */
+            uncompile_program(mpr->prog);
 
-	if (m->next)
-	   m->next->prev = m->prev;
-	if (m->prev)
-		m->prev->next = m->next;
-	if (m == modules)
-		modules = m->next;
-	
-	log_status("MODULE: Free'd %s.\r\n", m->info->name);
-	dlclose(m->handle);
-	delete m;
+            //free((void *)mpr);
+            mpr = ompr;
+        }
+    }
+
+    if (m->next)
+        m->next->prev = m->prev;
+    if (m->prev)
+        m->prev->next = m->next;
+    if (m == modules)
+        modules = m->next;
+
+    log_status("MODULE: Free'd %s.\r\n", m->info->name);
+    dlclose(m->handle);
+    delete m;
 }
 
 

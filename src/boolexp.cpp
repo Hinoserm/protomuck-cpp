@@ -101,26 +101,20 @@ copy_bool(struct boolexp *old)
 
 
 bool
-eval_boolexp_rec2(int descr, dbref player, struct boolexp *b, dbref thing,
-                  int evalprogram)
+eval_boolexp_rec2(int descr, dbref player, struct boolexp * b, dbref thing, int evalprogram)
 {
     if (b == TRUE_BOOLEXP) {
         return 1;
     } else {
         switch (b->type) {
             case BOOLEXP_AND:
-                return (eval_boolexp_rec2
-                        (descr, player, b->sub1, thing, evalprogram)
-                        && eval_boolexp_rec2(descr, player, b->sub2, thing,
-                                             evalprogram));
+                return (eval_boolexp_rec2(descr, player, b->sub1, thing, evalprogram)
+                        && eval_boolexp_rec2(descr, player, b->sub2, thing, evalprogram));
             case BOOLEXP_OR:
-                return (eval_boolexp_rec2
-                        (descr, player, b->sub1, thing, evalprogram)
-                        || eval_boolexp_rec2(descr, player, b->sub2, thing,
-                                             evalprogram));
+                return (eval_boolexp_rec2(descr, player, b->sub1, thing, evalprogram)
+                        || eval_boolexp_rec2(descr, player, b->sub2, thing, evalprogram));
             case BOOLEXP_NOT:
-                return !eval_boolexp_rec2(descr, player, b->sub1, thing,
-                                          evalprogram);
+                return !eval_boolexp_rec2(descr, player, b->sub1, thing, evalprogram);
             case BOOLEXP_CONST:
 #ifndef SANITY
                 if (b->thing == NOTHING)
@@ -130,16 +124,12 @@ eval_boolexp_rec2(int descr, dbref player, struct boolexp *b, dbref thing,
                     struct frame *tmpfr;
                     dbref real_player;
 
-                    if (Typeof(player) == TYPE_PLAYER
-                        || Typeof(player) == TYPE_THING)
+                    if (Typeof(player) == TYPE_PLAYER || Typeof(player) == TYPE_THING)
                         real_player = player;
                     else
                         real_player = OWNER(player);
 
-                    tmpfr =
-                        interp(descr, real_player,
-                               DBFETCH(player)->location, b->thing, thing,
-                               PREEMPT, STD_HARDUID, 0);
+                    tmpfr = interp(descr, real_player, DBFETCH(player)->location, b->thing, thing, PREEMPT, STD_HARDUID, 0);
 
                     if (!tmpfr)
                         return 0;
@@ -156,15 +146,9 @@ eval_boolexp_rec2(int descr, dbref player, struct boolexp *b, dbref thing,
 #endif /* !SANITY */
             case BOOLEXP_PROP:
                 if (PropType(b->prop_check) == PROP_STRTYP) {
-                    if (has_property_strict(descr, player, thing,
-                                            PropName(b->prop_check),
-                                            PropDataUNCStr(b->prop_check),
-                                            atoi(PropDataUNCStr(b->prop_check))))
+                    if (has_property_strict(descr, player, thing, PropName(b->prop_check), PropDataUNCStr(b->prop_check), atoi(PropDataUNCStr(b->prop_check))))
                         return 1;
-                    if (has_property(descr, player, player,
-                                     PropName(b->prop_check),
-                                     PropDataUNCStr(b->prop_check),
-                                     atoi(PropDataUNCStr(b->prop_check))))
+                    if (has_property(descr, player, player, PropName(b->prop_check), PropDataUNCStr(b->prop_check), atoi(PropDataUNCStr(b->prop_check))))
                         return 1;
                 }
                 return 0;
@@ -176,14 +160,14 @@ eval_boolexp_rec2(int descr, dbref player, struct boolexp *b, dbref thing,
 }
 
 bool
-eval_boolexp_rec(int descr, dbref player, struct boolexp *b, dbref thing)
+eval_boolexp_rec(int descr, dbref player, struct boolexp * b, dbref thing)
 {
     return eval_boolexp_rec2(descr, player, b, thing, 1);
 }
 
 #ifndef SANITY
 bool
-eval_boolexp(int descr, dbref player, struct boolexp *b, dbref thing)
+eval_boolexp(int descr, dbref player, struct boolexp * b, dbref thing)
 {
     bool result;
 
@@ -197,7 +181,7 @@ eval_boolexp(int descr, dbref player, struct boolexp *b, dbref thing)
 
 #ifndef SANITY
 bool
-eval_boolexp2(int descr, dbref player, struct boolexp *b, dbref thing)
+eval_boolexp2(int descr, dbref player, struct boolexp * b, dbref thing)
 {
     bool result;
 
@@ -261,9 +245,7 @@ parse_boolexp_F(int descr, const char **parsebuf, dbref player, int dbloadp)
             /* must have hit an object ref */
             /* load the name into our buffer */
             p = buf;
-            while (**parsebuf
-                   && **parsebuf != AND_TOKEN && **parsebuf != OR_TOKEN
-                   && **parsebuf != ')') {
+            while (**parsebuf && **parsebuf != AND_TOKEN && **parsebuf != OR_TOKEN && **parsebuf != ')') {
                 *p++ = *(*parsebuf)++;
             }
             /* strip trailing whitespace */
@@ -309,8 +291,7 @@ parse_boolexp_F(int descr, const char **parsebuf, dbref player, int dbloadp)
                     return TRUE_BOOLEXP;
                 }
                 b->thing = (dbref) atoi(buf + 1);
-                if (b->thing < 0 || b->thing >= db_top
-                    || Typeof(b->thing) == TYPE_GARBAGE) {
+                if (b->thing < 0 || b->thing >= db_top || Typeof(b->thing) == TYPE_GARBAGE) {
                     free_boolnode(b);
                     return TRUE_BOOLEXP;
                 } else {
@@ -338,9 +319,7 @@ parse_boolexp_T(int descr, const char **parsebuf, dbref player, int dbloadp)
             b2 = alloc_boolnode();
             b2->type = BOOLEXP_AND;
             b2->sub1 = b;
-            if ((b2->sub2 =
-                 parse_boolexp_T(descr, parsebuf, player,
-                                 dbloadp)) == TRUE_BOOLEXP) {
+            if ((b2->sub2 = parse_boolexp_T(descr, parsebuf, player, dbloadp)) == TRUE_BOOLEXP) {
                 free_boolexp(b2);
                 return TRUE_BOOLEXP;
             } else {
@@ -369,9 +348,7 @@ parse_boolexp_E(int descr, const char **parsebuf, dbref player, int dbloadp)
             b2 = alloc_boolnode();
             b2->type = BOOLEXP_OR;
             b2->sub1 = b;
-            if ((b2->sub2 =
-                 parse_boolexp_E(descr, parsebuf, player,
-                                 dbloadp)) == TRUE_BOOLEXP) {
+            if ((b2->sub2 = parse_boolexp_E(descr, parsebuf, player, dbloadp)) == TRUE_BOOLEXP) {
                 free_boolexp(b2);
                 return TRUE_BOOLEXP;
             } else {
@@ -410,7 +387,7 @@ parse_boolprop(char *buf)
         type++;
     if (*type == PROP_DELIMITER) {
         /* Oops!  Clean up and return a TRUE */
-        delete[] x;
+        delete[]x;
         free_boolnode(b);
         return TRUE_BOOLEXP;
     }
@@ -423,7 +400,7 @@ parse_boolprop(char *buf)
         pclass++;
     if (!*pclass) {
         /* Oops!  CLEAN UP AND RETURN A TRUE */
-        delete[] x;
+        delete[]x;
         free_boolnode(b);
         return TRUE_BOOLEXP;
     }
@@ -434,7 +411,7 @@ parse_boolprop(char *buf)
     b->prop_check = p = alloc_propnode(type);
     SetPDataStr(p, alloc_string(pclass));
     SetPType(p, PROP_STRTYP);
-    delete[] x;
+    delete[]x;
     return b;
 }
 
@@ -599,7 +576,7 @@ getboolexp1(FILE * f)
   error:
     fprintf(stderr, "PANIC: Database error in reading bool expression.\n");
     abort();                    /* bomb out */
-	return NULL;
+    return NULL;
 }
 
 struct boolexp *

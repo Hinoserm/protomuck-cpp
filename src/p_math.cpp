@@ -23,8 +23,10 @@
 int
 arith_good(double test)
 {
-    return (((test) <= ((double) (MAXINT))) && ((test) >= ((double) (MININT))));
+    return (((test) <= ((double) (MAXINT)))
+            && ((test) >= ((double) (MININT))));
 }
+
 int
 arith_type(struct inst *op1, struct inst *op2)
 {
@@ -36,21 +38,18 @@ arith_type(struct inst *op1, struct inst *op2)
             || (op1->type == PROG_FLOAT && op2->type == PROG_INTEGER)
             || (op1->type == PROG_INTEGER && op2->type == PROG_FLOAT));
 }
+
 void
 prim_add(PRIM_PROTOTYPE)
 {
-	double fresult, tf1, tf2, tl;
-	int tmp, result;
-    
+    double fresult, tf1, tf2, tl;
+    int tmp, result;
+
     if (!arith_type(&oper[1], &oper[0]))
         abort_interp("Invalid argument type");
     if ((oper[0].type == PROG_FLOAT) || (oper[1].type == PROG_FLOAT)) {
-        tf1 =
-            (oper[0].type ==
-             PROG_FLOAT) ? oper[0].data.fnumber : oper[0].data.number;
-        tf2 =
-            (oper[1].type ==
-             PROG_FLOAT) ? oper[1].data.fnumber : oper[1].data.number;
+        tf1 = (oper[0].type == PROG_FLOAT) ? oper[0].data.fnumber : oper[0].data.number;
+        tf2 = (oper[1].type == PROG_FLOAT) ? oper[1].data.fnumber : oper[1].data.number;
         if (!no_good(tf1) && !no_good(tf2)) {
             fresult = tf1 + tf2;
         } else {
@@ -70,29 +69,25 @@ prim_add(PRIM_PROTOTYPE)
         if (!arith_good(tl))
             fr->error.error_flags.i_bounds = 1;
     }
-    tmp = (oper[1].type == PROG_FLOAT
-           || oper[0].type == PROG_FLOAT) ? PROG_FLOAT : oper[1].type;
-    
+    tmp = (oper[1].type == PROG_FLOAT || oper[0].type == PROG_FLOAT) ? PROG_FLOAT : oper[1].type;
+
     if (tmp == PROG_FLOAT)
         push(arg, top, tmp, MIPSCAST & fresult);
     else
         push(arg, top, tmp, MIPSCAST & result);
 }
+
 void
 prim_subtract(PRIM_PROTOTYPE)
 {
-	double fresult, tf1, tf2, tl;
-	int tmp, result;
-    
+    double fresult, tf1, tf2, tl;
+    int tmp, result;
+
     if (!arith_type(&oper[1], &oper[0]))
         abort_interp("Invalid argument type.");
     if ((oper[0].type == PROG_FLOAT) || (oper[1].type == PROG_FLOAT)) {
-        tf1 =
-            (oper[1].type ==
-             PROG_FLOAT) ? oper[1].data.fnumber : oper[1].data.number;
-        tf2 =
-            (oper[0].type ==
-             PROG_FLOAT) ? oper[0].data.fnumber : oper[0].data.number;
+        tf1 = (oper[1].type == PROG_FLOAT) ? oper[1].data.fnumber : oper[1].data.number;
+        tf2 = (oper[0].type == PROG_FLOAT) ? oper[0].data.fnumber : oper[0].data.number;
         if (!no_good(tf1) && !no_good(tf2)) {
             fresult = tf1 - tf2;
         } else {
@@ -112,29 +107,25 @@ prim_subtract(PRIM_PROTOTYPE)
         if (!arith_good(tl))
             fr->error.error_flags.i_bounds = 1;
     }
-    tmp = (oper[1].type == PROG_FLOAT
-           || oper[0].type == PROG_FLOAT) ? PROG_FLOAT : oper[1].type;
-    
+    tmp = (oper[1].type == PROG_FLOAT || oper[0].type == PROG_FLOAT) ? PROG_FLOAT : oper[1].type;
+
     if (tmp == PROG_FLOAT)
         push(arg, top, tmp, MIPSCAST & fresult);
     else
         push(arg, top, tmp, MIPSCAST & result);
 }
+
 void
 prim_multiply(PRIM_PROTOTYPE)
 {
-	double fresult, tf1, tf2, tl;
-	int tmp, result;
-    
+    double fresult, tf1, tf2, tl;
+    int tmp, result;
+
     if (!arith_type(&oper[1], &oper[0]))
         abort_interp("Invalid argument type.");
     if ((oper[0].type == PROG_FLOAT) || (oper[1].type == PROG_FLOAT)) {
-        tf1 =
-            (oper[0].type ==
-             PROG_FLOAT) ? oper[0].data.fnumber : oper[0].data.number;
-        tf2 =
-            (oper[1].type ==
-             PROG_FLOAT) ? oper[1].data.fnumber : oper[1].data.number;
+        tf1 = (oper[0].type == PROG_FLOAT) ? oper[0].data.fnumber : oper[0].data.number;
+        tf2 = (oper[1].type == PROG_FLOAT) ? oper[1].data.fnumber : oper[1].data.number;
         if (!no_good(tf1) && !no_good(tf2)) {
             fresult = tf1 * tf2;
         } else {
@@ -154,38 +145,30 @@ prim_multiply(PRIM_PROTOTYPE)
         if (!arith_good(tl))
             fr->error.error_flags.i_bounds = 1;
     }
-    tmp = (oper[1].type == PROG_FLOAT
-           || oper[0].type == PROG_FLOAT) ? PROG_FLOAT : oper[1].type;
-    
+    tmp = (oper[1].type == PROG_FLOAT || oper[0].type == PROG_FLOAT) ? PROG_FLOAT : oper[1].type;
+
     if (tmp == PROG_FLOAT)
         push(arg, top, tmp, MIPSCAST & fresult);
     else
         push(arg, top, tmp, MIPSCAST & result);
 }
+
 void
 prim_divide(PRIM_PROTOTYPE)
 {
-	double fresult, tf1, tf2;
-	int result, tmp;
-    
+    double fresult, tf1, tf2;
+    int result, tmp;
+
     if (!arith_type(&oper[1], &oper[0]))
         abort_interp("Invalid argument type");
     if ((oper[0].type == PROG_FLOAT) || (oper[1].type == PROG_FLOAT)) {
-        if ((oper[0].type == PROG_INTEGER && !oper[0].data.number) ||
-            (oper[0].type == PROG_FLOAT && fabs(oper[0].data.fnumber)
-             < DBL_EPSILON)) {
-            fresult = tp_alt_infinity_handler ?
-                ((oper[1].type ==
-                  PROG_INTEGER) ? oper[1].data.number : oper[1].data.fnumber) *
-                INF : 0.0;
+        if ((oper[0].type == PROG_INTEGER && !oper[0].data.number) || (oper[0].type == PROG_FLOAT && fabs(oper[0].data.fnumber)
+                                                                       < DBL_EPSILON)) {
+            fresult = tp_alt_infinity_handler ? ((oper[1].type == PROG_INTEGER) ? oper[1].data.number : oper[1].data.fnumber) * INF : 0.0;
             fr->error.error_flags.div_zero = 1;
         } else {
-            tf1 =
-                (oper[1].type ==
-                 PROG_FLOAT) ? oper[1].data.fnumber : oper[1].data.number;
-            tf2 =
-                (oper[0].type ==
-                 PROG_FLOAT) ? oper[0].data.fnumber : oper[0].data.number;
+            tf1 = (oper[1].type == PROG_FLOAT) ? oper[1].data.fnumber : oper[1].data.number;
+            tf2 = (oper[0].type == PROG_FLOAT) ? oper[0].data.fnumber : oper[0].data.number;
             if (!no_good(tf1) && !no_good(tf2)) {
                 fresult = tf1 / tf2;
             } else {
@@ -208,71 +191,74 @@ prim_divide(PRIM_PROTOTYPE)
             fr->error.error_flags.div_zero = 1;
         }
     }
-    tmp = (oper[1].type == PROG_FLOAT
-           || oper[0].type == PROG_FLOAT) ? PROG_FLOAT : oper[1].type;
-    
+    tmp = (oper[1].type == PROG_FLOAT || oper[0].type == PROG_FLOAT) ? PROG_FLOAT : oper[1].type;
+
     if (tmp == PROG_FLOAT)
         push(arg, top, tmp, MIPSCAST & fresult);
     else
         push(arg, top, tmp, MIPSCAST & result);
 }
+
 void
 prim_mod(PRIM_PROTOTYPE)
 {
-	int result, tmp;
-    
-    if ((!arith_type(&oper[1], &oper[0])) || (oper[0].type == PROG_FLOAT) ||
-        (oper[1].type == PROG_FLOAT))
+    int result, tmp;
+
+    if ((!arith_type(&oper[1], &oper[0])) || (oper[0].type == PROG_FLOAT) || (oper[1].type == PROG_FLOAT))
         abort_interp("Invalid argument type.");
     if (oper[0].data.number)
         result = oper[1].data.number % oper[0].data.number;
     else
         result = 0;
     tmp = oper[1].type;
-    
+
     push(arg, top, tmp, MIPSCAST & result);
 }
+
 void
 prim_bitor(PRIM_PROTOTYPE)
 {
-	int result, tmp;
-    
+    int result, tmp;
+
     if (!arith_type(&oper[1], &oper[0]))
         abort_interp("Invalid argument type");
     result = oper[1].data.number | oper[0].data.number;
     tmp = oper[1].type;
-    
+
     push(arg, top, tmp, MIPSCAST & result);
 }
+
 void
 prim_bitxor(PRIM_PROTOTYPE)
 {
-	int result, tmp;
-    
+    int result, tmp;
+
     if (!arith_type(&oper[1], &oper[0]))
         abort_interp("Invalid argument type");
     result = oper[1].data.number ^ oper[0].data.number;
     tmp = oper[1].type;
-    
+
     push(arg, top, tmp, MIPSCAST & result);
 }
+
 void
 prim_bitand(PRIM_PROTOTYPE)
 {
-	int result, tmp;
-    
+    int result, tmp;
+
     if (!arith_type(&oper[1], &oper[0]))
         abort_interp("Invalid argument type");
     result = oper[1].data.number & oper[0].data.number;
     tmp = oper[1].type;
-    
+
     push(arg, top, tmp, MIPSCAST & result);
 }
+
 void
 prim_bitshift(PRIM_PROTOTYPE)
 {
-	int result, tmp;
-    
+    int result, tmp;
+
     if (!arith_type(&oper[1], &oper[0]))
         abort_interp("Invalid argument type");
     if (oper[0].data.number > 0)
@@ -282,214 +268,184 @@ prim_bitshift(PRIM_PROTOTYPE)
     else
         result = oper[1].data.number;
     tmp = oper[1].type;
-    
+
     push(arg, top, tmp, MIPSCAST & result);
 }
+
 void
 prim_and(PRIM_PROTOTYPE)
 {
-	int result;
-    
+    int result;
+
     result = !logical_false(&oper[0]) && !logical_false(&oper[1]);
-    
+
     PushInt(result);
 }
+
 void
 prim_or(PRIM_PROTOTYPE)
 {
-	int result;
-    
+    int result;
+
     result = !logical_false(&oper[0]) || !logical_false(&oper[1]);
-    
+
     PushInt(result);
 }
+
 void
 prim_xor(PRIM_PROTOTYPE)
 {
-	int result;
-    
+    int result;
+
     if (logical_false(&oper[0]))
         result = !logical_false(&oper[1]);
     else
         result = logical_false(&oper[1]);
-    
+
     PushInt(result);
 }
+
 void
 prim_not(PRIM_PROTOTYPE)
 {
-	int result;
-    
+    int result;
+
     result = logical_false(&oper[0]);
-    
+
     PushInt(result);
 }
+
 int
 comp_t(struct inst *op)
 {
-    return (op->type == PROG_INTEGER || op->type == PROG_FLOAT
-            || op->type == PROG_OBJECT);
+    return (op->type == PROG_INTEGER || op->type == PROG_FLOAT || op->type == PROG_OBJECT);
 }
+
 void
 prim_lessthan(PRIM_PROTOTYPE)
-{	
-	double tf1, tf2;
-	int result;
-    
+{
+    double tf1, tf2;
+    int result;
+
     if (!comp_t(&oper[0]) || !comp_t(&oper[1]))
         abort_interp("Invalid argument type.");
     if (oper[0].type == PROG_FLOAT || oper[1].type == PROG_FLOAT) {
-        tf1 = (oper[1].type == PROG_FLOAT) ? oper[1].data.fnumber :
-            (oper[1].type == PROG_INTEGER) ? oper[1].data.number :
-            oper[1].data.objref;
-        tf2 = (oper[0].type == PROG_FLOAT) ? oper[0].data.fnumber :
-            (oper[0].type == PROG_INTEGER) ? oper[0].data.number :
-            oper[0].data.objref;
+        tf1 = (oper[1].type == PROG_FLOAT) ? oper[1].data.fnumber : (oper[1].type == PROG_INTEGER) ? oper[1].data.number : oper[1].data.objref;
+        tf2 = (oper[0].type == PROG_FLOAT) ? oper[0].data.fnumber : (oper[0].type == PROG_INTEGER) ? oper[0].data.number : oper[0].data.objref;
         result = tf1 < tf2;
     } else {
-        result =
-            (((oper[1].type ==
-               PROG_INTEGER) ? oper[1].data.number : oper[1].data.objref)
-             < ((oper[0].type == PROG_INTEGER) ? oper[0].data.number : oper[0].
-                data.objref));
+        result = (((oper[1].type == PROG_INTEGER) ? oper[1].data.number : oper[1].data.objref)
+                  < ((oper[0].type == PROG_INTEGER) ? oper[0].data.number : oper[0].data.objref));
     }
-    
+
     PushInt(result);
 }
+
 void
 prim_greathan(PRIM_PROTOTYPE)
 {
-	double tf1, tf2;
-	int result;
-    
+    double tf1, tf2;
+    int result;
+
     if (!comp_t(&oper[0]) || !comp_t(&oper[1]))
         abort_interp("Invalid argument type.");
     if (oper[0].type == PROG_FLOAT || oper[1].type == PROG_FLOAT) {
-        tf1 = (oper[1].type == PROG_FLOAT) ? oper[1].data.fnumber :
-            (oper[1].type == PROG_INTEGER) ? oper[1].data.number :
-            oper[1].data.objref;
-        tf2 = (oper[0].type == PROG_FLOAT) ? oper[0].data.fnumber :
-            (oper[0].type == PROG_INTEGER) ? oper[0].data.number :
-            oper[0].data.objref;
+        tf1 = (oper[1].type == PROG_FLOAT) ? oper[1].data.fnumber : (oper[1].type == PROG_INTEGER) ? oper[1].data.number : oper[1].data.objref;
+        tf2 = (oper[0].type == PROG_FLOAT) ? oper[0].data.fnumber : (oper[0].type == PROG_INTEGER) ? oper[0].data.number : oper[0].data.objref;
         result = tf1 > tf2;
     } else {
-        result =
-            (((oper[1].type ==
-               PROG_INTEGER) ? oper[1].data.number : oper[1].data.objref)
-             > ((oper[0].type == PROG_INTEGER) ? oper[0].data.number : oper[0].
-                data.objref));
+        result = (((oper[1].type == PROG_INTEGER) ? oper[1].data.number : oper[1].data.objref)
+                  > ((oper[0].type == PROG_INTEGER) ? oper[0].data.number : oper[0].data.objref));
     }
-    
+
     PushInt(result);
 }
+
 void
 prim_equal(PRIM_PROTOTYPE)
 {
-	double tf1, tf2;
-	int result;
-    
+    double tf1, tf2;
+    int result;
+
     if (!comp_t(&oper[0]) || !comp_t(&oper[1]))
         abort_interp("Invalid argument type.");
     if (oper[0].type == PROG_FLOAT || oper[1].type == PROG_FLOAT) {
-        tf1 = (oper[1].type == PROG_FLOAT) ? oper[1].data.fnumber :
-            (oper[1].type == PROG_INTEGER) ? oper[1].data.number :
-            oper[1].data.objref;
-        tf2 = (oper[0].type == PROG_FLOAT) ? oper[0].data.fnumber :
-            (oper[0].type == PROG_INTEGER) ? oper[0].data.number :
-            oper[0].data.objref;
+        tf1 = (oper[1].type == PROG_FLOAT) ? oper[1].data.fnumber : (oper[1].type == PROG_INTEGER) ? oper[1].data.number : oper[1].data.objref;
+        tf2 = (oper[0].type == PROG_FLOAT) ? oper[0].data.fnumber : (oper[0].type == PROG_INTEGER) ? oper[0].data.number : oper[0].data.objref;
         result = tf1 == tf2;
     } else {
-        result =
-            (((oper[1].type ==
-               PROG_INTEGER) ? oper[1].data.number : oper[1].data.objref)
-             == ((oper[0].type == PROG_INTEGER) ? oper[0].data.number : oper[0].
-                 data.objref));
+        result = (((oper[1].type == PROG_INTEGER) ? oper[1].data.number : oper[1].data.objref)
+                  == ((oper[0].type == PROG_INTEGER) ? oper[0].data.number : oper[0].data.objref));
     }
-    
+
     PushInt(result);
 }
+
 void
 prim_noteq(PRIM_PROTOTYPE)
 {
-	double tf1, tf2;
-	int result;
-    
+    double tf1, tf2;
+    int result;
+
     if (!comp_t(&oper[0]) || !comp_t(&oper[1]))
         abort_interp("Invalid argument type.");
     if (oper[0].type == PROG_FLOAT || oper[1].type == PROG_FLOAT) {
-        tf1 = (oper[1].type == PROG_FLOAT) ? oper[1].data.fnumber :
-            (oper[1].type == PROG_INTEGER) ? oper[1].data.number :
-            oper[1].data.objref;
-        tf2 = (oper[0].type == PROG_FLOAT) ? oper[0].data.fnumber :
-            (oper[0].type == PROG_INTEGER) ? oper[0].data.number :
-            oper[0].data.objref;
+        tf1 = (oper[1].type == PROG_FLOAT) ? oper[1].data.fnumber : (oper[1].type == PROG_INTEGER) ? oper[1].data.number : oper[1].data.objref;
+        tf2 = (oper[0].type == PROG_FLOAT) ? oper[0].data.fnumber : (oper[0].type == PROG_INTEGER) ? oper[0].data.number : oper[0].data.objref;
         result = tf1 != tf2;
     } else {
-        result =
-            (((oper[1].type ==
-               PROG_INTEGER) ? oper[1].data.number : oper[1].data.objref)
-             != ((oper[0].type == PROG_INTEGER) ? oper[0].data.number : oper[0].
-                 data.objref));
+        result = (((oper[1].type == PROG_INTEGER) ? oper[1].data.number : oper[1].data.objref)
+                  != ((oper[0].type == PROG_INTEGER) ? oper[0].data.number : oper[0].data.objref));
     }
-    
+
     PushInt(result);
 }
+
 void
 prim_lesseq(PRIM_PROTOTYPE)
 {
-	double tf1, tf2;
-	int result;
-    
+    double tf1, tf2;
+    int result;
+
     if (!comp_t(&oper[0]) || !comp_t(&oper[1]))
         abort_interp("Invalid argument type.");
     if (oper[0].type == PROG_FLOAT || oper[1].type == PROG_FLOAT) {
-        tf1 = (oper[1].type == PROG_FLOAT) ? oper[1].data.fnumber :
-            (oper[1].type == PROG_INTEGER) ? oper[1].data.number :
-            oper[1].data.objref;
-        tf2 = (oper[0].type == PROG_FLOAT) ? oper[0].data.fnumber :
-            (oper[0].type == PROG_INTEGER) ? oper[0].data.number :
-            oper[0].data.objref;
+        tf1 = (oper[1].type == PROG_FLOAT) ? oper[1].data.fnumber : (oper[1].type == PROG_INTEGER) ? oper[1].data.number : oper[1].data.objref;
+        tf2 = (oper[0].type == PROG_FLOAT) ? oper[0].data.fnumber : (oper[0].type == PROG_INTEGER) ? oper[0].data.number : oper[0].data.objref;
         result = tf1 <= tf2;
     } else {
-        result =
-            (((oper[1].type ==
-               PROG_INTEGER) ? oper[1].data.number : oper[1].data.objref)
-             <= ((oper[0].type == PROG_INTEGER) ? oper[0].data.number : oper[0].
-                 data.objref));
+        result = (((oper[1].type == PROG_INTEGER) ? oper[1].data.number : oper[1].data.objref)
+                  <= ((oper[0].type == PROG_INTEGER) ? oper[0].data.number : oper[0].data.objref));
     }
-    
+
     PushInt(result);
 }
+
 void
 prim_greateq(PRIM_PROTOTYPE)
 {
-	double tf1, tf2;
-	int result;
-    
+    double tf1, tf2;
+    int result;
+
     if (!comp_t(&oper[0]) || !comp_t(&oper[1]))
         abort_interp("Invalid argument type.");
     if (oper[0].type == PROG_FLOAT || oper[1].type == PROG_FLOAT) {
-        tf1 = (oper[1].type == PROG_FLOAT) ? oper[1].data.fnumber :
-            (oper[1].type == PROG_INTEGER) ? oper[1].data.number :
-            oper[1].data.objref;
-        tf2 = (oper[0].type == PROG_FLOAT) ? oper[0].data.fnumber :
-            (oper[0].type == PROG_INTEGER) ? oper[0].data.number :
-            oper[0].data.objref;
+        tf1 = (oper[1].type == PROG_FLOAT) ? oper[1].data.fnumber : (oper[1].type == PROG_INTEGER) ? oper[1].data.number : oper[1].data.objref;
+        tf2 = (oper[0].type == PROG_FLOAT) ? oper[0].data.fnumber : (oper[0].type == PROG_INTEGER) ? oper[0].data.number : oper[0].data.objref;
         result = tf1 >= tf2;
     } else {
-        result =
-            (((oper[1].type ==
-               PROG_INTEGER) ? oper[1].data.number : oper[1].data.objref)
-             >= ((oper[0].type == PROG_INTEGER) ? oper[0].data.number : oper[0].
-                 data.objref));
+        result = (((oper[1].type == PROG_INTEGER) ? oper[1].data.number : oper[1].data.objref)
+                  >= ((oper[0].type == PROG_INTEGER) ? oper[0].data.number : oper[0].data.objref));
     }
-    
+
     PushInt(result);
 }
+
 void
 prim_random(PRIM_PROTOTYPE)
 {
     int result = RANDOM();
+
     CHECKOFLOW(1);
     PushInt(result);
 }
@@ -497,24 +453,17 @@ prim_random(PRIM_PROTOTYPE)
 void
 prim_int(PRIM_PROTOTYPE)
 {
-	int result;
-    
-    if (!(oper[0].type == PROG_OBJECT || oper[0].type == PROG_VAR ||
-          oper[0].type == PROG_LVAR || oper[0].type == PROG_FLOAT))
+    int result;
+
+    if (!(oper[0].type == PROG_OBJECT || oper[0].type == PROG_VAR || oper[0].type == PROG_LVAR || oper[0].type == PROG_FLOAT))
         abort_interp("Invalid argument type.");
-    if ((!(oper[0].type == PROG_FLOAT)) ||
-        (oper[0].type == PROG_FLOAT
-         && arith_good((double) oper[0].data.fnumber))) {
-        result =
-            (int) ((oper[0].type ==
-                    PROG_OBJECT) ? oper[0].data.objref : (oper[0].type ==
-                                                         PROG_FLOAT) ? oper[0].
-                   data.fnumber : oper[0].data.number);
+    if ((!(oper[0].type == PROG_FLOAT)) || (oper[0].type == PROG_FLOAT && arith_good((double) oper[0].data.fnumber))) {
+        result = (int) ((oper[0].type == PROG_OBJECT) ? oper[0].data.objref : (oper[0].type == PROG_FLOAT) ? oper[0].data.fnumber : oper[0].data.number);
     } else {
         result = 0;
         fr->error.error_flags.i_bounds = 1;
     }
-    
+
     PushInt(result);
 }
 
@@ -523,12 +472,11 @@ prim_plusplus(PRIM_PROTOTYPE)
 {
     struct inst *tmp;
     int vnum, result;
-	double fresult;
-	struct inst temp1, temp2;
-    
+    double fresult;
+    struct inst temp1, temp2;
+
     temp1 = oper[0];
-    if (oper[0].type == PROG_VAR || oper[0].type == PROG_SVAR
-        || oper[0].type == PROG_LVAR)
+    if (oper[0].type == PROG_VAR || oper[0].type == PROG_SVAR || oper[0].type == PROG_LVAR)
         if (oper[0].data.number > MAX_VAR || oper[0].data.number < 0)
             abort_interp("Variable number out of range.");
     switch (oper[0].type) {
@@ -541,25 +489,26 @@ prim_plusplus(PRIM_PROTOTYPE)
             break;
         case PROG_LVAR:{
             struct localvars *tmp2 = localvars_get(fr, program);
+
             copyinst(&(tmp2->lvars[temp1.data.number]), &temp2);
             break;
         }
         case PROG_INTEGER:
             oper[0].data.number++;
             result = oper[0].data.number;
-            
+
             PushInt(result);
             return;
         case PROG_OBJECT:
             oper[0].data.objref++;
             result = oper[0].data.objref;
-            
+
             PushObject(result);
             return;
         case PROG_FLOAT:
             oper[0].data.fnumber++;
             fresult = oper[0].data.fnumber;
-            
+
             PushFloat(fresult);
             return;
         default:
@@ -590,6 +539,7 @@ prim_plusplus(PRIM_PROTOTYPE)
         }
         case PROG_SVAR:{
             struct inst *tmp2;
+
             tmp2 = scopedvar_get(fr, 0, vnum);
             if (!tmp2)
                 abort_interp("Scoped variable number out of range.");
@@ -599,23 +549,25 @@ prim_plusplus(PRIM_PROTOTYPE)
         }
         case PROG_LVAR:{
             struct localvars *tmp2 = localvars_get(fr, program);
+
             CLEAR(&(tmp2->lvars[vnum]));
             copyinst(&temp2, &(tmp2->lvars[vnum]));
             break;
         }
     }
-    
+
 }
+
 void
 prim_minusminus(PRIM_PROTOTYPE)
 {
     struct inst *tmp;
     int vnum, result;
-	double fresult;
-	struct inst temp1, temp2;
+    double fresult;
+    struct inst temp1, temp2;
+
     temp1 = oper[0];
-    if (oper[0].type == PROG_VAR || oper[0].type == PROG_SVAR
-        || oper[0].type == PROG_LVAR)
+    if (oper[0].type == PROG_VAR || oper[0].type == PROG_SVAR || oper[0].type == PROG_LVAR)
         if (oper[0].data.number > MAX_VAR || oper[0].data.number < 0)
             abort_interp("Variable number out of range.");
     switch (oper[0].type) {
@@ -628,25 +580,26 @@ prim_minusminus(PRIM_PROTOTYPE)
             break;;
         case PROG_LVAR:{
             struct localvars *tmp2 = localvars_get(fr, program);
+
             copyinst(&(tmp2->lvars[temp1.data.number]), &temp2);
             break;
         }
         case PROG_INTEGER:
             oper[0].data.number--;
             result = oper[0].data.number;
-            
+
             PushInt(result);
             return;
         case PROG_OBJECT:
             oper[0].data.objref--;
             result = oper[0].data.objref;
-            
+
             PushObject(result);
             return;
         case PROG_FLOAT:
             oper[0].data.fnumber--;
             fresult = oper[0].data.fnumber;
-            
+
             PushFloat(fresult);
             return;
         default:
@@ -677,6 +630,7 @@ prim_minusminus(PRIM_PROTOTYPE)
         }
         case PROG_SVAR:{
             struct inst *tmp2;
+
             tmp2 = scopedvar_get(fr, 0, vnum);
             if (!tmp2)
                 abort_interp("Scoped variable number out of range.");
@@ -686,31 +640,34 @@ prim_minusminus(PRIM_PROTOTYPE)
         }
         case PROG_LVAR:{
             struct localvars *tmp2 = localvars_get(fr, program);
+
             CLEAR(&(tmp2->lvars[vnum]));
             copyinst(&temp2, &(tmp2->lvars[vnum]));
             break;
         }
     }
-    
+
 }
+
 void
 prim_abs(PRIM_PROTOTYPE)
 {
-	int result;
-    
+    int result;
+
     if (oper[0].type != PROG_INTEGER)
         abort_interp("Non-integer argument.");
     result = oper[0].data.number;
     if (result < 0)
         result = -result;
-    
+
     PushInt(result);
 }
+
 void
 prim_sign(PRIM_PROTOTYPE)
 {
-	int result;
-    
+    int result;
+
     if (oper[0].type != PROG_INTEGER)
         abort_interp("Non-integer argument.");
     if (oper[0].data.number > 0)
@@ -719,6 +676,6 @@ prim_sign(PRIM_PROTOTYPE)
         result = -1;
     else
         result = 0;
-    
+
     PushInt(result);
 }

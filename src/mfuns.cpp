@@ -30,8 +30,7 @@ mfn_func(MFUNARGS)
     for (i = 1; i < argc - 1; i++) {
         ptr = MesgParse(argv[i], argv[i]);
         CHECKRETURN(ptr, "FUNC", "variable name argument");
-        sprintf(buf, "{with:%.*s,{:%d},%.*s}", MAX_MFUN_NAME_LEN, ptr, i,
-                (BUFFER_LEN - MAX_MFUN_NAME_LEN - 20), def);
+        sprintf(buf, "{with:%.*s,{:%d},%.*s}", MAX_MFUN_NAME_LEN, ptr, i, (BUFFER_LEN - MAX_MFUN_NAME_LEN - 20), def);
         strcpy(def, buf);
     }
     i = new_mfunc(funcname, def);
@@ -571,8 +570,7 @@ mfn_rand(MFUNARGS)
     num = get_list_count(what, obj, perms, pname);
     if (!num)
         ABORT_MPI("RAND", "Failed list read.");
-    ptr =
-        get_list_item(what, obj, perms, pname, (((RANDOM() / 256) % num) + 1));
+    ptr = get_list_item(what, obj, perms, pname, (((RANDOM() / 256) % num) + 1));
     if (!ptr)
         ABORT_MPI("RAND", "Failed list read.");
     return ptr;
@@ -606,7 +604,7 @@ mfn_timesub(MFUNARGS)
     offset = ((((time_t) time(NULL) + offset) % period) * num) / period;
     if (offset < 0)
         offset = -offset;
-    ptr = get_list_item(what, obj, perms, pname, (int)offset + 1);
+    ptr = get_list_item(what, obj, perms, pname, (int) offset + 1);
     if (!ptr)
         ABORT_MPI("TIMESUB", "Failed list read.");
     return ptr;
@@ -1264,7 +1262,7 @@ mfn_default(MFUNARGS)
     CHECKRETURN(ptr, "IF", "arg 1");
     if (ptr && truestr(buf)) {
         if (!ptr)
-            ptr = (char *)"";
+            ptr = (char *) "";
     } else {
         ptr = MesgParse(argv[1], buf);
         CHECKRETURN(ptr, "IF", "arg 2");
@@ -1281,7 +1279,7 @@ mfn_if(MFUNARGS)
     if (argc == 3) {
         fbr = argv[2];
     } else {
-        fbr = (char *)"";
+        fbr = (char *) "";
     }
     ptr = MesgParse(argv[0], buf);
     CHECKRETURN(ptr, "IF", "arg 1");
@@ -1293,7 +1291,7 @@ mfn_if(MFUNARGS)
         CHECKRETURN(ptr, "IF", "arg 3");
     } else {
         *buf = '\0';
-        ptr = (char *)"";
+        ptr = (char *) "";
     }
     return ptr;
 }
@@ -1618,8 +1616,8 @@ mfn_nearby(MFUNARGS)
     } else {
         obj2 = what;
     }
-    if (!Wizperms(what) && !isneighbor(obj, what) && !isneighbor(obj2, what) &&
-        !isneighbor(obj, player) && !isneighbor(obj2, player)
+    if (!Wizperms(what) && !isneighbor(obj, what) && !isneighbor(obj2, what)
+        && !isneighbor(obj, player) && !isneighbor(obj2, player)
         ) {
         ABORT_MPI("NEARBY", "Permission denied.  Neither object is local.");
     }
@@ -1702,16 +1700,11 @@ mfn_ansi(MFUNARGS)
         } else {
             ptr2 = ptr + strlen(ptr);
         }
-        if (Typeof(what) == TYPE_ROOM || OWNER(what) == obj || player == obj ||
-            Mageperms(what) ||
-            (Typeof(what) == TYPE_EXIT && Typeof(getloc(what)) == TYPE_ROOM) ||
-            string_prefix(argv[0], NAME(player))) {
+        if (Typeof(what) == TYPE_ROOM || OWNER(what) == obj || player == obj || Mageperms(what) || (Typeof(what) == TYPE_EXIT && Typeof(getloc(what)) == TYPE_ROOM)
+            || string_prefix(argv[0], NAME(player))) {
             sprintf(buf, "%.4093s", ptr);
         } else {
-            sprintf(buf, "%s%.16s%s%.4078s",
-                    ((obj == OWNER(perms) || obj == player) ? "" : "> "),
-                    NAME(player),
-                    ((*argv[0] == '\'' || isspace(*argv[0])) ? "" : " "), ptr);
+            sprintf(buf, "%s%.16s%s%.4078s", ((obj == OWNER(perms) || obj == player) ? "" : "> "), NAME(player), ((*argv[0] == '\'' || isspace(*argv[0])) ? "" : " "), ptr);
         }
         anotify_from_echo(player, obj, buf, 1);
     }
@@ -1745,16 +1738,11 @@ mfn_html(MFUNARGS)
         } else {
             ptr2 = ptr + strlen(ptr);
         }
-        if (Typeof(what) == TYPE_ROOM || OWNER(what) == obj || player == obj ||
-            Mageperms(what) ||
-            (Typeof(what) == TYPE_EXIT && Typeof(getloc(what)) == TYPE_ROOM) ||
-            string_prefix(argv[0], NAME(player))) {
+        if (Typeof(what) == TYPE_ROOM || OWNER(what) == obj || player == obj || Mageperms(what) || (Typeof(what) == TYPE_EXIT && Typeof(getloc(what)) == TYPE_ROOM)
+            || string_prefix(argv[0], NAME(player))) {
             sprintf(buf, "%.4093s", ptr);
         } else {
-            sprintf(buf, "%s%.16s%s%.4078s",
-                    ((obj == OWNER(perms) || obj == player) ? "" : "> "),
-                    NAME(player),
-                    ((*argv[0] == '\'' || isspace(*argv[0])) ? "" : " "), ptr);
+            sprintf(buf, "%s%.16s%s%.4078s", ((obj == OWNER(perms) || obj == player) ? "" : "> "), NAME(player), ((*argv[0] == '\'' || isspace(*argv[0])) ? "" : " "), ptr);
         }
         notify_html_from_echo(player, obj, buf, 1);
 /*      notify_html_nolisten(player, buf, 1); */
@@ -1788,16 +1776,11 @@ mfn_tell(MFUNARGS)
         } else {
             ptr2 = ptr + strlen(ptr);
         }
-        if (Typeof(what) == TYPE_ROOM || OWNER(what) == obj || player == obj ||
-            Mageperms(what) ||
-            (Typeof(what) == TYPE_EXIT && Typeof(getloc(what)) == TYPE_ROOM) ||
-            string_prefix(argv[0], NAME(player))) {
+        if (Typeof(what) == TYPE_ROOM || OWNER(what) == obj || player == obj || Mageperms(what) || (Typeof(what) == TYPE_EXIT && Typeof(getloc(what)) == TYPE_ROOM)
+            || string_prefix(argv[0], NAME(player))) {
             sprintf(buf, "%.4093s", ptr);
         } else {
-            sprintf(buf, "%s%.16s%s%.4078s",
-                    ((obj == OWNER(perms) || obj == player) ? "" : "> "),
-                    NAME(player),
-                    ((*argv[0] == '\'' || isspace(*argv[0])) ? "" : " "), ptr);
+            sprintf(buf, "%s%.16s%s%.4078s", ((obj == OWNER(perms) || obj == player) ? "" : "> "), NAME(player), ((*argv[0] == '\'' || isspace(*argv[0])) ? "" : " "), ptr);
         }
         notify_from_echo(player, obj, buf, 1);
     }
@@ -1833,16 +1816,11 @@ mfn_telldescr(MFUNARGS)
         } else {
             ptr2 = ptr + strlen(ptr);
         }
-        if (Typeof(what) == TYPE_ROOM || OWNER(what) == obj || player == obj ||
-            Mageperms(what) ||
-            (Typeof(what) == TYPE_EXIT && Typeof(getloc(what)) == TYPE_ROOM) ||
-            string_prefix(argv[0], NAME(player))) {
+        if (Typeof(what) == TYPE_ROOM || OWNER(what) == obj || player == obj || Mageperms(what) || (Typeof(what) == TYPE_EXIT && Typeof(getloc(what)) == TYPE_ROOM)
+            || string_prefix(argv[0], NAME(player))) {
             sprintf(buf, "%.4093s", ptr);
         } else {
-            sprintf(buf, "%s%.16s%s%.4078s",
-                    ((obj == OWNER(perms) || obj == player) ? "" : "> "),
-                    NAME(player),
-                    ((*argv[0] == '\'' || isspace(*argv[0])) ? "" : " "), ptr);
+            sprintf(buf, "%s%.16s%s%.4078s", ((obj == OWNER(perms) || obj == player) ? "" : "> "), NAME(player), ((*argv[0] == '\'' || isspace(*argv[0])) ? "" : " "), ptr);
         }
         notify_descriptor(obj, buf);
     }
@@ -1876,13 +1854,11 @@ mfn_otell(MFUNARGS)
         } else {
             ptr2 = ptr + strlen(ptr);
         }
-        if (Typeof(what) == TYPE_ROOM || Mageperms(what) ||
-            (Typeof(what) == TYPE_EXIT && Typeof(getloc(what)) == TYPE_ROOM) ||
-            string_prefix(argv[0], NAME(player))) {
+        if (Typeof(what) == TYPE_ROOM || Mageperms(what) || (Typeof(what) == TYPE_EXIT && Typeof(getloc(what)) == TYPE_ROOM)
+            || string_prefix(argv[0], NAME(player))) {
             strcpy(buf, ptr);
         } else {
-            sprintf(buf, "%.16s%s%.4078s", NAME(player),
-                    ((*argv[0] == '\'' || isspace(*argv[0])) ? "" : " "), ptr);
+            sprintf(buf, "%.16s%s%.4078s", NAME(player), ((*argv[0] == '\'' || isspace(*argv[0])) ? "" : " "), ptr);
         }
         thing = DBFETCH(obj)->contents;
         while (thing != NOTHING) {
@@ -1922,13 +1898,11 @@ mfn_oansi(MFUNARGS)
         } else {
             ptr2 = ptr + strlen(ptr);
         }
-        if (Typeof(what) == TYPE_ROOM || Mageperms(what) ||
-            (Typeof(what) == TYPE_EXIT && Typeof(getloc(what)) == TYPE_ROOM) ||
-            string_prefix(argv[0], NAME(player))) {
+        if (Typeof(what) == TYPE_ROOM || Mageperms(what) || (Typeof(what) == TYPE_EXIT && Typeof(getloc(what)) == TYPE_ROOM)
+            || string_prefix(argv[0], NAME(player))) {
             strcpy(buf, ptr);
         } else {
-            sprintf(buf, "%.16s%s%.4078s", NAME(player),
-                    ((*argv[0] == '\'' || isspace(*argv[0])) ? "" : " "), ptr);
+            sprintf(buf, "%.16s%s%.4078s", NAME(player), ((*argv[0] == '\'' || isspace(*argv[0])) ? "" : " "), ptr);
         }
         thing = DBFETCH(obj)->contents;
         while (thing != NOTHING) {
@@ -1968,13 +1942,11 @@ mfn_ohtml(MFUNARGS)
         } else {
             ptr2 = ptr + strlen(ptr);
         }
-        if (Typeof(what) == TYPE_ROOM || Mageperms(what) ||
-            (Typeof(what) == TYPE_EXIT && Typeof(getloc(what)) == TYPE_ROOM) ||
-            string_prefix(argv[0], NAME(player))) {
+        if (Typeof(what) == TYPE_ROOM || Mageperms(what) || (Typeof(what) == TYPE_EXIT && Typeof(getloc(what)) == TYPE_ROOM)
+            || string_prefix(argv[0], NAME(player))) {
             strcpy(buf, ptr);
         } else {
-            sprintf(buf, "%.16s%s%.4078s", NAME(player),
-                    ((*argv[0] == '\'' || isspace(*argv[0])) ? "" : " "), ptr);
+            sprintf(buf, "%.16s%s%.4078s", NAME(player), ((*argv[0] == '\'' || isspace(*argv[0])) ? "" : " "), ptr);
         }
         thing = DBFETCH(obj)->contents;
         while (thing != NOTHING) {

@@ -23,19 +23,20 @@ void
 prim_descr_safeboot(PRIM_PROTOTYPE)
 {
     struct descriptor_data *d;
-    
+
     if (oper[0].type != PROG_INTEGER)
         abort_interp("Descriptor integer expected.");
     if (!(d = descrdata_by_descr(oper[0].data.number)))
         abort_interp("Invalid descriptor.");
     d->booted = 4;
-    
+
 }
+
 void
 prim_body_getchar(PRIM_PROTOTYPE)
 {
     struct descriptor_data *d;
-	int result;
+    int result;
 
     if (oper[0].type != PROG_INTEGER)
         abort_interp("Integer argument expected. (2)");
@@ -52,14 +53,15 @@ prim_body_getchar(PRIM_PROTOTYPE)
     } else {
         result = d->http->body.data[oper[0].data.number];
     }
-    
+
     PushInt(result);
 }
+
 void
 prim_body_nextchar(PRIM_PROTOTYPE)
 {
     struct descriptor_data *d;
-	int result, tmp;
+    int result, tmp;
 
     if (oper[0].type != PROG_INTEGER)
         abort_interp("Descriptor integer expected. (1)");
@@ -78,14 +80,15 @@ prim_body_nextchar(PRIM_PROTOTYPE)
             d->http->body.curr = tmp + 1;
         }
     }
-    
+
     PushInt(result);
 }
+
 void
 prim_body_prevchar(PRIM_PROTOTYPE)
 {
     struct descriptor_data *d;
-	int result, tmp;
+    int result, tmp;
 
     if (oper[0].type != PROG_INTEGER)
         abort_interp("Descriptor integer expected. (1)");
@@ -104,15 +107,16 @@ prim_body_prevchar(PRIM_PROTOTYPE)
             d->http->body.curr = tmp;
         }
     }
-    
+
     PushInt(result);
 }
+
 void
 prim_httpdata(PRIM_PROTOTYPE)
 {
     struct descriptor_data *d;
     stk_array *nw;
-    
+
     if (oper[0].type != PROG_INTEGER)
         abort_interp("Descriptor integer expected.");
     if (!(d = descrdata_by_descr(oper[0].data.number)))
@@ -120,7 +124,7 @@ prim_httpdata(PRIM_PROTOTYPE)
     if (d->type != CT_HTTP || !d->http)
         abort_interp("Non-HTTP connection.");
     nw = d->http->makearray();
-    
+
     PushArrayRaw(nw);
 }
 #endif /* NEWHTTPD */

@@ -37,7 +37,9 @@
  *
  */
 /* Definition of 'McpFrame' */
-
+#ifdef MCP_SUPPORT
+# include "mcp.h"
+#endif
 #include "dbsearch.h"
 
 /* Prototypes for externs not defined elsewhere */
@@ -110,6 +112,7 @@ typedef struct timenode {
 extern timequeue tqhead;
 
 extern stk_array *get_pids(dbref ref);
+extern stk_array *get_pidinfo_timers(int pid);
 extern stk_array *get_pidinfo(int pid);
 extern int scan_instances(dbref program);
 extern void handle_read_event(int descr, dbref player, const char *command,
@@ -179,6 +182,10 @@ extern void do_dig(int descr, dbref player, const char *name,
                    const char *pname);
 extern void do_create(dbref player, char *name, char *cost);
 extern void do_prog(int descr, dbref player, const char *name);
+#ifdef MCP_SUPPORT
+extern void do_mcpprogram(int descr, dbref player, const char *name);
+extern void do_mcpedit(int descr, dbref player, const char *name);
+#endif
 extern void do_edit(int descr, dbref player, const char *name);
 extern int unset_source(dbref player, dbref loc, dbref action);
 extern int _link_exit(int descr, dbref player, dbref exit, char *dest_name,
@@ -225,12 +232,10 @@ extern void dump_deltas(void);
 
 /* From hashtab.c */
 extern unsigned phash(const char *s, unsigned hash_size);
-extern hash_data *find_hash(register const char *s, hash_tab *table, unsigned size);
-extern hash_entry *add_hash(register const char *name, hash_data data, hash_tab *table,
-                            unsigned size);
-extern hash_entry *add_hash_int(register const char *name, int value,
-                                hash_tab *table, unsigned size);
-extern int free_hash(register const char *name, hash_tab *table, unsigned size);
+extern hash_data *find_hash(const char *s, hash_tab *table, unsigned size);
+extern hash_entry *add_hash(const char *name, hash_data data, hash_tab *table, unsigned size);
+extern hash_entry *add_hash_int(const char *name, int value, hash_tab *table, unsigned size);
+extern int free_hash(const char *name, hash_tab *table, unsigned size);
 extern void kill_hash(hash_tab *table, unsigned size, int freeptrs);
 
 /* From help.c */
@@ -426,7 +431,7 @@ extern const char *exit_prefix(const char *string,
 extern int string_prefix(const char *string, const char *prefix);
 extern const char *string_match(const char *src, const char *sub);
 
-extern char *mushformat_substitute(const char *str);
+//extern char *mushformat_substitute(const char *str);
 extern char *pronoun_substitute(int descr, dbref player, const char *str);
 extern char *intostr(char *buf, int i);
 extern char *html_escape(const char *str);
@@ -462,8 +467,8 @@ extern int wcharlen_slice(char* buf, int slice, int buflen);
 #endif
 
 /* Lazy macros to simplify writing MUSH formatting hooks in notify prims */
-#define strcpy_mush(x,y) (strcpy(x, mushformat_substitute(y)))
-#define prefix_message_mush(v,w,x,y,z) (prefix_message(v,mushformat_substitute(w),x,y,z))
+//#define strcpy_mush(x,y) (strcpy(x, mushformat_substitute(y)))
+//#define prefix_message_mush(v,w,x,y,z) (prefix_message(v,mushformat_substitute(w),x,y,z))
 
 
 #if !defined(MALLOC_PROFILING)
@@ -522,7 +527,7 @@ extern char power_2char(char *flag);
 extern const char *unparse_flags(dbref thing, char buf[BUFFER_LEN]);
 extern const char *ansi_unparse_object(dbref player, dbref object);
 extern const char *unparse_object(dbref player, dbref object);
-extern const char *unparse_boolexp(dbref player, struct boolexp *b,
+extern const char *unparse_boolexp(char *buf, dbref player, struct boolexp *b,
                                    int fullname);
 extern const char *ansiname(dbref loc, char buf[BUFFER_LEN]);
 
@@ -530,7 +535,6 @@ extern const char *ansiname(dbref loc, char buf[BUFFER_LEN]);
 #ifdef COMPRESS
 extern void save_compress_words_to_file(FILE * f);
 extern void init_compress_from_file(FILE * dicto);
-extern const char *pcompress(const char *);
 extern void init_compress(void);
 #endif /* COMPRESS */
 extern const char *puncompress(const char *);
@@ -625,6 +629,11 @@ extern size_t Base64Decode(void *outbuf, size_t outbuflen, const char *inbuf);
 
 /* from sha1.c */
 extern void SHAbase64(char *dest, const void *orig, int len);
+
+#ifdef MCP_SUPPORT
+/* from mcppkgs.c */
+extern void show_mcp_error(McpFrame *mfr, char *topic, char *text);
+#endif
 
 /* from p_socket.c */
 #ifdef MUF_SOCKETS

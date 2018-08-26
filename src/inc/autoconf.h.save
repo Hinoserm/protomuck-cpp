@@ -10,7 +10,7 @@
 #define HAVE_DIRENT_H 1
 
 /* Define to 1 if you have the <dlfcn.h> header file. */
-/* #undef HAVE_DLFCN_H */
+#define HAVE_DLFCN_H /**/
 
 /* Define to 1 if you don't have `vprintf' but do have `_doprnt.' */
 /* #undef HAVE_DOPRNT */
@@ -28,13 +28,13 @@
 #define HAVE_INTTYPES_H 1
 
 /* Define to 1 if you have the `dl' library (-ldl). */
-/* #undef HAVE_LIBDL */
+#define HAVE_LIBDL 1
 
 /* Define to 1 if you have the `pcre' library (-lpcre). */
 #define HAVE_LIBPCRE 1
 
 /* Define to 1 if you have the `pthread' library (-lpthread). */
-#define HAVE_LIBPTHREAD 1
+/* #define HAVE_LIBPTHREAD 1 */
 
 /* Define to 1 if you have the `util' library (-lutil). */
 /* #undef HAVE_LIBUTIL */
@@ -164,7 +164,7 @@
 /* #undef IPV6 */
 
 /* Defined to enable modular support */
-/* #undef MODULAR_SUPPORT */
+#undef MODULAR_SUPPORT /**/
 
 /* Defined to DISABLE compression support. */
 /* #undef NO_COMPRESS */
@@ -218,7 +218,8 @@
 /* #undef TM_IN_SYS_TIME */
 
 /* The value of the uname -a command. */
-#define UNAME_VALUE "Linux potassium.ginkosoft.com 3.11.1-grsec-slacomp #2 SMP Mon Sep 23 19:39:44 CDT 2013 x86_64 x86_64 x86_64 GNU/Linux"
+// #define UNAME_VALUE "Linux potassium.ginkosoft.com 3.2.11-grsec #1 SMP Fri Mar 16 18:05:35 CDT 2012 x86_64 x86_64 x86_64 GNU/Linux"
+#define UNAME_VALUE "Flexible Survival"
 
 /* Defined to enable SSL support. */
 #define USE_SSL /**/

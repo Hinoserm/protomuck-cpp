@@ -83,19 +83,16 @@ do_wizchat(dbref player, const char *arg)
     switch (arg[0]) {
 
         case '|':
-            sprintf(buf, SYSBLUE "WizChat" SYSPURPLE "> " SYSAQUA "%s",
-                    tct(arg + 1, buf2));
+            sprintf(buf, SYSBLUE "WizChat" SYSPURPLE "> " SYSAQUA "%s", tct(arg + 1, buf2));
             break;
 
         case '#':
-            sprintf(buf, SYSBLUE "WizChat" SYSPURPLE "> "
-                    SYSAQUA "%s", tct(arg + 1, buf2));
+            sprintf(buf, SYSBLUE "WizChat" SYSPURPLE "> " SYSAQUA "%s", tct(arg + 1, buf2));
             break;
 
         case ':':
         case ';':
-            sprintf(buf, SYSBLUE "WizChat" SYSPURPLE "> " SYSAQUA
-                    "%s %s", tct(NAME(player), buf2), tct(arg + 1, buf3));
+            sprintf(buf, SYSBLUE "WizChat" SYSPURPLE "> " SYSAQUA "%s %s", tct(NAME(player), buf2), tct(arg + 1, buf3));
             break;
 
         case '?':
@@ -103,9 +100,7 @@ do_wizchat(dbref player, const char *arg)
             return;
 
         default:
-            sprintf(buf, SYSBLUE "WizChat" SYSPURPLE "> " SYSAQUA
-                    "%s says, \"" SYSYELLOW "%s" SYSAQUA "\"",
-                    tct(NAME(player), buf2), tct(arg, buf3));
+            sprintf(buf, SYSBLUE "WizChat" SYSPURPLE "> " SYSAQUA "%s says, \"" SYSYELLOW "%s" SYSAQUA "\"", tct(NAME(player), buf2), tct(arg, buf3));
             break;
     }
     ansi_wall_wizards(buf);
@@ -167,63 +162,56 @@ do_teleport(int descr, dbref player, const char *arg1, const char *arg2)
             anotify_nolisten2(player, CINFO "I don't know where you mean!");
             break;
         case HOME:
-	case NIL:
-	    if (destination == HOME) {
-            switch (Typeof(victim)) {
-                case TYPE_PLAYER:
-                    destination = DBFETCH(victim)->sp.player.home;
-                    if (parent_loop_check(victim, destination))
-                        destination = DBFETCH(OWNER(victim))->sp.player.home;
-                    break;
-                case TYPE_THING:
-                    destination = DBFETCH(victim)->sp.thing.home;
-                    if (parent_loop_check(victim, destination)) {
-                        destination = DBFETCH(OWNER(victim))->sp.player.home;
+        case NIL:
+            if (destination == HOME) {
+                switch (Typeof(victim)) {
+                    case TYPE_PLAYER:
+                        destination = DBFETCH(victim)->sp.player.home;
+                        if (parent_loop_check(victim, destination))
+                            destination = DBFETCH(OWNER(victim))->sp.player.home;
+                        break;
+                    case TYPE_THING:
+                        destination = DBFETCH(victim)->sp.thing.home;
                         if (parent_loop_check(victim, destination)) {
-                            destination = (dbref) 0;
+                            destination = DBFETCH(OWNER(victim))->sp.player.home;
+                            if (parent_loop_check(victim, destination)) {
+                                destination = (dbref) 0;
+                            }
                         }
-                    }
-                    break;
-                case TYPE_ROOM:
-                    destination = GLOBAL_ENVIRONMENT;
-                    break;
-                case TYPE_PROGRAM:
-                    destination = OWNER(victim);
-                    break;
-                default:
-                    destination = tp_player_start; /* caught in the next
-                                                    * switch anyway */
-                    break;
+                        break;
+                    case TYPE_ROOM:
+                        destination = GLOBAL_ENVIRONMENT;
+                        break;
+                    case TYPE_PROGRAM:
+                        destination = OWNER(victim);
+                        break;
+                    default:
+                        destination = tp_player_start; /* caught in the next
+                                                        * switch anyway */
+                        break;
+                }
+            } else {
+                switch (Typeof(victim)) {
+                    case TYPE_PLAYER:
+                        destination = tp_player_start;
+                        break;
+                    case TYPE_THING:
+                        destination = OWNER(victim);
+                        break;
+                    case TYPE_ROOM:
+                        destination = tp_default_parent;
+                        break;
+                    case TYPE_PROGRAM:
+                        destination = OWNER(victim);
+                        break;
+                }
             }
-	    } else {
-            switch (Typeof(victim)) {
-                case TYPE_PLAYER:
-                    destination = tp_player_start;
-                    break;
-                case TYPE_THING:
-                    destination = OWNER(victim);
-                    break;
-                case TYPE_ROOM:
-                    destination = tp_default_parent;
-                    break;
-                case TYPE_PROGRAM:
-                    destination = OWNER(victim);
-                    break;
-            } }
         default:
             switch (Typeof(victim)) {
                 case TYPE_PLAYER:
-                    if (!controls(player, victim) ||
-                        ((!controls(player, destination)) &&
-                         (!(FLAGS(destination) & JUMP_OK)) &&
-                         (destination != DBFETCH(victim)->sp.player.home)
-                        ) ||
-                        ((!controls(player, getloc(victim))) &&
-                         (!(FLAGS(getloc(victim)) & JUMP_OK)) &&
-                         (getloc(victim) != DBFETCH(victim)->sp.player.home)
-                        ) ||
-                        ((Typeof(destination) == TYPE_THING) &&
-                         !controls(player, getloc(destination))
+                    if (!controls(player, victim) || ((!controls(player, destination)) && (!(FLAGS(destination) & JUMP_OK)) && (destination != DBFETCH(victim)->sp.player.home)
+                        ) || ((!controls(player, getloc(victim))) && (!(FLAGS(getloc(victim)) & JUMP_OK)) && (getloc(victim) != DBFETCH(victim)->sp.player.home)
+                        ) || ((Typeof(destination) == TYPE_THING) && !controls(player, getloc(destination))
                         )
                         ) {
                         if (!(POWERS(OWNER(player)) & POW_TELEPORT)) {
@@ -231,91 +219,64 @@ do_teleport(int descr, dbref player, const char *arg1, const char *arg2)
                             break;
                         }
                     }
-                    if (Typeof(destination) != TYPE_ROOM &&
-                        Typeof(destination) != TYPE_PLAYER &&
-                        Typeof(destination) != TYPE_THING) {
+                    if (Typeof(destination) != TYPE_ROOM && Typeof(destination) != TYPE_PLAYER && Typeof(destination) != TYPE_THING) {
                         anotify_nolisten2(player, CFAIL "Bad destination.");
                         break;
                     }
-                    if (!Wiz(victim) &&
-                        (Typeof(destination) == TYPE_THING &&
-                         !(FLAGS(destination) & VEHICLE))) {
+                    if (!Wiz(victim) && (Typeof(destination) == TYPE_THING && !(FLAGS(destination) & VEHICLE))) {
                         if (!(POWERS(OWNER(player)) & POW_TELEPORT)) {
-                            anotify_nolisten2(player,
-                                              CFAIL
-                                              "Destination object is not a vehicle.");
+                            anotify_nolisten2(player, CFAIL "Destination object is not a vehicle.");
                             break;
                         }
                     }
                     if (parent_loop_check(victim, destination)) {
-                        anotify_nolisten2(player,
-                                          CFAIL
-                                          "Objects can't contain themselves.");
+                        anotify_nolisten2(player, CFAIL "Objects can't contain themselves.");
                         break;
                     }
                     if (Typeof(destination) == TYPE_PLAYER) {
                         destination = DBFETCH(destination)->location;
                     }
-                    if ((Typeof(destination) == TYPE_ROOM) && Guest(player) &&
-                        (tp_guest_needflag ? !(FLAG2(destination) & F2GUEST)
-                         : (FLAG2(destination) & F2GUEST))) {
-                        anotify_nolisten2(player,
-                                          CFAIL "Guests aren't allowed there.");
+                    if ((Typeof(destination) == TYPE_ROOM) && Guest(player) && (tp_guest_needflag ? !(FLAG2(destination) & F2GUEST)
+                                                                                : (FLAG2(destination) & F2GUEST))) {
+                        anotify_nolisten2(player, CFAIL "Guests aren't allowed there.");
                         break;
                     }
-                    anotify_nolisten2(victim,
-                                      CNOTE
-                                      "You feel a wrenching sensation...");
-                    enter_room(descr, victim, destination,
-                               DBFETCH(victim)->location);
-                    sprintf(buf, CSUCC "%s teleported to %s.",
-                            unparse_object(player, victim), NAME(destination));
+                    anotify_nolisten2(victim, CNOTE "You feel a wrenching sensation...");
+                    enter_room(descr, victim, destination, DBFETCH(victim)->location);
+                    sprintf(buf, CSUCC "%s teleported to %s.", unparse_object(player, victim), NAME(destination));
                     anotify_nolisten2(player, buf);
                     break;
                 case TYPE_THING:
                     if (parent_loop_check(victim, destination)) {
-                        anotify_nolisten2(player,
-                                          CFAIL
-                                          "You can't make a container contain itself!");
+                        anotify_nolisten2(player, CFAIL "You can't make a container contain itself!");
                         break;
                     }
                 case TYPE_PROGRAM:
-                    if (Typeof(destination) != TYPE_ROOM
-                        && Typeof(destination) != TYPE_PLAYER
-                        && Typeof(destination) != TYPE_THING) {
+                    if (Typeof(destination) != TYPE_ROOM && Typeof(destination) != TYPE_PLAYER && Typeof(destination) != TYPE_THING) {
                         anotify_nolisten2(player, CFAIL "Bad destination.");
                         break;
                     }
-                    if (!((controls(player, destination) ||
-                           can_link_to(player, NOTYPE, destination)) &&
-                          (controls(player, victim) ||
-                           controls(player, DBFETCH(victim)->location)))) {
+                    if (!((controls(player, destination) || can_link_to(player, NOTYPE, destination)) && (controls(player, victim) || controls(player, DBFETCH(victim)->location)))) {
                         if (!(POWERS(OWNER(player)) & POW_TELEPORT)) {
                             anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
                             break;
                         }
                     }
                     /* check for non-sticky dropto */
-                    if (Typeof(destination) == TYPE_ROOM
-                        && DBFETCH(destination)->sp.room.dropto != NOTHING
-                        && !(FLAGS(destination) & STICKY))
+                    if (Typeof(destination) == TYPE_ROOM && DBFETCH(destination)->sp.room.dropto != NOTHING && !(FLAGS(destination) & STICKY))
                         destination = DBFETCH(destination)->sp.room.dropto;
                     /* Bugfix: treat THINGs more like PLAYERs. */
                     if (Typeof(victim) == TYPE_THING) {
                         if (FLAGS(victim) & ZOMBIE) {
-                            anotify_nolisten2(victim,
-                                              CNOTE
-                                              "You feel a wrenching sensation...");
+                            anotify_nolisten2(victim, CNOTE "You feel a wrenching sensation...");
                         }
-                        enter_room(descr, victim, destination,
-                                   DBFETCH(victim)->location);
+                        enter_room(descr, victim, destination, DBFETCH(victim)->location);
                     } else {
                         moveto(victim, destination);
                     }
                     /* End bugfix */
                     sprintf(buf, CSUCC "%s teleported to %s.",
-                            unparse_object(player, victim),
-                            (destination == -3 ? "HOME" : (destination == -4 ? NAME(OWNER(victim)) : NAME(destination)))
+                            unparse_object(player, victim), (destination == -3 ? "HOME" : (destination == -4 ? NAME(OWNER(victim)) : NAME(destination)))
                         );
                     anotify_nolisten2(player, buf);
                     break;
@@ -334,13 +295,11 @@ do_teleport(int descr, dbref player, const char *arg1, const char *arg2)
                         }
                     }
                     if (parent_loop_check(victim, destination)) {
-                        anotify_nolisten2(player,
-                                          CFAIL "Parent would create a loop.");
+                        anotify_nolisten2(player, CFAIL "Parent would create a loop.");
                         break;
                     }
                     moveto(victim, destination);
-                    sprintf(buf, CSUCC "Parent of %s set to %s.",
-                            unparse_object(player, victim), NAME(destination));
+                    sprintf(buf, CSUCC "Parent of %s set to %s.", unparse_object(player, victim), NAME(destination));
                     anotify_nolisten2(player, buf);
                     break;
                 case TYPE_GARBAGE:
@@ -403,8 +362,7 @@ do_force(int descr, dbref player, const char *what, char *command)
         return;
     }
     if (MLevel(player) < MLevel(victim)) {
-        anotify_nolisten2(player,
-                          CFAIL "You cannot force higher level wizards.");
+        anotify_nolisten2(player, CFAIL "You cannot force higher level wizards.");
         return;
     }
     if (!controls(player, victim)) {
@@ -423,8 +381,7 @@ do_force(int descr, dbref player, const char *what, char *command)
     }
 
     loc = getloc(victim);
-    if (!Wiz(player) && Typeof(victim) == TYPE_THING && loc != NOTHING &&
-        (FLAGS(loc) & ZOMBIE) && Typeof(loc) == TYPE_ROOM) {
+    if (!Wiz(player) && Typeof(victim) == TYPE_THING && loc != NOTHING && (FLAGS(loc) & ZOMBIE) && Typeof(loc) == TYPE_ROOM) {
         anotify_nolisten2(player, CFAIL "It is in a no-puppet zone.");
         return;
     }
@@ -445,8 +402,7 @@ do_force(int descr, dbref player, const char *what, char *command)
             *(ptr2++) = *(ptr++);
         *ptr2 = '\0';
         if (lookup_player(objname) != NOTHING) {
-            anotify_nolisten2(player,
-                              CFAIL "Puppets cannot have a player's name.");
+            anotify_nolisten2(player, CFAIL "Puppets cannot have a player's name.");
             return;
         }
     }
@@ -510,11 +466,9 @@ do_stats(dbref player, const char *name)
     for (i = 0; i < db_top; i++) {
 
 #ifdef DISKBASE
-        if (((owner == NOTHING) || (OWNER(i) == owner)) &&
-            DBFETCH(i)->propsmode != PROPS_UNLOADED)
+        if (((owner == NOTHING) || (OWNER(i) == owner)) && DBFETCH(i)->propsmode != PROPS_UNLOADED)
             loaded++;
-        if (((owner == NOTHING) || (OWNER(i) == owner)) &&
-            DBFETCH(i)->propsmode == PROPS_CHANGED)
+        if (((owner == NOTHING) || (OWNER(i) == owner)) && DBFETCH(i)->propsmode == PROPS_CHANGED)
             changed++;
 #endif
 
@@ -524,8 +478,7 @@ do_stats(dbref player, const char *name)
             altered++;
 
         /* if unused for 90 days, inc oldobj count */
-        if (((owner == NOTHING) || (OWNER(i) == owner)) &&
-            (currtime - DBFETCH(i)->ts.lastused) > tp_aging_time)
+        if (((owner == NOTHING) || (OWNER(i) == owner)) && (currtime - DBFETCH(i)->ts.lastused) > tp_aging_time)
             oldobjs++;
 
         if ((owner == NOTHING) || (OWNER(i) == owner))
@@ -570,25 +523,15 @@ do_stats(dbref player, const char *name)
     }
 
     anotify_fmt(player,
-                SYSYELLOW "%7d room%s        %7d exit%s        %7d thing%s",
-                rooms, (rooms == 1) ? " " : "s", exits,
-                (exits == 1) ? " " : "s", things, (things == 1) ? " " : "s");
+                SYSYELLOW "%7d room%s        %7d exit%s        %7d thing%s", rooms, (rooms == 1) ? " " : "s", exits, (exits == 1) ? " " : "s", things, (things == 1) ? " " : "s");
 
-    anotify_fmt(player,
-                SYSYELLOW "%7d program%s     %7d player%s      %7d garbage",
-                programs, (programs == 1) ? " " : "s", players,
-                (players == 1) ? " " : "s", garbage);
+    anotify_fmt(player, SYSYELLOW "%7d program%s     %7d player%s      %7d garbage", programs, (programs == 1) ? " " : "s", players, (players == 1) ? " " : "s", garbage);
 
-    anotify_fmt(player, SYSBLUE
-                "%7d total object%s                     %7d old & unused",
-                total, (total == 1) ? " " : "s", oldobjs);
+    anotify_fmt(player, SYSBLUE "%7d total object%s                     %7d old & unused", total, (total == 1) ? " " : "s", oldobjs);
 
 #ifdef DISKBASE
     if (Mage(OWNER(player))) {
-        anotify_fmt(player, SYSWHITE
-                    "%7d proploaded object%s                %7d propchanged object%s",
-                    loaded, (loaded == 1) ? " " : "s",
-                    changed, (changed == 1) ? "" : "s");
+        anotify_fmt(player, SYSWHITE "%7d proploaded object%s                %7d propchanged object%s", loaded, (loaded == 1) ? " " : "s", changed, (changed == 1) ? "" : "s");
 
     }
 #endif
@@ -605,31 +548,19 @@ do_stats(dbref player, const char *name)
 #else
         (void) format_time(buf, 40, "%a %b %e %T\0", time_tm);
 #endif
-        anotify_fmt(player, SYSRED "%7d unsaved object%s     Last dump: %s",
-                    altered, (altered == 1) ? "" : "s", buf);
+        anotify_fmt(player, SYSRED "%7d unsaved object%s     Last dump: %s", altered, (altered == 1) ? "" : "s", buf);
     }
 /* #endif */
 
     if (garbage > 0)
-        anotify_fmt(player, SYSNORMAL
-                    "%7d piece%s of garbage %s using %d bytes of RAM.",
-                    garbage, (garbage == 1) ? "" : "s",
-                    (garbage == 1) ? "is" : "are", tgsize);
+        anotify_fmt(player, SYSNORMAL "%7d piece%s of garbage %s using %d bytes of RAM.", garbage, (garbage == 1) ? "" : "s", (garbage == 1) ? "is" : "are", tgsize);
 
     if (tpcnt > 0)
-        anotify_fmt(player, SYSPURPLE
-                    "%7d active program%s %s using %d bytes of RAM.",
-                    tpcnt, (tpcnt == 1) ? "" : "s",
-                    (tpcnt == 1) ? "is" : "are", tpsize);
+        anotify_fmt(player, SYSPURPLE "%7d active program%s %s using %d bytes of RAM.", tpcnt, (tpcnt == 1) ? "" : "s", (tpcnt == 1) ? "is" : "are", tpsize);
 
-    anotify_fmt(player, SYSGREEN
-                "%7d %sobject%s %s using %d bytes of RAM.",
-                tocnt, tpcnt ? "other " : "",
-                (tocnt == 1) ? "" : "s", (tocnt == 1) ? "is" : "are", tosize);
+    anotify_fmt(player, SYSGREEN "%7d %sobject%s %s using %d bytes of RAM.", tocnt, tpcnt ? "other " : "", (tocnt == 1) ? "" : "s", (tocnt == 1) ? "is" : "are", tosize);
     anotify_fmt(player, SYSYELLOW
-                "%7ld cached host %s using %ld bytes of RAM.",
-                hostdb_count, (hostdb_count == 1L) ? "entry is" : "entries are",
-                host_hostdb_size() + host_userdb_size());
+                "%7ld cached host %s using %ld bytes of RAM.", hostdb_count, (hostdb_count == 1L) ? "entry is" : "entries are", host_hostdb_size() + host_userdb_size());
     /* Bandwidth Usage Stats */
     if (Mage(OWNER(player))) {
         memtemp = bytesIn / 1000;
@@ -637,17 +568,13 @@ do_stats(dbref player, const char *name)
         anotify_fmt(player, SYSBROWN
                     "%7d %s input             " SYSAQUA "%7d %s output",
                     memtemp < 100000 ? memtemp : memtemp / 1000,
-                    memtemp < 100000 ? "Kbytes" : "Mbytes",
-                    memtemp2 < 100000 ? memtemp2 : memtemp2 / 1000,
-                    memtemp2 < 100000 ? "Kbytes" : "Mbytes");
+                    memtemp < 100000 ? "Kbytes" : "Mbytes", memtemp2 < 100000 ? memtemp2 : memtemp2 / 1000, memtemp2 < 100000 ? "Kbytes" : "Mbytes");
         memtemp = bytesIn + bytesOut;
         memtemp = memtemp / 1000;
         anotify_fmt(player, SYSFOREST
                     "%7d %s total traffic     " SYSVIOLET "%7d %s",
                     memtemp < 100000 ? memtemp : memtemp / 1000,
-                    memtemp < 100000 ? "KBytes" : "Mbytes",
-                    commandTotal < 100000 ? commandTotal : commandTotal / 1000,
-                    commandTotal < 100000 ? "commands" : "thousand commands");
+                    memtemp < 100000 ? "KBytes" : "Mbytes", commandTotal < 100000 ? commandTotal : commandTotal / 1000, commandTotal < 100000 ? "commands" : "thousand commands");
     }
 
 }
@@ -688,8 +615,7 @@ do_boot(dbref player, const char *name)
 
     anotify_nolisten2(victim, SYSBLUE "Shaaawing!  See ya!");
     if (boot_off(victim)) {
-        log_status("BOOT: %s(%d) by %s(%d)\n", NAME(victim),
-                   victim, NAME(player), player);
+        log_status("BOOT: %s(%d) by %s(%d)\n", NAME(victim), victim, NAME(player), player);
         if (player != victim)
             anotify_fmt(player, CSUCC "You booted %s off!", PNAME(victim));
     } else
@@ -704,9 +630,7 @@ do_frob(int descr, dbref player, const char *name, const char *recip)
     dbref stuff;
     char buf[BUFFER_LEN];
 
-    if (!
-        (Typeof(player) == TYPE_PLAYER
-         && (Arch(player) || (POWERS(player) & POW_PLAYER_PURGE)))) {
+    if (!(Typeof(player) == TYPE_PLAYER && (Arch(player) || (POWERS(player) & POW_PLAYER_PURGE)))) {
         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
         return;
     }
@@ -734,8 +658,7 @@ do_frob(int descr, dbref player, const char *name, const char *recip)
     if (!*recip) {
         recipient = MAN;
     } else {
-        if ((recipient = lookup_player(recip)) == NOTHING
-            || recipient == victim) {
+        if ((recipient = lookup_player(recip)) == NOTHING || recipient == victim) {
             anotify_nolisten2(player, CINFO "Give their stuff to who?");
             return;
         }
@@ -758,27 +681,25 @@ do_frob(int descr, dbref player, const char *name, const char *recip)
                     break;
             }
         }
-        if (Typeof(stuff) == TYPE_THING &&
-            DBFETCH(stuff)->sp.thing.home == victim) {
+        if (Typeof(stuff) == TYPE_THING && DBFETCH(stuff)->sp.thing.home == victim) {
             DBSTORE(stuff, sp.thing.home, tp_player_start);
         }
     }
     if (DBFETCH(victim)->sp.player.password) {
         delete DBFETCH(victim)->sp.player.password;
+
         DBFETCH(victim)->sp.player.password = 0;
     }
     dequeue_prog(victim, 0);    /* dequeue progs that player's running */
 
-    anotify_nolisten2(victim,
-                      SYSBLUE "You have been frobbed!  Been nice knowing you.");
+    anotify_nolisten2(victim, SYSBLUE "You have been frobbed!  Been nice knowing you.");
     anotify_fmt(player, CSUCC "You frob %s.", PNAME(victim));
-    log_status("FROB: %s(%d) by %s(%d)\n", NAME(victim),
-               victim, NAME(player), player);
+    log_status("FROB: %s(%d) by %s(%d)\n", NAME(victim), victim, NAME(player), player);
     if (Typeof(victim) != TYPE_PLAYER)
         return;
     boot_player_off(victim);
     if (DBFETCH(victim)->sp.player.descrs) {
-        delete[] DBFETCH(victim)->sp.player.descrs;
+        delete[]DBFETCH(victim)->sp.player.descrs;
         DBFETCH(victim)->sp.player.descrs = NULL;
         DBFETCH(victim)->sp.player.descr_count = 0;
     }
@@ -786,6 +707,7 @@ do_frob(int descr, dbref player, const char *name, const char *recip)
     /* reset name */
     sprintf(buf, "The soul of %s", PNAME(victim));
     delete NAME(victim);
+
     NAME(victim) = alloc_string(buf);
     DBDIRTY(victim);
     FLAGS(victim) = TYPE_THING;
@@ -819,10 +741,8 @@ do_purge(int descr, dbref player, const char *arg1, const char *arg2)
         notify(player, "Usage: @purge me=yourpassword");
         notify(player, "@purge deletes EVERYTHING you own.");
         notify(player, "Do this at your own risk!");
-        notify(player,
-               "You must now use your password to ensure that Joe Blow doesn't");
-        notify(player,
-               "delete all your prized treasures while you take a nature break.");
+        notify(player, "You must now use your password to ensure that Joe Blow doesn't");
+        notify(player, "delete all your prized treasures while you take a nature break.");
         return;
     }
 
@@ -832,9 +752,7 @@ do_purge(int descr, dbref player, const char *arg1, const char *arg2)
         anotify_nolisten2(player, CINFO "Who?");
         return;
     }
-    if ((!controls(player, victim) && !(POWERS(player) & POW_PLAYER_PURGE)) ||
-        Typeof(player) != TYPE_PLAYER ||
-        Typeof(victim) != TYPE_PLAYER || TMage(victim)
+    if ((!controls(player, victim) && !(POWERS(player) & POW_PLAYER_PURGE)) || Typeof(player) != TYPE_PLAYER || Typeof(victim) != TYPE_PLAYER || TMage(victim)
         ) {
         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
         return;
@@ -845,9 +763,7 @@ do_purge(int descr, dbref player, const char *arg1, const char *arg2)
         return;
     }
 
-    if (!check_password(victim, arg2) &&
-        (strcmp(arg2, "yes") ||
-         !(Arch(player) || POWERS(player) & POW_PLAYER_PURGE))
+    if (!check_password(victim, arg2) && (strcmp(arg2, "yes") || !(Arch(player) || POWERS(player) & POW_PLAYER_PURGE))
         ) {
         anotify_nolisten2(player, CFAIL "Wrong password.");
         return;
@@ -857,14 +773,12 @@ do_purge(int descr, dbref player, const char *arg1, const char *arg2)
         if (victim == OWNER(thing)) {
             switch (Typeof(thing)) {
                 case TYPE_GARBAGE:
-                    anotify_fmt(player, CFAIL "Player owns garbage object #%d.",
-                                thing);
+                    anotify_fmt(player, CFAIL "Player owns garbage object #%d.", thing);
                 case TYPE_PLAYER:
                     break;
                 case TYPE_ROOM:
                     if (thing == tp_player_start || thing == GLOBAL_ENVIRONMENT) {
-                        anotify_nolisten2(player, CFAIL
-                                          "Cannot recycle player start or global environment.");
+                        anotify_nolisten2(player, CFAIL "Cannot recycle player start or global environment.");
                         break;
                     }
                 case TYPE_THING:
@@ -874,8 +788,7 @@ do_purge(int descr, dbref player, const char *arg1, const char *arg2)
                     count++;
                     break;
                 default:
-                    anotify_fmt(player, CFAIL "Unknown object type for #%d.",
-                                thing);
+                    anotify_fmt(player, CFAIL "Unknown object type for #%d.", thing);
             }
         }
     anotify_fmt(player, CSUCC "%d objects purged.", count);
@@ -897,9 +810,7 @@ do_newpassword(dbref player, const char *name, const char *password)
         anotify_nolisten2(player, CFAIL "Poor password.");
 
     } else if (Boy(victim)) {
-        anotify_nolisten2(player,
-                          CFAIL
-                          "You can't change a MAN's nor a BOY's password!");
+        anotify_nolisten2(player, CFAIL "You can't change a MAN's nor a BOY's password!");
         return;
     } else {
         if (TMage(victim) && !Boy(player)) {
@@ -910,10 +821,8 @@ do_newpassword(dbref player, const char *name, const char *password)
         /* it's ok, do it */
         set_password(victim, password);
         anotify_nolisten2(player, CSUCC "Password changed.");
-        anotify_fmt(victim, CNOTE
-                    "Your password has been changed by %s.", NAME(player));
-        log_status("NPAS: %s(%d) by %s(%d)\n", NAME(victim), (int) victim,
-                   NAME(player), (int) player);
+        anotify_fmt(victim, CNOTE "Your password has been changed by %s.", NAME(player));
+        log_status("NPAS: %s(%d) by %s(%d)\n", NAME(victim), (int) victim, NAME(player), (int) player);
     }
 }
 
@@ -922,9 +831,7 @@ do_pcreate(dbref player, const char *user, const char *password)
 {
     dbref newguy;
 
-    if (!
-        (Typeof(player) == TYPE_PLAYER
-         && (Arch(player) || (POWERS(player) & POW_PLAYER_CREATE)))) {
+    if (!(Typeof(player) == TYPE_PLAYER && (Arch(player) || (POWERS(player) & POW_PLAYER_CREATE)))) {
         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
         return;
     }
@@ -933,8 +840,7 @@ do_pcreate(dbref player, const char *user, const char *password)
         anotify_nolisten2(player, CFAIL "Create failed.");
         anotify_nolisten2(player, BOLD "Syntax: @pcreate <name>=<password>");
     } else {
-        log_status("PCRE: %s(%d) by %s(%d)\n",
-                   NAME(newguy), (int) newguy, NAME(player), (int) player);
+        log_status("PCRE: %s(%d) by %s(%d)\n", NAME(newguy), (int) newguy, NAME(player), (int) player);
         anotify_fmt(player, CSUCC "Player %s(%d) created.", user, newguy);
     }
 }
@@ -960,58 +866,34 @@ do_powers(int descr, dbref player, const char *name, const char *power)
     }
 
     if (force_level) {
-        anotify_nolisten2(player,
-                          CFAIL "Can't set a @power from a @force or {force}.");
+        anotify_nolisten2(player, CFAIL "Can't set a @power from a @force or {force}.");
         return;
     }
 
     if (!name || !*name) {
         anotify_nolisten2(player, CNOTE "Powers List");
-        anotify_nolisten2(player,
-                          CMOVE
-                          "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
-        anotify_nolisten2(player,
-                          "ALL_MUF_PRIMS   - [m] Gives full access to MUF primitives");
-        anotify_nolisten2(player,
-                          "ANNOUNCE        - [a] Can use @wall and dwall commands");
-        anotify_nolisten2(player,
-                          "BOOT            - [b] Can use @boot and dboot commands");
-        anotify_nolisten2(player,
-                          "CHOWN_ANYTHING  - [c] Can @chown anything, unless it is PROTECTed");
-        anotify_nolisten2(player,
-                          "CONTROL_ALL     - [r] Has control over any object.");
-        anotify_nolisten2(player,
-                          "CONTROL_MUF     - [f] Has control over any MUF object.");
-        anotify_nolisten2(player,
-                          "EXPANDED_WHO    - [x] Gets the wizard version of WHO");
-        anotify_nolisten2(player,
-                          "HIDE            - [h] Can set themselves DARK or login HIDDEN");
-        anotify_nolisten2(player,
-                          "IDLE            - [i] Not effected by the idle limit");
-        anotify_nolisten2(player,
-                          "LINK_ANYWHERE   - [l] Can @link an exit to anywhere");
-        anotify_nolisten2(player,
-                          "LONG_FINGERS    - [g] Can do anything from a long distance");
+        anotify_nolisten2(player, CMOVE "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
+        anotify_nolisten2(player, "ALL_MUF_PRIMS   - [m] Gives full access to MUF primitives");
+        anotify_nolisten2(player, "ANNOUNCE        - [a] Can use @wall and dwall commands");
+        anotify_nolisten2(player, "BOOT            - [b] Can use @boot and dboot commands");
+        anotify_nolisten2(player, "CHOWN_ANYTHING  - [c] Can @chown anything, unless it is PROTECTed");
+        anotify_nolisten2(player, "CONTROL_ALL     - [r] Has control over any object.");
+        anotify_nolisten2(player, "CONTROL_MUF     - [f] Has control over any MUF object.");
+        anotify_nolisten2(player, "EXPANDED_WHO    - [x] Gets the wizard version of WHO");
+        anotify_nolisten2(player, "HIDE            - [h] Can set themselves DARK or login HIDDEN");
+        anotify_nolisten2(player, "IDLE            - [i] Not effected by the idle limit");
+        anotify_nolisten2(player, "LINK_ANYWHERE   - [l] Can @link an exit to anywhere");
+        anotify_nolisten2(player, "LONG_FINGERS    - [g] Can do anything from a long distance");
         anotify_nolisten2(player, "NO_PAY          - [n] Infinite money");
-        anotify_nolisten2(player,
-                          "OPEN_ANYWHERE   - [o] Can @open an exit from any location");
-        anotify_nolisten2(player,
-                          "PLAYER_CREATE   - [p] @pcreate, @newpassword, @name");
-        anotify_nolisten2(player,
-                          "PLAYER_PURGE    - [u] @toad and @purge power.");
-        anotify_nolisten2(player,
-                          "SEARCH          - [s] Can use @find, @entrances, @own, and @contents");
-        anotify_nolisten2(player,
-                          "SEE_ALL         - [e] Can examine any object, and @list any program");
-        anotify_nolisten2(player,
-                          "STAFF           - [w] Special staff bit for use in MUF");
-        anotify_nolisten2(player,
-                          "SHUTDOWN        - [d] Can run @shutdown or @restart");
-        anotify_nolisten2(player,
-                          "TELEPORT        - [t] Unrestricted use of @teleport");
-        anotify_nolisten2(player,
-                          CMOVE
-                          "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
+        anotify_nolisten2(player, "OPEN_ANYWHERE   - [o] Can @open an exit from any location");
+        anotify_nolisten2(player, "PLAYER_CREATE   - [p] @pcreate, @newpassword, @name");
+        anotify_nolisten2(player, "PLAYER_PURGE    - [u] @toad and @purge power.");
+        anotify_nolisten2(player, "SEARCH          - [s] Can use @find, @entrances, @own, and @contents");
+        anotify_nolisten2(player, "SEE_ALL         - [e] Can examine any object, and @list any program");
+        anotify_nolisten2(player, "STAFF           - [w] Special staff bit for use in MUF");
+        anotify_nolisten2(player, "SHUTDOWN        - [d] Can run @shutdown or @restart");
+        anotify_nolisten2(player, "TELEPORT        - [t] Unrestricted use of @teleport");
+        anotify_nolisten2(player, CMOVE "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
         anotify_nolisten2(player, "Syntax: @power <player>=[!]<power>");
         anotify_nolisten2(player, CINFO "Done.");
         return;
@@ -1117,7 +999,7 @@ do_serverdebug(int descr, dbref player, const char *arg1, const char *arg2)
 
 
 #ifndef NO_USAGE_COMMAND
-long max_open_files(void);       /* from interface.c */
+long max_open_files(void);      /* from interface.c */
 
 void
 do_usage(dbref player)
@@ -1148,22 +1030,16 @@ do_usage(dbref player)
     notify_fmt(player, "Sent %d messages over a socket.", usage.ru_msgsnd);
     notify_fmt(player, "Received %d messages over a socket.", usage.ru_msgrcv);
     notify_fmt(player, "Received %d signals.", usage.ru_nsignals);
-    notify_fmt(player, "Page faults NOT requiring physical I/O: %d",
-               usage.ru_minflt);
-    notify_fmt(player, "Page faults REQUIRING physical I/O: %d",
-               usage.ru_majflt);
+    notify_fmt(player, "Page faults NOT requiring physical I/O: %d", usage.ru_minflt);
+    notify_fmt(player, "Page faults REQUIRING physical I/O: %d", usage.ru_majflt);
     notify_fmt(player, "Swapped out of main memory %d times.", usage.ru_nswap);
-    notify_fmt(player, "Voluntarily context switched %d times.",
-               usage.ru_nvcsw);
-    notify_fmt(player, "Involuntarily context switched %d times.",
-               usage.ru_nivcsw);
+    notify_fmt(player, "Voluntarily context switched %d times.", usage.ru_nvcsw);
+    notify_fmt(player, "Involuntarily context switched %d times.", usage.ru_nivcsw);
     notify_fmt(player, "User time used: %d sec.", usage.ru_utime.tv_sec);
     notify_fmt(player, "System time used: %d sec.", usage.ru_stime.tv_sec);
     notify_fmt(player, "Pagesize for this machine: %d", psize);
-    notify_fmt(player, "Maximum resident memory: %dk",
-               (usage.ru_maxrss * (psize / 1024)));
-    notify_fmt(player, "Integral resident memory: %dk",
-               (usage.ru_idrss * (psize / 1024)));
+    notify_fmt(player, "Maximum resident memory: %dk", (usage.ru_maxrss * (psize / 1024)));
+    notify_fmt(player, "Integral resident memory: %dk", (usage.ru_idrss * (psize / 1024)));
 #endif /* HAVE_GETRUSAGE */
 }
 
@@ -1171,32 +1047,34 @@ do_usage(dbref player)
 
 
 #ifdef MODULAR_SUPPORT
-void do_modload(dbref player, char *arg)
+void
+do_modload(dbref player, char *arg)
 {
-	char *error;
+    char *error;
 
-	if (!Boy(OWNER(player))) {
+    if (!Boy(OWNER(player))) {
         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
         return;
     }
 
-	if ((error = module_load(arg, player))) {
-		anotify_fmt(player, CFAIL "Module load failed: %s", error);
-		return;
-	}
+    if ((error = module_load(arg, player))) {
+        anotify_fmt(player, CFAIL "Module load failed: %s", error);
+        return;
+    }
 
-	anotify_fmt(player, CSUCC "Loaded %s (version %d): %s", modules->info->name, modules->info->version, modules->info->description);
+    anotify_fmt(player, CSUCC "Loaded %s (version %d): %s", modules->info->name, modules->info->version, modules->info->description);
 }
 
-void do_modunload(dbref player, char *arg)
+void
+do_modunload(dbref player, char *arg)
 {
-	struct module *m = modules;
-	char buf[BUFFER_LEN];
-	bool force = 0;
-	char arg1[BUFFER_LEN];
+    struct module *m = modules;
+    char buf[BUFFER_LEN];
+    bool force = 0;
+    char arg1[BUFFER_LEN];
     char *arg2;
 
-	if (!Boy(OWNER(player))) {
+    if (!Boy(OWNER(player))) {
         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
         return;
     }
@@ -1210,58 +1088,60 @@ void do_modunload(dbref player, char *arg)
         arg2++;
 
     if (!string_compare(arg1, "#force")) {
-		force = 1;
-		strcpy(buf, arg2);
-	} else
-		strcpy(buf, arg1);
+        force = 1;
+        strcpy(buf, arg2);
+    } else
+        strcpy(buf, arg1);
 
-	while (m) {
-		if (!string_compare(buf, m->info->name)) {
-			if (m->progs && !force) {
-				anotify_nolisten2(player, CFAIL "This module is currently required by running programs and will not be unloaded.  Use #force to force unloading.");
-				return;
-			}
+    while (m) {
+        if (!string_compare(buf, m->info->name)) {
+            if (m->progs && !force) {
+                anotify_nolisten2(player, CFAIL "This module is currently required by running programs and will not be unloaded.  Use #force to force unloading.");
+                return;
+            }
             break;
-		}
+        }
 
-		m = m->next;
-	}
+        m = m->next;
+    }
 
-	if (m) {
-		struct module *mr;
-		int i;
+    if (m) {
+        struct module *mr;
+        int i;
 
-		startover:
-		
-		mr = modules;
+      startover:
 
-		while (mr) {
-			if (mr->info->requires) {
-				for (i = 0; mr->info->requires[i].name; i++) {
-					if (!string_compare(mr->info->requires[i].name, m->info->name)) {
-						if (!force) {
-							anotify_fmt(player, CFAIL "This module is currently required by module \"%s\".  Use #force to force unloading.", mr->info->name);
-							return;
-						} else {
-							char buf[BUFFER_LEN];
-							sprintf(buf, "#force %s", mr->info->name);
-							do_modunload(player, buf);
-							goto startover;
-						}
-					}
-				}
-			}
+        mr = modules;
 
-			mr = mr->next;
-		}
+        while (mr) {
+            if (mr->info->requires) {
+                for (i = 0; mr->info->requires[i].name; i++) {
+                    if (!string_compare(mr->info->requires[i].name, m->info->name)) {
+                        if (!force) {
+                            anotify_fmt(player, CFAIL "This module is currently required by module \"%s\".  Use #force to force unloading.", mr->info->name);
+                            return;
+                        } else {
+                            char buf[BUFFER_LEN];
 
-		anotify_fmt(player, CSUCC "Unloaded %s.", m->info->name);
-		module_free(m);
-	} else
-		anotify_nolisten2(player, CINFO "Not found.");
+                            sprintf(buf, "#force %s", mr->info->name);
+                            do_modunload(player, buf);
+                            goto startover;
+                        }
+                    }
+                }
+            }
+
+            mr = mr->next;
+        }
+
+        anotify_fmt(player, CSUCC "Unloaded %s.", m->info->name);
+        module_free(m);
+    } else
+        anotify_nolisten2(player, CINFO "Not found.");
 }
 
-void do_modinfo(dbref player, char *arg)
+void
+do_modinfo(dbref player, char *arg)
 {
 
 }
@@ -1274,7 +1154,7 @@ do_muf_funcprofs(dbref player, char *arg1)
     char buf[BUFFER_LEN];
     dbref i = NOTHING;
     int count = atoi(arg1);
-	struct funcprof *fpr;
+    struct funcprof *fpr;
 
     if (!Mage(OWNER(player))) {
         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
@@ -1284,23 +1164,23 @@ do_muf_funcprofs(dbref player, char *arg1)
     if (count < 0) {
         anotify_nolisten2(player, CFAIL "Count has to be a positive number.");
         return;
-    } /* else if (count == 0) {
-        count = 10;
-    } */
-
+    }
+    /* else if (count == 0) {
+       count = 10;
+       } */
     for (i = db_top; i-- > 0;) {
-		if (!count || i == count) {
-			if (Typeof(i) == TYPE_PROGRAM && DBFETCH(i)->sp.program.code && DBFETCH(i)->sp.program.fprofile) {
-				fpr = DBFETCH(i)->sp.program.fprofile;
-				while (fpr) {
-						sprintf(buf, "%30s %30s %f, %ld", unparse_object(player, i), fpr->funcname, fpr->totaltime, fpr->usecount);
-						anotify_nolisten2(player, buf);
+        if (!count || i == count) {
+            if (Typeof(i) == TYPE_PROGRAM && DBFETCH(i)->sp.program.code && DBFETCH(i)->sp.program.fprofile) {
+                fpr = DBFETCH(i)->sp.program.fprofile;
+                while (fpr) {
+                    sprintf(buf, "%30s %30s %f, %ld", unparse_object(player, i), fpr->funcname, fpr->totaltime, fpr->usecount);
+                    anotify_nolisten2(player, buf);
 
-					fpr = fpr->next;
-				}
-			}
-		}
-	}
+                    fpr = fpr->next;
+                }
+            }
+        }
+    }
 
     anotify_nolisten2(player, CINFO "Done.");
 }
@@ -1405,8 +1285,7 @@ do_muf_topprofs(dbref player, char *arg1)
     anotify_nolisten2(player, CINFO "     %CPU   TotalTime  UseCount  Program");
     while (tops) {
         curr = tops;
-        sprintf(buf, "%10.3f %10.3f %9ld %s", curr->pcnt, curr->proftime,
-                curr->usecount, unparse_object(player, curr->prog));
+        sprintf(buf, "%10.3f %10.3f %9ld %s", curr->pcnt, curr->proftime, curr->usecount, unparse_object(player, curr->prog));
         notify(player, buf);
         tops = tops->next;
         delete curr;
@@ -1415,9 +1294,7 @@ do_muf_topprofs(dbref player, char *arg1)
             CNOTE "Profile Length (sec): " NORMAL "%5ld  " CNOTE "%%idle: "
             NORMAL "%5.2f%%  " CNOTE "Total Cycles: " NORMAL "%5lu",
             (current_systime - sel_prof_start_time),
-            ((double) (sel_prof_idle_sec + (sel_prof_idle_usec / 1000000.0)) *
-             100.0) / (double) ((current_systime - sel_prof_start_time) + 0.01),
-            sel_prof_idle_use);
+            ((double) (sel_prof_idle_sec + (sel_prof_idle_usec / 1000000.0)) * 100.0) / (double) ((current_systime - sel_prof_start_time) + 0.01), sel_prof_idle_use);
     anotify_nolisten2(player, buf);
     anotify_nolisten2(player, CINFO "Done.");
 }
@@ -1469,6 +1346,7 @@ do_mpi_topprofs(dbref player, char *arg1)
     for (i = db_top; i-- > 0;) {
         if (DBFETCH(i)->mpi_prof_use) {
             struct profnode *newnode = new profnode;
+
             newnode->next = NULL;
             newnode->prog = i;
             newnode->proftime = DBFETCH(i)->mpi_proftime.tv_sec;
@@ -1519,8 +1397,7 @@ do_mpi_topprofs(dbref player, char *arg1)
     anotify_nolisten2(player, CINFO "     %CPU   TotalTime  UseCount  Object");
     while (tops) {
         curr = tops;
-        sprintf(buf, "%10.3f %10.3f %9ld %s", curr->pcnt, curr->proftime,
-                curr->usecount, unparse_object(player, curr->prog));
+        sprintf(buf, "%10.3f %10.3f %9ld %s", curr->pcnt, curr->proftime, curr->usecount, unparse_object(player, curr->prog));
         notify(player, buf);
         tops = tops->next;
         delete curr;
@@ -1529,10 +1406,7 @@ do_mpi_topprofs(dbref player, char *arg1)
             CNOTE "Profile Length (sec): " NORMAL "%5ld  " CNOTE "%%idle: "
             NORMAL "%5.2f%%  " CNOTE "Total Cycles: " NORMAL "%5lu",
             (current_systime - sel_prof_start_time),
-            (((double) sel_prof_idle_sec +
-              (sel_prof_idle_usec / 1000000.0)) * 100.0) /
-            (double) ((current_systime - sel_prof_start_time) + 0.01),
-            sel_prof_idle_use);
+            (((double) sel_prof_idle_sec + (sel_prof_idle_usec / 1000000.0)) * 100.0) / (double) ((current_systime - sel_prof_start_time) + 0.01), sel_prof_idle_use);
     anotify_nolisten2(player, buf);
     anotify_nolisten2(player, CINFO "Done.");
 }
@@ -1595,6 +1469,7 @@ do_all_topprofs(dbref player, char *arg1)
     for (i = db_top; i-- > 0;) {
         if (DBFETCH(i)->mpi_prof_use) {
             struct profnode *newnode = new profnode;
+
             newnode->next = NULL;
             newnode->prog = i;
             newnode->proftime = DBFETCH(i)->mpi_proftime.tv_sec;
@@ -1650,8 +1525,7 @@ do_all_topprofs(dbref player, char *arg1)
             newnode->prog = i;
             newnode->proftime = tmpt.tv_sec;
             newnode->proftime += (tmpt.tv_usec / 1000000.0);
-            newnode->comptime =
-                current_systime - DBFETCH(i)->sp.program.profstart;
+            newnode->comptime = current_systime - DBFETCH(i)->sp.program.profstart;
             newnode->usecount = DBFETCH(i)->sp.program.profuses;
             newnode->type = 1;
             if (newnode->comptime > 0) {
@@ -1695,13 +1569,10 @@ do_all_topprofs(dbref player, char *arg1)
             }
         }
     }
-    anotify_nolisten2(player,
-                      CINFO "     %CPU   TotalTime  UseCount  Type  Object");
+    anotify_nolisten2(player, CINFO "     %CPU   TotalTime  UseCount  Type  Object");
     while (tops) {
         curr = tops;
-        sprintf(buf, "%10.3f %10.3f %9ld%5s   %s", curr->pcnt, curr->proftime,
-                curr->usecount, curr->type ? "MUF" : "MPI",
-                unparse_object(player, curr->prog));
+        sprintf(buf, "%10.3f %10.3f %9ld%5s   %s", curr->pcnt, curr->proftime, curr->usecount, curr->type ? "MUF" : "MPI", unparse_object(player, curr->prog));
         notify(player, buf);
         tops = tops->next;
         delete curr;
@@ -1710,9 +1581,7 @@ do_all_topprofs(dbref player, char *arg1)
             CNOTE "Profile Length (sec): " NORMAL "%5ld  " CNOTE "%%idle: "
             NORMAL "%5.2f%%  " CNOTE "Total Cycles: " NORMAL "%5lu",
             (current_systime - sel_prof_start_time),
-            ((double) (sel_prof_idle_sec + (sel_prof_idle_usec / 1000000.0)) *
-             100.0) / (double) ((current_systime - sel_prof_start_time) + 0.01),
-            sel_prof_idle_use);
+            ((double) (sel_prof_idle_sec + (sel_prof_idle_usec / 1000000.0)) * 100.0) / (double) ((current_systime - sel_prof_start_time) + 0.01), sel_prof_idle_use);
     anotify_nolisten2(player, buf);
     anotify_nolisten2(player, CINFO "Done.");
 }
@@ -1730,32 +1599,23 @@ do_memory(dbref who)
         struct mallinfo mi;
 
         mi = mallinfo();
-        notify_fmt(who, "Total allocated from system:   %6dk",
-                   (mi.arena / 1024));
+        notify_fmt(who, "Total allocated from system:   %6dk", (mi.arena / 1024));
         notify_fmt(who, "Number of non-inuse chunks:    %6d", mi.ordblks);
         notify_fmt(who, "Small block count:             %6d", mi.smblks);
-        notify_fmt(who, "Small block mem alloced:       %6dk",
-                   (mi.usmblks / 1024));
-        notify_fmt(who, "Small block memory free:       %6dk",
-                   (mi.fsmblks / 1024));
+        notify_fmt(who, "Small block mem alloced:       %6dk", (mi.usmblks / 1024));
+        notify_fmt(who, "Small block memory free:       %6dk", (mi.fsmblks / 1024));
 #ifdef HAVE_STRUCT_MALLINFO_HBLKS
         notify_fmt(who, "Number of mmapped regions:     %6d", mi.hblks);
 #endif
-        notify_fmt(who, "Total memory mmapped:          %6dk",
-                   (mi.hblkhd / 1024));
-        notify_fmt(who, "Total memory malloced:         %6dk",
-                   (mi.uordblks / 1024));
-        notify_fmt(who, "Mem allocated overhead:        %6dk",
-                   ((mi.arena - mi.uordblks) / 1024));
-        notify_fmt(who, "Memory free:                   %6dk",
-                   (mi.fordblks / 1024));
+        notify_fmt(who, "Total memory mmapped:          %6dk", (mi.hblkhd / 1024));
+        notify_fmt(who, "Total memory malloced:         %6dk", (mi.uordblks / 1024));
+        notify_fmt(who, "Mem allocated overhead:        %6dk", ((mi.arena - mi.uordblks) / 1024));
+        notify_fmt(who, "Memory free:                   %6dk", (mi.fordblks / 1024));
 #ifdef HAVE_STRUCT_MALLINFO_KEEPCOST
-        notify_fmt(who, "Top-most releasable chunk size:%6dk",
-                   (mi.keepcost / 1024));
+        notify_fmt(who, "Top-most releasable chunk size:%6dk", (mi.keepcost / 1024));
 #endif
 #ifdef HAVE_STRUCT_MALLINFO_TREEOVERHEAD
-        notify_fmt(who, "Memory free overhead:    %6dk",
-                   (mi.treeoverhead / 1024));
+        notify_fmt(who, "Memory free overhead:    %6dk", (mi.treeoverhead / 1024));
 #endif
 #ifdef HAVE_STRUCT_MALLINFO_GRAIN
         notify_fmt(who, "Small block grain: %6d", mi.grain);

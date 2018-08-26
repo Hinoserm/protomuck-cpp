@@ -12,8 +12,7 @@
 #include "reg.h"
 
 bool
-can_link_to(dbref who, object_flag_type what_type,
-            dbref where)
+can_link_to(dbref who, object_flag_type what_type, dbref where)
 {
     if (where == HOME)
         return 1;
@@ -33,8 +32,7 @@ can_link_to(dbref who, object_flag_type what_type,
         case TYPE_PLAYER:
             return (Typeof(where) == TYPE_ROOM && (controls(who, where)
                                                    || Linkable(where)
-                                                   || (POWERS(who) &
-                                                       POW_LINK_ANYWHERE)));
+                                                   || (POWERS(who) & POW_LINK_ANYWHERE)));
             /* NOTREACHED */
             break;
         case TYPE_ROOM:
@@ -44,8 +42,7 @@ can_link_to(dbref who, object_flag_type what_type,
             /* NOTREACHED */
             break;
         case TYPE_THING:
-            return ((Typeof(where) == TYPE_ROOM || Typeof(where) == TYPE_PLAYER
-                     || Typeof(where) == TYPE_THING)
+            return ((Typeof(where) == TYPE_ROOM || Typeof(where) == TYPE_PLAYER || Typeof(where) == TYPE_THING)
                     && (controls(who, where) || Linkable(where)
                         || (POWERS(who) & POW_LINK_ANYWHERE)));
             /* NOTREACHED */
@@ -124,11 +121,9 @@ could_doit(int descr, dbref player, dbref thing)
         }
 
         /* for actions */
-        if ((DBFETCH(thing)->location != NOTHING) &&
-            (Typeof(DBFETCH(thing)->location) != TYPE_ROOM)) {
+        if ((DBFETCH(thing)->location != NOTHING) && (Typeof(DBFETCH(thing)->location) != TYPE_ROOM)) {
 
-            if ((Typeof(dest) == TYPE_ROOM || Typeof(dest) == TYPE_PLAYER) &&
-                (FLAGS(source) & BUILDER))
+            if ((Typeof(dest) == TYPE_ROOM || Typeof(dest) == TYPE_PLAYER) && (FLAGS(source) & BUILDER))
                 return 0;
 
             if (tp_secure_teleport && Typeof(dest) == TYPE_ROOM) {
@@ -146,8 +141,7 @@ could_doit(int descr, dbref player, dbref thing)
 
 
 bool
-could_doit2(int descr, dbref player, dbref thing, char *prop,
-            bool tryprog)
+could_doit2(int descr, dbref player, dbref thing, char *prop, bool tryprog)
 {
     dbref source, dest, owner;
 
@@ -189,11 +183,9 @@ could_doit2(int descr, dbref player, dbref thing, char *prop,
         }
 
         /* for actions */
-        if ((DBFETCH(thing)->location != NOTHING) &&
-            (Typeof(DBFETCH(thing)->location) != TYPE_ROOM)) {
+        if ((DBFETCH(thing)->location != NOTHING) && (Typeof(DBFETCH(thing)->location) != TYPE_ROOM)) {
 
-            if ((Typeof(dest) == TYPE_ROOM || Typeof(dest) == TYPE_PLAYER) &&
-                (FLAGS(source) & BUILDER))
+            if ((Typeof(dest) == TYPE_ROOM || Typeof(dest) == TYPE_PLAYER) && (FLAGS(source) & BUILDER))
                 return 0;
 
             if (tp_secure_teleport && Typeof(dest) == TYPE_ROOM) {
@@ -208,18 +200,15 @@ could_doit2(int descr, dbref player, dbref thing, char *prop,
     }
 
     if (tryprog)
-        return (eval_boolexp(descr, player,
-                             get_property_lock(thing, prop), thing));
+        return (eval_boolexp(descr, player, get_property_lock(thing, prop), thing));
     else
-        return (eval_boolexp2(descr, player,
-                              get_property_lock(thing, prop), thing));
+        return (eval_boolexp2(descr, player, get_property_lock(thing, prop), thing));
 
 }
 
 
 bool
-test_lock(int descr, dbref player, dbref thing,
-          const char *lockprop)
+test_lock(int descr, dbref player, dbref thing, const char *lockprop)
 {
     struct boolexp *lokptr;
 
@@ -229,8 +218,7 @@ test_lock(int descr, dbref player, dbref thing,
 
 
 bool
-test_lock_false_default(int descr, dbref player,
-                        dbref thing, const char *lockprop)
+test_lock_false_default(int descr, dbref player, dbref thing, const char *lockprop)
 {
     struct boolexp *lok = get_property_lock(thing, lockprop);
 
@@ -242,8 +230,7 @@ test_lock_false_default(int descr, dbref player,
 
 
 bool
-can_doit(int descr, dbref player, dbref thing,
-         const char *default_fail_msg)
+can_doit(int descr, dbref player, dbref thing, const char *default_fail_msg)
 {
     dbref loc;
 
@@ -253,16 +240,13 @@ can_doit(int descr, dbref player, dbref thing,
     if (OkObj(thing)) {
         dbref dest = Typeof(thing) == TYPE_EXIT ? (DBFETCH(thing)->sp.exit.ndest ? DBFETCH(thing)->sp.exit.dest[0] : NOTHING) : NOTHING;
 
-        if (((FLAG2(player) & F2IMMOBILE) && !(FLAG2(thing) & F2IMMOBILE)) &&
-            (!OkObj(dest) || Typeof(dest) != TYPE_PROGRAM)
+        if (((FLAG2(player) & F2IMMOBILE) && !(FLAG2(thing) & F2IMMOBILE)) && (!OkObj(dest) || Typeof(dest) != TYPE_PROGRAM)
             ) {
-            envpropqueue(descr, player, OkObj(player) ? getloc(player) : -1,
-                         thing, thing, NOTHING, "@immobile", "Immobile", 1, 1);
+            envpropqueue(descr, player, OkObj(player) ? getloc(player) : -1, thing, thing, NOTHING, "@immobile", "Immobile", 1, 1);
             return 0;
         }
     }
-    if (!TMage(OWNER(player)) && Typeof(player) == TYPE_THING &&
-        (FLAGS(thing) & ZOMBIE)) {
+    if (!TMage(OWNER(player)) && Typeof(player) == TYPE_THING && (FLAGS(thing) & ZOMBIE)) {
         notify(player, "Sorry, but zombies can't do that.");
         return 0;
     }
@@ -274,8 +258,7 @@ can_doit(int descr, dbref player, dbref thing,
             notify(player, default_fail_msg);
         }
         if (GETOFAIL(thing) && !Dark(player)) {
-            parse_omessage(descr, player, loc, thing, GETOFAIL(thing),
-                           PNAME(player), "(@Ofail)");
+            parse_omessage(descr, player, loc, thing, GETOFAIL(thing), PNAME(player), "(@Ofail)");
         }
         return 0;
     } else {
@@ -299,8 +282,7 @@ can_see(dbref player, dbref thing, bool can_see_loc)
     if (!OkObj(player) || !OkObj(thing))
         return 0;
 
-    if (player == thing || Typeof(thing) == TYPE_EXIT
-        || Typeof(thing) == TYPE_ROOM)
+    if (player == thing || Typeof(thing) == TYPE_EXIT || Typeof(thing) == TYPE_ROOM)
         return 0;
 
     if (Light(thing))
@@ -317,8 +299,8 @@ can_see(dbref player, dbref thing, bool can_see_loc)
                             || (POWERS(player) & POW_SEE_ALL));
                 }
             default:
-                return (!Dark(thing) || (POWERS(player) & POW_SEE_ALL) ||
-                        (controls(player, thing) && !(FLAGS(player) & STICKY)));
+                return (!Dark(thing) || (POWERS(player) & POW_SEE_ALL) || (controls(player, thing)
+                                                                           && !(FLAGS(player) & STICKY)));
 
         }
     } else {
@@ -394,8 +376,7 @@ newcontrols(dbref who, dbref what, bool true_c)
                 if (Typeof(what) != TYPE_PLAYER)
                     for (index = what; index != NOTHING; index = getloc(index))
                         if ((controlsEx(who, index))
-                            && (Typeof(index) == TYPE_ROOM
-                                && ((FLAGS(index) & BUILDER) || Mage(index))))
+                            && (Typeof(index) == TYPE_ROOM && ((FLAGS(index) & BUILDER) || Mage(index))))
                             return 1;
             } else {
                 if (Typeof(what) != TYPE_PLAYER)
@@ -410,8 +391,7 @@ newcontrols(dbref who, dbref what, bool true_c)
 
         if (tp_realms_control && (Typeof(what) != TYPE_PLAYER))
             for (index = what; index != NOTHING; index = getloc(index))
-                if ((OWNER(index) == who) && (Typeof(index) == TYPE_ROOM
-                                              && Mage(index)))
+                if ((OWNER(index) == who) && (Typeof(index) == TYPE_ROOM && Mage(index)))
                     return 1;
 #ifdef CONTROLS_SUPPORT
     }
@@ -448,7 +428,8 @@ restricted(dbref player, dbref thing, object_flag_type flag)
                 if (Typeof(thing) == TYPE_THING)
                     return (!Mage(OWNER(player)));
             } else {
-                if ((Typeof(thing) == TYPE_THING) && (FLAGS(player) & VEHICLE))
+                if ((Typeof(thing) == TYPE_THING)
+                    && (FLAGS(player) & VEHICLE))
                     return (!Mage(OWNER(player)));
             }
             return (0);
@@ -464,8 +445,7 @@ restricted(dbref player, dbref thing, object_flag_type flag)
             return (0);
             break;
         case QUELL:
-            return (TMage(thing) && (thing != player) &&
-                    (Typeof(thing) == TYPE_PLAYER));
+            return (TMage(thing) && (thing != player) && (Typeof(thing) == TYPE_PLAYER));
             break;
         case BUILDER:
             if ((Typeof(thing) == TYPE_PLAYER)
@@ -576,11 +556,7 @@ word_start(const char *str, const char let)
 bool
 ok_name(const char *name)
 {
-    return (name
-            && *name
-            && *name != LOOKUP_TOKEN
-            && *name != REGISTERED_TOKEN
-            && *name != NUMBER_TOKEN && !index(name, ARG_DELIMITER)
+    return (name && *name && *name != LOOKUP_TOKEN && *name != REGISTERED_TOKEN && *name != NUMBER_TOKEN && !index(name, ARG_DELIMITER)
 /*	    && !index(name, AND_TOKEN) */
             && !index(name, OR_TOKEN)
             && !index(name, '^')
@@ -597,17 +573,16 @@ ok_player_name(const char *name)
 {
     const char *scan;
 
-    if (!ok_name(name) || strlen(name) > (size_t)PLAYER_NAME_LIMIT)
+    if (!ok_name(name) || strlen(name) > (size_t) PLAYER_NAME_LIMIT)
         return 0;
 
     for (scan = name; *scan; scan++) {
-        if ( tp_spaces_in_playernames ) {
-            if ( !isprint(*scan) || *scan == '"' ) {
+        if (tp_spaces_in_playernames) {
+            if (!isprint(*scan) || *scan == '"') {
                 return 0;
-            }         
-        }
-        else {
-            if ( !isprint(*scan) || isspace(*scan) ) /* was isgraph(*scan) */
+            }
+        } else {
+            if (!isprint(*scan) || isspace(*scan)) /* was isgraph(*scan) */
                 return 0;
         }
     }
@@ -622,7 +597,7 @@ ok_player_name(const char *name)
 bool
 ok_password(const char *password)
 {
-    register const char *scan;
+    const char *scan;
 
     if (*password == '\0')
         return 0;

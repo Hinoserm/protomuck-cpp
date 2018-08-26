@@ -13,7 +13,7 @@
  */
 
 unsigned
-phash(register const char *s, unsigned hash_size)
+phash(const char *s, unsigned hash_size)
 {
     unsigned hashval;
 
@@ -27,9 +27,9 @@ phash(register const char *s, unsigned hash_size)
  * returns NULL if not found, otherwise a pointer to the data union.
  */
 hash_data *
-find_hash(register const char *s, hash_tab *table, unsigned size)
+find_hash(const char *s, hash_tab *table, unsigned size)
 {
-    register hash_entry *hp;
+    hash_entry *hp;
 
     for (hp = table[phash(s, size)]; hp != NULL; hp = hp->next)
         if (string_compare(s, hp->name) == 0)
@@ -47,11 +47,10 @@ find_hash(register const char *s, hash_tab *table, unsigned size)
  * make a static copy of the name before adding it to the table.
  */
 hash_entry *
-add_hash(register const char *name, hash_data data,
-         hash_tab *table, unsigned size)
+add_hash(const char *name, hash_data data, hash_tab *table, unsigned size)
 {
-    register hash_entry *hp;
-    register unsigned int hashval;
+    hash_entry *hp;
+    unsigned int hashval;
 
     hashval = phash(name, size);
 
@@ -63,6 +62,7 @@ add_hash(register const char *name, hash_data data,
     /* If not found, set up a new entry */
     if (hp == NULL) {
         hp = new hash_entry;
+
         if (hp == NULL)
             /* can't allocate new entry -- die */
             return NULL;
@@ -80,24 +80,25 @@ add_hash(register const char *name, hash_data data,
  * from the function.
  */
 hash_entry *
-add_hash_int(register const char *name, int value, 
-             hash_tab *table, unsigned size)
+add_hash_int(const char *name, int value, hash_tab *table, unsigned size)
 {
-    register hash_entry *hp;
-    register unsigned int hashval;
+    hash_entry *hp;
+    unsigned int hashval;
     hash_data hd;
+
     hd.ival = value;
-    
+
     hashval = phash(name, size);
- 
+
     for (hp = table[hashval]; hp; hp = hp->next)
         if (string_compare(name, hp->name) == 0)
             break;
- 
+
     /* If not found, set up a new entry */
-    if ( !hp ) {
+    if (!hp) {
         hp = new hash_entry;
-        if (!hp ) {
+
+        if (!hp) {
             /* Out of memory? */
             return NULL;
         }
@@ -105,10 +106,10 @@ add_hash_int(register const char *name, int value,
         table[hashval] = hp;
         hp->name = (char *) string_dup(name);
     }
- 
+
     /* store the data */
     hp->dat = hd;
-    
+
     return hp;
 }
 
@@ -118,16 +119,17 @@ add_hash_int(register const char *name, int value,
  * a name.  Returns 0 on success, or -1 if the name cannot be found.
  */
 int
-free_hash(register const char *name, hash_tab *table, unsigned size)
+free_hash(const char *name, hash_tab *table, unsigned size)
 {
-    register hash_entry **lp, *hp;
+    hash_entry **lp, *hp;
 
     lp = &table[phash(name, size)];
     for (hp = *lp; hp != NULL; lp = &hp->next, hp = hp->next)
         if (string_compare(name, hp->name) == 0) {
             *lp = hp->next;     /* got it.  fix the pointers */
-            delete[] hp->name;
+            delete[]hp->name;
             delete hp;
+
             return 0;
         }
     return -1;                  /* not found */
@@ -137,16 +139,16 @@ free_hash(register const char *name, hash_tab *table, unsigned size)
 void
 kill_hash(hash_tab *table, unsigned size, int freeptrs)
 {
-    register hash_entry *hp, *np;
-    register unsigned int i;
+    hash_entry *hp, *np;
+    unsigned int i;
 
     for (i = 0; i < size; i++) {
         for (hp = table[i]; hp != NULL; hp = np) {
             np = hp->next;      /* Don't dereference the pointer after */
-            delete[] hp->name;
+            delete[]hp->name;
             if (freeptrs)
-                delete[] hp->dat.pval;
-            delete hp;  /* we've freed it! */
+                delete[]hp->dat.pval;
+            delete hp;          /* we've freed it! */
         }
         table[i] = NULL;
     }

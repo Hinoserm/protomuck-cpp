@@ -346,8 +346,7 @@ reg_check_a_trix(char *trix, char *str, int expected_result)
     int actual_result = reg_trix(trix, str);
 
     if (!actual_result != !expected_result) {
-        printf("reg_trix bug: reg_trix(\"%s\",\"%s\") d=%d\n",
-               trix, str, actual_result);
+        printf("reg_trix bug: reg_trix(\"%s\",\"%s\") d=%d\n", trix, str, actual_result);
     }
 }
 
@@ -571,8 +570,7 @@ strcasestr2(const char *s1, const char *s2)
     static char t1[MAX_STRCASESTR2_ARG];
     static char t2[MAX_STRCASESTR2_ARG];
 
-    if (strlen(s1) > MAX_STRCASESTR2_ARG - 1
-        || strlen(s2) > MAX_STRCASESTR2_ARG - 1) {
+    if (strlen(s1) > MAX_STRCASESTR2_ARG - 1 || strlen(s2) > MAX_STRCASESTR2_ARG - 1) {
         return NULL;
     }
     strcpy_tolower(t1, s1);

@@ -4,6 +4,9 @@
 #include "copyright.h"
 #include "db.h"
 #include "defaults.h"
+#ifdef MCP_SUPPORT
+# include "mcp.h"
+#endif
 #include "newhttp.h"
 
 #ifdef USE_SSL
@@ -132,6 +135,9 @@ struct descriptor_data {
 #ifdef USE_SSL
     SSL			    *ssl_session;
 #endif
+#ifdef MCP_SUPPORT
+    McpFrame                 mcpframe;      /* Muck-To-Client protocal information */
+#endif
 #ifdef NEWHTTPD
     class http *http;          /* hinoserm: Class for webserver stuff */
 #endif /* NEWHTTPD */
@@ -239,8 +245,8 @@ extern void wall_arches(const char *msg);
 extern void wall_wizards(const char *msg);
 extern void ansi_wall_wizards(const char *msg);
 extern void show_wizards(dbref player);
-extern int shutdown_flag; /* if non-zero, interface should shut down */
-extern int restart_flag; /* if non-zero, should restart after shut down */
+extern std::atomic_int shutdown_flag; /* if non-zero, interface should shut down */
+extern std::atomic_int restart_flag; /* if non-zero, should restart after shut down */
 /* if delayed_shutdown is non-null, game is in a delayed shutdown loop.
  * interface should shut down when when tp_shutdown_delay has been exceeded. */
 extern time_t delayed_shutdown;
@@ -273,6 +279,12 @@ extern int pdescrcount(void);
 extern int pfirstdescr(void);
 extern int plastdescr(void);
 extern int pdescrcon(int c);
+#ifdef MCP_SUPPORT
+extern McpFrame *descr_mcpframe(int c);
+extern void SendText(McpFrame * mfr, const char *text);
+extern int mcpframe_to_descr(McpFrame * ptr);
+extern int mcpframe_to_user(McpFrame * ptr);
+#endif
 extern int pnextdescr(int c);
 extern int pfirstconn(dbref who);
 extern int pset_user(struct descriptor_data *d, dbref who);

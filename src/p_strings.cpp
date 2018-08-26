@@ -1,4 +1,5 @@
 /* Primitives package */
+#include <stdexcept>
 
 #include "copyright.h"
 #include "config.h"
@@ -22,12 +23,14 @@ prim_fmtstring(PRIM_PROTOTYPE)
 {
     int slen, scnt, tstop, tlen, tnum, i;
     int slrj, spad1, spad2, slen1, slen2, temp;
-    char sstr[BUFFER_LEN], sfmt[255], hold[256], tbuf[BUFFER_LEN];
-	char buf[BUFFER_LEN];
+
+    //char sstr[BUFFER_LEN], sfmt[255], hold[256], tbuf[BUFFER_LEN];
+    char sstr[BUFFER_LEN], sfmt[BUFFER_LEN], hold[BUFFER_LEN], tbuf[BUFFER_LEN];
+    char buf[BUFFER_LEN];
     char *ptr, *begptr;
-	int result;
-	dbref ref;
-	struct inst *oper2;
+    int result;
+    dbref ref;
+    struct inst *oper2;
 
     if (oper[0].type != PROG_STRING)
         abort_interp("Top argument must be a string.");
@@ -80,13 +83,13 @@ prim_fmtstring(PRIM_PROTOTYPE)
                 } else {
                     if (sstr[scnt] == '*') {
                         scnt++;
-                        
-						CHECKOP(1);
+
+                        CHECKOP(1);
                         oper2 = POP();
                         if (oper2->type != PROG_INTEGER) {
-							CLEAR(oper2);
+                            CLEAR(oper2);
                             abort_interp("Format specified integer argument not found.");
-						}
+                        }
                         slen1 = oper2->data.number;
                         CLEAR(oper2);
                     } else {
@@ -102,21 +105,21 @@ prim_fmtstring(PRIM_PROTOTYPE)
                     } else {
                         if (sstr[scnt] == '*') {
                             scnt++;
-                            
-							CHECKOP(1);
+
+                            CHECKOP(1);
                             oper2 = POP();
                             if (oper2->type != PROG_INTEGER) {
-								CLEAR(oper2);
+                                CLEAR(oper2);
                                 abort_interp("Format specified integer argument not found.");
-							}
+                            }
                             if (oper2->data.number < 0) {
-								CLEAR(oper2);
+                                CLEAR(oper2);
                                 abort_interp("Dynamic precision value must be a positive integer.");
-							}
+                            }
                             slen2 = oper2->data.number;
                             CLEAR(oper2);
                         } else {
-			    //CLEAR(oper2);
+                            //CLEAR(oper2);
                             abort_interp("Invalid format string.");
                         }
                     }
@@ -124,8 +127,8 @@ prim_fmtstring(PRIM_PROTOTYPE)
                     slen2 = -1;
                 }
                 /* ANSI handling */
-                
-				CHECKOP(1);
+
+                CHECKOP(1);
                 oper2 = POP();
                 if (('s' == sstr[scnt]) && (PROG_STRING == oper2->type)
                     && (oper2->data.string)) {
@@ -155,9 +158,9 @@ prim_fmtstring(PRIM_PROTOTYPE)
                     }
                 }
                 if ((slen1 > 0) && ((abs(slen1) + result) > BUFFER_LEN)) {
-					CLEAR(oper2);
+                    CLEAR(oper2);
                     abort_interp("Specified format field width too large.");
-				}
+                }
                 sfmt[0] = '%';
                 sfmt[1] = '\0';
                 if (slrj == 1)
@@ -204,9 +207,9 @@ prim_fmtstring(PRIM_PROTOTYPE)
                     case 'i':
                         strcat(sfmt, "d");
                         if (oper2->type != PROG_INTEGER) {
-							CLEAR(oper2);
+                            CLEAR(oper2);
                             abort_interp("Format specified integer argument not found.");
-						}
+                        }
                         sprintf(tbuf, sfmt, oper2->data.number);
                         tlen = strlen(tbuf);
                         if (slrj == 2) {
@@ -222,9 +225,9 @@ prim_fmtstring(PRIM_PROTOTYPE)
                             }
                         }
                         if (tlen + result > BUFFER_LEN) {
-							CLEAR(oper2);
+                            CLEAR(oper2);
                             abort_interp("Resultant string would overflow buffer.");
-						}
+                        }
                         buf[result] = '\0';
                         strcat(buf, tbuf);
                         result += tlen;
@@ -234,12 +237,10 @@ prim_fmtstring(PRIM_PROTOTYPE)
                     case 's':
                         strcat(sfmt, "s");
                         if (oper2->type != PROG_STRING) {
-							CLEAR(oper2);
+                            CLEAR(oper2);
                             abort_interp("Format specified string argument not found.");
-						}
-                        sprintf(tbuf, sfmt,
-                                ((oper2->data.string) ? oper2->data.string->
-                                 data : ""));
+                        }
+                        sprintf(tbuf, sfmt, ((oper2->data.string) ? oper2->data.string->data : ""));
                         tlen = strlen(tbuf);
                         if (slrj == 2) {
                             tnum = 0;
@@ -254,9 +255,9 @@ prim_fmtstring(PRIM_PROTOTYPE)
                             }
                         }
                         if (strlen(tbuf) + result > BUFFER_LEN) {
-							CLEAR(oper2);
+                            CLEAR(oper2);
                             abort_interp("Resultant string would overflow buffer.");
-						}
+                        }
                         buf[result] = '\0';
                         strcat(buf, tbuf);
                         result += strlen(tbuf);
@@ -325,9 +326,9 @@ prim_fmtstring(PRIM_PROTOTYPE)
                             }
                         }
                         if (strlen(tbuf) + result > BUFFER_LEN) {
-							CLEAR(oper2);
+                            CLEAR(oper2);
                             abort_interp("Resultant string would overflow buffer.");
-						}
+                        }
                         buf[result] = '\0';
                         strcat(buf, tbuf);
                         result += strlen(tbuf);
@@ -336,9 +337,9 @@ prim_fmtstring(PRIM_PROTOTYPE)
                     case 'd':
                         strcat(sfmt, "s");
                         if (oper2->type != PROG_OBJECT) {
-							CLEAR(oper2);
+                            CLEAR(oper2);
                             abort_interp("Format specified object not found.");
-						}
+                        }
                         sprintf(hold, "#%d", oper2->data.objref);
                         sprintf(tbuf, sfmt, hold);
                         tlen = strlen(tbuf);
@@ -355,9 +356,9 @@ prim_fmtstring(PRIM_PROTOTYPE)
                             }
                         }
                         if (strlen(tbuf) + result > BUFFER_LEN) {
-							CLEAR(oper2);
+                            CLEAR(oper2);
                             abort_interp("Resultant string would overflow buffer.");
-						}
+                        }
                         buf[result] = '\0';
                         strcat(buf, tbuf);
                         result += strlen(tbuf);
@@ -366,13 +367,13 @@ prim_fmtstring(PRIM_PROTOTYPE)
                     case 'D':
                         strcat(sfmt, "s");
                         if (oper2->type != PROG_OBJECT) {
-							CLEAR(oper2);
+                            CLEAR(oper2);
                             abort_interp("Format specified object not found.");
-						}
+                        }
                         if (!valid_object(oper2)) {
-							CLEAR(oper2);
+                            CLEAR(oper2);
                             abort_interp("Format specified object not valid.");
-						}
+                        }
                         ref = oper2->data.objref;
                         CHECKREMOTE(ref);
                         if ((Typeof(ref) != TYPE_PLAYER)
@@ -398,9 +399,9 @@ prim_fmtstring(PRIM_PROTOTYPE)
                             }
                         }
                         if (strlen(tbuf) + result > BUFFER_LEN) {
-							CLEAR(oper2);
+                            CLEAR(oper2);
                             abort_interp("Resultant string would overflow buffer.");
-						}
+                        }
                         buf[result] = '\0';
                         strcat(buf, tbuf);
                         result += strlen(tbuf);
@@ -409,11 +410,10 @@ prim_fmtstring(PRIM_PROTOTYPE)
                     case 'l':
                         strcat(sfmt, "s");
                         if (oper2->type != PROG_LOCK) {
-							CLEAR(oper2);
+                            CLEAR(oper2);
                             abort_interp("Format specified lock not found.");
-						}
-                        strcpy(hold,
-                               unparse_boolexp(ProgUID, oper2->data.lock, 1));
+                        }
+                        strcpy(hold, unparse_boolexp(tbuf, ProgUID, oper2->data.lock, 1));
                         sprintf(tbuf, sfmt, hold);
                         tlen = strlen(tbuf);
                         if (slrj == 2) {
@@ -429,9 +429,9 @@ prim_fmtstring(PRIM_PROTOTYPE)
                             }
                         }
                         if (strlen(tbuf) + result > BUFFER_LEN) {
-							CLEAR(oper2);
+                            CLEAR(oper2);
                             abort_interp("Resultant string would overflow buffer.");
-						}
+                        }
                         buf[result] = '\0';
                         strcat(buf, tbuf);
                         result += strlen(tbuf);
@@ -444,9 +444,9 @@ prim_fmtstring(PRIM_PROTOTYPE)
                         sprintf(hold, "%c", sstr[scnt]);
                         strcat(sfmt, hold);
                         if (oper2->type != PROG_FLOAT) {
-							CLEAR(oper2);
+                            CLEAR(oper2);
                             abort_interp("Format specified float not found.");
-						}
+                        }
                         sprintf(tbuf, sfmt, oper2->data.fnumber);
                         tlen = strlen(tbuf);
                         if (slrj == 2) {
@@ -462,16 +462,16 @@ prim_fmtstring(PRIM_PROTOTYPE)
                             }
                         }
                         if (strlen(tbuf) + result > BUFFER_LEN) {
-							CLEAR(oper2);
+                            CLEAR(oper2);
                             abort_interp("Resultant string would overflow buffer.");
-						}
+                        }
                         buf[result] = '\0';
                         strcat(buf, tbuf);
                         result += strlen(tbuf);
                         CLEAR(oper2);
                         break;
                     default:
-						CLEAR(oper2);
+                        CLEAR(oper2);
                         abort_interp("Invalid format string.");
                         break;
                 }
@@ -517,13 +517,10 @@ void
 prim_split(PRIM_PROTOTYPE)
 {
     char *temp = NULL;
-	char buf[BUFFER_LEN];
-	char *pname;
-	int result;
+    char buf[BUFFER_LEN];
+    char *pname;
+    int result;
 
-    
-    
-    
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string argument. (2)");
     if (!oper[0].data.string)
@@ -545,8 +542,8 @@ prim_split(PRIM_PROTOTYPE)
             result = 1;
         }
     }
-    
-    
+
+
     if (result) {
         if (result == 1) {
             if (buf[0] == '\0') {
@@ -573,12 +570,9 @@ void
 prim_rsplit(PRIM_PROTOTYPE)
 {
     char *temp = NULL, *hold = NULL;
-	char buf[BUFFER_LEN];
-	int result;
+    char buf[BUFFER_LEN];
+    int result;
 
-    
-    
-    
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string argument. (2)");
     if (!oper[0].data.string)
@@ -594,14 +588,11 @@ prim_rsplit(PRIM_PROTOTYPE)
         if (oper[0].data.string->length > oper[1].data.string->length) {
             result = -1;
         } else {
-            temp =
-                buf + (oper[1].data.string->length - oper[0].data.string->length);
+            temp = buf + (oper[1].data.string->length - oper[0].data.string->length);
             hold = NULL;
             while ((temp != (buf - 1)) && (!hold)) {
                 if (*temp == *(oper[0].data.string->data))
-                    if (!strncmp
-                        (temp, oper[0].data.string->data,
-                         oper[0].data.string->length))
+                    if (!strncmp(temp, oper[0].data.string->data, oper[0].data.string->length))
                         hold = temp;
                 temp--;
             }
@@ -614,8 +605,8 @@ prim_rsplit(PRIM_PROTOTYPE)
             }
         }
     }
-    
-    
+
+
     if (result) {
         if (result == 1) {
             if (buf[0] == '\0') {
@@ -642,10 +633,10 @@ void
 prim_ctoi(PRIM_PROTOTYPE)
 {
     unsigned char c;
-	int result;
+    int result;
 
-    
-    
+
+
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string argument. (1)");
     if (!oper[0].data.string) {
@@ -654,51 +645,46 @@ prim_ctoi(PRIM_PROTOTYPE)
         c = oper[0].data.string->data[0];
     }
     result = c;
-    
+
     PushInt(result);
 }
 
 void
 prim_itoc(PRIM_PROTOTYPE)
 {
-	char buf[BUFFER_LEN];
+    char buf[BUFFER_LEN];
 
-    
-    
     if ((oper[0].type != PROG_INTEGER) || (oper[0].data.number < 0))
         abort_interp("Argument must be a positive integer. (1)");
     /* This protection makes no sense, given the fact that almost
        all of these codes are generatable other ways at M1. 
        It also stops regular users from generating unicode. -- Alynna 
-    if (((oper[0].data.number > 127) && (mlev < LARCH))
-        || (!isprint((char) oper[0].data.number) && (mlev < LARCH)
-            && ((char) oper[0].data.number != '\n')
-            && ((char) oper[0].data.number != '\r')
-            && ((char) oper[0].data.number != ESCAPE_CHAR))) {
-        result = 0;
-    } else {
-        result = 1;
-        buf[0] = (char) oper[0].data.number;
-        buf[1] = '\0';
-    }
-    
-    if (result) {
-        PushString(buf);
-    } else {
-        PushNullStr;
-    } */
+       if (((oper[0].data.number > 127) && (mlev < LARCH))
+       || (!isprint((char) oper[0].data.number) && (mlev < LARCH)
+       && ((char) oper[0].data.number != '\n')
+       && ((char) oper[0].data.number != '\r')
+       && ((char) oper[0].data.number != ESCAPE_CHAR))) {
+       result = 0;
+       } else {
+       result = 1;
+       buf[0] = (char) oper[0].data.number;
+       buf[1] = '\0';
+       }
+
+       if (result) {
+       PushString(buf);
+       } else {
+       PushNullStr;
+       } */
     buf[0] = (char) oper[0].data.number;
     buf[1] = '\0';
-    PushString(buf);
+    PushStringL(buf, 1);
 }
 
 void
 prim_stod(PRIM_PROTOTYPE)
 {
     dbref ref;
-
-    
-    
 
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string argument. (1)");
@@ -727,22 +713,22 @@ prim_stod(PRIM_PROTOTYPE)
             ref = (dbref) atoi(ptr);
         }                       /* if */
     }
-    
+
     PushObject(ref);
 }
 
 void
 prim_dtos(PRIM_PROTOTYPE)
 {
-	char buf[BUFFER_LEN];
+    char buf[BUFFER_LEN];
 
-    
-    
+
+
     if (oper[0].type != PROG_OBJECT)
         abort_interp("No Object Dbref was passed as an argment.");
     sprintf(buf, "#%d", oper[0].data.objref);
 
-    
+
     PushString(buf);
 }
 
@@ -751,12 +737,8 @@ void
 prim_midstr(PRIM_PROTOTYPE)
 {
     int start, range, result;
-	char buf[BUFFER_LEN];
+    char buf[BUFFER_LEN];
 
-    
-    
-    
-    
     result = 0;
     if (oper[2].type != PROG_STRING)
         abort_interp("Non-string argument. (1)");
@@ -784,9 +766,7 @@ prim_midstr(PRIM_PROTOTYPE)
             buf[range] = '\0';
         }
     }
-    
-    
-    
+
     if (result) {
         PushNullStr;
     } else {
@@ -797,26 +777,24 @@ prim_midstr(PRIM_PROTOTYPE)
 void
 prim_numberp(PRIM_PROTOTYPE)
 {
-	int result;
+    int result;
 
-    
-    
     if (oper[0].type != PROG_STRING || !oper[0].data.string)
         result = 0;
     else
         result = number(oper[0].data.string->data);
-    
+
     PushInt(result);
 }
 
 void
 prim_stringcmp(PRIM_PROTOTYPE)
 {
-	int result;
+    int result;
 
-    
-    
-    
+
+
+
     if (oper[0].type != PROG_STRING || oper[1].type != PROG_STRING)
         abort_interp("Non-string argument.");
     if (oper[0].data.string == oper[1].data.string)
@@ -824,22 +802,21 @@ prim_stringcmp(PRIM_PROTOTYPE)
     else if (!(oper[1].data.string && oper[0].data.string))
         result = oper[0].data.string ? -1 : 1;
     else {
-        result =
-            string_compare(oper[1].data.string->data, oper[0].data.string->data);
+        result = string_compare(oper[1].data.string->data, oper[0].data.string->data);
     }
-    
-    
+
+
     PushInt(result);
 }
 
 void
 prim_strcmp(PRIM_PROTOTYPE)
 {
-	int result;
+    int result;
 
-    
-    
-    
+
+
+
     if (oper[0].type != PROG_STRING || oper[1].type != PROG_STRING)
         abort_interp("Non-string argument.");
     if (oper[0].data.string == oper[1].data.string)
@@ -849,20 +826,20 @@ prim_strcmp(PRIM_PROTOTYPE)
     else {
         result = strcmp(oper[1].data.string->data, oper[0].data.string->data);
     }
-    
-    
+
+
     PushInt(result);
 }
 
 void
 prim_strncmp(PRIM_PROTOTYPE)
 {
-	int result;
+    int result;
 
-    
-    
-    
-    
+
+
+
+
     if (oper[0].type != PROG_INTEGER)
         abort_interp("Non-integer argument.");
     if (oper[1].type != PROG_STRING || oper[2].type != PROG_STRING)
@@ -872,21 +849,20 @@ prim_strncmp(PRIM_PROTOTYPE)
     else if (!(oper[2].data.string && oper[1].data.string))
         result = oper[1].data.string ? -1 : 1;
     else
-        result = strncmp(oper[2].data.string->data, oper[1].data.string->data,
-                         oper[0].data.number);
-    
-    
-    
+        result = strncmp(oper[2].data.string->data, oper[1].data.string->data, oper[0].data.number);
+
+
+
     PushInt(result);
 }
 
 void
 prim_strcut(PRIM_PROTOTYPE)
 {
-	struct inst temp1, temp2;
-	char buf[BUFFER_LEN];
+    struct inst temp1, temp2;
+    char buf[BUFFER_LEN];
 
-    
+
     temp1 = oper[0];
     temp2 = oper[1];
     if (temp1.type != PROG_INTEGER)
@@ -908,8 +884,7 @@ prim_strcut(PRIM_PROTOTYPE)
             buf[temp1.data.number] = '\0';
             PushString(buf);
             if (temp2.data.string->length > temp1.data.number) {
-                bcopy(temp2.data.string->data + temp1.data.number, buf,
-                      temp2.data.string->length - temp1.data.number + 1);
+                bcopy(temp2.data.string->data + temp1.data.number, buf, temp2.data.string->length - temp1.data.number + 1);
                 PushString(buf);
             } else {
                 PushNullStr;
@@ -921,73 +896,65 @@ prim_strcut(PRIM_PROTOTYPE)
 void
 prim_strlen(PRIM_PROTOTYPE)
 {
-	int result;
+    int result;
 
-    
-    
+
+
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string argument.");
     if (!oper[0].data.string)
         result = 0;
     else
         result = oper[0].data.string->length;
-    
+
     PushInt(result);
 }
 
 void
 prim_strcat(PRIM_PROTOTYPE)
 {
-    struct shared_string *string;
-	char buf[BUFFER_LEN];  
     
+
     if (oper[0].type != PROG_STRING || oper[1].type != PROG_STRING)
         abort_interp("Non-string argument.");
     if (!oper[0].data.string && !oper[1].data.string)
-        string = NULL;
+        PushNullStr;
     else if (!oper[1].data.string) {
         oper[0].data.string->links++;
-        string = oper[0].data.string;
+        PushStrRaw(oper[0].data.string);
     } else if (!oper[0].data.string) {
         oper[1].data.string->links++;
-        string = oper[1].data.string;
-    } else if (oper[0].data.string->length + oper[1].data.string->length
-               > (BUFFER_LEN) - 1) {
+        PushStrRaw(oper[1].data.string);
+    } else if (oper[0].data.string->length + oper[1].data.string->length > (BUFFER_LEN) - 1) {
         abort_interp("Operation would result in overflow.");
     } else {
+        struct shared_string *string;
+        char buf[oper[1].data.string->length + oper[0].data.string->length + 1];
+
         bcopy(oper[1].data.string->data, buf, oper[1].data.string->length);
-        bcopy(oper[0].data.string->data, buf + oper[1].data.string->length,
-              oper[0].data.string->length + 1);
-        string = alloc_prog_string(buf);
-    }
-    
-    
-    PushStrRaw(string);
+        bcopy(oper[0].data.string->data, buf + oper[1].data.string->length, oper[0].data.string->length + 1);
+        string = alloc_prog_string_exact(buf, oper[1].data.string->length + oper[0].data.string->length, -2);
+
+        PushStrRaw(string);
+    }    
 }
 
 void
 prim_atoi(PRIM_PROTOTYPE)
 {
-	int result;
+    int result;
 
-    
-    
     if (oper[0].type != PROG_STRING || !oper[0].data.string)
         result = 0;
     else
         result = atoi(oper[0].data.string->data);
-    
+
     PushInt(result);
 }
 
 void
 prim_notify_descriptor(PRIM_PROTOTYPE)
 {
-    char buf[BUFFER_LEN * 2];
-
-    
-    
-    
     if (mlev < LMAGE)
         abort_interp("Mage primitive.");
     if (oper[0].type != PROG_STRING)
@@ -995,21 +962,23 @@ prim_notify_descriptor(PRIM_PROTOTYPE)
     if (oper[1].type != PROG_INTEGER)
         abort_interp("Descriptor integer expected. (1)");
     if (!pdescrp(oper[1].data.number)) {
-        
-        
         return;
     }
+
     if (oper[0].data.string) {
+        char buf[BUFFER_LEN * 2];
+
         strcpy(buf, oper[0].data.string->data);
-        if ( !tp_mush_format_escapes )
-            strcpy(buf, oper[0].data.string->data);
-        else
-            strcpy_mush(buf, oper[0].data.string->data);
-        
+
+        struct descriptor_data *d = descrdata_by_descr(oper[1].data.number);
+
+        if (d->http)
+            d->http->log(8, "DESCRNOTIFY(%d:%d, %d): %s\r\n", program, pc->line, fr->pid, buf);
+
         notify_descriptor(oper[1].data.number, buf);
     }
-    
-    
+
+
 }
 
 void
@@ -1020,9 +989,9 @@ prim_ansi_notify_descriptor(PRIM_PROTOTYPE)
      */
     char buf[BUFFER_LEN * 2];
 
-    
-    
-    
+
+
+
     if (mlev < LMAGE)
         abort_interp("Mage primitive.");
     if (oper[0].type != PROG_STRING)
@@ -1030,19 +999,16 @@ prim_ansi_notify_descriptor(PRIM_PROTOTYPE)
     if (oper[1].type != PROG_INTEGER)
         abort_interp("Invalid descriptor arguement. (1)");
     if (!pdescrp(oper[1].data.number)) {
-        
-        
+
+
         return;
     }
     if (oper[0].data.string) {
-        if ( !tp_mush_format_escapes )
-            strcpy(buf, oper[0].data.string->data);
-        else
-            strcpy_mush(buf, oper[0].data.string->data);
+        strcpy(buf, oper[0].data.string->data);
         anotify_descriptor(oper[1].data.number, buf);
     }
-    
-    
+
+
 }
 
 void
@@ -1055,33 +1021,28 @@ prim_notify_descriptor_char(PRIM_PROTOTYPE)
 
     char theChar;
 
-    
-    
-    
+
+
+
     if (mlev < LMAGE)
         abort_interp("Mage primitive.");
     if (oper[0].type != PROG_INTEGER || oper[1].type != PROG_INTEGER)
         abort_interp("Requires integer arguements.");
     if (!pdescrp(oper[1].data.number)) {
-        
-        
+
+
         return;
     }
     theChar = (char) oper[0].data.number;
 
     notify_descriptor_char(oper[1].data.number, theChar);
-    
-    
+
+
 }
 
 void
 prim_notify(PRIM_PROTOTYPE)
 {
-    char buf[BUFFER_LEN * 2];
-
-    
-    
-    
     if (oper[0].type != PROG_STRING) {
         abort_interp("Non-string argument (2)");
     }
@@ -1091,24 +1052,17 @@ prim_notify(PRIM_PROTOTYPE)
     CHECKREMOTE(oper[1].data.objref);
 
     if (oper[0].data.string) {
+        char buf[BUFFER_LEN * 2];
+
         if (tp_m1_name_notify && mlev < LM2 && PSafe != oper[1].data.objref) {
-            if ( !tp_mush_format_escapes )
-                prefix_message(buf, oper[0].data.string->data, PNAME(PSafe),
-                               BUFFER_LEN, 1);
-            else
-                prefix_message_mush(buf, oper[0].data.string->data, PNAME(PSafe),
-                                    BUFFER_LEN, 1);
+            prefix_message(buf, oper[0].data.string->data, PNAME(PSafe), BUFFER_LEN, 1);
         } else {
-            if ( !tp_mush_format_escapes )
-                strcpy(buf, oper[0].data.string->data);
-            else
-                strcpy_mush(buf, oper[0].data.string->data);
+            strcpy(buf, oper[0].data.string->data);
         }
-        notify_listeners(fr->descr, PSafe, program, oper[1].data.objref,
-                         getloc(PSafe), buf, 1);
+        notify_listeners(fr->descr, PSafe, program, oper[1].data.objref, getloc(PSafe), buf, 1);
     }
-    
-    
+
+
 }
 
 void
@@ -1116,82 +1070,64 @@ prim_notify_html(PRIM_PROTOTYPE)
 {
     char buf[BUFFER_LEN * 2];
 
-    
-    
-    
+
+
+
     if (oper[0].type != PROG_STRING) {
-        
-        
+
+
         abort_interp("Non-string argument (2)");
     }
     if (!valid_object(&oper[1])) {
-        
-        
+
+
         abort_interp("Invalid object argument (1)");
     }
     CHECKREMOTE(oper[1].data.objref);
 
     if (oper[0].data.string) {
         if (tp_m1_name_notify && mlev < LM2 && PSafe != oper[1].data.objref) {
-            if ( !tp_mush_format_escapes )
-                prefix_message(buf, oper[0].data.string->data, PNAME(PSafe),
-                               BUFFER_LEN - 1, 1);
-            else
-                prefix_message_mush(buf, oper[0].data.string->data, PNAME(PSafe),
-                               BUFFER_LEN - 1, 1);
+            prefix_message(buf, oper[0].data.string->data, PNAME(PSafe), BUFFER_LEN - 1, 1);
         } else {
-            if ( !tp_mush_format_escapes )
-                strcpy(buf, oper[0].data.string->data);
-            else
-                strcpy_mush(buf, oper[0].data.string->data);
+            strcpy(buf, oper[0].data.string->data);
         }
         strcat(buf, "\r");
-        notify_html_listeners(fr->descr, PSafe, program, oper[1].data.objref,
-                              getloc(PSafe), buf, 1);
+        notify_html_listeners(fr->descr, PSafe, program, oper[1].data.objref, getloc(PSafe), buf, 1);
     }
-    
-    
+
+
 }
 
 void
 prim_notify_html_nocr(PRIM_PROTOTYPE)
 {
-	char buf[BUFFER_LEN];
+    char buf[BUFFER_LEN];
 
-    
-    
-    
+
+
+
     if (oper[0].type != PROG_STRING) {
-        
-        
+
+
         abort_interp("Non-string argument (2)");
     }
     if (!valid_object(&oper[1])) {
-        
-        
+
+
         abort_interp("Invalid object argument (1)");
     }
     CHECKREMOTE(oper[1].data.objref);
 
     if (oper[0].data.string) {
         if (tp_m1_name_notify && mlev < LM2 && PSafe != oper[1].data.objref) {
-            if ( !tp_mush_format_escapes )
-                prefix_message(buf, oper[0].data.string->data, PNAME(PSafe),
-                               BUFFER_LEN, 1);
-            else
-                prefix_message_mush(buf, oper[0].data.string->data, PNAME(PSafe),
-                               BUFFER_LEN, 1);
+            prefix_message(buf, oper[0].data.string->data, PNAME(PSafe), BUFFER_LEN, 1);
         } else {
-            if ( !tp_mush_format_escapes )
-                strcpy(buf, oper[0].data.string->data);
-            else
-                strcpy_mush(buf, oper[0].data.string->data);
+            strcpy(buf, oper[0].data.string->data);
         }
-        notify_html_listeners(fr->descr, PSafe, program, oper[1].data.objref,
-                              getloc(PSafe), buf, 1);
+        notify_html_listeners(fr->descr, PSafe, program, oper[1].data.objref, getloc(PSafe), buf, 1);
     }
-    
-    
+
+
 }
 
 void
@@ -1199,9 +1135,9 @@ prim_ansi_notify(PRIM_PROTOTYPE)
 {
     char buf[BUFFER_LEN * 2];
 
-    
-    
-    
+
+
+
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string argument (2)");
     if (!valid_object(&oper[1]))
@@ -1210,23 +1146,14 @@ prim_ansi_notify(PRIM_PROTOTYPE)
 
     if (oper[0].data.string) {
         if (tp_m1_name_notify && mlev < LM2 && PSafe != oper[1].data.objref) {
-            if ( !tp_mush_format_escapes )
-                prefix_message(buf, oper[0].data.string->data, PNAME(PSafe),
-                               BUFFER_LEN, 1);
-            else
-                prefix_message_mush(buf, oper[0].data.string->data, PNAME(PSafe),
-                           BUFFER_LEN, 1);
+            prefix_message(buf, oper[0].data.string->data, PNAME(PSafe), BUFFER_LEN, 1);
         } else {
-            if ( !tp_mush_format_escapes )
-                strcpy(buf, oper[0].data.string->data);
-            else
-                strcpy_mush(buf, oper[0].data.string->data);
+            strcpy(buf, oper[0].data.string->data);
         }
-        ansi_notify_listeners(fr->descr, PSafe, program, oper[1].data.objref,
-                              getloc(PSafe), buf, 1);
+        ansi_notify_listeners(fr->descr, PSafe, program, oper[1].data.objref, getloc(PSafe), buf, 1);
     }
-    
-    
+
+
 }
 
 
@@ -1235,73 +1162,63 @@ prim_notify_exclude(PRIM_PROTOTYPE)
 {
     /* roomD excludeDn ... excludeD1 nI messageS  -- */
     char buf[BUFFER_LEN * 2];
-        int result, tmp;
+    int result, tmp;
 
     if (oper[1].type != PROG_INTEGER)
         abort_interp("non-integer count argument (top-1)");
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string message argument (top)");
 
-    if (tp_m1_name_notify && oper[0].data.string &&
-        mlev < LM2 && PSafe != oper[1].data.objref) {
-        if ( !tp_mush_format_escapes )
-            prefix_message(buf, oper[0].data.string->data, PNAME(PSafe),
-                           BUFFER_LEN, 1);
-        else
-            prefix_message_mush(buf, oper[0].data.string->data, PNAME(PSafe),
-                                BUFFER_LEN, 1);
-    } else {               
-        if ( !tp_mush_format_escapes )
-            strcpy(buf, DoNullInd(oper[0].data.string));
-        else     
-            strcpy_mush(buf, DoNullInd(oper[0].data.string));     
+    if (tp_m1_name_notify && oper[0].data.string && mlev < LM2 && PSafe != oper[1].data.objref) {
+        prefix_message(buf, oper[0].data.string->data, PNAME(PSafe), BUFFER_LEN, 1);
+    } else {
+        strcpy(buf, DoNullInd(oper[0].data.string));
     }
     result = oper[1].data.number;
     {
         dbref what, where, excluded[STACK_SIZE];
         int count, i;
-		struct inst *oper1;
-      
-        count = i = result;   
-       if (i >= STACK_SIZE || i < 0)
+        struct inst *oper1;
+
+        count = i = result;
+        if (i >= STACK_SIZE || i < 0)
             abort_interp("Count argument is out of range.");
-        while (i > 0) {      
+        while (i > 0) {
             CHECKOP(1);
             oper1 = POP();
             if (oper1->type != PROG_OBJECT) {
-				CLEAR(oper1);
+                CLEAR(oper1);
                 abort_interp("Invalid object argument.");
-			}
+            }
             excluded[--i] = oper1->data.objref;
             CLEAR(oper1);
         }
         CHECKOP(1);
-        oper1 = POP();              
+        oper1 = POP();
         if (!valid_object(oper1)) {
-			CLEAR(oper1);
+            CLEAR(oper1);
             abort_interp("Non-object argument (1)");
-		}
+        }
         where = oper1->data.objref;
         if (Typeof(where) != TYPE_ROOM && Typeof(where) != TYPE_THING && Typeof(where) != TYPE_PLAYER) {
-			CLEAR(oper1);
+            CLEAR(oper1);
             abort_interp("Invalid location argument (1)");
-		}
-        CHECKREMOTE(where);   
+        }
+        CHECKREMOTE(where);
         what = DBFETCH(where)->contents;
         CLEAR(oper1);
         if (*buf) {
-            while (what != NOTHING) {     
-                if (Typeof(what) != TYPE_ROOM) {      
+            while (what != NOTHING) {
+                if (Typeof(what) != TYPE_ROOM) {
                     for (tmp = 0, i = count; i-- > 0;) {
-                        if (excluded[i] == what)           
+                        if (excluded[i] == what)
                             tmp = 1;
                     }
                 } else {
                     tmp = 1;
                 }
                 if (!tmp)
-                    notify_listeners(fr->descr, PSafe, program, what, where,
-                                     buf, 0);
+                    notify_listeners(fr->descr, PSafe, program, what, where, buf, 0);
                 what = DBFETCH(what)->next;
             }
         }
@@ -1317,79 +1234,67 @@ prim_ansi_notify_exclude(PRIM_PROTOTYPE)
 {
     /* roomD excludeDn ... excludeD1 nI messageS  -- */
     char buf[BUFFER_LEN * 2];
-        int result, tmp;
+    int result, tmp;
 
     if (oper[1].type != PROG_INTEGER)
         abort_interp("non-integer count argument (top-1)");
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string message argument (top)");
 
-    if (tp_m1_name_notify && oper[0].data.string &&
-        mlev < LM2 && PSafe != oper[1].data.objref) {
-        if ( !tp_mush_format_escapes )
-            prefix_message(buf, oper[0].data.string->data, PNAME(PSafe),
-                           BUFFER_LEN, 1);
-        else
-            prefix_message_mush(buf, oper[0].data.string->data, PNAME(PSafe),
-                                BUFFER_LEN, 1);
-    } else {               
-        if ( !tp_mush_format_escapes )
-            strcpy(buf, DoNullInd(oper[0].data.string));
-        else     
-            strcpy_mush(buf, DoNullInd(oper[0].data.string));     
+    if (tp_m1_name_notify && oper[0].data.string && mlev < LM2 && PSafe != oper[1].data.objref) {
+        prefix_message(buf, oper[0].data.string->data, PNAME(PSafe), BUFFER_LEN, 1);
+    } else {
+        strcpy(buf, DoNullInd(oper[0].data.string));
     }
     result = oper[1].data.number;
     {
         dbref what, where, excluded[STACK_SIZE];
         int count, i;
-		struct inst *oper1;    
-    
+        struct inst *oper1;
+
         count = i = result;
         if (i >= STACK_SIZE || i < 0)
             abort_interp("Count argument is out of range.");
-        while (i > 0) {      
+        while (i > 0) {
             CHECKOP(1);
             oper1 = POP();
             if (oper1->type != PROG_OBJECT) {
-				CLEAR(oper1);
+                CLEAR(oper1);
                 abort_interp("Invalid object argument.");
-			}
+            }
             excluded[--i] = oper1->data.objref;
             CLEAR(oper1);
         }
         CHECKOP(1);
-        oper1 = POP();              
+        oper1 = POP();
         if (!valid_object(oper1)) {
-			CLEAR(oper1);
+            CLEAR(oper1);
             abort_interp("Non-object argument (1)");
-		}
+        }
         where = oper1->data.objref;
-        if (Typeof(where) != TYPE_ROOM && Typeof(where) != TYPE_THING &&
-            Typeof(where) != TYPE_PLAYER)
+        if (Typeof(where) != TYPE_ROOM && Typeof(where) != TYPE_THING && Typeof(where) != TYPE_PLAYER)
             abort_interp("Invalid location argument (1)");
-        CHECKREMOTE(where);   
+        CHECKREMOTE(where);
         what = DBFETCH(where)->contents;
         CLEAR(oper1);
         if (*buf) {
-            while (what != NOTHING) {     
-                if (Typeof(what) != TYPE_ROOM) {      
+            while (what != NOTHING) {
+                if (Typeof(what) != TYPE_ROOM) {
                     for (tmp = 0, i = count; i-- > 0;) {
-                        if (excluded[i] == what)           
+                        if (excluded[i] == what)
                             tmp = 1;
                     }
                 } else {
                     tmp = 1;
                 }
                 if (!tmp)
-                    ansi_notify_listeners(fr->descr, PSafe, program, what,
-                                          where, buf, 0);
+                    ansi_notify_listeners(fr->descr, PSafe, program, what, where, buf, 0);
                 what = DBFETCH(what)->next;
             }
         }
 
         if (tp_listeners) {
-            ansi_notify_listeners(fr->descr, PSafe, program, where, where, buf,
-                                  0);
+            ansi_notify_listeners(fr->descr, PSafe, program, where, where, buf, 0);
 //            if (tp_listeners_env) {
 //                what = DBFETCH(where)->location;
 //                for (; what != NOTHING; what = DBFETCH(what)->location)
@@ -1406,81 +1311,69 @@ prim_notify_html_exclude(PRIM_PROTOTYPE)
 {
     /* roomD excludeDn ... excludeD1 nI messageS  -- */
     char buf[BUFFER_LEN * 2];
-        int result, tmp;
+    int result, tmp;
 
     if (oper[1].type != PROG_INTEGER)
         abort_interp("non-integer count argument (top-1)");
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string message argument (top)");
 
-    if (tp_m1_name_notify && oper[0].data.string &&
-        mlev < LM2 && PSafe != oper[1].data.objref) {
-        if ( !tp_mush_format_escapes )
-            prefix_message(buf, oper[0].data.string->data, PNAME(PSafe),
-                           BUFFER_LEN, 1);
-        else
-            prefix_message_mush(buf, oper[0].data.string->data, PNAME(PSafe),
-                                BUFFER_LEN, 1);
-    } else {               
-        if ( !tp_mush_format_escapes )
-            strcpy(buf, DoNullInd(oper[0].data.string));
-        else     
-            strcpy_mush(buf, DoNullInd(oper[0].data.string));     
+    if (tp_m1_name_notify && oper[0].data.string && mlev < LM2 && PSafe != oper[1].data.objref) {
+        prefix_message(buf, oper[0].data.string->data, PNAME(PSafe), BUFFER_LEN, 1);
+    } else {
+        strcpy(buf, DoNullInd(oper[0].data.string));
     }
     result = oper[1].data.number;
     {
         dbref what, where, excluded[STACK_SIZE];
         int count, i;
-		struct inst *oper1;    
-    
+        struct inst *oper1;
+
         count = i = result;
         if (i >= STACK_SIZE || i < 0)
             abort_interp("Count argument is out of range.");
-        while (i > 0) {      
+        while (i > 0) {
             CHECKOP(1);
             oper1 = POP();
             if (oper1->type != PROG_OBJECT) {
-				CLEAR(oper1);
+                CLEAR(oper1);
                 abort_interp("Invalid object argument.");
-			}
+            }
             excluded[--i] = oper1->data.objref;
             CLEAR(oper1);
         }
         CHECKOP(1);
-        oper1 = POP();              
+        oper1 = POP();
         if (!valid_object(oper1)) {
             abort_interp("Non-object argument (1)");
-			CLEAR(oper1);
-		}
+            CLEAR(oper1);
+        }
         where = oper1->data.objref;
-        if (Typeof(where) != TYPE_ROOM && Typeof(where) != TYPE_THING &&
-            Typeof(where) != TYPE_PLAYER) {
-				CLEAR(oper1);
+        if (Typeof(where) != TYPE_ROOM && Typeof(where) != TYPE_THING && Typeof(where) != TYPE_PLAYER) {
+            CLEAR(oper1);
             abort_interp("Invalid location argument (1)");
-		}
-        CHECKREMOTE(where);   
+        }
+        CHECKREMOTE(where);
         what = DBFETCH(where)->contents;
         CLEAR(oper1);
         if (*buf) {
-            while (what != NOTHING) {     
-                if (Typeof(what) != TYPE_ROOM) {      
+            while (what != NOTHING) {
+                if (Typeof(what) != TYPE_ROOM) {
                     for (tmp = 0, i = count; i-- > 0;) {
-                        if (excluded[i] == what)           
+                        if (excluded[i] == what)
                             tmp = 1;
                     }
                 } else {
                     tmp = 1;
                 }
                 if (!tmp)
-                    notify_html_listeners(fr->descr, PSafe, program, what,
-                                          where, buf, 0);
+                    notify_html_listeners(fr->descr, PSafe, program, what, where, buf, 0);
                 what = DBFETCH(what)->next;
             }
         }
 
         if (tp_listeners) {
-            notify_html_listeners(fr->descr, PSafe, program, where, where, buf,
-                                  0);
+            notify_html_listeners(fr->descr, PSafe, program, where, where, buf, 0);
 //            if (tp_listeners_env) {
 //                what = DBFETCH(where)->location;
 //                for (; what != NOTHING; what = DBFETCH(what)->location)
@@ -1496,81 +1389,69 @@ prim_notify_html_exclude_nocr(PRIM_PROTOTYPE)
 {
     /* roomD excludeDn ... excludeD1 nI messageS  -- */
     char buf[BUFFER_LEN * 2];
-        int result, tmp;
+    int result, tmp;
 
     if (oper[1].type != PROG_INTEGER)
         abort_interp("non-integer count argument (top-1)");
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string message argument (top)");
 
-    if (tp_m1_name_notify && oper[0].data.string &&
-        mlev < LM2 && PSafe != oper[1].data.objref) {
-        if ( !tp_mush_format_escapes )
-            prefix_message(buf, oper[0].data.string->data, PNAME(PSafe),
-                           BUFFER_LEN, 1);
-        else
-            prefix_message_mush(buf, oper[0].data.string->data, PNAME(PSafe),
-                                BUFFER_LEN, 1);
-    } else {               
-        if ( !tp_mush_format_escapes )
-            strcpy(buf, DoNullInd(oper[0].data.string));
-        else     
-            strcpy_mush(buf, DoNullInd(oper[0].data.string));     
+    if (tp_m1_name_notify && oper[0].data.string && mlev < LM2 && PSafe != oper[1].data.objref) {
+        prefix_message(buf, oper[0].data.string->data, PNAME(PSafe), BUFFER_LEN, 1);
+    } else {
+        strcpy(buf, DoNullInd(oper[0].data.string));
     }
     result = oper[1].data.number;
     {
         dbref what, where, excluded[STACK_SIZE];
         int count, i;
-		struct inst *oper1;    
-    
+        struct inst *oper1;
+
         count = i = result;
         if (i >= STACK_SIZE || i < 0)
             abort_interp("Count argument is out of range.");
-        while (i > 0) {      
+        while (i > 0) {
             CHECKOP(1);
             oper1 = POP();
             if (oper1->type != PROG_OBJECT) {
-				CLEAR(oper1);
+                CLEAR(oper1);
                 abort_interp("Invalid object argument.");
-			}
+            }
             excluded[--i] = oper1->data.objref;
             CLEAR(oper1);
         }
         CHECKOP(1);
-        oper1 = POP();              
+        oper1 = POP();
         if (!valid_object(oper1)) {
-			CLEAR(oper1);
+            CLEAR(oper1);
             abort_interp("Non-object argument (1)");
-		}
+        }
         where = oper1->data.objref;
-        if (Typeof(where) != TYPE_ROOM && Typeof(where) != TYPE_THING &&
-            Typeof(where) != TYPE_PLAYER) {
-				CLEAR(oper1);
+        if (Typeof(where) != TYPE_ROOM && Typeof(where) != TYPE_THING && Typeof(where) != TYPE_PLAYER) {
+            CLEAR(oper1);
             abort_interp("Invalid location argument (1)");
-		}
-        CHECKREMOTE(where);   
+        }
+        CHECKREMOTE(where);
         what = DBFETCH(where)->contents;
         CLEAR(oper1);
         if (*buf) {
-            while (what != NOTHING) {     
-                if (Typeof(what) != TYPE_ROOM) {      
+            while (what != NOTHING) {
+                if (Typeof(what) != TYPE_ROOM) {
                     for (tmp = 0, i = count; i-- > 0;) {
-                        if (excluded[i] == what)           
+                        if (excluded[i] == what)
                             tmp = 1;
                     }
                 } else {
                     tmp = 1;
                 }
                 if (!tmp)
-                    notify_html_listeners(fr->descr, PSafe, program, what,
-                                          where, buf, 0);
+                    notify_html_listeners(fr->descr, PSafe, program, what, where, buf, 0);
                 what = DBFETCH(what)->next;
             }
         }
 
         if (tp_listeners) {
-            notify_html_listeners(fr->descr, PSafe, program, where, where, buf,
-                                  0);
+            notify_html_listeners(fr->descr, PSafe, program, where, where, buf, 0);
 //            if (tp_listeners_env) {
 //                what = DBFETCH(where)->location;
 //                for (; what != NOTHING; what = DBFETCH(what)->location)
@@ -1585,7 +1466,7 @@ void
 prim_intostr(PRIM_PROTOTYPE)
 {
     char *ptr = NULL;
-	char buf[BUFFER_LEN];
+    char buf[BUFFER_LEN];
 
     if (oper[0].type == PROG_STRING) {
         strcpy(buf, DoNullInd(oper[0].data.string));
@@ -1597,18 +1478,18 @@ prim_intostr(PRIM_PROTOTYPE)
         sprintf(buf, "%d", oper[0].data.number);
         ptr = buf;
     }
-    
+
     PushString(ptr);
 }
 
 void
 prim_explode(PRIM_PROTOTYPE)
 {
-	struct inst temp1, temp2;
-	int result;
-	char buf[BUFFER_LEN];
+    struct inst temp1, temp2;
+    int result;
+    char buf[BUFFER_LEN];
 
-    
+
     temp1 = oper[0];
     temp2 = oper[1];
 
@@ -1650,12 +1531,12 @@ prim_explode(PRIM_PROTOTYPE)
 void
 prim_subst(PRIM_PROTOTYPE)
 {
-	char buf[BUFFER_LEN];
+    char buf[BUFFER_LEN];
 
-    
-    
-    
-    
+
+
+
+
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string argument (3)");
     if (oper[1].type != PROG_STRING)
@@ -1672,8 +1553,7 @@ prim_subst(PRIM_PROTOTYPE)
 
         buf[0] = '\0';
         if (oper[2].data.string) {
-            bcopy(oper[2].data.string->data, xbuf,
-                  oper[2].data.string->length + 1);
+            bcopy(oper[2].data.string->data, xbuf, oper[2].data.string->length + 1);
             match = oper[0].data.string->data;
             replacement = DoNullInd(oper[1].data.string);
             k = *replacement ? oper[1].data.string->length : 0;
@@ -1693,20 +1573,20 @@ prim_subst(PRIM_PROTOTYPE)
             }
         }
     }
-    
-    
-    
+
+
+
     PushString(buf);
 }
 
 void
 prim_instr(PRIM_PROTOTYPE)
 {
-	int result;
+    int result;
 
-    
-    
-    
+
+
+
     if (oper[0].type != PROG_STRING)
         abort_interp("Invalid argument type (2)");
     if (!(oper[0].data.string))
@@ -1730,19 +1610,19 @@ prim_instr(PRIM_PROTOTYPE)
             remaining += step;
         } while (remaining >= oper[1].data.string->data && *remaining);
     }
-    
-    
+
+
     PushInt(result);
 }
 
 void
 prim_rinstr(PRIM_PROTOTYPE)
 {
-	int result;
+    int result;
 
-    
-    
-    
+
+
+
     if (oper[0].type != PROG_STRING)
         abort_interp("Invalid argument type (2)");
     if (!(oper[0].data.string))
@@ -1768,42 +1648,41 @@ prim_rinstr(PRIM_PROTOTYPE)
             remaining += step;
         } while (remaining >= oper[1].data.string->data && *remaining);
     }
-    
-    
+
+
     PushInt(result);
 }
 
 void
 prim_pronoun_sub(PRIM_PROTOTYPE)
 {
-	char buf[BUFFER_LEN];
+    char buf[BUFFER_LEN];
 
-    
-    
-                  /* oper[0] is a string, oper[1] a dbref */
+
+
+    /* oper[0] is a string, oper[1] a dbref */
     if (!valid_object(&oper[1]))
         abort_interp("Invalid argument (1)");
     if (oper[0].type != PROG_STRING)
         abort_interp("Invalid argument (2)");
     if (oper[0].data.string) {
-        strcpy(buf, pronoun_substitute(fr->descr, oper[1].data.objref,
-                                       oper[0].data.string->data));
+        strcpy(buf, pronoun_substitute(fr->descr, oper[1].data.objref, oper[0].data.string->data));
     } else {
         buf[0] = '\0';
     }
-    
-    
+
+
     PushString(buf);
 }
 
 void
 prim_toupper(PRIM_PROTOTYPE)
 {
-	char buf[BUFFER_LEN];
-	int ref;
+    char buf[BUFFER_LEN];
+    int ref;
 
-    
-    
+
+
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string argument.");
     if (oper[0].data.string) {
@@ -1813,18 +1692,18 @@ prim_toupper(PRIM_PROTOTYPE)
     }
     for (ref = 0; buf[ref]; ref++)
         buf[ref] = UPCASE(buf[ref]);
-    
+
     PushString(buf);
 }
 
 void
 prim_tolower(PRIM_PROTOTYPE)
 {
-	char buf[BUFFER_LEN];
-	int ref;
+    char buf[BUFFER_LEN];
+    int ref;
 
-    
-    
+
+
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string argument.");
     if (oper[0].data.string) {
@@ -1834,7 +1713,7 @@ prim_tolower(PRIM_PROTOTYPE)
     }
     for (ref = 0; buf[ref]; ref++)
         buf[ref] = DOWNCASE(buf[ref]);
-    
+
     PushString(buf);
 }
 
@@ -1842,11 +1721,11 @@ void
 prim_unparseobj(PRIM_PROTOTYPE)
 {
     char tbuf[BUFFER_LEN];
-	char buf[BUFFER_LEN];
-	int result;
+    char buf[BUFFER_LEN];
+    int result;
 
-    
-    
+
+
     if (oper[0].type != PROG_OBJECT)
         abort_interp("Non-object argument.");
     {
@@ -1865,10 +1744,9 @@ prim_unparseobj(PRIM_PROTOTYPE)
                 if (result < 0 || result >= db_top)
                     sprintf(buf, "*INVALID(#%d)*", result);
                 else
-                    sprintf(buf, "%s(#%d%s)", RNAME(result), result,
-                            unparse_flags(result, tbuf));
+                    sprintf(buf, "%s(#%d%s)", RNAME(result), result, unparse_flags(result, tbuf));
         }
-        
+
         PushString(buf);
     }
 }
@@ -1877,8 +1755,8 @@ void
 prim_smatch(PRIM_PROTOTYPE)
 {
     char xbuf[BUFFER_LEN];
-	char buf[BUFFER_LEN];
-	int result;
+    char buf[BUFFER_LEN];
+    int result;
 
     if (oper[0].type != PROG_STRING || oper[1].type != PROG_STRING)
         abort_interp("Non-string argument.");
@@ -1886,60 +1764,58 @@ prim_smatch(PRIM_PROTOTYPE)
     strcpy(buf, DoNullInd(oper[0].data.string));
     strcpy(xbuf, DoNullInd(oper[1].data.string));
     result = equalstr(buf, xbuf);
-    
-    
+
+
     PushInt(result);
 }
 
 void
 prim_striplead(PRIM_PROTOTYPE)
-{                               
-	/* string -- string' */
-	char buf[BUFFER_LEN];
-	char *pname;
-    
-    
+{
+    /* string -- string' */
+    char buf[BUFFER_LEN];
+    char *pname;
+
+
     if (oper[0].type != PROG_STRING)
         abort_interp("Not a string argument.");
     strcpy(buf, DoNullInd(oper[0].data.string));
     for (pname = buf; *pname && isspace(*pname); pname++) ;
-    
+
     PushString(pname);
 }
 
 void
 prim_striptail(PRIM_PROTOTYPE)
-{   /* string -- string' */
-	char buf[BUFFER_LEN];
-	int result;
-    
-    
+{                               /* string -- string' */
+    char buf[BUFFER_LEN];
+    int result;
+
+
     if (oper[0].type != PROG_STRING)
         abort_interp("Not a string argument.");
     strcpy(buf, DoNullInd(oper[0].data.string));
     result = strlen(buf);
     while ((result-- > 0) && isspace(buf[result]))
         buf[result] = '\0';
-    
+
     PushString(buf);
 }
 
 void
 prim_stringpfx(PRIM_PROTOTYPE)
 {
-	int result;
+    int result;
 
     if (oper[0].type != PROG_STRING || oper[1].type != PROG_STRING)
         abort_interp("Non-string argument.");
     if (oper[0].data.string == oper[1].data.string)
         result = 1;
     else {
-        result =
-            string_prefix(DoNullInd(oper[1].data.string),
-                          DoNullInd(oper[0].data.string));
+        result = string_prefix(DoNullInd(oper[1].data.string), DoNullInd(oper[0].data.string));
     }
-    
-    
+
+
     PushInt(result);
 }
 
@@ -1956,8 +1832,8 @@ prim_strencrypt(PRIM_PROTOTYPE)
         abort_interp("Key cannot be a null string. (2)");
     }
     ptr = strencrypt(DoNullInd(oper[1].data.string), oper[0].data.string->data);
-    
-    
+
+
     PushString(ptr);
 }
 
@@ -1974,8 +1850,8 @@ prim_strdecrypt(PRIM_PROTOTYPE)
         abort_interp("Key cannot be a null string. (2)");
     }
     ptr = strdecrypt(DoNullInd(oper[1].data.string), oper[0].data.string->data);
-    
-    
+
+
     PushString(ptr);
 }
 
@@ -1987,7 +1863,7 @@ prim_tokensplit(PRIM_PROTOTYPE)
     char esc;
     char escisdel;
     char outbuf[BUFFER_LEN];
-	char buf[BUFFER_LEN];
+    char buf[BUFFER_LEN];
 
     if (oper[2].type != PROG_STRING)
         abort_interp("Not a string argument. (1)");
@@ -2024,9 +1900,9 @@ prim_tokensplit(PRIM_PROTOTYPE)
         *out++ = *ptr++;
     }
     *out = '\0';
-    
-    
-    
+
+
+
     if (ptr && *ptr) {
         char charbuf[2];
 
@@ -2059,15 +1935,15 @@ prim_parse_ansi(PRIM_PROTOTYPE)
     if (oper[0].data.number < 0 || oper[0].data.number > 3)
         abort_interp("Integer out of range of 0 - 3.");
     if (!oper[1].data.string || oper[1].data.string->length < 1) {
-        
-        
+
+
         PushNullStr;
     } else {
 
         ctype = oper[0].data.number;
         sprintf(buf3, "%s", oper[1].data.string->data);
-        
-        
+
+
 
         if (ctype == 0)
             sprintf(buf4, "%s", buf3);
@@ -2099,7 +1975,7 @@ prim_parse_neon(PRIM_PROTOTYPE)
         abort_interp("Invalid object. (1)");
 
     ref = oper[2].data.objref;
-    
+
 
     if (!oper[0].data.string || oper[0].data.string->length < 1) {
         sprintf(buf5, "%s", ANSINORMAL);
@@ -2108,13 +1984,13 @@ prim_parse_neon(PRIM_PROTOTYPE)
     }
 
     if (!oper[1].data.string || oper[1].data.string->length < 1) {
-        
-        
+
+
         PushNullStr;
     } else {
         sprintf(buf3, "%s", oper[1].data.string->data);
-        
-        
+
+
         sprintf(buf4, "%s", parse_ansi(ref, buf, buf3, buf5));
         PushString(buf4);
     }
@@ -2128,7 +2004,7 @@ prim_unparse_ansi(PRIM_PROTOTYPE)
     char buf4[BUFFER_LEN];
     int ctype;
 
-	if (oper[0].type != PROG_INTEGER)
+    if (oper[0].type != PROG_INTEGER)
         abort_interp("Non-integer argument.");
     if (oper[1].type != PROG_STRING)
         abort_interp("Not a string argument.");
@@ -2136,8 +2012,8 @@ prim_unparse_ansi(PRIM_PROTOTYPE)
     if (oper[0].data.number < 0 || oper[0].data.number > 3)
         abort_interp("Integer out of range of 0-3.");
     if (!oper[1].data.string || oper[1].data.string->length < 1) {
-        
-        
+
+
         PushNullStr;
     } else {
 
@@ -2146,8 +2022,8 @@ prim_unparse_ansi(PRIM_PROTOTYPE)
         buf3[0] = '\0';
         buf4[0] = '\0';
         sprintf(buf3, "%s", oper[1].data.string->data);
-        
-        
+
+
 
         if (ctype == 0) {
             strip_ansi(buf, buf3);
@@ -2180,15 +2056,15 @@ prim_escape_ansi(PRIM_PROTOTYPE)
     if (oper[0].data.number < 0 || oper[0].data.number > 3)
         abort_interp("Integer out of range of 0-3.");
     if (!oper[1].data.string || oper[1].data.string->length < 1) {
-        
-        
+
+
         PushNullStr;
     } else {
 
         ctype = oper[0].data.number;
         sprintf(buf3, "%s", oper[1].data.string->data);
-        
-        
+
+
 
         if (ctype == 0)
             sprintf(buf4, "%s", escape_ansi(buf, buf3));
@@ -2215,7 +2091,7 @@ prim_ansi_strlen(PRIM_PROTOTYPE)
         abort_interp("Not a string argument.");
 
     if (!oper[0].data.string) {
-        
+
         i = 0;
         PushInt(i);
         /* Weird PushInt() #define requires that. */
@@ -2242,7 +2118,7 @@ prim_ansi_strlen(PRIM_PROTOTYPE)
             i++;
         }
     }
-    
+
     PushInt(i);
 }
 
@@ -2254,15 +2130,15 @@ prim_ansi_strcut(PRIM_PROTOTYPE)
     char outbuf1[BUFFER_LEN];
     char outbuf2[BUFFER_LEN];
     int loc;
-	char buf[BUFFER_LEN];
+    char buf[BUFFER_LEN];
 
     if (oper[1].type != PROG_STRING)
         abort_interp("Not a string argument. (1)");
     if (oper[0].type != PROG_INTEGER)
         abort_interp("Not an integer argument. (2)");
     if (!oper[1].data.string) {
-        
-        
+
+
         PushNullStr;
         PushNullStr;
         return;
@@ -2272,15 +2148,15 @@ prim_ansi_strcut(PRIM_PROTOTYPE)
 
     if (oper[0].data.number >= oper[1].data.string->length) {
         strcpy(buf, oper[1].data.string->data);
-        
-        
+
+
         PushString(buf);
         PushNullStr;
         return;
     } else if (oper[0].data.number <= 0) {
         strcpy(buf, oper[1].data.string->data);
-        
-        
+
+
         PushNullStr;
         PushString(buf);
         return;
@@ -2311,11 +2187,10 @@ prim_ansi_strcut(PRIM_PROTOTYPE)
         }
     }
     *op = '\0';
-    memcpy((void *) outbuf2, (const void *) ptr,
-           oper[1].data.string->length - (ptr - oper[1].data.string->data) + 1);
+    memcpy((void *) outbuf2, (const void *) ptr, oper[1].data.string->length - (ptr - oper[1].data.string->data) + 1);
 
-    
-    
+
+
     PushString(outbuf1);
     if (!*outbuf2) {
         PushNullStr;
@@ -2327,19 +2202,19 @@ prim_ansi_strcut(PRIM_PROTOTYPE)
 void
 prim_ansi_strip(PRIM_PROTOTYPE)
 {
-	char buf[BUFFER_LEN];
+    char buf[BUFFER_LEN];
 
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string argument.");
 
     if (!oper[0].data.string) {
-        
+
         PushNullStr;
         return;
     }
 
     strip_ansi(buf, oper[0].data.string->data);
-    
+
     PushString(buf);
 }
 
@@ -2348,7 +2223,7 @@ void
 prim_ansi_midstr(PRIM_PROTOTYPE)
 {
     int loc, start, range;
-	char buf[BUFFER_LEN];
+    char buf[BUFFER_LEN];
     const char *ptr;
     char *op;
 
@@ -2366,7 +2241,7 @@ prim_ansi_midstr(PRIM_PROTOTYPE)
     start = oper[1].data.number - 1;
     range = oper[0].data.number;
 
-    if (!oper[2].data.string || start > oper[2].data.string->length || range == 0) { 
+    if (!oper[2].data.string || start > oper[2].data.string->length || range == 0) {
         PushNullStr;
         return;
     }
@@ -2420,9 +2295,9 @@ prim_ansi_midstr(PRIM_PROTOTYPE)
     }
     *op = '\0';
 
-    
-    
-    
+
+
+
     PushString(buf);
 }
 
@@ -2466,8 +2341,7 @@ prim_textattr(PRIM_PROTOTYPE)
                         strcat(buf, ANSI_BOLD);
                     } else if (!string_compare(attr, "dim")) {
                         strcat(buf, ANSI_DIM);
-                    } else if (!string_compare(attr, "uline") ||
-                               !string_compare(attr, "underline")) {
+                    } else if (!string_compare(attr, "uline") || !string_compare(attr, "underline")) {
                         strcat(buf, ANSI_UNDERLINE);
                     } else if (!string_compare(attr, "flash")) {
                         strcat(buf, ANSI_FLASH);
@@ -2536,8 +2410,8 @@ prim_textattr(PRIM_PROTOTYPE)
     }
     strcat(buf, ANSI_RESET);
 
-    
-    
+
+
     PushString(buf);
 }
 
@@ -2548,21 +2422,22 @@ prim_flag_2char(PRIM_PROTOTYPE)
     int n = 0;
     char flag_char;
     char *flag_str;
-	char buf[BUFFER_LEN];
+    char buf[BUFFER_LEN];
 
     if (oper[0].type != PROG_STRING)
         abort_interp("Top argument must be a string. (1)");
     if (!oper[0].data.string)
         abort_interp("Empty string given. (1)");
     flag_str = new char[strlen(oper[0].data.string->data) + 1];
+
     strcpy(flag_str, oper[0].data.string->data);
     while (*flag_str == '!') {
         n = !n;
         (void) flag_str++;
     }
     flag_char = flag_2char(flag_str);
-    delete[] flag_str;
-    
+    delete[]flag_str;
+
     if (flag_char <= 0)
         abort_interp("Not a valid flag to convert to a character. (1)");
     if (n)
@@ -2579,21 +2454,22 @@ prim_power_2char(PRIM_PROTOTYPE)
     int n = 0;
     char power_char;
     char *power_str;
-	char buf[BUFFER_LEN];
+    char buf[BUFFER_LEN];
 
     if (oper[0].type != PROG_STRING)
         abort_interp("Top argument must be a string. (1)");
     if (!oper[0].data.string)
         abort_interp("Empty string given. (1)");
     power_str = new char[strlen(oper[0].data.string->data) + 1];
+
     strcpy(power_str, oper[0].data.string->data);
     while (*power_str == '!') {
         n = !n;
         (void) power_str++;
     }
     power_char = power_2char(power_str);
-    delete[] power_str;
-    
+    delete[]power_str;
+
     if (power_char <= 0)
         abort_interp("Not a valid power to convert to a character. (1)");
     if (n)
@@ -2606,484 +2482,499 @@ prim_power_2char(PRIM_PROTOTYPE)
 void
 prim_array_fmtstrings(PRIM_PROTOTYPE)
 {
-	int slen, scnt, tstop, tlen, tnum, i;
-	int slrj, spad1, spad2, slen1, slen2, temp;
-	char sstr[BUFFER_LEN], sfmt[255], hold[256], tbuf[BUFFER_LEN];
-	char *ptr, *begptr;
-	char fieldbuf[BUFFER_LEN];
-	char *fieldname = fieldbuf;
-	const char *fmtstr = NULL;
-	stk_array *arr = NULL;
-	stk_array *arr2 = NULL;
-	stk_array *nu = NULL;
-	int result;
-	char buf[BUFFER_LEN];
-	struct inst temp1, temp2, temp3;
-	struct inst *oper3;
-	dbref ref;
+    int slen, scnt, tstop, tlen, tnum, i;
+    int slrj, spad1, spad2, slen1, slen2, temp;
 
-	if (oper[1].type != PROG_ARRAY)
-		abort_interp("Argument not an array of arrays. (1)");
-	if (!array_is_homogenous(oper[1].data.array, PROG_ARRAY))
-		abort_interp("Argument not a homogenous array of arrays. (1)");
-	arr = oper[1].data.array;
+// char sstr[BUFFER_LEN], sfmt[255], hold[256], tbuf[BUFFER_LEN];
+    char sstr[BUFFER_LEN], sfmt[BUFFER_LEN], hold[BUFFER_LEN], tbuf[BUFFER_LEN];
+    char *ptr, *begptr;
+    char fieldbuf[BUFFER_LEN];
+    char *fieldname = fieldbuf;
+    const char *fmtstr = NULL;
+    stk_array *arr = NULL;
+    stk_array *arr2 = NULL;
+    stk_array *nu = NULL;
+    int result;
+    char buf[BUFFER_LEN];
+    struct inst temp1, temp2, temp3;
+    struct inst *oper3;
+    dbref ref;
 
-	if (oper[0].type != PROG_STRING)
-		abort_interp("Expected string argument. (2)");
-	fmtstr = DoNullInd(oper[0].data.string);
-	slen = strlen(fmtstr);
+    if (oper[1].type != PROG_ARRAY)
+        abort_interp("Argument not an array of arrays. (1)");
+    if (!array_is_homogenous(oper[1].data.array, PROG_ARRAY))
+        abort_interp("Argument not a homogenous array of arrays. (1)");
+    arr = oper[1].data.array;
 
-	nu = new_array_packed(0,0);
-	if (array_first(arr, &temp1)) {
-		do {
-			strcpyn(sstr, sizeof(sstr), fmtstr);
-			result = 0;		/* End of current string, must be smaller than BUFFER_LEN */
-			scnt = 0;
-			tstop = 0;
-			/*   "%-20.19[name]s %6[dbref]d"   */
-			while ((scnt < slen) && (result < BUFFER_LEN)) {
-				if (sstr[scnt] == FMTTOKEN) {
-					if (sstr[scnt + 1] == FMTTOKEN) {
-						buf[result++] = FMTTOKEN;
-						scnt += 2;
-					} else {
-						scnt++;
-						if ((sstr[scnt] == '-') || (sstr[scnt] == '|')) {
-							if (sstr[scnt] == '-')
-								slrj = 1;
-							else
-								slrj = 2;
-							scnt++;
-						} else {
-							slrj = 0;
-						}
-						if ((sstr[scnt] == '+') || (sstr[scnt] == ' ')) {
-							if (sstr[scnt] == '+')
-								spad1 = 1;
-							else
-								spad1 = 2;
-							scnt++;
-						} else {
-							spad1 = 0;
-						}
-						if (sstr[scnt] == '0') {
-							scnt++;
-							spad2 = 1;
-						} else {
-							spad2 = 0;
-						}
-						slen1 = atoi(&sstr[scnt]);
-						if ((sstr[scnt] >= '0') && (sstr[scnt] <= '9')) {
-							while ((sstr[scnt] >= '0') && (sstr[scnt] <= '9'))
-								scnt++;
-						} else {
-							slen1 = -1;
-						}
-						if (sstr[scnt] == '.') {
-							scnt++;
-							slen2 = atoi(&sstr[scnt]);
-							if ((sstr[scnt] >= '0') && (sstr[scnt] <= '9')) {
-								while ((sstr[scnt] >= '0') && (sstr[scnt] <= '9'))
-									scnt++;
-							} else {
-								abort_interp("Invalid format string.");
-							}
-						} else {
-							slen2 = -1;
-						}
+    if (oper[0].type != PROG_STRING)
+        abort_interp("Expected string argument. (2)");
+    fmtstr = DoNullInd(oper[0].data.string);
+    slen = strlen(fmtstr);
 
-						if (sstr[scnt] == '[') {
-							scnt++;
-							fieldname = fieldbuf;
-							while(sstr[scnt] && sstr[scnt] != ']') {
-								*fieldname++ = sstr[scnt++];
-							}
-							if (sstr[scnt] != ']') {
-								abort_interp("Specified format field didn't have an array index terminator ']'.");
-							}
-							scnt++;
-							*fieldname++ = '\0';
+    nu = new_array_packed(0, 0);
+    if (array_first(arr, &temp1)) {
+        do {
+            strcpyn(sstr, sizeof(sstr), fmtstr);
+            result = 0;         /* End of current string, must be smaller than BUFFER_LEN */
+            scnt = 0;
+            tstop = 0;
+            /*   "%-20.19[name]s %6[dbref]d"   */
+            while ((scnt < slen) && (result < BUFFER_LEN)) {
+                if (sstr[scnt] == FMTTOKEN) {
+                    if (sstr[scnt + 1] == FMTTOKEN) {
+                        buf[result++] = FMTTOKEN;
+                        scnt += 2;
+                    } else {
+                        scnt++;
+                        if ((sstr[scnt] == '-') || (sstr[scnt] == '|')) {
+                            if (sstr[scnt] == '-')
+                                slrj = 1;
+                            else
+                                slrj = 2;
+                            scnt++;
+                        } else {
+                            slrj = 0;
+                        }
+                        if ((sstr[scnt] == '+') || (sstr[scnt] == ' ')) {
+                            if (sstr[scnt] == '+')
+                                spad1 = 1;
+                            else
+                                spad1 = 2;
+                            scnt++;
+                        } else {
+                            spad1 = 0;
+                        }
+                        if (sstr[scnt] == '0') {
+                            scnt++;
+                            spad2 = 1;
+                        } else {
+                            spad2 = 0;
+                        }
+                        slen1 = atoi(&sstr[scnt]);
+                        if ((sstr[scnt] >= '0') && (sstr[scnt] <= '9')) {
+                            while ((sstr[scnt] >= '0') && (sstr[scnt] <= '9'))
+                                scnt++;
+                        } else {
+                            slen1 = -1;
+                        }
+                        if (sstr[scnt] == '.') {
+                            scnt++;
+                            slen2 = atoi(&sstr[scnt]);
+                            if ((sstr[scnt] >= '0') && (sstr[scnt] <= '9')) {
+                                while ((sstr[scnt] >= '0')
+                                       && (sstr[scnt] <= '9'))
+                                    scnt++;
+                            } else {
+                                abort_interp("Invalid format string.");
+                            }
+                        } else {
+                            slen2 = -1;
+                        }
 
-							oper3 = array_getitem(arr, &temp1);
-							arr2 = oper3->data.array;
-							oper3 = NULL;
-							if (number(fieldbuf)) {
-								temp2.type = PROG_INTEGER;
-								temp2.data.number = atoi(fieldbuf);
-								oper3 = array_getitem(arr2, &temp2);
-							}
-							if (!oper3) {
-								temp2.type = PROG_STRING;
-								temp2.data.string = alloc_prog_string(fieldbuf);
-								oper3 = array_getitem(arr2, &temp2);
-								CLEAR(&temp2);
-							}
-							if (!oper3) {
-								temp3.type = PROG_STRING;
-								temp3.data.string = NULL;
-								oper3 = &temp3;
-							}
-						} else {
-							abort_interp("Specified format field didn't have an array index.");
-						}
+                        if (sstr[scnt] == '[') {
+                            scnt++;
+                            fieldname = fieldbuf;
+                            while (sstr[scnt] && sstr[scnt] != ']') {
+                                *fieldname++ = sstr[scnt++];
+                            }
+                            if (sstr[scnt] != ']') {
+                                abort_interp("Specified format field didn't have an array index terminator ']'.");
+                            }
+                            scnt++;
+                            *fieldname++ = '\0';
 
-						/* If s is the format and oper3 is really a string, repair the lengths to account for ansi codes. */
-						if(('s' == sstr[scnt]) && (PROG_STRING == oper3->type) && (oper3->data.string)) {
-							ptr = oper3->data.string->data;
+                            oper3 = array_getitem(arr, &temp1);
+                            arr2 = oper3->data.array;
+                            oper3 = NULL;
+                            if (number(fieldbuf)) {
+                                temp2.type = PROG_INTEGER;
+                                temp2.data.number = atoi(fieldbuf);
+                                oper3 = array_getitem(arr2, &temp2);
+                            }
+                            if (!oper3) {
+                                temp2.type = PROG_STRING;
+                                temp2.data.string = alloc_prog_string(fieldbuf);
+                                oper3 = array_getitem(arr2, &temp2);
+                                CLEAR(&temp2);
+                            }
+                            if (!oper3) {
+                                temp3.type = PROG_STRING;
+                                temp3.data.string = NULL;
+                                oper3 = &temp3;
+                            }
+                        } else {
+                            abort_interp("Specified format field didn't have an array index.");
+                        }
 
-							i = 0;
-							while ((-1 == slen2 || i < slen2) && *ptr) {  /* adapted from prim_ansi_strlen */
-								begptr = ptr;
-								if (*ptr++ == ESCAPE_CHAR) {
-									if (*ptr == '\0') {;
-									} else if (*ptr != '[') {
-										ptr++;
-									} else {
-										ptr++;
-										while (isdigit(*ptr) || *ptr == ';')
-											ptr++;
-										if (*ptr == 'm')
-											ptr++;
-									}
-									i += (int) (ptr - begptr);
-									slen1 += (int) (ptr - begptr);
-									if(-1 != slen2) slen2 += (int) (ptr - begptr);
-								} else { i++; };
-							}
-						}
-						if ((slen1 > 0) && ((slen1 + result) > BUFFER_LEN))
-							abort_interp("Specified format field width too large.");
+                        /* If s is the format and oper3 is really a string, repair the lengths to account for ansi codes. */
+                        if (('s' == sstr[scnt])
+                            && (PROG_STRING == oper3->type)
+                            && (oper3->data.string)) {
+                            ptr = oper3->data.string->data;
 
-						sfmt[0] = '%';
-						sfmt[1] = '\0';
-						if (slrj == 1)
-							strcatn(sfmt, sizeof(sfmt), "-");
-						if (spad1) {
-							if (spad1 == 1)
-								strcatn(sfmt, sizeof(sfmt), "+");
-							else
-								strcatn(sfmt, sizeof(sfmt), " ");
-						}
-						if (spad2)
-							strcatn(sfmt, sizeof(sfmt), "0");
-						if (slen1 != -1) {
-							snprintf(tbuf, sizeof(tbuf), "%d", slen1);
-							strcatn(sfmt, sizeof(sfmt), tbuf);
-						}
-						if (slen2 != -1) {
-							snprintf(tbuf, sizeof(tbuf), ".%d", slen2);
-							strcatn(sfmt, sizeof(sfmt), tbuf);
-						}
-						if (sstr[scnt] == '~') {
-							switch (oper3->type) {
-							case PROG_OBJECT:
-								sstr[scnt] = 'D';
-								break;
-							case PROG_FLOAT:
-								sstr[scnt++] = 'l';
-								sstr[scnt] = 'g';
-								break;
-							case PROG_INTEGER:
-								sstr[scnt] = 'i';
-								break;
-							case PROG_LOCK:
-								sstr[scnt] = 'l';
-								break;
-							case PROG_STRING:
-								sstr[scnt] = 's';
-								break;
-							default:
-								sstr[scnt] = '?';
-								break;
-							}
-						}
-						switch (sstr[scnt]) {
-						case 'i':
-							strcatn(sfmt, sizeof(sfmt), "d");
-							if (oper3->type != PROG_INTEGER)
-								abort_interp("Format specified integer argument not found.");
-							snprintf(tbuf, sizeof(tbuf), sfmt, oper3->data.number);
-							tlen = strlen(tbuf);
-							if (slrj == 2) {
-								tnum = 0;
-								while ((tbuf[tnum] == ' ') && (tnum < tlen))
-									tnum++;
-								if ((tnum) && (tnum < tlen)) {
-									temp = tnum / 2;
-									for (i = tnum; i < tlen; i++)
-										tbuf[i - temp] = tbuf[i];
-									for (i = tlen - temp; i < tlen; i++)
-										tbuf[i] = ' ';
-								}
-							}
-							if (tlen + result > BUFFER_LEN)
-								abort_interp("Resultant string would overflow buffer.");
-							buf[result] = '\0';
-							strcatn(buf, sizeof(buf), tbuf);
-							result += tlen;
-							break;
-						case 'S':
-						case 's':
-							strcatn(sfmt, sizeof(sfmt), "s");
-							if (oper3->type != PROG_STRING)
-								abort_interp("Format specified string argument not found.");
-							snprintf(tbuf, sizeof(tbuf), sfmt, DoNullInd(oper3->data.string));
-							tlen = strlen(tbuf);
-							if (slrj == 2) {
-								tnum = 0;
-								while ((tbuf[tnum] == ' ') && (tnum < tlen))
-									tnum++;
-								if ((tnum) && (tnum < tlen)) {
-									temp = tnum / 2;
-									for (i = tnum; i < tlen; i++)
-										tbuf[i - temp] = tbuf[i];
-									for (i = tlen - temp; i < tlen; i++)
-										tbuf[i] = ' ';
-								}
-							}
-							if (strlen(tbuf) + result > BUFFER_LEN)
-								abort_interp("Resultant string would overflow buffer.");
-							buf[result] = '\0';
-							strcatn(buf, sizeof(buf), tbuf);
-							result += strlen(tbuf);
-							break;
-						case '?':
-							strcatn(sfmt, sizeof(sfmt), "s");
-							switch (oper3->type) {
-							case PROG_OBJECT:
-								strcpyn(hold, sizeof(hold), "OBJECT");
-								break;
-							case PROG_FLOAT:
-								strcpyn(hold, sizeof(hold), "FLOAT");
-								break;
-							case PROG_INTEGER:
-								strcpyn(hold, sizeof(hold), "INTEGER");
-								break;
-							case PROG_LOCK:
-								strcpyn(hold, sizeof(hold), "LOCK");
-								break;
-							case PROG_STRING:
-								strcpyn(hold, sizeof(hold), "STRING");
-								break;
-							case PROG_VAR:
-								strcpyn(hold, sizeof(hold), "VARIABLE");
-								break;
-							case PROG_LVAR:
-								strcpyn(hold, sizeof(hold), "LOCAL-VARIABLE");
-								break;
-							case PROG_SVAR:
-								strcpyn(hold, sizeof(hold), "SCOPED-VARIABLE");
-								break;
-							case PROG_ADD:
-								strcpyn(hold, sizeof(hold), "ADDRESS");
-								break;
-							case PROG_ARRAY:
-								strcpyn(hold, sizeof(hold), "ARRAY");
-								break;
-							case PROG_FUNCTION:
-								strcpyn(hold, sizeof(hold), "FUNCTION-NAME");
-								break;
-							case PROG_IF:
-								strcpyn(hold, sizeof(hold), "IF-STATEMENT");
-								break;
-							case PROG_EXEC:
-								strcpyn(hold, sizeof(hold), "EXECUTE");
-								break;
-							case PROG_JMP:
-								strcpyn(hold, sizeof(hold), "JUMP");
-								break;
-							case PROG_PRIMITIVE:
-								strcpyn(hold, sizeof(hold), "PRIMITIVE");
-								break;
-							default:
-								strcpyn(hold, sizeof(hold), "UNKNOWN");
-							}
-							snprintf(tbuf, sizeof(tbuf), sfmt, hold);
-							tlen = strlen(tbuf);
-							if (slrj == 2) {
-								tnum = 0;
-								while ((tbuf[tnum] == ' ') && (tnum < tlen))
-									tnum++;
-								if ((tnum) && (tnum < tlen)) {
-									temp = tnum / 2;
-									for (i = tnum; i < tlen; i++)
-										tbuf[i - temp] = tbuf[i];
-									for (i = tlen - temp; i < tlen; i++)
-										tbuf[i] = ' ';
-								}
-							}
-							if (strlen(tbuf) + result > BUFFER_LEN)
-								abort_interp("Resultant string would overflow buffer.");
-							buf[result] = '\0';
-							strcatn(buf, sizeof(buf), tbuf);
-							result += strlen(tbuf);
-							break;
-						case 'd':
-							strcatn(sfmt, sizeof(sfmt), "s");
-							if (oper3->type != PROG_OBJECT)
-								abort_interp("Format specified object not found.");
-							snprintf(hold, sizeof(hold), "#%d", oper3->data.objref);
-							snprintf(tbuf, sizeof(tbuf), sfmt, hold);
-							tlen = strlen(tbuf);
-							if (slrj == 2) {
-								tnum = 0;
-								while ((tbuf[tnum] == ' ') && (tnum < tlen))
-									tnum++;
-								if ((tnum) && (tnum < tlen)) {
-									temp = tnum / 2;
-									for (i = tnum; i < tlen; i++)
-										tbuf[i - temp] = tbuf[i];
-									for (i = tlen - temp; i < tlen; i++)
-										tbuf[i] = ' ';
-								}
-							}
-							if (strlen(tbuf) + result > BUFFER_LEN)
-								abort_interp("Resultant string would overflow buffer.");
-							buf[result] = '\0';
-							strcatn(buf, sizeof(buf), tbuf);
-							result += strlen(tbuf);
-							break;
-						case 'D':
-							strcatn(sfmt, sizeof(sfmt), "s");
-							if (oper3->type != PROG_OBJECT)
-								abort_interp("Format specified object not found.");
-							if (!valid_object(oper3))
-								abort_interp("Format specified object not valid.");
-							ref = oper3->data.objref;
-							CHECKREMOTE(ref);
-							if (NAME(ref)) {
-								strcpyn(hold, sizeof(hold), NAME(ref));
-							} else {
-								hold[0] = '\0';
-							}
-							snprintf(tbuf, sizeof(tbuf), sfmt, hold);
-							tlen = strlen(tbuf);
-							if (slrj == 2) {
-								tnum = 0;
-								while ((tbuf[tnum] == ' ') && (tnum < tlen))
-									tnum++;
-								if ((tnum) && (tnum < tlen)) {
-									temp = tnum / 2;
-									for (i = tnum; i < tlen; i++)
-										tbuf[i - temp] = tbuf[i];
-									for (i = tlen - temp; i < tlen; i++)
-										tbuf[i] = ' ';
-								}
-							}
-							if (strlen(tbuf) + result > BUFFER_LEN)
-								abort_interp("Resultant string would overflow buffer.");
-							buf[result] = '\0';
-							strcatn(buf, sizeof(buf), tbuf);
-							result += strlen(tbuf);
-							break;
-						case 'l':
-							strcatn(sfmt, sizeof(sfmt), "s");
-							if (oper3->type != PROG_LOCK)
-								abort_interp("Format specified lock not found.");
-							strcpyn(hold, sizeof(hold), unparse_boolexp(ProgUID, oper3->data.lock, 1));
-							snprintf(tbuf, sizeof(tbuf), sfmt, hold);
-							tlen = strlen(tbuf);
-							if (slrj == 2) {
-								tnum = 0;
-								while ((tbuf[tnum] == ' ') && (tnum < tlen))
-									tnum++;
-								if ((tnum) && (tnum < tlen)) {
-									temp = tnum / 2;
-									for (i = tnum; i < tlen; i++)
-										tbuf[i - temp] = tbuf[i];
-									for (i = tlen - temp; i < tlen; i++)
-										tbuf[i] = ' ';
-								}
-							}
-							if (strlen(tbuf) + result > BUFFER_LEN)
-								abort_interp("Resultant string would overflow buffer.");
-							buf[result] = '\0';
-							strcatn(buf, sizeof(buf), tbuf);
-							result += strlen(tbuf);
-							break;
-						case 'f':
-						case 'e':
-						case 'g':
-							strcatn(sfmt, sizeof(sfmt), "l");
-							snprintf(hold, sizeof(hold), "%c", sstr[scnt]);
-							strcatn(sfmt, sizeof(sfmt), hold);
-							if (oper3->type != PROG_FLOAT)
-								abort_interp("Format specified float not found.");
-							snprintf(tbuf, sizeof(tbuf), sfmt, oper3->data.fnumber);
-							tlen = strlen(tbuf);
-							if (slrj == 2) {
-								tnum = 0;
-								while ((tbuf[tnum] == ' ') && (tnum < tlen))
-									tnum++;
-								if ((tnum) && (tnum < tlen)) {
-									temp = tnum / 2;
-									for (i = tnum; i < tlen; i++)
-										tbuf[i - temp] = tbuf[i];
-									for (i = tlen - temp; i < tlen; i++)
-										tbuf[i] = ' ';
-								}
-							}
-							if (strlen(tbuf) + result > BUFFER_LEN)
-								abort_interp("Resultant string would overflow buffer.");
-							buf[result] = '\0';
-							strcatn(buf, sizeof(buf), tbuf);
-							result += strlen(tbuf);
-							break;
-						default:
-							abort_interp("Invalid format string.");
-							break;
-						}
-						scnt++;
-						tstop += strlen(tbuf);
-					}
-				} else {
-					if ((sstr[scnt] == '\\') && (sstr[scnt + 1] == 't')) {
-						if ((result - (tstop % 8) + 1) >= BUFFER_LEN)
-							abort_interp("Resultant string would overflow buffer.");
-						if ((tstop % 8) == 0) {
-							buf[result++] = ' ';
-							tstop++;
-						}
-						while ((tstop % 8) != 0) {
-							buf[result++] = ' ';
-							tstop++;
-						}
-						scnt += 2;
-						tstop = 0;
-					} else {
-						if (sstr[scnt] == '\r') {
-							tstop = 0;
-							scnt++;
-							buf[result++] = '\r';
-						} else {
-							buf[result++] = sstr[scnt++];
-							tstop++;
-						}
-					}
-				}
-			}
-			if (result >= BUFFER_LEN)
-				abort_interp("Resultant string would overflow buffer.");
-			buf[result] = '\0';
+                            i = 0;
+                            while ((-1 == slen2 || i < slen2) && *ptr) { /* adapted from prim_ansi_strlen */
+                                begptr = ptr;
+                                if (*ptr++ == ESCAPE_CHAR) {
+                                    if (*ptr == '\0') {;
+                                    } else if (*ptr != '[') {
+                                        ptr++;
+                                    } else {
+                                        ptr++;
+                                        while (isdigit(*ptr) || *ptr == ';')
+                                            ptr++;
+                                        if (*ptr == 'm')
+                                            ptr++;
+                                    }
+                                    i += (int) (ptr - begptr);
+                                    slen1 += (int) (ptr - begptr);
+                                    if (-1 != slen2)
+                                        slen2 += (int) (ptr - begptr);
+                                } else {
+                                    i++;
+                                };
+                            }
+                        }
+                        if ((slen1 > 0) && ((slen1 + result) > BUFFER_LEN))
+                            abort_interp("Specified format field width too large.");
 
-			temp2.type = PROG_STRING;
-			temp2.data.string = alloc_prog_string(buf);
-			array_appenditem(&nu, &temp2);
-			CLEAR(&temp2);
-		} while (array_next(arr, &temp1));
-	}
+                        sfmt[0] = '%';
+                        sfmt[1] = '\0';
+                        if (slrj == 1)
+                            strcatn(sfmt, sizeof(sfmt), "-");
+                        if (spad1) {
+                            if (spad1 == 1)
+                                strcatn(sfmt, sizeof(sfmt), "+");
+                            else
+                                strcatn(sfmt, sizeof(sfmt), " ");
+                        }
+                        if (spad2)
+                            strcatn(sfmt, sizeof(sfmt), "0");
+                        if (slen1 != -1) {
+                            snprintf(tbuf, sizeof(tbuf), "%d", slen1);
+                            strcatn(sfmt, sizeof(sfmt), tbuf);
+                        }
+                        if (slen2 != -1) {
+                            snprintf(tbuf, sizeof(tbuf), ".%d", slen2);
+                            strcatn(sfmt, sizeof(sfmt), tbuf);
+                        }
+                        if (sstr[scnt] == '~') {
+                            switch (oper3->type) {
+                                case PROG_OBJECT:
+                                    sstr[scnt] = 'D';
+                                    break;
+                                case PROG_FLOAT:
+                                    sstr[scnt++] = 'l';
+                                    sstr[scnt] = 'g';
+                                    break;
+                                case PROG_INTEGER:
+                                    sstr[scnt] = 'i';
+                                    break;
+                                case PROG_LOCK:
+                                    sstr[scnt] = 'l';
+                                    break;
+                                case PROG_STRING:
+                                    sstr[scnt] = 's';
+                                    break;
+                                default:
+                                    sstr[scnt] = '?';
+                                    break;
+                            }
+                        }
+                        switch (sstr[scnt]) {
+                            case 'i':
+                                strcatn(sfmt, sizeof(sfmt), "d");
+                                if (oper3->type != PROG_INTEGER)
+                                    abort_interp("Format specified integer argument not found.");
+                                snprintf(tbuf, sizeof(tbuf), sfmt, oper3->data.number);
+                                tlen = strlen(tbuf);
+                                if (slrj == 2) {
+                                    tnum = 0;
+                                    while ((tbuf[tnum] == ' ')
+                                           && (tnum < tlen))
+                                        tnum++;
+                                    if ((tnum) && (tnum < tlen)) {
+                                        temp = tnum / 2;
+                                        for (i = tnum; i < tlen; i++)
+                                            tbuf[i - temp] = tbuf[i];
+                                        for (i = tlen - temp; i < tlen; i++)
+                                            tbuf[i] = ' ';
+                                    }
+                                }
+                                if (tlen + result > BUFFER_LEN)
+                                    abort_interp("Resultant string would overflow buffer.");
+                                buf[result] = '\0';
+                                strcatn(buf, sizeof(buf), tbuf);
+                                result += tlen;
+                                break;
+                            case 'S':
+                            case 's':
+                                strcatn(sfmt, sizeof(sfmt), "s");
+                                if (oper3->type != PROG_STRING)
+                                    abort_interp("Format specified string argument not found.");
+                                snprintf(tbuf, sizeof(tbuf), sfmt, DoNullInd(oper3->data.string));
+                                tlen = strlen(tbuf);
+                                if (slrj == 2) {
+                                    tnum = 0;
+                                    while ((tbuf[tnum] == ' ')
+                                           && (tnum < tlen))
+                                        tnum++;
+                                    if ((tnum) && (tnum < tlen)) {
+                                        temp = tnum / 2;
+                                        for (i = tnum; i < tlen; i++)
+                                            tbuf[i - temp] = tbuf[i];
+                                        for (i = tlen - temp; i < tlen; i++)
+                                            tbuf[i] = ' ';
+                                    }
+                                }
+                                if (strlen(tbuf) + result > BUFFER_LEN)
+                                    abort_interp("Resultant string would overflow buffer.");
+                                buf[result] = '\0';
+                                strcatn(buf, sizeof(buf), tbuf);
+                                result += strlen(tbuf);
+                                break;
+                            case '?':
+                                strcatn(sfmt, sizeof(sfmt), "s");
+                                switch (oper3->type) {
+                                    case PROG_OBJECT:
+                                        strcpyn(hold, sizeof(hold), "OBJECT");
+                                        break;
+                                    case PROG_FLOAT:
+                                        strcpyn(hold, sizeof(hold), "FLOAT");
+                                        break;
+                                    case PROG_INTEGER:
+                                        strcpyn(hold, sizeof(hold), "INTEGER");
+                                        break;
+                                    case PROG_LOCK:
+                                        strcpyn(hold, sizeof(hold), "LOCK");
+                                        break;
+                                    case PROG_STRING:
+                                        strcpyn(hold, sizeof(hold), "STRING");
+                                        break;
+                                    case PROG_VAR:
+                                        strcpyn(hold, sizeof(hold), "VARIABLE");
+                                        break;
+                                    case PROG_LVAR:
+                                        strcpyn(hold, sizeof(hold), "LOCAL-VARIABLE");
+                                        break;
+                                    case PROG_SVAR:
+                                        strcpyn(hold, sizeof(hold), "SCOPED-VARIABLE");
+                                        break;
+                                    case PROG_ADD:
+                                        strcpyn(hold, sizeof(hold), "ADDRESS");
+                                        break;
+                                    case PROG_ARRAY:
+                                        strcpyn(hold, sizeof(hold), "ARRAY");
+                                        break;
+                                    case PROG_FUNCTION:
+                                        strcpyn(hold, sizeof(hold), "FUNCTION-NAME");
+                                        break;
+                                    case PROG_IF:
+                                        strcpyn(hold, sizeof(hold), "IF-STATEMENT");
+                                        break;
+                                    case PROG_EXEC:
+                                        strcpyn(hold, sizeof(hold), "EXECUTE");
+                                        break;
+                                    case PROG_JMP:
+                                        strcpyn(hold, sizeof(hold), "JUMP");
+                                        break;
+                                    case PROG_PRIMITIVE:
+                                        strcpyn(hold, sizeof(hold), "PRIMITIVE");
+                                        break;
+                                    default:
+                                        strcpyn(hold, sizeof(hold), "UNKNOWN");
+                                }
+                                snprintf(tbuf, sizeof(tbuf), sfmt, hold);
+                                tlen = strlen(tbuf);
+                                if (slrj == 2) {
+                                    tnum = 0;
+                                    while ((tbuf[tnum] == ' ')
+                                           && (tnum < tlen))
+                                        tnum++;
+                                    if ((tnum) && (tnum < tlen)) {
+                                        temp = tnum / 2;
+                                        for (i = tnum; i < tlen; i++)
+                                            tbuf[i - temp] = tbuf[i];
+                                        for (i = tlen - temp; i < tlen; i++)
+                                            tbuf[i] = ' ';
+                                    }
+                                }
+                                if (strlen(tbuf) + result > BUFFER_LEN)
+                                    abort_interp("Resultant string would overflow buffer.");
+                                buf[result] = '\0';
+                                strcatn(buf, sizeof(buf), tbuf);
+                                result += strlen(tbuf);
+                                break;
+                            case 'd':
+                                strcatn(sfmt, sizeof(sfmt), "s");
+                                if (oper3->type != PROG_OBJECT)
+                                    abort_interp("Format specified object not found.");
+                                snprintf(hold, sizeof(hold), "#%d", oper3->data.objref);
+                                snprintf(tbuf, sizeof(tbuf), sfmt, hold);
+                                tlen = strlen(tbuf);
+                                if (slrj == 2) {
+                                    tnum = 0;
+                                    while ((tbuf[tnum] == ' ')
+                                           && (tnum < tlen))
+                                        tnum++;
+                                    if ((tnum) && (tnum < tlen)) {
+                                        temp = tnum / 2;
+                                        for (i = tnum; i < tlen; i++)
+                                            tbuf[i - temp] = tbuf[i];
+                                        for (i = tlen - temp; i < tlen; i++)
+                                            tbuf[i] = ' ';
+                                    }
+                                }
+                                if (strlen(tbuf) + result > BUFFER_LEN)
+                                    abort_interp("Resultant string would overflow buffer.");
+                                buf[result] = '\0';
+                                strcatn(buf, sizeof(buf), tbuf);
+                                result += strlen(tbuf);
+                                break;
+                            case 'D':
+                                strcatn(sfmt, sizeof(sfmt), "s");
+                                if (oper3->type != PROG_OBJECT)
+                                    abort_interp("Format specified object not found.");
+                                if (!valid_object(oper3))
+                                    abort_interp("Format specified object not valid.");
+                                ref = oper3->data.objref;
+                                CHECKREMOTE(ref);
+                                if (NAME(ref)) {
+                                    strcpyn(hold, sizeof(hold), NAME(ref));
+                                } else {
+                                    hold[0] = '\0';
+                                }
+                                snprintf(tbuf, sizeof(tbuf), sfmt, hold);
+                                tlen = strlen(tbuf);
+                                if (slrj == 2) {
+                                    tnum = 0;
+                                    while ((tbuf[tnum] == ' ')
+                                           && (tnum < tlen))
+                                        tnum++;
+                                    if ((tnum) && (tnum < tlen)) {
+                                        temp = tnum / 2;
+                                        for (i = tnum; i < tlen; i++)
+                                            tbuf[i - temp] = tbuf[i];
+                                        for (i = tlen - temp; i < tlen; i++)
+                                            tbuf[i] = ' ';
+                                    }
+                                }
+                                if (strlen(tbuf) + result > BUFFER_LEN)
+                                    abort_interp("Resultant string would overflow buffer.");
+                                buf[result] = '\0';
+                                strcatn(buf, sizeof(buf), tbuf);
+                                result += strlen(tbuf);
+                                break;
+                            case 'l':
+                                strcatn(sfmt, sizeof(sfmt), "s");
+                                if (oper3->type != PROG_LOCK)
+                                    abort_interp("Format specified lock not found.");
+                                strcpyn(hold, sizeof(hold), unparse_boolexp(tbuf, ProgUID, oper3->data.lock, 1));
+                                snprintf(tbuf, sizeof(tbuf), sfmt, hold);
+                                tlen = strlen(tbuf);
+                                if (slrj == 2) {
+                                    tnum = 0;
+                                    while ((tbuf[tnum] == ' ')
+                                           && (tnum < tlen))
+                                        tnum++;
+                                    if ((tnum) && (tnum < tlen)) {
+                                        temp = tnum / 2;
+                                        for (i = tnum; i < tlen; i++)
+                                            tbuf[i - temp] = tbuf[i];
+                                        for (i = tlen - temp; i < tlen; i++)
+                                            tbuf[i] = ' ';
+                                    }
+                                }
+                                if (strlen(tbuf) + result > BUFFER_LEN)
+                                    abort_interp("Resultant string would overflow buffer.");
+                                buf[result] = '\0';
+                                strcatn(buf, sizeof(buf), tbuf);
+                                result += strlen(tbuf);
+                                break;
+                            case 'f':
+                            case 'e':
+                            case 'g':
+                                strcatn(sfmt, sizeof(sfmt), "l");
+                                snprintf(hold, sizeof(hold), "%c", sstr[scnt]);
+                                strcatn(sfmt, sizeof(sfmt), hold);
+                                if (oper3->type != PROG_FLOAT)
+                                    abort_interp("Format specified float not found.");
+                                snprintf(tbuf, sizeof(tbuf), sfmt, oper3->data.fnumber);
+                                tlen = strlen(tbuf);
+                                if (slrj == 2) {
+                                    tnum = 0;
+                                    while ((tbuf[tnum] == ' ')
+                                           && (tnum < tlen))
+                                        tnum++;
+                                    if ((tnum) && (tnum < tlen)) {
+                                        temp = tnum / 2;
+                                        for (i = tnum; i < tlen; i++)
+                                            tbuf[i - temp] = tbuf[i];
+                                        for (i = tlen - temp; i < tlen; i++)
+                                            tbuf[i] = ' ';
+                                    }
+                                }
+                                if (strlen(tbuf) + result > BUFFER_LEN)
+                                    abort_interp("Resultant string would overflow buffer.");
+                                buf[result] = '\0';
+                                strcatn(buf, sizeof(buf), tbuf);
+                                result += strlen(tbuf);
+                                break;
+                            default:
+                                abort_interp("Invalid format string.");
+                                break;
+                        }
+                        scnt++;
+                        tstop += strlen(tbuf);
+                    }
+                } else {
+                    if ((sstr[scnt] == '\\') && (sstr[scnt + 1] == 't')) {
+                        if ((result - (tstop % 8) + 1) >= BUFFER_LEN)
+                            abort_interp("Resultant string would overflow buffer.");
+                        if ((tstop % 8) == 0) {
+                            buf[result++] = ' ';
+                            tstop++;
+                        }
+                        while ((tstop % 8) != 0) {
+                            buf[result++] = ' ';
+                            tstop++;
+                        }
+                        scnt += 2;
+                        tstop = 0;
+                    } else {
+                        if (sstr[scnt] == '\r') {
+                            tstop = 0;
+                            scnt++;
+                            buf[result++] = '\r';
+                        } else {
+                            buf[result++] = sstr[scnt++];
+                            tstop++;
+                        }
+                    }
+                }
+            }
+            if (result >= BUFFER_LEN)
+                abort_interp("Resultant string would overflow buffer.");
+            buf[result] = '\0';
 
-	
-	
-	PushArrayRaw(nu);
+            temp2.type = PROG_STRING;
+            temp2.data.string = alloc_prog_string(buf);
+            array_appenditem(&nu, &temp2);
+            CLEAR(&temp2);
+        } while (array_next(arr, &temp1));
+    }
+
+
+
+    PushArrayRaw(nu);
 }
 
 void
 prim_ansi_unparseobj(PRIM_PROTOTYPE)
 {
     char tbuf[BUFFER_LEN], tbuf2[BUFFER_LEN];
-	char buf[BUFFER_LEN];
-	int result;
+    char buf[BUFFER_LEN];
+    int result;
 
     if (oper[0].type != PROG_OBJECT)
         abort_interp("Non-object argument.");
@@ -3107,8 +2998,7 @@ prim_ansi_unparseobj(PRIM_PROTOTYPE)
             if (result < 0 || result >= db_top) {
                 sprintf(buf, SYSRED "*INVALID(#%d)*", result);
             } else {
-                sprintf(buf, "%s" SYSYELLOW "(#%d%s)", ansiname(result, tbuf),
-                        result, unparse_flags(result, tbuf2));
+                sprintf(buf, "%s" SYSYELLOW "(#%d%s)", ansiname(result, tbuf), result, unparse_flags(result, tbuf2));
             }
     }
     PushString(buf);
@@ -3117,8 +3007,8 @@ prim_ansi_unparseobj(PRIM_PROTOTYPE)
 void
 prim_ansi_name(PRIM_PROTOTYPE)
 {
-	dbref ref;
-	char buf[BUFFER_LEN];
+    dbref ref;
+    char buf[BUFFER_LEN];
 
 
     if (oper[0].type != PROG_OBJECT)
@@ -3140,8 +3030,8 @@ prim_ansi_name(PRIM_PROTOTYPE)
 void
 prim_unparse_flags(PRIM_PROTOTYPE)
 {
-	dbref ref;
-	char buf[BUFFER_LEN];
+    dbref ref;
+    char buf[BUFFER_LEN];
 
     if (oper[0].type != PROG_OBJECT)
         abort_interp("Arguement (1) is not a dbref.");
@@ -3160,7 +3050,7 @@ prim_unparse_flags(PRIM_PROTOTYPE)
 void
 prim_base64encode(PRIM_PROTOTYPE)
 {
-	char buf[BUFFER_LEN];
+    //char buf[BUFFER_LEN];
 
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string argument. (1)");
@@ -3168,19 +3058,27 @@ prim_base64encode(PRIM_PROTOTYPE)
     if (!oper[0].data.string) {
         PushNullStr;
     } else {
-        if (((oper[0].data.string->length + 2) / 3 * 4) > BUFFER_LEN)
-            abort_interp("Operation would result in overflow.");
-        http_encode64(oper[0].data.string->data, oper[0].data.string->length,
-                      buf);
-        PushString(buf);
+        std::string tmp;
+        
+        try {
+            std::string in(oper[0].data.string->data, oper[0].data.string->length);
+            tmp = http_encode64(in);
+        }
+        catch(std::exception & e) {
+            abort_interp(e.what());
+        }
+        if (tmp.length() >= BUFFER_LEN)
+            abort_interp("Resultant string would overflow buffer.");
+
+        PushString(tmp.c_str());
     }
 }
 
 void
 prim_base64decode(PRIM_PROTOTYPE)
 {
-	char buf[BUFFER_LEN];
-	int result;
+    //char buf[BUFFER_LEN];
+    //int result;
 
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string argument. (1)");
@@ -3188,24 +3086,130 @@ prim_base64decode(PRIM_PROTOTYPE)
     if (!oper[0].data.string) {
         PushNullStr;
     } else {
-        result =
-            http_decode64(oper[0].data.string->data, oper[0].data.string->length,
-                          buf);
-        if (result < 0)
-            PushNullStr;
-        else
-            PushString(buf);
+        std::string tmp;
+
+        try {
+            tmp = http_decode64(oper[0].data.string->data);
+        }
+        catch(std::exception & e) {
+            abort_interp(e.what());
+        }
+        if (tmp.length() >= BUFFER_LEN)
+            abort_interp("Resultant string would overflow buffer.");
+
+        PushString(tmp.c_str());
     }
 }
+
+void
+prim_str2hex(PRIM_PROTOTYPE)
+{
+    if (oper[0].type != PROG_STRING)
+        abort_interp("Non-string argument. (1)");
+
+    if (!oper[0].data.string) {
+        PushNullStr;
+    } else {
+        if (oper[0].data.string->length * 2 >= BUFFER_LEN)
+            abort_interp("Resultant string would overflow buffer.");
+
+        std::string in(oper[0].data.string->data, oper[0].data.string->length); 
+        std::string out = strToHex(in, 1);
+
+        PushString(out.c_str());
+    }
+}
+
+void
+prim_hex2str(PRIM_PROTOTYPE)
+{
+    if (oper[0].type != PROG_STRING)
+        abort_interp("Non-string argument. (1)");
+
+    if (!oper[0].data.string) {
+        PushNullStr;
+    } else {
+        std::string out;
+
+        try {
+            std::string in(oper[0].data.string->data, oper[0].data.string->length);
+            out = hexToStr(in);
+        }
+        catch(std::exception & e) {
+            abort_interp(e.what());
+        }
+        if (out.length() >= BUFFER_LEN)
+            abort_interp("Resultant string would overflow buffer.");
+
+        PushString(out);
+    }
+}
+
+void
+prim_hex2base64str(PRIM_PROTOTYPE)
+{
+    //char buf[BUFFER_LEN];
+
+    if (oper[0].type != PROG_STRING)
+        abort_interp("Non-string argument. (1)");
+
+    if (!oper[0].data.string) {
+        PushNullStr;
+    } else {
+        std::string tmp;
+
+        try {
+            tmp = hexToStr(oper[0].data.string->data);
+        }
+        catch(std::exception & e) {
+            abort_interp(e.what());
+        }
+        if ((((tmp.length() / 3) + 1) * 4) >= BUFFER_LEN)
+            abort_interp("Resultant string would overflow buffer.");
+
+        tmp = http_encode64(tmp);
+        if (tmp.length() >= BUFFER_LEN)
+            abort_interp("Resultant string would overflow buffer.");
+
+        PushString(tmp);
+    }
+}
+
+/* void
+prim_base64str2hex(PRIM_PROTOTYPE)
+{
+    char buf[BUFFER_LEN];
+    int result;
+
+    if (oper[0].type != PROG_STRING)
+        abort_interp("Non-string argument. (1)");
+
+    if (!oper[0].data.string) {
+        PushNullStr;
+    } else {
+        result = http_decode64(oper[0].data.string->data, oper[0].data.string->length, buf);
+        if (result <= 0) {
+            PushNullStr;
+        } else if (result * 2 >= BUFFER_LEN) {
+            abort_interp("Resultant string would overflow buffer.");
+        } else {
+            std::string tmp(buf, result);
+            
+            PushString(strToHex(tmp).c_str());
+        }
+    }
+}
+*/
 
 #ifdef UTF8_SUPPORT
 /* refer to comments for wcharlen in stringutil.c */
 
 void
-prim_wcharlen(PRIM_PROTOTYPE) {
+prim_wcharlen(PRIM_PROTOTYPE)
+{
     int result = 0;
 
-	if (oper[0].type != PROG_STRING)
+    if (oper[0].type != PROG_STRING)
         abort_interp("Non-string argument. (1)");
 
     if (!oper[0].data.string) {
@@ -3224,7 +3228,8 @@ prim_wcharlen(PRIM_PROTOTYPE) {
 }
 
 void
-prim_wcharlen_slice(PRIM_PROTOTYPE) {
+prim_wcharlen_slice(PRIM_PROTOTYPE)
+{
     int result = 0;
 
     if (oper[0].type != PROG_INTEGER)
@@ -3237,9 +3242,7 @@ prim_wcharlen_slice(PRIM_PROTOTYPE) {
         return;
     }
 
-    result = wcharlen_slice(DoNullInd(oper[1].data.string),
-                            oper[0].data.number,
-                            oper[1].data.string->length);
+    result = wcharlen_slice(DoNullInd(oper[1].data.string), oper[0].data.number, oper[1].data.string->length);
 
     if (result == -1) {
         /* Let's abort for now, just to see how often we get these. */
@@ -3249,4 +3252,3 @@ prim_wcharlen_slice(PRIM_PROTOTYPE) {
     PushInt(result);
 }
 #endif /* UTF8_SUPPORT */
-

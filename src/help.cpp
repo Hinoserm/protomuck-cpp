@@ -63,8 +63,7 @@ spit_file_segment(dbref player, const char *filename, const char *seg)
         }
     }
     if ((f = fopen(filename, "r")) == NULL) {
-        sprintf(buf, CINFO "%s is missing.  Management has been notified.",
-                filename);
+        sprintf(buf, CINFO "%s is missing.  Management has been notified.", filename);
         anotify_nolisten2(player, buf);
         fputs("spit_file:", stderr);
         perror(filename);
@@ -76,8 +75,7 @@ spit_file_segment(dbref player, const char *filename, const char *seg)
                     break;
                 }
             currline++;
-            if ((!startline || (currline >= startline)) &&
-                (!endline || (currline <= endline))) {
+            if ((!startline || (currline >= startline)) && (!endline || (currline <= endline))) {
                 if (*buf) {
                     notify(player, buf);
                 } else {
@@ -114,8 +112,7 @@ spit_file_segment_lines(dbref player, const char *filename, const char *seg)
         }
     }
     if ((f = fopen(filename, "r")) == NULL) {
-        sprintf(buf, CINFO "%s is missing.  Management has been notified.",
-                filename);
+        sprintf(buf, CINFO "%s is missing.  Management has been notified.", filename);
         anotify_nolisten2(player, buf);
         fputs("spit_file:", stderr);
         perror(filename);
@@ -127,8 +124,7 @@ spit_file_segment_lines(dbref player, const char *filename, const char *seg)
                     break;
                 }
             currline++;
-            if ((!startline || (currline >= startline)) &&
-                (!endline || (currline <= endline))) {
+            if ((!startline || (currline >= startline)) && (!endline || (currline <= endline))) {
                 if (*buf) {
                     notify_fmt(player, "%2d: %s", currline, buf);
                 } else {
@@ -192,8 +188,7 @@ index_file(dbref player, const char *onwhat, const char *file)
     }
 
     if ((f = fopen(file, "r")) == NULL) {
-        sprintf(buf, SYSYELLOW
-                "%s is missing.  Management has been notified.", file);
+        sprintf(buf, SYSYELLOW "%s is missing.  Management has been notified.", file);
         anotify_nolisten2(player, buf);
         fprintf(stderr, "help: No file %s!\n", file);
         log2file(HELP_LOG, "MISSING: %s", file);
@@ -207,18 +202,12 @@ index_file(dbref player, const char *onwhat, const char *file)
             do {
                 do {
                     if (!(fgets(buf, sizeof buf, f))) {
-                        sprintf(buf, CINFO "There is no help for \"%s\"",
-                                onwhat);
+                        sprintf(buf, CINFO "There is no help for \"%s\"", onwhat);
                         anotify_nolisten2(player, buf);
                         fclose(f);
                         if (tp_log_failedhelp) {
-                            log2file(HELP_LOG,
-                                     "%s tried to look up '%s' in: %s.",
-                                     unparse_object(player, player), onwhat,
-                                     file);
-                            sprintf(wallBuf, "%s tried to look up '%s' in: %s.",
-                                    unparse_object(player, player), onwhat,
-                                    file);
+                            log2file(HELP_LOG, "%s tried to look up '%s' in: %s.", unparse_object(player, player), onwhat, file);
+                            sprintf(wallBuf, "%s tried to look up '%s' in: %s.", unparse_object(player, player), onwhat, file);
                             wall_logwizards(wallBuf);
                         }
                         return;
@@ -226,18 +215,12 @@ index_file(dbref player, const char *onwhat, const char *file)
                 } while (*buf != '~');
                 do {
                     if (!(fgets(buf, sizeof buf, f))) {
-                        sprintf(buf, CINFO "There is no help for \"%s\"",
-                                onwhat);
+                        sprintf(buf, CINFO "There is no help for \"%s\"", onwhat);
                         anotify_nolisten2(player, buf);
                         fclose(f);
                         if (tp_log_failedhelp) {
-                            log2file(HELP_LOG,
-                                     "%s tried to look up '%s' in: %s.",
-                                     unparse_object(player, player), onwhat,
-                                     file);
-                            sprintf(wallBuf, "%s tried to look up '%s' in: %s.",
-                                    unparse_object(player, player), onwhat,
-                                    file);
+                            log2file(HELP_LOG, "%s tried to look up '%s' in: %s.", unparse_object(player, player), onwhat, file);
+                            sprintf(wallBuf, "%s tried to look up '%s' in: %s.", unparse_object(player, player), onwhat, file);
                             wall_logwizards(wallBuf);
                         }
                         return;
@@ -278,10 +261,9 @@ index_file(dbref player, const char *onwhat, const char *file)
 
 
 int
-show_subfile(dbref player, const char *dir, const char *topic, const char *seg,
-             int partial)
+show_subfile(dbref player, const char *dir, const char *topic, const char *seg, int partial)
 {
-    char buf[256];
+    char buf[1024];
     struct stat st;
 
 #ifdef DIR_AVALIBLE
@@ -305,10 +287,9 @@ show_subfile(dbref player, const char *dir, const char *topic, const char *seg,
 
     if ((df = (DIR *) opendir(dir))) {
         while ((dp = readdir(df))) {
-            if ((partial && string_prefix(dp->d_name, topic)) ||
-                (!partial && !string_compare(dp->d_name, topic))
+            if ((partial && string_prefix(dp->d_name, topic)) || (!partial && !string_compare(dp->d_name, topic))
                 ) {
-                sprintf(buf, "%s/%s", dir, dp->d_name);
+                snprintf(buf, sizeof(buf), "%s/%s", dir, dp->d_name);
                 break;
             }
         }
@@ -419,16 +400,14 @@ do_motd(dbref player, char *text)
     }
     if (!string_compare(text, "clear")) {
         unlink(MOTD_FILE);
-        log2file(MOTD_FILE, "- - - - - - - - - - - - - - - - - - - "
-                 "- - - - - - - - - - - - - - - - - - -");
+        log2file(MOTD_FILE, "- - - - - - - - - - - - - - - - - - - " "- - - - - - - - - - - - - - - - - - -");
         anotify_nolisten2(player, CSUCC "MOTD cleared.");
         return;
     }
     lt = current_systime;
     log2file(MOTD_FILE, "%.16s", ctime(&lt));
     add_motd_text_fmt(text);
-    log2file(MOTD_FILE, "- - - - - - - - - - - - - - - - - - - "
-             "- - - - - - - - - - - - - - - - - - -");
+    log2file(MOTD_FILE, "- - - - - - - - - - - - - - - - - - - " "- - - - - - - - - - - - - - - - - - -");
     anotify_nolisten2(player, CSUCC "MOTD updated.");
 }
 
@@ -460,9 +439,7 @@ do_info(dbref player, const char *topic, const char *seg)
 
                 if (*(dp->d_name) != '.') {
                     if (!f)
-                        anotify_nolisten2(player,
-                                          CINFO
-                                          "Available information files are:");
+                        anotify_nolisten2(player, CINFO "Available information files are:");
                     if ((cols++ > 2)
                         || ((strlen(buf) + strlen(dp->d_name)) > 63)) {
                         notify(player, buf);
@@ -481,12 +458,10 @@ do_info(dbref player, const char *topic, const char *seg)
         if (f)
             notify(player, buf);
         else
-            anotify_nolisten2(player,
-                              CINFO "No information files are available.");
+            anotify_nolisten2(player, CINFO "No information files are available.");
         /* free(buf); */
 #else /* !DIR_AVALIBLE */
-        anotify_nolisten2(player,
-                          CINFO "Type 'info index' for a list of files.");
+        anotify_nolisten2(player, CINFO "Type 'info index' for a list of files.");
 #endif /* !DIR_AVALIBLE */
     }
 }

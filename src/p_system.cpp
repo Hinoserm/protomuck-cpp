@@ -18,11 +18,10 @@
 #include "netresolve.h"
 
 /* mutex? -hinoserm */
-extern struct frame* aForceFrameStack[9];
+extern struct frame *aForceFrameStack[9];
 
 extern struct line *read_program(dbref i);
-extern int tune_setparm(const dbref player, const char *parmname,
-                        const char *val);
+extern int tune_setparm(const dbref player, const char *parmname, const char *val);
 
 void
 prim_sysparm(PRIM_PROTOTYPE)
@@ -44,7 +43,7 @@ prim_sysparm(PRIM_PROTOTYPE)
 void
 prim_setsysparm(PRIM_PROTOTYPE)
 {
-	int result;
+    int result;
 
     if (oper[1].type != PROG_STRING)
         abort_interp("Invalid argument. (1)");
@@ -55,14 +54,11 @@ prim_setsysparm(PRIM_PROTOTYPE)
     if (!oper[0].data.string)
         abort_interp("Null string argument. (2)");
 
-    result = tune_setparm(program, oper[1].data.string->data,
-                          oper[0].data.string->data);
+    result = tune_setparm(program, oper[1].data.string->data, oper[0].data.string->data);
 
     switch (result) {
         case 0:                /* TUNESET_SUCCESS */
-            log_status("TUNED (MUF): %s(%d) tuned %s to %s\n",
-                       OkObj(player) ? NAME(player) : "(Login)", player,
-                       oper[1].data.string->data, oper[0].data.string->data);
+            log_status("TUNED (MUF): %s(%d) tuned %s to %s\n", OkObj(player) ? NAME(player) : "(Login)", player, oper[1].data.string->data, oper[0].data.string->data);
             break;
         case 1:                /* TUNESET_UNKNOWN */
             abort_interp("Unknown parameter. (1)");
@@ -89,12 +85,12 @@ prim_version(PRIM_PROTOTYPE)
 void
 prim_force(PRIM_PROTOTYPE)
 {
-	char buf[BUFFER_LEN];
-    int nFrameIndex = -1; /* -1 means it hasn't been set */
-    int nCurFr = 0; /* Loop iterator */
+    char buf[BUFFER_LEN];
+    int nFrameIndex = -1;       /* -1 means it hasn't been set */
+    int nCurFr = 0;             /* Loop iterator */
     int wclen = -2;
     int len;
-	dbref ref;
+    dbref ref;
 
     /* d s -- */
     if (fr->level > 8)
@@ -125,19 +121,16 @@ prim_force(PRIM_PROTOTYPE)
     /* Okay, we need to store a pointer to the fr in the global stack of
      * frame pointers we need to enable ispid? and getpidinfo to be able
      * to search. */
-    for ( ; nCurFr < 9; ++nCurFr )
-    {
-        if ( !aForceFrameStack[nCurFr] )
-        {
+    for (; nCurFr < 9; ++nCurFr) {
+        if (!aForceFrameStack[nCurFr]) {
             aForceFrameStack[nCurFr] = fr;
             nFrameIndex = nCurFr;
             break;
         }
     }
-    
-    if ( nFrameIndex == -1 )
-    {
-        abort_interp( "Internal error trying to cache frame pointer." );
+
+    if (nFrameIndex == -1) {
+        abort_interp("Internal error trying to cache frame pointer.");
     }
 
     fr->level++;
@@ -148,7 +141,7 @@ prim_force(PRIM_PROTOTYPE)
     force_level--;
 
     /* Now remove our pointer from the end of the array */
-    aForceFrameStack[nFrameIndex] = NULL; 
+    aForceFrameStack[nFrameIndex] = NULL;
 }
 
 void
@@ -161,7 +154,7 @@ prim_force_level(PRIM_PROTOTYPE)
 void
 prim_logstatus(PRIM_PROTOTYPE)
 {
-	char buf[BUFFER_LEN];
+    char buf[BUFFER_LEN];
 
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string argument (1).");
@@ -197,8 +190,7 @@ prim_shutdown(PRIM_PROTOTYPE)
     if (oper[0].type != PROG_STRING)
         abort_interp("String expected.");
 
-    log_status("SHUT(MUF: %d): by %s(%d)\n", program,
-               OkObj(player) ? NAME(player) : "(login)", player);
+    log_status("SHUT(MUF: %d): by %s(%d)\n", program, OkObj(player) ? NAME(player) : "(login)", player);
     shutdown_flag = 1;
     restart_flag = 0;
     if (oper[0].data.string) {
@@ -215,8 +207,7 @@ prim_restart(PRIM_PROTOTYPE)
     if (oper[0].type != PROG_STRING)
         abort_interp("String expected.");
 
-    log_status("RESTART(MUF: %d): by %s(%d)\n", program,
-               OkObj(player) ? NAME(player) : "(login)", player);
+    log_status("RESTART(MUF: %d): by %s(%d)\n", program, OkObj(player) ? NAME(player) : "(login)", player);
     shutdown_flag = 1;
     restart_flag = 1;
 
@@ -243,10 +234,8 @@ prim_armageddon(PRIM_PROTOTYPE)
         strcat(buf, "\r\n");
     }
 
-    log_status("DDAY(MUF: %d): by %s(%d)\n", program,
-               OkObj(player) ? NAME(player) : "(login)", player);
-    fprintf(stderr, "DDAY(MUF: %d): by %s(%d)\n", program,
-            OkObj(player) ? NAME(player) : "(login)", player);
+    log_status("DDAY(MUF: %d): by %s(%d)\n", program, OkObj(player) ? NAME(player) : "(login)", player);
+    fprintf(stderr, "DDAY(MUF: %d): by %s(%d)\n", program, OkObj(player) ? NAME(player) : "(login)", player);
     close_sockets(buf);
 
 #ifdef SPAWN_HOST_RESOLVER

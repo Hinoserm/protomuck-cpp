@@ -24,12 +24,10 @@ do_say(int descr, dbref player, const char *message)
         return;
     tct(message, buf2);
     /* notify everybody */
-    sprintf(buf, "^SAY/POSE^You say, ^SAY/QUOTES^\"^SAY/TEXT^%s^SAY/QUOTES^\"",
-            buf2);
+    sprintf(buf, "^SAY/POSE^You say, ^SAY/QUOTES^\"^SAY/TEXT^%s^SAY/QUOTES^\"", buf2);
     anotify(player, buf);
 
-    sprintf(buf, "^SAY/POSE^%s says, ^SAY/QUOTES^\"^SAY/TEXT^%s^SAY/QUOTES^\"",
-            PNAME(player), buf2);
+    sprintf(buf, "^SAY/POSE^%s says, ^SAY/QUOTES^\"^SAY/TEXT^%s^SAY/QUOTES^\"", PNAME(player), buf2);
     anotify_except(DBFETCH(loc)->contents, player, buf, player);
 }
 
@@ -61,36 +59,30 @@ do_whisper(int descr, dbref player, const char *arg1, const char *arg2)
             break;
         default:
             if (Meeper(OWNER(player))) {
-                do_parse_mesg(descr, player, player, arg2, "(whisper)", buf,
-                              MPI_ISPRIVATE);
+                do_parse_mesg(descr, player, player, arg2, "(whisper)", buf, MPI_ISPRIVATE);
                 tct(buf, buf2);
             } else {
                 tct(arg2, buf2);
             }
 
             if (buf2[0] == ':' || buf2[0] == ';') {
-                sprintf(buf, SYSBLUE "%s whispers, \"" SYSPURPLE "%s %s"
-                        SYSBLUE "\"", PNAME(player), PNAME(player), buf2 + 1);
+                sprintf(buf, SYSBLUE "%s whispers, \"" SYSPURPLE "%s %s" SYSBLUE "\"", PNAME(player), PNAME(player), buf2 + 1);
                 if (!anotify_from(player, who, buf)) {
                     sprintf(buf, SYSBLUE "%s is not connected.", PNAME(who));
                     anotify_nolisten2(player, buf);
                     break;
                 }
-                sprintf(buf, SYSBLUE "You whisper, \"" SYSPURPLE "%s %s"
-                        SYSBLUE "\" to %s.", PNAME(player), buf2 + 1,
-                        PNAME(who));
+                sprintf(buf, SYSBLUE "You whisper, \"" SYSPURPLE "%s %s" SYSBLUE "\" to %s.", PNAME(player), buf2 + 1, PNAME(who));
                 anotify(player, buf);
                 break;
             } else {
-                sprintf(buf, SYSBLUE "%s whispers, \"" SYSPURPLE "%s" SYSBLUE
-                        "\"", PNAME(player), buf2);
+                sprintf(buf, SYSBLUE "%s whispers, \"" SYSPURPLE "%s" SYSBLUE "\"", PNAME(player), buf2);
                 if (!anotify_from(player, who, buf)) {
                     sprintf(buf, SYSBLUE "%s is not connected.", PNAME(who));
                     anotify_nolisten2(player, buf);
                     break;
                 }
-                sprintf(buf, SYSBLUE "You whisper, \"" SYSPURPLE "%s" SYSBLUE
-                        "\" to %s.", buf2, PNAME(who));
+                sprintf(buf, SYSBLUE "You whisper, \"" SYSPURPLE "%s" SYSBLUE "\" to %s.", buf2, PNAME(who));
                 anotify(player, buf);
                 break;
             }
@@ -125,16 +117,14 @@ do_wall(dbref player, const char *message)
         switch (message[0]) {
             case ':':
             case ';':
-                sprintf(buf, SYSWHITE MARK SYSNORMAL "%s %s", NAME(player),
-                        message + 1);
+                sprintf(buf, SYSWHITE MARK SYSNORMAL "%s %s", NAME(player), message + 1);
                 break;
             case '#':
             case '|':
                 sprintf(buf, SYSWHITE MARK SYSNORMAL "%s", message + 1);
                 break;
             default:
-                sprintf(buf, SYSWHITE MARK SYSNORMAL "%s shouts, \"%s\"",
-                        NAME(player), message);
+                sprintf(buf, SYSWHITE MARK SYSNORMAL "%s shouts, \"%s\"", NAME(player), message);
         }
         wall_all(buf);
         /* log_status("WALL: %s(%d): %s\n", NAME(player), player, buf); */
@@ -164,8 +154,7 @@ do_gripe(dbref player, const char *message)
     }
 
     loc = DBFETCH(player)->location;
-    log_gripe("%s(%d) in %s(%d): %s\n",
-              NAME(player), player, NAME(loc), loc, message);
+    log_gripe("%s(%d) in %s(%d): %s\n", NAME(player), player, NAME(loc), loc, message);
 
     anotify_nolisten2(player, CINFO "Your complaint has been filed.");
 
@@ -194,9 +183,7 @@ do_page(int descr, dbref player, const char *arg1, const char *arg2)
 
     if (Guest(player)) {
         if (!Mage(target)) {
-            anotify_nolisten2(player,
-                              CINFO
-                              "Guests can only page wizards, type 'wizzes'.");
+            anotify_nolisten2(player, CINFO "Guests can only page wizards, type 'wizzes'.");
             return;
         }
     }
@@ -206,23 +193,19 @@ do_page(int descr, dbref player, const char *arg1, const char *arg2)
         return;
     }
     if (Meeper(OWNER(player))) {
-        do_parse_mesg(descr, player, player, arg2, "(page)", buf,
-                      MPI_ISPRIVATE);
+        do_parse_mesg(descr, player, player, arg2, "(page)", buf, MPI_ISPRIVATE);
         tct(buf, buf2);
     } else {
         tct(arg2, buf2);
     }
 
     if (!*buf2) {
-        sprintf(buf, CSUCC "You sense that %s is looking for you in %s.",
-                PNAME(player), NAME(DBFETCH(player)->location));
+        sprintf(buf, CSUCC "You sense that %s is looking for you in %s.", PNAME(player), NAME(DBFETCH(player)->location));
     } else {
         if (buf2[0] == ':' || buf2[0] == ';') {
-            sprintf(buf, SYSGREEN "%s pages \"" SYSYELLOW "%s %s" SYSGREEN "\"",
-                    PNAME(player), PNAME(player), buf2);
+            sprintf(buf, SYSGREEN "%s pages \"" SYSYELLOW "%s %s" SYSGREEN "\"", PNAME(player), PNAME(player), buf2);
         } else {
-            sprintf(buf, SYSGREEN "%s pages \"" SYSYELLOW "%s" SYSGREEN "\"",
-                    PNAME(player), buf2);
+            sprintf(buf, SYSGREEN "%s pages \"" SYSYELLOW "%s" SYSGREEN "\"", PNAME(player), buf2);
         }
     }
     if (anotify_from(player, target, buf))
@@ -234,8 +217,7 @@ do_page(int descr, dbref player, const char *arg1, const char *arg2)
 }
 
 int
-notify_listeners(int descr, dbref who, dbref xprog, dbref obj,
-                 dbref room, const char *msg, int isprivate)
+notify_listeners(int descr, dbref who, dbref xprog, dbref obj, dbref room, const char *msg, int isprivate)
 {
     char buf[BUFFER_LEN], buf2[BUFFER_LEN], buf3[BUFFER_LEN], *noamsg;
     dbref ref;
@@ -247,67 +229,42 @@ notify_listeners(int descr, dbref who, dbref xprog, dbref obj,
     noamsg = tct(buf2, buf3);
 
     if (tp_listeners && (tp_listeners_obj || Typeof(obj) == TYPE_ROOM)) {
-        listenqueue(descr, who, room, obj, obj, xprog, "_listen", msg,
-                    tp_listen_mlev, 1, 0);
-        listenqueue(descr, who, room, obj, obj, xprog, "_olisten", msg,
-                    tp_listen_mlev, 0, 0);
-        listenqueue(descr, who, room, obj, obj, xprog, "~listen", msg,
-                    tp_listen_mlev, 1, 1);
-        listenqueue(descr, who, room, obj, obj, xprog, "~olisten", msg,
-                    tp_listen_mlev, 0, 1);
-        listenqueue(descr, who, room, obj, obj, xprog, "@listen", msg,
-                    tp_listen_mlev, 1, 1);
-        listenqueue(descr, who, room, obj, obj, xprog, "@olisten", msg,
-                    tp_listen_mlev, 0, 1);
-        listenqueue(descr, who, room, obj, obj, xprog, "_alisten", noamsg,
-                    tp_listen_mlev, 1, 0);
-        listenqueue(descr, who, room, obj, obj, xprog, "_aolisten", noamsg,
-                    tp_listen_mlev, 0, 0);
-        listenqueue(descr, who, room, obj, obj, xprog, "~alisten", noamsg,
-                    tp_listen_mlev, 1, 1);
-        listenqueue(descr, who, room, obj, obj, xprog, "~aolisten", noamsg,
-                    tp_listen_mlev, 0, 1);
-        listenqueue(descr, who, room, obj, obj, xprog, "@alisten", noamsg,
-                    tp_listen_mlev, 1, 1);
-        listenqueue(descr, who, room, obj, obj, xprog, "@aolisten", noamsg,
-                    tp_listen_mlev, 0, 1);
+        listenqueue(descr, who, room, obj, obj, xprog, "_listen", msg, tp_listen_mlev, 1, 0);
+        listenqueue(descr, who, room, obj, obj, xprog, "_olisten", msg, tp_listen_mlev, 0, 0);
+        listenqueue(descr, who, room, obj, obj, xprog, "~listen", msg, tp_listen_mlev, 1, 1);
+        listenqueue(descr, who, room, obj, obj, xprog, "~olisten", msg, tp_listen_mlev, 0, 1);
+        listenqueue(descr, who, room, obj, obj, xprog, "@listen", msg, tp_listen_mlev, 1, 1);
+        listenqueue(descr, who, room, obj, obj, xprog, "@olisten", msg, tp_listen_mlev, 0, 1);
+        listenqueue(descr, who, room, obj, obj, xprog, "_alisten", noamsg, tp_listen_mlev, 1, 0);
+        listenqueue(descr, who, room, obj, obj, xprog, "_aolisten", noamsg, tp_listen_mlev, 0, 0);
+        listenqueue(descr, who, room, obj, obj, xprog, "~alisten", noamsg, tp_listen_mlev, 1, 1);
+        listenqueue(descr, who, room, obj, obj, xprog, "~aolisten", noamsg, tp_listen_mlev, 0, 1);
+        listenqueue(descr, who, room, obj, obj, xprog, "@alisten", noamsg, tp_listen_mlev, 1, 1);
+        listenqueue(descr, who, room, obj, obj, xprog, "@aolisten", noamsg, tp_listen_mlev, 0, 1);
         /* Loop up the environment only if tp_listeners_env is set and obj
          * is a room. Runs once otherwise. -brevantes */
-        if (tp_listeners_env && (Typeof(obj) == TYPE_ROOM) ) {
+        if (tp_listeners_env && (Typeof(obj) == TYPE_ROOM)) {
             obj = DBFETCH(obj)->location;
-            for (;obj != NOTHING;obj = DBFETCH(obj)->location) {
-                listenqueue(descr, who, room, obj, obj, xprog, "_listen", msg,
-                            tp_listen_mlev, 1, 0);
-                listenqueue(descr, who, room, obj, obj, xprog, "_olisten", msg,
-                            tp_listen_mlev, 0, 0);
-                listenqueue(descr, who, room, obj, obj, xprog, "~listen", msg,
-                            tp_listen_mlev, 1, 1);
-                listenqueue(descr, who, room, obj, obj, xprog, "~olisten", msg,
-                            tp_listen_mlev, 0, 1);
-                listenqueue(descr, who, room, obj, obj, xprog, "@listen", msg,
-                            tp_listen_mlev, 1, 1);
-                listenqueue(descr, who, room, obj, obj, xprog, "@olisten", msg,
-                            tp_listen_mlev, 0, 1);
-                listenqueue(descr, who, room, obj, obj, xprog, "_alisten", noamsg,
-                            tp_listen_mlev, 1, 0);
-                listenqueue(descr, who, room, obj, obj, xprog, "_aolisten", noamsg,
-                            tp_listen_mlev, 0, 0);
-                listenqueue(descr, who, room, obj, obj, xprog, "~alisten", noamsg,
-                            tp_listen_mlev, 1, 1);
-                listenqueue(descr, who, room, obj, obj, xprog, "~aolisten", noamsg,
-                            tp_listen_mlev, 0, 1);
-                listenqueue(descr, who, room, obj, obj, xprog, "@alisten", noamsg,
-                            tp_listen_mlev, 1, 1);
-                listenqueue(descr, who, room, obj, obj, xprog, "@aolisten", noamsg,
-                            tp_listen_mlev, 0, 1);
+            for (; obj != NOTHING; obj = DBFETCH(obj)->location) {
+                listenqueue(descr, who, room, obj, obj, xprog, "_listen", msg, tp_listen_mlev, 1, 0);
+                listenqueue(descr, who, room, obj, obj, xprog, "_olisten", msg, tp_listen_mlev, 0, 0);
+                listenqueue(descr, who, room, obj, obj, xprog, "~listen", msg, tp_listen_mlev, 1, 1);
+                listenqueue(descr, who, room, obj, obj, xprog, "~olisten", msg, tp_listen_mlev, 0, 1);
+                listenqueue(descr, who, room, obj, obj, xprog, "@listen", msg, tp_listen_mlev, 1, 1);
+                listenqueue(descr, who, room, obj, obj, xprog, "@olisten", msg, tp_listen_mlev, 0, 1);
+                listenqueue(descr, who, room, obj, obj, xprog, "_alisten", noamsg, tp_listen_mlev, 1, 0);
+                listenqueue(descr, who, room, obj, obj, xprog, "_aolisten", noamsg, tp_listen_mlev, 0, 0);
+                listenqueue(descr, who, room, obj, obj, xprog, "~alisten", noamsg, tp_listen_mlev, 1, 1);
+                listenqueue(descr, who, room, obj, obj, xprog, "~aolisten", noamsg, tp_listen_mlev, 0, 1);
+                listenqueue(descr, who, room, obj, obj, xprog, "@alisten", noamsg, tp_listen_mlev, 1, 1);
+                listenqueue(descr, who, room, obj, obj, xprog, "@aolisten", noamsg, tp_listen_mlev, 0, 1);
             }
             return 0;
         }
     }
 
 
-    if (tp_zombies && (Typeof(obj) == TYPE_THING) && !isprivate
-            && !(FLAGS(obj) & QUELL)) {
+    if (tp_zombies && (Typeof(obj) == TYPE_THING) && !isprivate && !(FLAGS(obj) & QUELL)) {
         if (FLAGS(obj) & VEHICLE) {
             if (getloc(who) == getloc(obj)) {
                 char pbuf[BUFFER_LEN];
@@ -315,13 +272,11 @@ notify_listeners(int descr, dbref who, dbref xprog, dbref obj,
 
                 prefix = GETOECHO(obj);
                 if (prefix && *prefix) {
-                    prefix = do_parse_mesg(-1, who, obj, prefix,
-                                           "(@Oecho)", pbuf, MPI_ISPRIVATE);
+                    prefix = do_parse_mesg(-1, who, obj, prefix, "(@Oecho)", pbuf, MPI_ISPRIVATE);
                 }
                 if (!prefix || !*prefix)
                     prefix = "Outside>";
-                sprintf(buf, "%s %.*s", prefix,
-                        (int) (BUFFER_LEN - 2 - strlen(prefix)), msg);
+                sprintf(buf, "%s %.*s", prefix, (int) (BUFFER_LEN - 2 - strlen(prefix)), msg);
                 ref = DBFETCH(obj)->contents;
                 while (ref != NOTHING) {
 #ifdef IGNORE_SUPPORT
@@ -338,11 +293,9 @@ notify_listeners(int descr, dbref who, dbref xprog, dbref obj,
 #ifdef IGNORE_SUPPORT
         if (ignorance(who, obj))
             return 0;
-	if ( !isprivate &&
-	     Typeof(obj) == TYPE_THING &&
-	     FLAGS(obj) & ZOMBIE && 
-	     LOCATION(obj) == LOCATION(OWNER(obj))
-	   ) return 0;
+        if (!isprivate && Typeof(obj) == TYPE_THING && FLAGS(obj) & ZOMBIE && LOCATION(obj) == LOCATION(OWNER(obj))
+            )
+            return 0;
 #endif /* IGNORE_SUPPORT */
         /* Hack to reduce spam from zombies in the same room as you */
         return notify_nolisten(obj, msg, isprivate);
@@ -353,8 +306,7 @@ notify_listeners(int descr, dbref who, dbref xprog, dbref obj,
 
 
 int
-ansi_notify_listeners(int descr, dbref who, dbref xprog, dbref obj,
-                      dbref room, const char *msg, int isprivate)
+ansi_notify_listeners(int descr, dbref who, dbref xprog, dbref obj, dbref room, const char *msg, int isprivate)
 {
     char buf[BUFFER_LEN], buf2[BUFFER_LEN], *noabuf;
     dbref ref;
@@ -365,66 +317,41 @@ ansi_notify_listeners(int descr, dbref who, dbref xprog, dbref obj,
     noabuf = unparse_ansi(buf2, msg);
 
     if (tp_listeners && (tp_listeners_obj || Typeof(obj) == TYPE_ROOM)) {
-        listenqueue(descr, who, room, obj, obj, xprog, "_listen", noabuf,
-                    tp_listen_mlev, 1, 0);
-        listenqueue(descr, who, room, obj, obj, xprog, "_olisten", noabuf,
-                    tp_listen_mlev, 0, 0);
-        listenqueue(descr, who, room, obj, obj, xprog, "~listen", noabuf,
-                    tp_listen_mlev, 1, 1);
-        listenqueue(descr, who, room, obj, obj, xprog, "~olisten", noabuf,
-                    tp_listen_mlev, 0, 1);
-        listenqueue(descr, who, room, obj, obj, xprog, "@listen", noabuf,
-                    tp_listen_mlev, 1, 1);
-        listenqueue(descr, who, room, obj, obj, xprog, "@olisten", noabuf,
-                    tp_listen_mlev, 0, 1);
-        listenqueue(descr, who, room, obj, obj, xprog, "_alisten", msg,
-                    tp_listen_mlev, 1, 0);
-        listenqueue(descr, who, room, obj, obj, xprog, "_aolisten", msg,
-                    tp_listen_mlev, 0, 0);
-        listenqueue(descr, who, room, obj, obj, xprog, "~alisten", msg,
-                    tp_listen_mlev, 1, 1);
-        listenqueue(descr, who, room, obj, obj, xprog, "~aolisten", msg,
-                    tp_listen_mlev, 0, 1);
-        listenqueue(descr, who, room, obj, obj, xprog, "@alisten", msg,
-                    tp_listen_mlev, 1, 1);
-        listenqueue(descr, who, room, obj, obj, xprog, "@aolisten", msg,
-                    tp_listen_mlev, 0, 1);
+        listenqueue(descr, who, room, obj, obj, xprog, "_listen", noabuf, tp_listen_mlev, 1, 0);
+        listenqueue(descr, who, room, obj, obj, xprog, "_olisten", noabuf, tp_listen_mlev, 0, 0);
+        listenqueue(descr, who, room, obj, obj, xprog, "~listen", noabuf, tp_listen_mlev, 1, 1);
+        listenqueue(descr, who, room, obj, obj, xprog, "~olisten", noabuf, tp_listen_mlev, 0, 1);
+        listenqueue(descr, who, room, obj, obj, xprog, "@listen", noabuf, tp_listen_mlev, 1, 1);
+        listenqueue(descr, who, room, obj, obj, xprog, "@olisten", noabuf, tp_listen_mlev, 0, 1);
+        listenqueue(descr, who, room, obj, obj, xprog, "_alisten", msg, tp_listen_mlev, 1, 0);
+        listenqueue(descr, who, room, obj, obj, xprog, "_aolisten", msg, tp_listen_mlev, 0, 0);
+        listenqueue(descr, who, room, obj, obj, xprog, "~alisten", msg, tp_listen_mlev, 1, 1);
+        listenqueue(descr, who, room, obj, obj, xprog, "~aolisten", msg, tp_listen_mlev, 0, 1);
+        listenqueue(descr, who, room, obj, obj, xprog, "@alisten", msg, tp_listen_mlev, 1, 1);
+        listenqueue(descr, who, room, obj, obj, xprog, "@aolisten", msg, tp_listen_mlev, 0, 1);
         /* Loop up the environment only if tp_listeners_env is set and obj
          * is a room. Runs once otherwise. -brevantes */
-        if (tp_listeners_env && (Typeof(obj) == TYPE_ROOM) ) {
+        if (tp_listeners_env && (Typeof(obj) == TYPE_ROOM)) {
             obj = DBFETCH(obj)->location;
-            for (;obj != NOTHING;obj = DBFETCH(obj)->location) {
-                listenqueue(descr, who, room, obj, obj, xprog, "_listen", noabuf,
-                            tp_listen_mlev, 1, 0);
-                listenqueue(descr, who, room, obj, obj, xprog, "_olisten", noabuf,
-                            tp_listen_mlev, 0, 0);
-                listenqueue(descr, who, room, obj, obj, xprog, "~listen", noabuf,
-                            tp_listen_mlev, 1, 1);
-                listenqueue(descr, who, room, obj, obj, xprog, "~olisten", noabuf,
-                            tp_listen_mlev, 0, 1);
-                listenqueue(descr, who, room, obj, obj, xprog, "@listen", noabuf,
-                            tp_listen_mlev, 1, 1);
-                listenqueue(descr, who, room, obj, obj, xprog, "@olisten", noabuf,
-                            tp_listen_mlev, 0, 1);
-                listenqueue(descr, who, room, obj, obj, xprog, "_alisten", msg,
-                            tp_listen_mlev, 1, 0);
-                listenqueue(descr, who, room, obj, obj, xprog, "_aolisten", msg,
-                            tp_listen_mlev, 0, 0);
-                listenqueue(descr, who, room, obj, obj, xprog, "~alisten", msg,
-                            tp_listen_mlev, 1, 1);
-                listenqueue(descr, who, room, obj, obj, xprog, "~aolisten", msg,
-                            tp_listen_mlev, 0, 1);
-                listenqueue(descr, who, room, obj, obj, xprog, "@alisten", msg,
-                            tp_listen_mlev, 1, 1);
-                listenqueue(descr, who, room, obj, obj, xprog, "@aolisten", msg,
-                            tp_listen_mlev, 0, 1);
+            for (; obj != NOTHING; obj = DBFETCH(obj)->location) {
+                listenqueue(descr, who, room, obj, obj, xprog, "_listen", noabuf, tp_listen_mlev, 1, 0);
+                listenqueue(descr, who, room, obj, obj, xprog, "_olisten", noabuf, tp_listen_mlev, 0, 0);
+                listenqueue(descr, who, room, obj, obj, xprog, "~listen", noabuf, tp_listen_mlev, 1, 1);
+                listenqueue(descr, who, room, obj, obj, xprog, "~olisten", noabuf, tp_listen_mlev, 0, 1);
+                listenqueue(descr, who, room, obj, obj, xprog, "@listen", noabuf, tp_listen_mlev, 1, 1);
+                listenqueue(descr, who, room, obj, obj, xprog, "@olisten", noabuf, tp_listen_mlev, 0, 1);
+                listenqueue(descr, who, room, obj, obj, xprog, "_alisten", msg, tp_listen_mlev, 1, 0);
+                listenqueue(descr, who, room, obj, obj, xprog, "_aolisten", msg, tp_listen_mlev, 0, 0);
+                listenqueue(descr, who, room, obj, obj, xprog, "~alisten", msg, tp_listen_mlev, 1, 1);
+                listenqueue(descr, who, room, obj, obj, xprog, "~aolisten", msg, tp_listen_mlev, 0, 1);
+                listenqueue(descr, who, room, obj, obj, xprog, "@alisten", msg, tp_listen_mlev, 1, 1);
+                listenqueue(descr, who, room, obj, obj, xprog, "@aolisten", msg, tp_listen_mlev, 0, 1);
             }
             return 0;
         }
     }
 
-    if (tp_zombies && (Typeof(obj) == TYPE_THING) && !isprivate
-        && !(FLAGS(obj) & QUELL)) {
+    if (tp_zombies && (Typeof(obj) == TYPE_THING) && !isprivate && !(FLAGS(obj) & QUELL)) {
         if (FLAGS(obj) & VEHICLE) {
             if (getloc(who) == getloc(obj)) {
                 char pbuf[BUFFER_LEN];
@@ -432,13 +359,11 @@ ansi_notify_listeners(int descr, dbref who, dbref xprog, dbref obj,
 
                 prefix = GETOECHO(obj);
                 if (prefix && *prefix) {
-                    prefix = do_parse_mesg(-1, who, obj, prefix,
-                                           "(@Oecho)", pbuf, MPI_ISPRIVATE);
+                    prefix = do_parse_mesg(-1, who, obj, prefix, "(@Oecho)", pbuf, MPI_ISPRIVATE);
                 }
                 if (!prefix || !*prefix)
                     prefix = "Outside>";
-                sprintf(buf, "%s %.*s", prefix,
-                        (int) (BUFFER_LEN - 2 - strlen(prefix)), msg);
+                sprintf(buf, "%s %.*s", prefix, (int) (BUFFER_LEN - 2 - strlen(prefix)), msg);
                 ref = DBFETCH(obj)->contents;
                 while (ref != NOTHING) {
 #ifdef IGNORE_SUPPORT
@@ -456,11 +381,9 @@ ansi_notify_listeners(int descr, dbref who, dbref xprog, dbref obj,
         if (ignorance(who, obj))
             return 0;
 #endif /* IGNORE_SUPPORT */
-	if ( !isprivate && 
-	     Typeof(obj) == TYPE_THING &&
-	     FLAGS(obj) & ZOMBIE && 
-	     LOCATION(obj) == LOCATION(OWNER(obj))
-	   ) return 0;
+        if (!isprivate && Typeof(obj) == TYPE_THING && FLAGS(obj) & ZOMBIE && LOCATION(obj) == LOCATION(OWNER(obj))
+            )
+            return 0;
         return anotify_nolisten(obj, msg, isprivate);
     } else {
         return 0;
@@ -468,8 +391,7 @@ ansi_notify_listeners(int descr, dbref who, dbref xprog, dbref obj,
 }
 
 int
-notify_html_listeners(int descr, dbref who, dbref xprog, dbref obj,
-                      dbref room, const char *msg, int isprivate)
+notify_html_listeners(int descr, dbref who, dbref xprog, dbref obj, dbref room, const char *msg, int isprivate)
 {
     char buf[BUFFER_LEN], *nohbuf, *noabuf, buf2[BUFFER_LEN];
     dbref ref;
@@ -481,66 +403,41 @@ notify_html_listeners(int descr, dbref who, dbref xprog, dbref obj,
     noabuf = tct(buf2, nohbuf);
 
     if (tp_listeners && (tp_listeners_obj || Typeof(obj) == TYPE_ROOM)) {
-        listenqueue(descr, who, room, obj, obj, xprog, "_listen", nohbuf,
-                    tp_listen_mlev, 1, 0);
-        listenqueue(descr, who, room, obj, obj, xprog, "_olisten", nohbuf,
-                    tp_listen_mlev, 0, 0);
-        listenqueue(descr, who, room, obj, obj, xprog, "~listen", nohbuf,
-                    tp_listen_mlev, 1, 1);
-        listenqueue(descr, who, room, obj, obj, xprog, "~olisten", nohbuf,
-                    tp_listen_mlev, 0, 1);
-        listenqueue(descr, who, room, obj, obj, xprog, "@listen", nohbuf,
-                    tp_listen_mlev, 1, 1);
-        listenqueue(descr, who, room, obj, obj, xprog, "@olisten", nohbuf,
-                    tp_listen_mlev, 0, 1);
-        listenqueue(descr, who, room, obj, obj, xprog, "_alisten", noabuf,
-                    tp_listen_mlev, 1, 0);
-        listenqueue(descr, who, room, obj, obj, xprog, "_aolisten", noabuf,
-                    tp_listen_mlev, 0, 0);
-        listenqueue(descr, who, room, obj, obj, xprog, "~alisten", noabuf,
-                    tp_listen_mlev, 1, 1);
-        listenqueue(descr, who, room, obj, obj, xprog, "~aolisten", noabuf,
-                    tp_listen_mlev, 0, 1);
-        listenqueue(descr, who, room, obj, obj, xprog, "@alisten", noabuf,
-                    tp_listen_mlev, 1, 1);
-        listenqueue(descr, who, room, obj, obj, xprog, "@aolisten", noabuf,
-                    tp_listen_mlev, 0, 1);
+        listenqueue(descr, who, room, obj, obj, xprog, "_listen", nohbuf, tp_listen_mlev, 1, 0);
+        listenqueue(descr, who, room, obj, obj, xprog, "_olisten", nohbuf, tp_listen_mlev, 0, 0);
+        listenqueue(descr, who, room, obj, obj, xprog, "~listen", nohbuf, tp_listen_mlev, 1, 1);
+        listenqueue(descr, who, room, obj, obj, xprog, "~olisten", nohbuf, tp_listen_mlev, 0, 1);
+        listenqueue(descr, who, room, obj, obj, xprog, "@listen", nohbuf, tp_listen_mlev, 1, 1);
+        listenqueue(descr, who, room, obj, obj, xprog, "@olisten", nohbuf, tp_listen_mlev, 0, 1);
+        listenqueue(descr, who, room, obj, obj, xprog, "_alisten", noabuf, tp_listen_mlev, 1, 0);
+        listenqueue(descr, who, room, obj, obj, xprog, "_aolisten", noabuf, tp_listen_mlev, 0, 0);
+        listenqueue(descr, who, room, obj, obj, xprog, "~alisten", noabuf, tp_listen_mlev, 1, 1);
+        listenqueue(descr, who, room, obj, obj, xprog, "~aolisten", noabuf, tp_listen_mlev, 0, 1);
+        listenqueue(descr, who, room, obj, obj, xprog, "@alisten", noabuf, tp_listen_mlev, 1, 1);
+        listenqueue(descr, who, room, obj, obj, xprog, "@aolisten", noabuf, tp_listen_mlev, 0, 1);
         /* Loop up the environment only if tp_listeners_env is set and obj
          * is a room. Runs once otherwise. -brevantes */
-        if (tp_listeners_env && (Typeof(obj) == TYPE_ROOM) ) {
+        if (tp_listeners_env && (Typeof(obj) == TYPE_ROOM)) {
             obj = DBFETCH(obj)->location;
-            for (;obj != NOTHING;obj = DBFETCH(obj)->location) {
-                listenqueue(descr, who, room, obj, obj, xprog, "_listen", nohbuf,
-                            tp_listen_mlev, 1, 0);
-                listenqueue(descr, who, room, obj, obj, xprog, "_olisten", nohbuf,
-                            tp_listen_mlev, 0, 0);
-                listenqueue(descr, who, room, obj, obj, xprog, "~listen", nohbuf,
-                            tp_listen_mlev, 1, 1);
-                listenqueue(descr, who, room, obj, obj, xprog, "~olisten", nohbuf,
-                            tp_listen_mlev, 0, 1);
-                listenqueue(descr, who, room, obj, obj, xprog, "@listen", nohbuf,
-                            tp_listen_mlev, 1, 1);
-                listenqueue(descr, who, room, obj, obj, xprog, "@olisten", nohbuf,
-                            tp_listen_mlev, 0, 1);
-                listenqueue(descr, who, room, obj, obj, xprog, "_alisten", noabuf,
-                            tp_listen_mlev, 1, 0);
-                listenqueue(descr, who, room, obj, obj, xprog, "_aolisten", noabuf,
-                            tp_listen_mlev, 0, 0);
-                listenqueue(descr, who, room, obj, obj, xprog, "~alisten", noabuf,
-                            tp_listen_mlev, 1, 1);
-                listenqueue(descr, who, room, obj, obj, xprog, "~aolisten", noabuf,
-                            tp_listen_mlev, 0, 1);
-                listenqueue(descr, who, room, obj, obj, xprog, "@alisten", noabuf,
-                            tp_listen_mlev, 1, 1);
-                listenqueue(descr, who, room, obj, obj, xprog, "@aolisten", noabuf,
-                            tp_listen_mlev, 0, 1);
+            for (; obj != NOTHING; obj = DBFETCH(obj)->location) {
+                listenqueue(descr, who, room, obj, obj, xprog, "_listen", nohbuf, tp_listen_mlev, 1, 0);
+                listenqueue(descr, who, room, obj, obj, xprog, "_olisten", nohbuf, tp_listen_mlev, 0, 0);
+                listenqueue(descr, who, room, obj, obj, xprog, "~listen", nohbuf, tp_listen_mlev, 1, 1);
+                listenqueue(descr, who, room, obj, obj, xprog, "~olisten", nohbuf, tp_listen_mlev, 0, 1);
+                listenqueue(descr, who, room, obj, obj, xprog, "@listen", nohbuf, tp_listen_mlev, 1, 1);
+                listenqueue(descr, who, room, obj, obj, xprog, "@olisten", nohbuf, tp_listen_mlev, 0, 1);
+                listenqueue(descr, who, room, obj, obj, xprog, "_alisten", noabuf, tp_listen_mlev, 1, 0);
+                listenqueue(descr, who, room, obj, obj, xprog, "_aolisten", noabuf, tp_listen_mlev, 0, 0);
+                listenqueue(descr, who, room, obj, obj, xprog, "~alisten", noabuf, tp_listen_mlev, 1, 1);
+                listenqueue(descr, who, room, obj, obj, xprog, "~aolisten", noabuf, tp_listen_mlev, 0, 1);
+                listenqueue(descr, who, room, obj, obj, xprog, "@alisten", noabuf, tp_listen_mlev, 1, 1);
+                listenqueue(descr, who, room, obj, obj, xprog, "@aolisten", noabuf, tp_listen_mlev, 0, 1);
             }
             return 0;
         }
     }
 
-    if (tp_zombies && (Typeof(obj) == TYPE_THING) && !isprivate
-        && !(FLAGS(obj) & QUELL)) {
+    if (tp_zombies && (Typeof(obj) == TYPE_THING) && !isprivate && !(FLAGS(obj) & QUELL)) {
         if (FLAGS(obj) & VEHICLE) {
             if (getloc(who) == getloc(obj)) {
                 char pbuf[BUFFER_LEN];
@@ -548,12 +445,11 @@ notify_html_listeners(int descr, dbref who, dbref xprog, dbref obj,
 
                 prefix = GETOECHO(obj);
                 if (prefix && *prefix) {
-                    prefix = do_parse_mesg(-1, who, obj, prefix,
-                                           "(@Oecho)", pbuf, MPI_ISPRIVATE);
-                }                if (!prefix || !*prefix)
+                    prefix = do_parse_mesg(-1, who, obj, prefix, "(@Oecho)", pbuf, MPI_ISPRIVATE);
+                }
+                if (!prefix || !*prefix)
                     prefix = "Outside>";
-                sprintf(buf, "%s %.*s", prefix,
-                        (int) (BUFFER_LEN - 2 - strlen(prefix)), msg);
+                sprintf(buf, "%s %.*s", prefix, (int) (BUFFER_LEN - 2 - strlen(prefix)), msg);
                 ref = DBFETCH(obj)->contents;
                 while (ref != NOTHING) {
 #ifdef IGNORE_SUPPORT
@@ -571,11 +467,9 @@ notify_html_listeners(int descr, dbref who, dbref xprog, dbref obj,
         if (ignorance(who, obj))
             return 0;
 #endif
-	if ( !isprivate && 
-	     Typeof(obj) == TYPE_THING &&
-	     FLAGS(obj) & ZOMBIE && 
-	     LOCATION(obj) == LOCATION(OWNER(obj))
-	   ) return 0;
+        if (!isprivate && Typeof(obj) == TYPE_THING && FLAGS(obj) & ZOMBIE && LOCATION(obj) == LOCATION(OWNER(obj))
+            )
+            return 0;
 
         return notify_html_nolisten(obj, msg, isprivate);
     } else {
@@ -655,8 +549,7 @@ anotify_except(dbref first, dbref exception, const char *msg, dbref who)
 
 
 void
-parse_omessage(int descr, dbref player, dbref dest, dbref exit, const char *msg,
-               const char *prefix, const char *whatcalled)
+parse_omessage(int descr, dbref player, dbref dest, dbref exit, const char *msg, const char *prefix, const char *whatcalled)
 {
     char buf[BUFFER_LEN * 2];
     char *ptr;

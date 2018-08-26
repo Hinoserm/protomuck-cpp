@@ -200,8 +200,7 @@ print_sections(FILE * f, FILE * hf, int cols)
     char *currsect;
 
     fprintf(f, "You can get more help on the following topics:\n\n");
-    fprintf(hf,
-            "<h4>You can get more help on the following topics:</h4>\n<ul>");
+    fprintf(hf, "<h4>You can get more help on the following topics:</h4>\n<ul>");
     width = 78 / cols;
     for (sptr = secthead; sptr; sptr = sptr->next) {
         currsect = sptr->section;
@@ -291,8 +290,7 @@ find_topics(FILE * infile)
                 }
             }
         } while (!feof(infile)
-                 && (*buf != '~' || buf[1] == '@' || buf[1] == '~'
-                     || buf[1] == '<' || buf[1] == '!'));
+                 && (*buf != '~' || buf[1] == '@' || buf[1] == '~' || buf[1] == '<' || buf[1] == '!'));
 
         do {
             if (!fgets(buf, sizeof(buf), infile)) {
@@ -354,10 +352,8 @@ process_lines(FILE * infile, FILE * outfile, FILE * htmlfile, int cols)
                     if (sectptr) {
                         *sectptr = '\0';
                     }
-                    fprintf(outfile, "~%*s\n", (38 + strlen(buf + 10) / 2),
-                            (buf + 10));
-                    fprintf(docsfile, "%*s\n", (38 + strlen(buf + 10) / 2),
-                            (buf + 10));
+                    fprintf(outfile, "~%*s\n", (38 + strlen(buf + 10) / 2), (buf + 10));
+                    fprintf(docsfile, "%*s\n", (38 + strlen(buf + 10) / 2), (buf + 10));
                     fprintf(htmlfile, HTML_SECTION, (buf + 10));
                 } else if (!strcmp(buf, "~~code\n")) {
                     fprintf(htmlfile, HTML_CODEBEGIN);
@@ -431,21 +427,17 @@ main(int argc, char **argv)
     int cols;
 
     if (argc != 4) {
-        fprintf(stderr,
-                "Usage: %s inputrawfile outputhelpfile outputhtmlfile\n",
-                argv[0]);
+        fprintf(stderr, "Usage: %s inputrawfile outputhelpfile outputhtmlfile\n", argv[0]);
         return 1;
     }
 
     if (!strcmp(argv[1], argv[2])) {
-        fprintf(stderr,
-                "%s: cannot use same file for input rawfile and output helpfile\n");
+        fprintf(stderr, "%s: cannot use same file for input rawfile and output helpfile\n");
         return 1;
     }
 
     if (!strcmp(argv[1], argv[3])) {
-        fprintf(stderr,
-                "%s: cannot use same file for input rawfile and output htmlfile\n");
+        fprintf(stderr, "%s: cannot use same file for input rawfile and output htmlfile\n");
         return 1;
     }
 

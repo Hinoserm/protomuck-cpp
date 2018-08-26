@@ -21,7 +21,7 @@
 #elif defined(HAVE_SYS_ERRNO_H)
 # include <sys/errno.h>
 #else
-  extern int errno;
+extern int errno;
 #endif
 
 #ifdef SOLARIS
@@ -170,10 +170,7 @@ host_as_hex(unsigned int addr)
 {
     static char buf[32];
 
-    sprintf(buf,
-            "%d.%d.%d.%d",
-            (addr >> 24) & 0xff,
-            (addr >> 16) & 0xff, (addr >> 8) & 0xff, addr & 0xff);
+    sprintf(buf, "%d.%d.%d.%d", (addr >> 24) & 0xff, (addr >> 16) & 0xff, (addr >> 8) & 0xff, addr & 0xff);
 
     return buf;
 }
@@ -192,8 +189,7 @@ new_connection(int sock)
     if (newsock >= maxd)
         maxd = newsock + 1;
 
-    verb("ACPT: %0.2d %s(%d)", newsock,
-         host_as_hex(ntohl(addr.sin_addr.s_addr)), ntohs(addr.sin_port));
+    verb("ACPT: %0.2d %s(%d)", newsock, host_as_hex(ntohl(addr.sin_addr.s_addr)), ntohs(addr.sin_port));
 
     d = (t_descr *) malloc(sizeof(t_descr));
     d->descriptor = newsock;

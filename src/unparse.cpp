@@ -189,8 +189,7 @@ flag_2char(char *flag)
         return 'L';
     if (string_prefix("dark", flag) || string_prefix("debugging", flag))
         return 'D';
-    if (string_prefix("sticky", flag) || string_prefix("silent", flag) ||
-        string_prefix("setuid", flag))
+    if (string_prefix("sticky", flag) || string_prefix("silent", flag) || string_prefix("setuid", flag))
         return 'S';
     if (string_prefix("quell", flag))
         return 'Q';
@@ -205,8 +204,7 @@ flag_2char(char *flag)
         return 'A';
     if (string_prefix("vehicle", flag) || string_prefix("viewable", flag))
         return 'V';
-    if (string_prefix("xforcible", flag) ||
-        string_prefix("expanded_debug", flag))
+    if (string_prefix("xforcible", flag) || string_prefix("expanded_debug", flag))
         return 'X';
     if (string_prefix("zombie", flag) || string_prefix("puppet", flag))
         return 'Z';
@@ -242,11 +240,9 @@ flag_2char(char *flag)
         return '&';
     if (string_prefix("meeper", flag) || string_prefix("mpi", flag))
         return LMPI + '0';
-    if (string_prefix("mucker", flag) || string_prefix("mucker1", flag) ||
-        string_prefix("m1", flag))
+    if (string_prefix("mucker", flag) || string_prefix("mucker1", flag) || string_prefix("m1", flag))
         return LM1 + '0';
-    if (string_prefix("nucker", flag) || string_prefix("mucker2", flag) ||
-        string_prefix("m2", flag))
+    if (string_prefix("nucker", flag) || string_prefix("mucker2", flag) || string_prefix("m2", flag))
         return LM2 + '0';
     if (string_prefix("sucker", flag) || string_prefix("mucker3", flag)
         || string_prefix("m3", flag))
@@ -342,14 +338,11 @@ unparse_object(dbref player, dbref loc)
 #ifndef SANITY
             if (!(FLAGS(player) & STICKY) &&
                 (TMage(player) || POWERS(player) & POW_SEE_ALL ||
-                 can_link_to(player, NOTYPE, loc) ||
-                 controls_link(player, loc) ||
-                 ((Typeof(loc) != TYPE_PLAYER) && (FLAGS(loc) & CHOWN_OK))
+                 can_link_to(player, NOTYPE, loc) || controls_link(player, loc) || ((Typeof(loc) != TYPE_PLAYER) && (FLAGS(loc) & CHOWN_OK))
                 )) {
                 /* show everything */
 #endif
-                sprintf(upb, "%s(#%d%s)", NAME(loc), loc,
-                        unparse_flags(loc, tbuf));
+                sprintf(upb, "%s(#%d%s)", NAME(loc), loc, unparse_flags(loc, tbuf));
                 return upb;
 #ifndef SANITY
             } else {
@@ -415,15 +408,11 @@ ansi_unparse_object(dbref player, dbref loc)
 #ifndef SANITY
             if (!(FLAGS(player) & STICKY) &&
                 (TMage(player) || POWERS(player) & POW_SEE_ALL ||
-                 POWERS(player) & POW_SEARCH ||
-                 can_link_to(player, NOTYPE, loc) ||
-                 controls_link(player, loc) ||
-                 ((Typeof(loc) != TYPE_PLAYER) && (FLAGS(loc) & CHOWN_OK))
+                 POWERS(player) & POW_SEARCH || can_link_to(player, NOTYPE, loc) || controls_link(player, loc) || ((Typeof(loc) != TYPE_PLAYER) && (FLAGS(loc) & CHOWN_OK))
                 )) {
 #endif
                 /* show everything */
-                sprintf(upb, "%s" SYSYELLOW "(#%d%s)",
-                        ansiname(loc, tbuf), loc, unparse_flags(loc, tbuf2));
+                sprintf(upb, "%s" SYSYELLOW "(#%d%s)", ansiname(loc, tbuf), loc, unparse_flags(loc, tbuf2));
                 return upb;
 #ifndef SANITY
             } else {
@@ -434,66 +423,66 @@ ansi_unparse_object(dbref player, dbref loc)
     }
 }
 
-static char boolexp_buf[BUFFER_LEN];
-static char *buftop;
+struct boolexp_temp_data {
+    char *buftop;
+    char *boolexp_buf;
+};
 
-static void
-unparse_boolexp1(dbref player, struct boolexp *b,
-                 boolexp_type outer_type, int fullname)
+void
+unparse_boolexp1(dbref player, struct boolexp *b, boolexp_type outer_type, int fullname, struct boolexp_temp_data *btr)
 {
-    if ((buftop - boolexp_buf) > (BUFFER_LEN / 2))
+    if ((btr->buftop - btr->boolexp_buf) > (BUFFER_LEN / 2))
         return;
     if (b == TRUE_BOOLEXP) {
-        strcpy(buftop, "*UNLOCKED*");
-        buftop += strlen(buftop);
+        strcpy(btr->buftop, "*UNLOCKED*");
+        btr->buftop += strlen(btr->buftop);
     } else {
         switch (b->type) {
             case BOOLEXP_AND:
                 if (outer_type == BOOLEXP_NOT) {
-                    *buftop++ = '(';
+                    *btr->buftop++ = '(';
                 }
-                unparse_boolexp1(player, b->sub1, b->type, fullname);
-                *buftop++ = AND_TOKEN;
-                unparse_boolexp1(player, b->sub2, b->type, fullname);
+                unparse_boolexp1(player, b->sub1, b->type, fullname, btr);
+                *btr->buftop++ = AND_TOKEN;
+                unparse_boolexp1(player, b->sub2, b->type, fullname, btr);
                 if (outer_type == BOOLEXP_NOT) {
-                    *buftop++ = ')';
+                    *btr->buftop++ = ')';
                 }
                 break;
             case BOOLEXP_OR:
                 if (outer_type == BOOLEXP_NOT || outer_type == BOOLEXP_AND) {
-                    *buftop++ = '(';
+                    *btr->buftop++ = '(';
                 }
-                unparse_boolexp1(player, b->sub1, b->type, fullname);
-                *buftop++ = OR_TOKEN;
-                unparse_boolexp1(player, b->sub2, b->type, fullname);
+                unparse_boolexp1(player, b->sub1, b->type, fullname, btr);
+                *btr->buftop++ = OR_TOKEN;
+                unparse_boolexp1(player, b->sub2, b->type, fullname, btr);
                 if (outer_type == BOOLEXP_NOT || outer_type == BOOLEXP_AND) {
-                    *buftop++ = ')';
+                    *btr->buftop++ = ')';
                 }
                 break;
             case BOOLEXP_NOT:
-                *buftop++ = '!';
-                unparse_boolexp1(player, b->sub1, b->type, fullname);
+                *btr->buftop++ = '!';
+                unparse_boolexp1(player, b->sub1, b->type, fullname, btr);
                 break;
             case BOOLEXP_CONST:
                 if (fullname) {
 #ifndef SANITY
-                    strcpy(buftop, unparse_object(player, b->thing));
+                    strcpy(btr->buftop, unparse_object(player, b->thing));
 #endif
                 } else {
-                    sprintf(buftop, "#%d", b->thing);
+                    sprintf(btr->buftop, "#%d", b->thing);
                 }
-                buftop += strlen(buftop);
+                btr->buftop += strlen(btr->buftop);
                 break;
             case BOOLEXP_PROP:
-                strcpy(buftop, PropName(b->prop_check));
-                strcat(buftop, ":");
+                strcpy(btr->buftop, PropName(b->prop_check));
+                strcat(btr->buftop, ":");
                 if (PropType(b->prop_check) == PROP_STRTYP)
-                    strcat(buftop, PropDataUNCStr(b->prop_check));
-                buftop += strlen(buftop);
+                    strcat(btr->buftop, PropDataUNCStr(b->prop_check));
+                btr->buftop += strlen(btr->buftop);
                 break;
             default:
-                fprintf(stderr,
-                        "WARN: Invalid Bool type. unparseboolexp1().\n");
+                fprintf(stderr, "WARN: Invalid Bool type. unparseboolexp1().\n");
                 /* abort(); *//* bad type */
                 break;
         }
@@ -501,11 +490,16 @@ unparse_boolexp1(dbref player, struct boolexp *b,
 }
 
 const char *
-unparse_boolexp(dbref player, struct boolexp *b, int fullname)
+unparse_boolexp(char *buf, dbref player, struct boolexp *b, int fullname)
 {
-    buftop = boolexp_buf;
-    unparse_boolexp1(player, b, BOOLEXP_CONST, fullname); /* no outer type */
-    *buftop++ = '\0';
+    struct boolexp_temp_data *btr = new boolexp_temp_data;
 
-    return boolexp_buf;
+    btr->boolexp_buf = buf;
+    btr->buftop = buf;
+    unparse_boolexp1(player, b, BOOLEXP_CONST, fullname, btr); /* no outer type */
+    *btr->buftop++ = '\0';
+
+    delete btr;
+
+    return buf;
 }

@@ -18,8 +18,7 @@
 
 const char *version = PATCHLEVEL;
 
-const char *infotext[] =
-{
+const char *infotext[] = {
     " ",
     SYSRED "ProtoMUCK " PROTOBASE " " SYSWHITE "-- " SYSCRIMSON VERSION,
 #if defined(WIN32) || defined(WIN_VC)
@@ -32,7 +31,7 @@ const char *infotext[] =
 #  endif
 # endif
 #endif
-    " ",
+        " ",
     SYSCYAN "Based on the original code written by these programmers:",
     "  " SYSAQUA "David Applegate    James Aspnes    Timothy Freeman    Bennet Yee",
     " ",
@@ -42,10 +41,8 @@ const char *infotext[] =
     "  " SYSAQUA "Zobeid",
     " ",
     SYSWHITE "ProtoMuck is derived from TinyMUCK, which was itself an extension",
-    SYSWHITE
-        "of TinyMUD.  Proto is an updated version of the NeonMUCK code base,",
-    SYSWHITE
-        "which originaly came from the FuzzBall distribution, by Foxen/Revar,",
+    SYSWHITE "of TinyMUD.  Proto is an updated version of the NeonMUCK code base,",
+    SYSWHITE "which originaly came from the FuzzBall distribution, by Foxen/Revar,",
     SYSWHITE "of TinyMUCK.",
     " ",
     SYSGREEN "And, here is the list of the programmers for ProtoMUCK:",
@@ -55,8 +52,7 @@ const char *infotext[] =
     SYSFOREST "  Moose    - Retired Project Administrator",
     " ",
     SYSWHITE "Thanks are also due towards the multiple people who had also",
-    SYSWHITE
-        "contributed ideas for the MUCK as we worked on it, and helped",
+    SYSWHITE "contributed ideas for the MUCK as we worked on it, and helped",
     SYSWHITE "us out along the way.",
     SYSCYAN "Feel free to check ProtoMUCK's webpage at the following address:",
     SYSAQUA "http://www.protomuck.org/",

@@ -48,13 +48,13 @@ prim_ndup(PRIM_PROTOTYPE)
 
     if (oper[0].type != PROG_INTEGER)
         abort_interp("Non-integer argument. (1)");
-    result = oper[0].data.number-1;
+    result = oper[0].data.number - 1;
     CHECKOP_READONLY(1);
     CHECKOFLOW(result);
 
     for (; result > 0; result--) {
-       copyinst(&arg[*top - 1], &arg[*top]);
-       (*top)++;
+        copyinst(&arg[*top - 1], &arg[*top]);
+        (*top)++;
     }
 
 }
@@ -107,22 +107,22 @@ prim_ldup(PRIM_PROTOTYPE)
 void
 prim_nip(PRIM_PROTOTYPE)
 {
-	copyinst(&oper[0],&arg[(*top)++]);
+    copyinst(&oper[0], &arg[(*top)++]);
 }
 
 void
 prim_tuck(PRIM_PROTOTYPE)
 {
     CHECKOFLOW(1);
-    copyinst(&oper[0],&arg[(*top)++]);
-	copyinst(&oper[1],&arg[(*top)++]);
-	copyinst(&oper[0],&arg[(*top)++]);
+    copyinst(&oper[0], &arg[(*top)++]);
+    copyinst(&oper[1], &arg[(*top)++]);
+    copyinst(&oper[0], &arg[(*top)++]);
 }
 
 void
 prim_at(PRIM_PROTOTYPE)
 {
-	struct inst temp1;
+    struct inst temp1;
 
     temp1 = fr->oper[0];
     if ((temp1.type != PROG_VAR) && (temp1.type != PROG_LVAR)
@@ -165,15 +165,15 @@ prim_bang(PRIM_PROTOTYPE)
         struct localvars *tmp = localvars_get(fr, program);
 
         CLEAR(&(tmp->lvars[oper[0].data.number]));
-        copyinst(&oper[1],&(tmp->lvars[oper[0].data.number]));
+        copyinst(&oper[1], &(tmp->lvars[oper[0].data.number]));
     } else if (oper[0].type == PROG_VAR) {
         /* GLOBALVAR */
         CLEAR(&(fr->variables[oper[0].data.number]));
-        copyinst(&oper[1],&(fr->variables[oper[0].data.number]));
-	} else if (oper[0].type == PROG_STVAR) {
+        copyinst(&oper[1], &(fr->variables[oper[0].data.number]));
+    } else if (oper[0].type == PROG_STVAR) {
         /* STATICVAR */
-		CLEAR(&(DBFETCH(program)->sp.program.staticvars[oper[0].data.number]));
-        copyinst(&oper[1],&(DBFETCH(program)->sp.program.staticvars[oper[0].data.number]));
+        CLEAR(&(DBFETCH(program)->sp.program.staticvars[oper[0].data.number]));
+        copyinst(&oper[1], &(DBFETCH(program)->sp.program.staticvars[oper[0].data.number]));
     } else {
         /* SCOPEDVAR */
         struct inst *tmp;
@@ -182,14 +182,14 @@ prim_bang(PRIM_PROTOTYPE)
         if (!tmp)
             abort_interp("Scoped variable number out of range.");
         CLEAR(tmp);
-        copyinst(&oper[1],tmp);
+        copyinst(&oper[1], tmp);
     }
 }
 
 void
 prim_var(PRIM_PROTOTYPE)
 {
-	int result;
+    int result;
 
     if (oper[0].type != PROG_INTEGER)
         abort_interp("Non-integer argument");
@@ -200,7 +200,7 @@ prim_var(PRIM_PROTOTYPE)
 void
 prim_localvar(PRIM_PROTOTYPE)
 {
-	int result;
+    int result;
 
     if (oper[0].type != PROG_INTEGER)
         abort_interp("Non-integer argument");
@@ -212,10 +212,9 @@ prim_localvar(PRIM_PROTOTYPE)
 void
 prim_variablep(PRIM_PROTOTYPE)
 {
-	int result;
+    int result;
 
-    result = (oper[0].type == PROG_LVAR || oper[0].type == PROG_VAR
-              || oper[0].type == PROG_SVAR);
+    result = (oper[0].type == PROG_LVAR || oper[0].type == PROG_VAR || oper[0].type == PROG_SVAR);
 
     PushInt(result);
 }
@@ -223,8 +222,8 @@ prim_variablep(PRIM_PROTOTYPE)
 void
 prim_swap(PRIM_PROTOTYPE)
 {
-	copyinst(&oper[0],&arg[(*top)++]);
-	copyinst(&oper[1],&arg[(*top)++]);
+    copyinst(&oper[0], &arg[(*top)++]);
+    copyinst(&oper[1], &arg[(*top)++]);
 }
 
 void
@@ -251,28 +250,28 @@ prim_pick(PRIM_PROTOTYPE)
 void
 prim_put(PRIM_PROTOTYPE)
 {
-	int tmp;
+    int tmp;
 
     if (oper[0].type != PROG_INTEGER || oper[0].data.number <= 0)
         abort_interp("Operand not a positive integer");
     tmp = oper[0].data.number;
     CHECKOP(tmp);
     CLEAR(&arg[*top - tmp]);
-    copyinst(&oper[1],&arg[*top - tmp]);
+    copyinst(&oper[1], &arg[*top - tmp]);
 }
 
 void
 prim_rot(PRIM_PROTOTYPE)
 {
-	copyinst(&oper[1],&arg[(*top)++]);
-	copyinst(&oper[0],&arg[(*top)++]);
-	copyinst(&oper[2],&arg[(*top)++]);
+    copyinst(&oper[1], &arg[(*top)++]);
+    copyinst(&oper[0], &arg[(*top)++]);
+    copyinst(&oper[2], &arg[(*top)++]);
 }
 
 void
 prim_popn(PRIM_PROTOTYPE)
 {
-	int tmp;
+    int tmp;
 
     if (oper[0].type != PROG_INTEGER)
         abort_interp("Non-integer argument.");
@@ -408,14 +407,14 @@ void
 prim_sort(PRIM_PROTOTYPE)
 {
     int (*comparator) (const void *, const void *);
-	int tmp, result;
+    int tmp, result;
 
     if (oper[0].type != PROG_INTEGER)
         abort_interp("Invalid argument type. (1)");
     if (oper[1].type != PROG_INTEGER)
         abort_interp("Invalid argument type. (2)");
 
-    tmp = oper[1].data.number;   /* {s} size */
+    tmp = oper[1].data.number;  /* {s} size */
     if ((tmp < 0) || (tmp >= STACK_SIZE - 2))
         abort_interp("Invalid array size.");
     CHECKOP(tmp);
@@ -452,12 +451,12 @@ prim_sort(PRIM_PROTOTYPE)
 void
 prim_rotate(PRIM_PROTOTYPE)
 {
-	int tmp;
-	struct inst temp2;
+    int tmp;
+    struct inst temp2;
 
     if (oper[0].type != PROG_INTEGER)
         abort_interp("Invalid argument type");
-    tmp = oper[0].data.number;   /* Depth on stack */
+    tmp = oper[0].data.number;  /* Depth on stack */
     CHECKOP(abs(tmp));
     if (tmp > 0) {
         temp2 = arg[*top - tmp];
@@ -475,7 +474,8 @@ prim_rotate(PRIM_PROTOTYPE)
 void
 prim_dbtop(PRIM_PROTOTYPE)
 {
-	dbref ref = (dbref) db_top;
+    dbref ref = (dbref) db_top;
+
     CHECKOFLOW(1);
     PushObject(ref);
 }
@@ -483,7 +483,8 @@ prim_dbtop(PRIM_PROTOTYPE)
 void
 prim_depth(PRIM_PROTOTYPE)
 {
-	int result = *top;
+    int result = *top;
+
     CHECKOFLOW(1);
     PushInt(result);
 }
@@ -491,7 +492,8 @@ prim_depth(PRIM_PROTOTYPE)
 void
 prim_prog(PRIM_PROTOTYPE)
 {
-	dbref ref = (dbref) program;
+    dbref ref = (dbref) program;
+
     CHECKOFLOW(1);
     PushObject(ref);
 }
@@ -499,7 +501,8 @@ prim_prog(PRIM_PROTOTYPE)
 void
 prim_trig(PRIM_PROTOTYPE)
 {
-	dbref ref = (dbref) fr->trig;
+    dbref ref = (dbref) fr->trig;
+
     CHECKOFLOW(1);
     PushObject(ref);
 }
@@ -507,7 +510,8 @@ prim_trig(PRIM_PROTOTYPE)
 void
 prim_caller(PRIM_PROTOTYPE)
 {
-	dbref ref = (dbref) fr->caller.st[fr->caller.top - 1];
+    dbref ref = (dbref) fr->caller.st[fr->caller.top - 1];
+
     CHECKOFLOW(1);
     PushObject(ref);
 }
@@ -515,64 +519,72 @@ prim_caller(PRIM_PROTOTYPE)
 void
 prim_intp(PRIM_PROTOTYPE)
 {
-	int result = (oper[0].type == PROG_INTEGER);
+    int result = (oper[0].type == PROG_INTEGER);
+
     PushInt(result);
 }
 
 void
 prim_floatp(PRIM_PROTOTYPE)
 {
-	int result = (oper[0].type == PROG_FLOAT);
+    int result = (oper[0].type == PROG_FLOAT);
+
     PushInt(result);
 }
 
 void
 prim_arrayp(PRIM_PROTOTYPE)
 {
-	int result = (oper[0].type == PROG_ARRAY);
+    int result = (oper[0].type == PROG_ARRAY);
+
     PushInt(result);
 }
 
 void
 prim_dictionaryp(PRIM_PROTOTYPE)
 {
-	int result = (oper[0].type == PROG_ARRAY && oper[0].data.array &&
-              oper[0].data.array->type == ARRAY_DICTIONARY);
+    int result = (oper[0].type == PROG_ARRAY && oper[0].data.array && oper[0].data.array->type == ARRAY_DICTIONARY);
+
     PushInt(result);
 }
 
 void
 prim_stringp(PRIM_PROTOTYPE)
 {
-	int result = (oper[0].type == PROG_STRING);
+    int result = (oper[0].type == PROG_STRING);
+
     PushInt(result);
 }
 
 void
 prim_dbrefp(PRIM_PROTOTYPE)
 {
-	int result = (oper[0].type == PROG_OBJECT);
+    int result = (oper[0].type == PROG_OBJECT);
+
     PushInt(result);
 }
 
 void
 prim_addressp(PRIM_PROTOTYPE)
 {
-	int result = (oper[0].type == PROG_ADD);
+    int result = (oper[0].type == PROG_ADD);
+
     PushInt(result);
 }
 
 void
 prim_lockp(PRIM_PROTOTYPE)
 {
-	int result = (oper[0].type == PROG_LOCK);
+    int result = (oper[0].type == PROG_LOCK);
+
     PushInt(result);
 }
 
 void
 prim_socketp(PRIM_PROTOTYPE)
 {
-	int result = (oper[0].type == PROG_SOCKET);
+    int result = (oper[0].type == PROG_SOCKET);
+
     if (result && oper[0].data.sock->listening)
         result = -1;            /* return -1 for listening sockets */
     PushInt(result);
@@ -581,14 +593,16 @@ prim_socketp(PRIM_PROTOTYPE)
 void
 prim_sqlp(PRIM_PROTOTYPE)
 {
-	int result = (oper[0].type == PROG_MYSQL);
+    int result = (oper[0].type == PROG_MYSQL);
+
     PushInt(result);
 }
 
 void
 prim_markp(PRIM_PROTOTYPE)
 {
-	int result = (oper[0].type == PROG_MARK);
+    int result = (oper[0].type == PROG_MARK);
+
     PushInt(result);
 }
 
@@ -601,15 +615,15 @@ prim_checkargs(PRIM_PROTOTYPE)
 {
     int currpos, stackpos;
     int rngstktop = 0;
-	int tmp, result;
+    int tmp, result;
     enum {
         itsarange, itsarepeat
     } rngstktyp[MaxComplexity];
     int rngstkpos[MaxComplexity];
     int rngstkcnt[MaxComplexity];
     char zbuf[BUFFER_LEN];
-	char buf[BUFFER_LEN];
-	dbref ref;
+    char buf[BUFFER_LEN];
+    dbref ref;
 
     if (oper[0].type != PROG_STRING)
         abort_interp("Non string argument");
@@ -793,8 +807,7 @@ prim_checkargs(PRIM_PROTOTYPE)
                 case 'v':
                     if (stackpos < 0)
                         ABORT_CHECKARGS("Stack underflow");
-                    if ((arg[stackpos].type != PROG_VAR) &&
-                        (arg[stackpos].type != PROG_LVAR))
+                    if ((arg[stackpos].type != PROG_VAR) && (arg[stackpos].type != PROG_LVAR))
                         ABORT_CHECKARGS("Expected a variable");
                     break;
                 case 'a':
@@ -838,7 +851,8 @@ prim_checkargs(PRIM_PROTOTYPE)
 void
 prim_mode(PRIM_PROTOTYPE)
 {
-	int result = fr->multitask;
+    int result = fr->multitask;
+
     CHECKOFLOW(1);
     PushInt(result);
 }
@@ -846,7 +860,7 @@ prim_mode(PRIM_PROTOTYPE)
 void
 prim_setmode(PRIM_PROTOTYPE)
 {
-	int result;
+    int result;
 
     if (oper[0].type != PROG_INTEGER)
         abort_interp("Invalid argument type");
@@ -877,7 +891,8 @@ prim_interp(PRIM_PROTOTYPE)
     char buf[BUFFER_LEN];
     struct frame *tmpfr;
 
-    if (!valid_object(&oper[2]) || Typeof(oper[2].data.objref) != TYPE_PROGRAM)
+    if (!valid_object(&oper[2])
+        || Typeof(oper[2].data.objref) != TYPE_PROGRAM)
         abort_interp("Bad program reference. (1)");
     if (!valid_object(&oper[1]))
         abort_interp("Bad object. (2)");
@@ -893,9 +908,7 @@ prim_interp(PRIM_PROTOTYPE)
     strcpy(match_args, oper[0].data.string ? oper[0].data.string->data : "");
     fr->level++;
     interp_set_depth(fr);
-    tmpfr = interp(fr->descr, player, DBFETCH(player)->location,
-                   oper[2].data.objref, oper[1].data.objref, PREEMPT,
-                   STD_HARDUID, 0);
+    tmpfr = interp(fr->descr, player, DBFETCH(player)->location, oper[2].data.objref, oper[1].data.objref, PREEMPT, STD_HARDUID, 0);
     if (tmpfr) {
         rv = interp_loop(player, oper[2].data.objref, tmpfr, 1);
     }
@@ -926,7 +939,7 @@ void
 prim_findmark(PRIM_PROTOTYPE)
 {
     int depth, height, count;
-	struct inst temp2;
+    struct inst temp2;
 
     depth = 1;
     height = *top - 1;
@@ -966,11 +979,11 @@ void
 prim_reverse(PRIM_PROTOTYPE)
 {
     int i, tmp;
-	struct inst temp2;
+    struct inst temp2;
 
     if (oper[0].type != PROG_INTEGER)
         abort_interp("Invalid argument type.");
-    tmp = oper[0].data.number;   /* Depth on stack */
+    tmp = oper[0].data.number;  /* Depth on stack */
     if (tmp < 0)
         abort_interp("Argument must be positive.");
     CHECKOP(tmp);
@@ -988,11 +1001,11 @@ void
 prim_lreverse(PRIM_PROTOTYPE)
 {
     int i, tmp;
-	struct inst temp2;
+    struct inst temp2;
 
     if (oper[0].type != PROG_INTEGER)
         abort_interp("Invalid argument type.");
-    tmp = oper[0].data.number;   /* Depth on stack */
+    tmp = oper[0].data.number;  /* Depth on stack */
     if (tmp < 0)
         abort_interp("Argument must be positive.");
     CHECKOP(tmp);
@@ -1027,8 +1040,8 @@ prim_for(PRIM_PROTOTYPE)
 
     fr->fors.top++;
     fr->fors.st = push_for(fr->fors.st);
-    copyinst(&oper[2],&fr->fors.st->cur);
-    copyinst(&oper[1],&fr->fors.st->end);
+    copyinst(&oper[2], &fr->fors.st->cur);
+    copyinst(&oper[1], &fr->fors.st->end);
     fr->fors.st->step = oper[0].data.number;
     fr->fors.st->didfirst = 0;
 
@@ -1055,7 +1068,7 @@ prim_foreach(PRIM_PROTOTYPE)
     if (fr->trys.st)
         fr->trys.st->for_count++;
 
-    copyinst(&oper[0],&fr->fors.st->end);
+    copyinst(&oper[0], &fr->fors.st->end);
     fr->fors.st->step = 0;
     fr->fors.st->didfirst = 0;
 }
@@ -1064,7 +1077,7 @@ prim_foreach(PRIM_PROTOTYPE)
 void
 prim_foriter(PRIM_PROTOTYPE)
 {
-	int result, tmp;
+    int result, tmp;
 
     if (!fr->fors.st)
         abort_interp("Internal error; FOR stack underflow.");

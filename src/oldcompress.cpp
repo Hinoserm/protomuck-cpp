@@ -55,8 +55,7 @@ old_init_compress(void)
     }
 
     for (i = 0; i < NUM_TOKENS; i++) {
-        old_token_table[(int) old_tokens[i][0]][(int) old_tokens[i][1]] =
-            i | TOKEN_BIT;
+        old_token_table[(int) old_tokens[i][0]][(int) old_tokens[i][1]] = i | TOKEN_BIT;
     }
 
     old_table_initialized = 1;

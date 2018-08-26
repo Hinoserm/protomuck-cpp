@@ -71,7 +71,7 @@ prim_clear(PRIM_PROTOTYPE)
 void
 prim_error_num(PRIM_PROTOTYPE)
 {
-	int result;
+    int result;
 
     CHECKOFLOW(1);
     result = ERROR_NUM;
@@ -82,7 +82,7 @@ void
 prim_clear_error(PRIM_PROTOTYPE)
 {
     int loop, result;
-	char buf[BUFFER_LEN];
+    char buf[BUFFER_LEN];
 
     if (oper[0].type != PROG_STRING && oper[0].type != PROG_INTEGER)
         abort_interp("Invalid argument type. (1)");
@@ -92,8 +92,7 @@ prim_clear_error(PRIM_PROTOTYPE)
         if ((oper[0].data.number < 0) || (oper[0].data.number >= ERROR_NUM)) {
             result = 0;
         } else {
-            fr->error.is_flags =
-                fr->error.is_flags & (~err_bits[oper[0].data.number].is_flags);
+            fr->error.is_flags = fr->error.is_flags & (~err_bits[oper[0].data.number].is_flags);
             result = 1;
         }
     } else {
@@ -109,9 +108,8 @@ prim_clear_error(PRIM_PROTOTYPE)
             while (loop < ERROR_NUM) {
                 if (!strcmp(buf, err_defs[loop].error_name)) {
                     result = 1;
-                    fr->error.is_flags =
-                        fr->error.is_flags & (~err_bits[loop].is_flags);
-					break;
+                    fr->error.is_flags = fr->error.is_flags & (~err_bits[loop].is_flags);
+                    break;
                 } else {
                     loop++;
                 }
@@ -125,7 +123,7 @@ void
 prim_set_error(PRIM_PROTOTYPE)
 {
     int loop, result;
-	char buf[BUFFER_LEN];
+    char buf[BUFFER_LEN];
 
     if (oper[0].type != PROG_STRING && oper[0].type != PROG_INTEGER)
         abort_interp("Invalid argument type. (1)");
@@ -135,8 +133,7 @@ prim_set_error(PRIM_PROTOTYPE)
         if ((oper[0].data.number < 0) || (oper[0].data.number >= ERROR_NUM)) {
             result = 0;
         } else {
-            fr->error.is_flags =
-                fr->error.is_flags | err_bits[oper[0].data.number].is_flags;
+            fr->error.is_flags = fr->error.is_flags | err_bits[oper[0].data.number].is_flags;
             result = 1;
         }
     } else {
@@ -152,9 +149,8 @@ prim_set_error(PRIM_PROTOTYPE)
             while (loop < ERROR_NUM) {
                 if (!strcmp(buf, err_defs[loop].error_name)) {
                     result = 1;
-                    fr->error.is_flags =
-                        fr->error.is_flags | err_bits[loop].is_flags;
-					break;
+                    fr->error.is_flags = fr->error.is_flags | err_bits[loop].is_flags;
+                    break;
                 } else {
                     loop++;
                 }
@@ -168,7 +164,7 @@ void
 prim_is_set(PRIM_PROTOTYPE)
 {
     int loop, result;
-	char buf[BUFFER_LEN];
+    char buf[BUFFER_LEN];
 
     if (oper[0].type != PROG_STRING && oper[0].type != PROG_INTEGER)
         abort_interp("Invalid argument type. (1)");
@@ -178,9 +174,7 @@ prim_is_set(PRIM_PROTOTYPE)
         if ((oper[0].data.number < 0) || (oper[0].data.number >= ERROR_NUM)) {
             result = 0;
         } else {
-            result =
-                ((fr->error.is_flags & err_bits[oper[0].data.number].is_flags) !=
-                 0);
+            result = ((fr->error.is_flags & err_bits[oper[0].data.number].is_flags) != 0);
         }
     } else {
         if (!oper[0].data.string) {
@@ -194,9 +188,8 @@ prim_is_set(PRIM_PROTOTYPE)
             loop = 0;
             while (loop < ERROR_NUM) {
                 if (!strcmp(buf, err_defs[loop].error_name)) {
-                    result =
-                        ((fr->error.is_flags & err_bits[loop].is_flags) != 0);
-					break;
+                    result = ((fr->error.is_flags & err_bits[loop].is_flags) != 0);
+                    break;
                 } else {
                     loop++;
                 }
@@ -210,7 +203,7 @@ void
 prim_error_str(PRIM_PROTOTYPE)
 {
     int loop, result;
-	char buf[BUFFER_LEN];
+    char buf[BUFFER_LEN];
 
     if (oper[0].type != PROG_STRING && oper[0].type != PROG_INTEGER)
         abort_interp("Invalid argument type. (1)");
@@ -252,7 +245,7 @@ prim_error_str(PRIM_PROTOTYPE)
 void
 prim_error_name(PRIM_PROTOTYPE)
 {
-	int result;
+    int result;
 
     if (oper[0].type != PROG_INTEGER)
         abort_interp("Invalid argument type. (1)");
@@ -274,7 +267,7 @@ void
 prim_error_bit(PRIM_PROTOTYPE)
 {
     int loop, result;
-	char buf[BUFFER_LEN];
+    char buf[BUFFER_LEN];
 
     if (oper[0].type != PROG_STRING)
         abort_interp("Invalid argument type. (1)");
@@ -292,7 +285,7 @@ prim_error_bit(PRIM_PROTOTYPE)
         while (loop < ERROR_NUM) {
             if (!strcmp(buf, err_defs[loop].error_name)) {
                 result = loop;
-				break;
+                break;
             } else {
                 loop++;
             }
@@ -304,7 +297,7 @@ prim_error_bit(PRIM_PROTOTYPE)
 void
 prim_is_error(PRIM_PROTOTYPE)
 {
-	int result;
+    int result;
 
     CHECKOFLOW(1);
     result = ((fr->error.is_flags) != 0);

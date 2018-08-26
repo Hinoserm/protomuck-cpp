@@ -136,8 +136,7 @@ static int lastfetchslot = -1;
 void
 update_fetchstats(void)
 {
-    int slot =
-        ((current_systime / FETCHSTATS_SLOT_TIME) % FETCHSTATS_SLOTS);
+    int slot = ((current_systime / FETCHSTATS_SLOT_TIME) % FETCHSTATS_SLOTS);
     int i;
 
     if (slot != lastfetchslot) {
@@ -158,8 +157,7 @@ update_fetchstats(void)
 void
 report_fetchstats(dbref player)
 {
-    int i =
-        ((current_systime / FETCHSTATS_SLOT_TIME) % FETCHSTATS_SLOTS);
+    int i = ((current_systime / FETCHSTATS_SLOT_TIME) % FETCHSTATS_SLOTS);
     int count = 0;
     double sum = 0.0, maxv = 0.0, minv;
 
@@ -182,10 +180,7 @@ report_fetchstats(dbref player)
     }
 
     notify_fmt(player, "Disk Fetches %2g minute min/ave/max: %.2f/%.2f/%.2f",
-               (FETCHSTATS_INTERVAL1 / 60.0),
-               (minv * 60.0 / FETCHSTATS_SLOT_TIME),
-               (sum * 60.0 / (FETCHSTATS_SLOT_TIME * count)),
-               (maxv * 60.0 / FETCHSTATS_SLOT_TIME));
+               (FETCHSTATS_INTERVAL1 / 60.0), (minv * 60.0 / FETCHSTATS_SLOT_TIME), (sum * 60.0 / (FETCHSTATS_SLOT_TIME * count)), (maxv * 60.0 / FETCHSTATS_SLOT_TIME));
 
     for (; count < (FETCHSTATS_INTERVAL2 / FETCHSTATS_SLOT_TIME); count++) {
         if (fetchstats[i] == -1)
@@ -199,10 +194,7 @@ report_fetchstats(dbref player)
     }
 
     notify_fmt(player, "Disk Fetches %2g minute min/ave/max: %.2f/%.2f/%.2f",
-               (FETCHSTATS_INTERVAL2 / 60.0),
-               (minv * 60.0 / FETCHSTATS_SLOT_TIME),
-               (sum * 60.0 / (FETCHSTATS_SLOT_TIME * count)),
-               (maxv * 60.0 / FETCHSTATS_SLOT_TIME));
+               (FETCHSTATS_INTERVAL2 / 60.0), (minv * 60.0 / FETCHSTATS_SLOT_TIME), (sum * 60.0 / (FETCHSTATS_SLOT_TIME * count)), (maxv * 60.0 / FETCHSTATS_SLOT_TIME));
 
     for (; count < (FETCHSTATS_INTERVAL3 / FETCHSTATS_SLOT_TIME); count++) {
         if (fetchstats[i] == -1)
@@ -216,10 +208,7 @@ report_fetchstats(dbref player)
     }
 
     notify_fmt(player, "Disk Fetches %2g minute min/ave/max: %.2f/%.2f/%.2f",
-               (FETCHSTATS_INTERVAL3 / 60.0),
-               (minv * 60.0 / FETCHSTATS_SLOT_TIME),
-               (sum * 60.0 / (FETCHSTATS_SLOT_TIME * count)),
-               (maxv * 60.0 / FETCHSTATS_SLOT_TIME));
+               (FETCHSTATS_INTERVAL3 / 60.0), (minv * 60.0 / FETCHSTATS_SLOT_TIME), (sum * 60.0 / (FETCHSTATS_SLOT_TIME * count)), (maxv * 60.0 / FETCHSTATS_SLOT_TIME));
 }
 
 void
@@ -253,8 +242,7 @@ report_cachestats(dbref player)
             if (gap)
                 notify(player, "[gap]");
 
-            notify_fmt(player, "%3ld:%6d (%5.2f%%) %*s", ((now - when) / 60),
-                       count, (count * 100.0 / proploaded_Q.count), ipct, "*");
+            notify_fmt(player, "%3ld:%6d (%5.2f%%) %*s", ((now - when) / 60), count, (count * 100.0 / proploaded_Q.count), ipct, "*");
             gap = 0;
         } else {
             gap = 1;
@@ -265,9 +253,7 @@ report_cachestats(dbref player)
 void
 diskbase_debug(dbref player)
 {
-    notify_fmt(player, "Propcache hit ratio: %.3f%% (%ld hits / %ld fetches)",
-               (100.0 * propcache_hits / (propcache_hits + propcache_misses)),
-               propcache_hits, propcache_misses);
+    notify_fmt(player, "Propcache hit ratio: %.3f%% (%ld hits / %ld fetches)", (100.0 * propcache_hits / (propcache_hits + propcache_misses)), propcache_hits, propcache_misses);
 
     report_fetchstats(player);
 
@@ -335,8 +321,7 @@ housecleanprops(void)
     int limit, max;
     dbref i, j;
 
-    if ((proploaded_Q.count < 10) ||
-        (proploaded_Q.count < (tp_max_loaded_objs * db_top / 100)))
+    if ((proploaded_Q.count < 10) || (proploaded_Q.count < (tp_max_loaded_objs * db_top / 100)))
         return;
 
     limit = 40;

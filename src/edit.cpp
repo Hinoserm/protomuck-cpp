@@ -110,9 +110,9 @@ grow_macro_tree(struct macrotable *node, struct macrotable *newmacro)
         return 1;
     }
 }
+
 int
-insert_macro(const char *macroname, const char *macrodef,
-             dbref player, struct macrotable **node)
+insert_macro(const char *macroname, const char *macrodef, dbref player, struct macrotable **node)
 {
     struct macrotable *newmacro;
 
@@ -125,8 +125,7 @@ insert_macro(const char *macroname, const char *macrodef,
 }
 
 void
-do_list_tree(struct macrotable *node, const char *first, const char *last,
-             int length, dbref player)
+do_list_tree(struct macrotable *node, const char *first, const char *last, int length, dbref player)
 {
     static char buf[BUFFER_LEN];
 
@@ -135,11 +134,9 @@ do_list_tree(struct macrotable *node, const char *first, const char *last,
     else {
         if (strncmp(node->name, first, strlen(first)) >= 0)
             do_list_tree(node->left, first, last, length, player);
-        if ((strncmp(node->name, first, strlen(first)) >= 0) &&
-            (strncmp(node->name, last, strlen(last)) <= 0)) {
+        if ((strncmp(node->name, first, strlen(first)) >= 0) && (strncmp(node->name, last, strlen(last)) <= 0)) {
             if (length) {
-                sprintf(buf, "%-16s %-16s  %s", node->name,
-                        NAME(node->implementor), node->definition);
+                sprintf(buf, "%-16s %-16s  %s", node->name, NAME(node->implementor), node->definition);
                 notify(player, buf);
                 buf[0] = '\0';
             } else {
@@ -178,14 +175,13 @@ purge_macro_tree(struct macrotable *node)
         return;
     purge_macro_tree(node->left);
     purge_macro_tree(node->right);
-    delete[] node->name;
-    delete[] node->definition;
+    delete[]node->name;
+    delete[]node->definition;
     delete node;
 }
 
 int
-erase_node(struct macrotable *oldnode, struct macrotable *node,
-           const char *killname, struct macrotable *mtop)
+erase_node(struct macrotable *oldnode, struct macrotable *node, const char *killname, struct macrotable *mtop)
 {
     if (!node)
         return 0;
@@ -198,17 +194,19 @@ erase_node(struct macrotable *oldnode, struct macrotable *node,
             oldnode->left = node->left;
             if (node->right)
                 grow_macro_tree(mtop, node->right);
-            delete[] node->name;
-            delete[] node->definition;
+            delete[]node->name;
+            delete[]node->definition;
             delete node;
+
             return 1;
         } else {
             oldnode->right = node->right;
             if (node->left)
                 grow_macro_tree(mtop, node->left);
-            delete[] node->name;
-            delete[] node->definition;
+            delete[]node->name;
+            delete[]node->definition;
             delete node;
+
             return 1;
         }
     }
@@ -226,11 +224,11 @@ kill_macro(const char *macroname, dbref player, struct macrotable **mtop)
 
         *mtop = whichway ? (*mtop)->left : (*mtop)->right;
         if ((*mtop) && (whichway ? macrotemp->right : macrotemp->left))
-            grow_macro_tree((*mtop),
-                            whichway ? macrotemp->right : macrotemp->left);
-        delete[] macrotemp->name;
-        delete[] macrotemp->definition;
+            grow_macro_tree((*mtop), whichway ? macrotemp->right : macrotemp->left);
+        delete[]macrotemp->name;
+        delete[]macrotemp->definition;
         delete macrotemp;
+
         return (1);
     } else if (erase_node((*mtop), (*mtop), macroname, (*mtop)))
         return (1);
@@ -290,21 +288,19 @@ editor(int descr, dbref player, const char *command)
                 if (insert_macro(word[1], word[2], player, &macrotop)) {
                     anotify_nolisten(player, CSUCC "Entry created.", 1);
                 } else {
-                    anotify_nolisten(player, CINFO "That macro already exists.",
-                                     1);
+                    anotify_nolisten(player, CINFO "That macro already exists.", 1);
                 }
             }
             for (; i >= 0; i--)
-                delete[] word[i];
+                delete[]word[i];
 
             return;
         }
         arg[i] = atoi(buf);
         if (arg[i] < 0) {
-            anotify_nolisten(player, CFAIL "Negative arguments not allowed.",
-                             1);
+            anotify_nolisten(player, CFAIL "Negative arguments not allowed.", 1);
             for (; i >= 0; i--)
-                delete[] word[i];
+                delete[]word[i];
             return;
         }
     }
@@ -320,11 +316,9 @@ editor(int descr, dbref player, const char *command)
                     anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
                 } else {
                     if (kill_macro(word[0], player, &macrotop))
-                        anotify_nolisten(player, CSUCC "Macro entry deleted.",
-                                         1);
+                        anotify_nolisten(player, CSUCC "Macro entry deleted.", 1);
                     else
-                        anotify_nolisten(player,
-                                         CINFO "Macro to delete not found.", 1);
+                        anotify_nolisten(player, CINFO "Macro to delete not found.", 1);
                 }
                 break;
             case SHOW_COMMAND:
@@ -379,7 +373,7 @@ editor(int descr, dbref player, const char *command)
         }
     }
     for (; i >= 0; i--)
-        delete[] word[i];
+        delete[]word[i];
 }
 
 
@@ -453,8 +447,7 @@ do_delete(dbref player, dbref program, int arg[], int argc)
 void
 do_quit(dbref player, dbref program)
 {
-    log_status("PROGRAM SAVED: %s by %s(%d)\n", unparse_object(player, program),
-               NAME(player), player);
+    log_status("PROGRAM SAVED: %s by %s(%d)\n", unparse_object(player, program), NAME(player), player);
     write_program(DBFETCH(program)->sp.program.first, program);
 
     if (tp_log_programs)
@@ -485,8 +478,7 @@ do_cancel(dbref player, dbref program)
 
 
 void
-match_and_list(int descr, dbref player, const char *name, char *linespec,
-               int editor)
+match_and_list(int descr, dbref player, const char *name, char *linespec, int editor)
 {
     dbref thing;
     char *p;
@@ -512,8 +504,7 @@ match_and_list(int descr, dbref player, const char *name, char *linespec,
     if ((thing = noisy_match_result(&md)) == NOTHING)
         return;
     if (Typeof(thing) != TYPE_PROGRAM) {
-        anotify_nolisten(player, CINFO "You can't list anything but a program.",
-                         1);
+        anotify_nolisten(player, CINFO "You can't list anything but a program.", 1);
         return;
     }
     if (!controls(player, thing) && !Viewable(thing)
@@ -603,12 +594,9 @@ do_list(dbref player, dbref program, int oarg[], int argc, int commentit)
         case 2:
             if ((arg[0] > arg[1]) && (arg[1] != -1)) {
                 if (commentit) {
-                    anotify_nolisten(player,
-                                     CFAIL "( Arguments don't make sense. )",
-                                     1);
+                    anotify_nolisten(player, CFAIL "( Arguments don't make sense. )", 1);
                 } else {
-                    anotify_nolisten(player,
-                                     CFAIL "Arguments don't make sense.", 1);
+                    anotify_nolisten(player, CFAIL "Arguments don't make sense.", 1);
                 }
                 return;
             }
@@ -629,21 +617,17 @@ do_list(dbref player, dbref program, int oarg[], int argc, int commentit)
                 }
                 if (count - arg[0] > 1) {
                     if (commentit) {
-                        sprintf(buf, SYSBLUE "( %d lines displayed. )",
-                                count - arg[0]);
+                        sprintf(buf, SYSBLUE "( %d lines displayed. )", count - arg[0]);
                     } else {
-                        sprintf(buf, SYSBLUE "%d lines displayed.",
-                                count - arg[0]);
+                        sprintf(buf, SYSBLUE "%d lines displayed.", count - arg[0]);
                     }
                     anotify_nolisten(player, buf, 1);
                 }
             } else {
                 if (commentit) {
-                    anotify_nolisten(player, SYSBLUE
-                                     "( Line not available for display. )", 1);
+                    anotify_nolisten(player, SYSBLUE "( Line not available for display. )", 1);
                 } else {
-                    anotify_nolisten(player, SYSBLUE
-                                     "Line not available for display.", 1);
+                    anotify_nolisten(player, SYSBLUE "Line not available for display.", 1);
                 }
             }
             break;
@@ -656,16 +640,14 @@ do_list(dbref player, dbref program, int oarg[], int argc, int commentit)
             break;
     }
 }
+
 void
 val_and_head(dbref player, int arg[], int argc)
 {
     dbref program;
 
     if (argc != 1) {
-        anotify_nolisten(player,
-                         CINFO
-                         "I don't understand which header you're trying to look at.",
-                         1);
+        anotify_nolisten(player, CINFO "I don't understand which header you're trying to look at.", 1);
         return;
     }
     program = arg[0];
@@ -686,9 +668,8 @@ do_list_header(dbref player, dbref program)
 {
     struct line *curr = read_program(program);
 
-    while (curr && (((curr->this_line)[0] == '(') ||
-                    (((curr->this_line)[0] == '/')
-                     && ((curr->this_line)[1] == '*')))) {
+    while (curr && (((curr->this_line)[0] == '(') || (((curr->this_line)[0] == '/')
+                                                      && ((curr->this_line)[1] == '*')))) {
         notify(player, curr->this_line);
         curr = curr->next;
     }
@@ -704,10 +685,7 @@ list_publics(int descr, dbref player, int arg[], int argc)
     dbref program;
 
     if (argc > 1) {
-        anotify_nolisten(player,
-                         CINFO
-                         "I don't understand which program you want to list PUBLIC functions for.",
-                         1);
+        anotify_nolisten(player, CINFO "I don't understand which program you want to list PUBLIC functions for.", 1);
         return;
     }
     program = (argc == 0) ? DBFETCH(player)->sp.player.curr_prog : arg[0];
@@ -726,8 +704,7 @@ list_publics(int descr, dbref player, int arg[], int argc)
             struct line *tmpline;
 
             tmpline = DBFETCH(program)->sp.program.first;
-            DBFETCH(program)->sp.program.first =
-                (struct line *) read_program(program);
+            DBFETCH(program)->sp.program.first = (struct line *) read_program(program);
             do_compile(descr, OWNER(program), program, 0);
             free_prog_text(DBFETCH(program)->sp.program.first);
             DBSTORE(program, sp.program.first, tmpline);
@@ -810,8 +787,7 @@ insert(dbref player, const char *line)
     }
     if (!curr) {                /* insert at the end */
         i = 1;
-        for (curr = DBFETCH(program)->sp.program.first; curr->next;
-             curr = curr->next)
+        for (curr = DBFETCH(program)->sp.program.first; curr->next; curr = curr->next)
             i++;                /* count lines */
         DBFETCH(program)->sp.program.curr_line = i + 2;
         new_line->prev = curr;

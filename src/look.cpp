@@ -38,11 +38,9 @@ print_owner(dbref player, dbref thing)
             if (DBFETCH(thing)->sp.exit.ndest) {
                 ref = (DBFETCH(thing)->sp.exit.dest)[0];
                 if (ref == NIL || ref == HOME)
-                    anotify_fmt(player, SYSCYAN "And is linked to: %s",
-                                ansi_unparse_object(MAN, ref));
+                    anotify_fmt(player, SYSCYAN "And is linked to: %s", ansi_unparse_object(MAN, ref));
                 else if (Typeof(ref) == TYPE_PROGRAM && FLAGS(ref) & VEHICLE) {
-                    anotify_fmt(player, SYSCYAN "And is linked to: %s",
-                                ansi_unparse_object(MAN, ref));
+                    anotify_fmt(player, SYSCYAN "And is linked to: %s", ansi_unparse_object(MAN, ref));
                 }
             }
             break;
@@ -53,8 +51,7 @@ print_owner(dbref player, dbref thing)
 }
 
 void
-exec_or_notify_2(int descr, dbref player, dbref thing,
-                 const char *message, const char *whatcalled, bool typ)
+exec_or_notify_2(int descr, dbref player, dbref thing, const char *message, const char *whatcalled, bool typ)
 {
     const char *p;
     char buf[BUFFER_LEN];
@@ -98,12 +95,10 @@ exec_or_notify_2(int descr, dbref player, dbref thing,
 
             strcpy(tmparg, match_args);
             strcpy(tmpcmd, match_cmdname);
-            p = do_parse_mesg(descr, player, thing, p, whatcalled, buf,
-                              MPI_ISPRIVATE);
+            p = do_parse_mesg(descr, player, thing, p, whatcalled, buf, MPI_ISPRIVATE);
             strcpy(match_args, p);
             strcpy(match_cmdname, whatcalled);
-            tmpfr = interp(descr, player, DBFETCH(player)->location, i, thing,
-                           PREEMPT, STD_HARDUID, 0);
+            tmpfr = interp(descr, player, DBFETCH(player)->location, i, thing, PREEMPT, STD_HARDUID, 0);
             if (tmpfr)
                 interp_loop(player, i, tmpfr, 0);
 
@@ -111,8 +106,7 @@ exec_or_notify_2(int descr, dbref player, dbref thing,
             strcpy(match_cmdname, tmpcmd);
         }
     } else {
-        p = do_parse_mesg(descr, player, thing, p, whatcalled, buf,
-                          MPI_ISPRIVATE);
+        p = do_parse_mesg(descr, player, thing, p, whatcalled, buf, MPI_ISPRIVATE);
         if (typ)
             notify(player, p);
         else
@@ -159,8 +153,8 @@ look_details(dbref player, dbref what, const char *propname)
             strcpy(buf2, SYSPURPLE);
             strcat(buf2, pname + strlen("_obj/"));
             tmpchr = buf2 + strlen(SYSPURPLE);
-            while (((*tmpchr) != '\0')) {
-                if (((*tmpchr) == ';'))
+            while ((*tmpchr) != '\0') {
+                if ((*tmpchr) == ';')
                     (*tmpchr) = '\0';
                 else
                     tmpchr++;
@@ -193,8 +187,7 @@ look_contents(dbref player, dbref loc, const char *contents_name)
             anotify_nolisten(player, contents_name, 1);
             DOLIST(thing, DBFETCH(loc)->contents) {
                 if (can_see(player, thing, can_see_loc))
-                    anotify_nolisten(player, ansi_unparse_object(player, thing),
-                                     1);
+                    anotify_nolisten(player, ansi_unparse_object(player, thing), 1);
             }
             break;              /* we're done */
         }
@@ -230,8 +223,7 @@ look_room(int descr, dbref player, dbref loc)
     /* tell him the description */
     if (Typeof(loc) == TYPE_ROOM) {
         if (Html(player) && GETHTMLDESC(loc))
-            exec_or_html_notify(descr, player, loc, GETHTMLDESC(loc),
-                                "(@Desc)");
+            exec_or_html_notify(descr, player, loc, GETHTMLDESC(loc), "(@Desc)");
         else if (GETDESC(loc))
             exec_or_notify(descr, player, loc, GETDESC(loc), "(@Desc)");
 
@@ -247,13 +239,11 @@ look_room(int descr, dbref player, dbref loc)
                 exec_or_notify(descr, player, loc, GETSUCC(loc), "(@Succ)");
 
             if (GETOSUCC(loc) && !Dark(player))
-                parse_omessage(descr, player, loc, loc, GETOSUCC(loc),
-                               NAME(player), "(@Osucc)");
+                parse_omessage(descr, player, loc, loc, GETOSUCC(loc), NAME(player), "(@Osucc)");
         }
     } else {
         if (Html(player) && GETIHTMLDESC(loc))
-            exec_or_html_notify(descr, player, loc, GETIHTMLDESC(loc),
-                                "(@Idesc)");
+            exec_or_html_notify(descr, player, loc, GETIHTMLDESC(loc), "(@Idesc)");
         else if (GETIDESC(loc))
             exec_or_notify(descr, player, loc, GETIDESC(loc), "(@Idesc)");
     }
@@ -264,8 +254,7 @@ look_room(int descr, dbref player, dbref loc)
     look_contents(player, loc, SYSBLUE "Contents:");
     if (tp_look_propqueues) {
         sprintf(obj_num, "#%d", loc);
-        envpropqueue(descr, player, loc, player, loc, NOTHING, "_lookq",
-                     obj_num, 1, 1);
+        envpropqueue(descr, player, loc, player, loc, NOTHING, "_lookq", obj_num, 1, 1);
     }
 }
 
@@ -281,8 +270,7 @@ do_look_around(int descr, dbref player)
 }
 
 void
-do_look_at(int descr, dbref player, const char *name,
-           const char *detail)
+do_look_at(int descr, dbref player, const char *name, const char *detail)
 {
     dbref thing, lastthing;
     bool nomatch;
@@ -316,8 +304,7 @@ do_look_at(int descr, dbref player, const char *name,
         if (thing != NOTHING && thing != AMBIGUOUS && !*detail) {
             switch (Typeof(thing)) {
                 case TYPE_ROOM:
-                    if (getloc(player) != thing
-                        && !can_link_to(player, TYPE_ROOM, thing)) {
+                    if (getloc(player) != thing && !can_link_to(player, TYPE_ROOM, thing)) {
                         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
                     } else {
                         look_room(descr, player, thing);
@@ -332,8 +319,7 @@ do_look_at(int descr, dbref player, const char *name,
                         look_contents(player, thing, SYSBLUE "Carrying:");
                         if (tp_look_propqueues) {
                             sprintf(obj_num, "#%d", thing);
-                            envpropqueue(descr, player, thing, player, thing,
-                                         NOTHING, "_lookq", obj_num, 1, 1);
+                            envpropqueue(descr, player, thing, player, thing, NOTHING, "_lookq", obj_num, 1, 1);
                         }
                     }
                     break;
@@ -349,8 +335,7 @@ do_look_at(int descr, dbref player, const char *name,
                         }
                         if (tp_look_propqueues) {
                             sprintf(obj_num, "#%d", thing);
-                            envpropqueue(descr, player, thing, player, thing,
-                                         NOTHING, "_lookq", obj_num, 1, 1);
+                            envpropqueue(descr, player, thing, player, thing, NOTHING, "_lookq", obj_num, 1, 1);
                         }
                     }
                     break;
@@ -360,8 +345,7 @@ do_look_at(int descr, dbref player, const char *name,
                         ts_useobject(player, thing);
                     if (tp_look_propqueues) {
                         sprintf(obj_num, "#%d", thing);
-                        envpropqueue(descr, player, thing, player, thing,
-                                     NOTHING, "_lookq", obj_num, 1, 1);
+                        envpropqueue(descr, player, thing, player, thing, NOTHING, "_lookq", obj_num, 1, 1);
                     }
                     break;
             }
@@ -425,8 +409,7 @@ do_look_at(int descr, dbref player, const char *name,
 #ifdef DISKBASE
                 propfetch(thing, lastmatch); /* DISKBASE PROPVALS */
 #endif
-                exec_or_notify(descr, player, thing, PropDataUNCStr(lastmatch),
-                               "(@detail)");
+                exec_or_notify(descr, player, thing, PropDataUNCStr(lastmatch), "(@detail)");
             } else if (ambig) {
                 anotify_nolisten(player, CINFO AMBIGUOUS_MESSAGE, 1);
             } else if (*detail) {
@@ -446,7 +429,7 @@ flag_description(dbref thing)
 {
     static char buf[1024];
     static char buf2[32];
-    int i,j;
+    int i, j;
 
     strcpy(buf, SYSGREEN "Type: " SYSYELLOW);
     switch (Typeof(thing)) {
@@ -512,20 +495,16 @@ flag_description(dbref thing)
         if (FLAGS(thing) & QUELL)
             strcat(buf, " QUELL");
         if (FLAGS(thing) & STICKY)
-            strcat(buf, (Typeof(thing) == TYPE_PROGRAM) ? " SETUID" :
-                   (Typeof(thing) == TYPE_PLAYER) ? " SILENT" : " STICKY");
+            strcat(buf, (Typeof(thing) == TYPE_PROGRAM) ? " SETUID" : (Typeof(thing) == TYPE_PLAYER) ? " SILENT" : " STICKY");
         if (FLAGS(thing) & DARK)
-            strcat(buf,
-                   (Typeof(thing) == TYPE_PROGRAM) ? " DEBUGGING" : " DARK");
+            strcat(buf, (Typeof(thing) == TYPE_PROGRAM) ? " DEBUGGING" : " DARK");
         if (FLAGS(thing) & LINK_OK)
             strcat(buf, " LINK_OK");
 
         if (FLAGS(thing) & BUILDER)
-            strcat(buf,
-                   (Typeof(thing) != TYPE_PROGRAM) ? " BUILDER" : " BOUND");
+            strcat(buf, (Typeof(thing) != TYPE_PROGRAM) ? " BUILDER" : " BOUND");
         if (FLAGS(thing) & CHOWN_OK)
-            strcat(buf,
-                   (Typeof(thing) == TYPE_PLAYER) ? " COLOR_ON" : " CHOWN_OK");
+            strcat(buf, (Typeof(thing) == TYPE_PLAYER) ? " COLOR_ON" : " CHOWN_OK");
         if (FLAGS(thing) & F256COLOR)
             strcat(buf, " 256COLOR");
 #ifdef CONTROLS_SUPPORT
@@ -537,22 +516,15 @@ flag_description(dbref thing)
         if (FLAGS(thing) & JUMP_OK)
             strcat(buf, " JUMP_OK");
         if (FLAGS(thing) & VEHICLE)
-            strcat(buf,
-                   (Typeof(thing) != TYPE_PROGRAM) ? " VEHICLE" : " VIEWABLE");
+            strcat(buf, (Typeof(thing) != TYPE_PROGRAM) ? " VEHICLE" : " VIEWABLE");
         if (FLAGS(thing) & XFORCIBLE)
-            strcat(buf,
-                   (Typeof(thing) !=
-                    TYPE_PROGRAM) ? " XFORCIBLE" : " EXPANDED_DEBUG");
+            strcat(buf, (Typeof(thing) != TYPE_PROGRAM) ? " XFORCIBLE" : " EXPANDED_DEBUG");
         if (FLAGS(thing) & ZOMBIE)
             strcat(buf, " ZOMBIE");
         if (FLAGS(thing) & HAVEN)
-            strcat(buf, (Typeof(thing) != TYPE_PROGRAM) ?
-                   (Typeof(thing) !=
-                    TYPE_THING ? " HAVEN" : "HIDE") : " HARDUID");
+            strcat(buf, (Typeof(thing) != TYPE_PROGRAM) ? (Typeof(thing) != TYPE_THING ? " HAVEN" : "HIDE") : " HARDUID");
         if (FLAGS(thing) & ABODE)
-            strcat(buf, (Typeof(thing) != TYPE_PROGRAM) ?
-                   (Typeof(thing) !=
-                    TYPE_EXIT ? " ABODE" : " ABATE") : " AUTOSTART");
+            strcat(buf, (Typeof(thing) != TYPE_PROGRAM) ? (Typeof(thing) != TYPE_EXIT ? " ABODE" : " ABATE") : " AUTOSTART");
         if (FLAG2(thing) & F2GUEST)
             strcat(buf, " GUEST");
         if (FLAG2(thing) & F2IDLE)
@@ -560,8 +532,7 @@ flag_description(dbref thing)
         if (FLAG2(thing) & F2LOGWALL)
             strcat(buf, " LOGWALL");
         if (FLAG2(thing) & F2LIGHT)
-            strcat(buf, (Typeof(thing) == TYPE_PROGRAM) ? " OLDCOMMENT" :
-                   " LIGHT");
+            strcat(buf, (Typeof(thing) == TYPE_PROGRAM) ? " OLDCOMMENT" : " LIGHT");
         if (FLAG2(thing) & F2MUFCOUNT)
             strcat(buf, " MUFCOUNT");
         if (FLAG2(thing) & F2PROTECT)
@@ -569,15 +540,11 @@ flag_description(dbref thing)
         if (FLAG2(thing) & F2ANTIPROTECT)
             strcat(buf, " ANTIPROTECT");
         if (FLAG2(thing) & F2PARENT)
-            strcat(buf, (Typeof(thing) == TYPE_PLAYER ||
-                         Typeof(thing) ==
-                         TYPE_PROGRAM) ? " PROG_DEBUG" : " PARENT");
+            strcat(buf, (Typeof(thing) == TYPE_PLAYER || Typeof(thing) == TYPE_PROGRAM) ? " PROG_DEBUG" : " PARENT");
         if (FLAG2(thing) & F2HIDDEN)
             strcat(buf, " HIDDEN");
         if (FLAG2(thing) & F2NO_COMMAND)
-            strcat(buf,
-                   (Typeof(thing) ==
-                    TYPE_PROGRAM) ? " NO_OPTIMIZE" : " NO_COMMAND");
+            strcat(buf, (Typeof(thing) == TYPE_PROGRAM) ? " NO_OPTIMIZE" : " NO_COMMAND");
         if (FLAG2(thing) & F2EXAMINE_OK)
             strcat(buf, " EXAMINE_OK");
         if (FLAG2(thing) & F2PUEBLO)
@@ -588,21 +555,21 @@ flag_description(dbref thing)
             strcat(buf, " SUSPECT");
         if (FLAG2(thing) & F2MOBILE) {
             if (!*tp_userflag_name) {
-                strcat(buf,
-                       (Typeof(thing) == TYPE_ROOM) ? " OFFER" : " MOBILE");
+                strcat(buf, (Typeof(thing) == TYPE_ROOM) ? " OFFER" : " MOBILE");
             } else {
                 strcat(buf, " ");
                 strcat(buf, tp_userflag_name);
             }
         }
 
-	for (i=0; i<32; i++)
-	    if (LFLAG(thing) & LFLAGx(i)) {
-		strncpy(buf2, lflag_name[i], 32);
-		for (j=0; j<32; j++) buf2[j]=UPCASE(buf2[j]);
+        for (i = 0; i < 32; i++)
+            if (LFLAG(thing) & LFLAGx(i)) {
+                strncpy(buf2, lflag_name[i], 32);
+                for (j = 0; j < 32; j++)
+                    buf2[j] = UPCASE(buf2[j]);
                 strcat(buf, " ");
-		strcat(buf, buf2);
-	    }
+                strcat(buf, buf2);
+            }
     }
     return buf;
 }
@@ -694,7 +661,7 @@ listprops_wildcard(dbref player, dbref thing, const char *dir, const char *wild)
                     anotify_nolisten(player, buf2, 1);
                 }
                 if (recurse)
-                    ptr = (char *)"**";
+                    ptr = (char *) "**";
                 cnt += listprops_wildcard(player, thing, buf, ptr);
             }
         }
@@ -737,6 +704,7 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
     dbref content;
     dbref exit;
     dbref ref_tm;
+    char ubuf[BUFFER_LEN];
 
     struct tm *time_tm;         /* used for timestamps */
 
@@ -771,52 +739,35 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
     }
 
     if ((!(POWERS(player) & POW_SEE_ALL) && !ExamineOk(thing)
-         && !can_link(OWNER(player), thing) && !Wiz(OWNER(player)) && !(!*dir
-                                                                        &&
-                                                                        Mage
-                                                                        (OWNER
-                                                                         (player))))
-        || (Protect(thing) && MLevel(OWNER(thing)) >= LBOY
-            && !(MLevel(OWNER(player)) >= LBOY))) {
+         && !can_link(OWNER(player), thing) && !Wiz(OWNER(player)) && !(!*dir && Mage(OWNER(player))))
+        || (Protect(thing) && MLevel(OWNER(thing)) >= LBOY && !(MLevel(OWNER(player)) >= LBOY))) {
         print_owner(player, thing);
         return;
     }
     if (*dir) {
         /* show him the properties */
         cnt = listprops_wildcard(player, thing, "", dir);
-        sprintf(buf, CINFO "%d propert%s listed.", cnt,
-                (cnt == 1 ? "y" : "ies"));
+        sprintf(buf, CINFO "%d propert%s listed.", cnt, (cnt == 1 ? "y" : "ies"));
         anotify_nolisten(player, buf, 1);
         return;
     }
     switch (Typeof(thing)) {
         case TYPE_ROOM:
             sprintf(buf, "%.*s" SYSNORMAL "  Owner: %s  Parent: ",
-                    (int) (BUFFER_LEN - strlen(NAME(OWNER(thing))) - 35),
-                    ansi_unparse_object(OWNER(player), thing),
-                    NAME(OWNER(thing)));
-            strcat(buf,
-                   ansi_unparse_object(OWNER(player),
-                                       DBFETCH(thing)->location));
+                    (int) (BUFFER_LEN - strlen(NAME(OWNER(thing))) - 35), ansi_unparse_object(OWNER(player), thing), NAME(OWNER(thing)));
+            strcat(buf, ansi_unparse_object(OWNER(player), DBFETCH(thing)->location));
             break;
         case TYPE_THING:
             sprintf(buf, "%.*s" SYSNORMAL "  Owner: %s  Value: %d",
-                    (int) (BUFFER_LEN - strlen(NAME(OWNER(thing))) - 35),
-                    ansi_unparse_object(OWNER(player), thing),
-                    NAME(OWNER(thing)), DBFETCH(thing)->sp.thing.value);
+                    (int) (BUFFER_LEN - strlen(NAME(OWNER(thing))) - 35), ansi_unparse_object(OWNER(player), thing), NAME(OWNER(thing)), DBFETCH(thing)->sp.thing.value);
             break;
         case TYPE_PLAYER:
             sprintf(buf, "%.*s" SYSNORMAL "  %s: %d  ",
-                    (int) (BUFFER_LEN - strlen(NAME(OWNER(thing))) - 35),
-                    ansi_unparse_object(OWNER(player), thing),
-                    tp_cpennies, DBFETCH(thing)->sp.player.pennies);
+                    (int) (BUFFER_LEN - strlen(NAME(OWNER(thing))) - 35), ansi_unparse_object(OWNER(player), thing), tp_cpennies, DBFETCH(thing)->sp.player.pennies);
             break;
         case TYPE_EXIT:
         case TYPE_PROGRAM:
-            sprintf(buf, "%.*s" SYSNORMAL "  Owner: %s",
-                    (int) (BUFFER_LEN - strlen(NAME(OWNER(thing))) - 35),
-                    ansi_unparse_object(OWNER(player), thing),
-                    NAME(OWNER(thing)));
+            sprintf(buf, "%.*s" SYSNORMAL "  Owner: %s", (int) (BUFFER_LEN - strlen(NAME(OWNER(thing))) - 35), ansi_unparse_object(OWNER(player), thing), NAME(OWNER(thing)));
             break;
         case TYPE_GARBAGE:
             strcpy(buf, ansi_unparse_object(OWNER(player), thing));
@@ -835,55 +786,42 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
         anotify_nolisten(player, buf, 1);
     }
     if (GETIDESC(thing)) {
-        sprintf(buf, SYSCYAN "IDESC:" SYSAQUA " %s",
-                tct(GETIDESC(thing), buf2));
+        sprintf(buf, SYSCYAN "IDESC:" SYSAQUA " %s", tct(GETIDESC(thing), buf2));
         anotify_nolisten(player, buf, 1);
     }
 
     if (GETANSIDESC(thing)) {
-        sprintf(buf, SYSCYAN "ANSIDESC:" SYSAQUA " %s",
-                tct(GETANSIDESC(thing), buf2));
+        sprintf(buf, SYSCYAN "ANSIDESC:" SYSAQUA " %s", tct(GETANSIDESC(thing), buf2));
         anotify_nolisten(player, buf, 1);
     }
     if (GETIANSIDESC(thing)) {
-        sprintf(buf, SYSCYAN "IANSIDESC:" SYSAQUA " %s",
-                tct(GETIANSIDESC(thing), buf2));
+        sprintf(buf, SYSCYAN "IANSIDESC:" SYSAQUA " %s", tct(GETIANSIDESC(thing), buf2));
         anotify_nolisten(player, buf, 1);
     }
 
     if (GETHTMLDESC(thing)) {
-        sprintf(buf, SYSCYAN "HTMLDESC:" SYSAQUA " %s",
-                tct(GETHTMLDESC(thing), buf2));
+        sprintf(buf, SYSCYAN "HTMLDESC:" SYSAQUA " %s", tct(GETHTMLDESC(thing), buf2));
         anotify_nolisten(player, buf, 1);
     }
     if (GETIHTMLDESC(thing)) {
-        sprintf(buf, SYSCYAN "IHTMLDESC:" SYSAQUA " %s",
-                tct(GETIHTMLDESC(thing), buf2));
+        sprintf(buf, SYSCYAN "IHTMLDESC:" SYSAQUA " %s", tct(GETIHTMLDESC(thing), buf2));
         anotify_nolisten(player, buf, 1);
     }
 
-    sprintf(buf, SYSVIOLET "Key:" SYSPURPLE " %s",
-            unparse_boolexp(OWNER(player), GETLOCK(thing), 1));
+    sprintf(buf, SYSVIOLET "Key:" SYSPURPLE " %s", unparse_boolexp(ubuf, OWNER(player), GETLOCK(thing), 1));
     anotify_nolisten(player, buf, 1);
 
-    sprintf(buf, SYSVIOLET "Chown_OK Key:" SYSPURPLE " %s",
-            unparse_boolexp(OWNER(player), get_property_lock(thing, CHLK_PROP),
-                            1));
+    sprintf(buf, SYSVIOLET "Chown_OK Key:" SYSPURPLE " %s", unparse_boolexp(ubuf, OWNER(player), get_property_lock(thing, CHLK_PROP), 1));
     anotify_nolisten(player, buf, 1);
 
-    sprintf(buf, SYSVIOLET "Container Key:" SYSPURPLE " %s",
-            unparse_boolexp(OWNER(player), get_property_lock(thing, "_/clk"),
-                            1));
+    sprintf(buf, SYSVIOLET "Container Key:" SYSPURPLE " %s", unparse_boolexp(ubuf, OWNER(player), get_property_lock(thing, "_/clk"), 1));
     anotify_nolisten(player, buf, 1);
 
-    sprintf(buf, SYSVIOLET "Force Key:" SYSPURPLE " %s",
-            unparse_boolexp(OWNER(player), get_property_lock(thing, "@/flk"),
-                            1));
+    sprintf(buf, SYSVIOLET "Force Key:" SYSPURPLE " %s", unparse_boolexp(ubuf, OWNER(player), get_property_lock(thing, "@/flk"), 1));
     anotify_nolisten(player, buf, 1);
 
     if (GETSUCC(thing)) {
-        sprintf(buf, SYSAQUA "Success:" SYSCYAN " %s",
-                tct(GETSUCC(thing), buf2));
+        sprintf(buf, SYSAQUA "Success:" SYSCYAN " %s", tct(GETSUCC(thing), buf2));
         anotify_nolisten(player, buf, 1);
     }
     if (GETFAIL(thing)) {
@@ -895,35 +833,29 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
         anotify_nolisten(player, buf, 1);
     }
     if (GETOSUCC(thing)) {
-        sprintf(buf, SYSAQUA "Osuccess:" SYSCYAN " %s",
-                tct(GETOSUCC(thing), buf2));
+        sprintf(buf, SYSAQUA "Osuccess:" SYSCYAN " %s", tct(GETOSUCC(thing), buf2));
         anotify_nolisten(player, buf, 1);
     }
     if (GETOFAIL(thing)) {
-        sprintf(buf, SYSAQUA "Ofail:" SYSCYAN " %s",
-                tct(GETOFAIL(thing), buf2));
+        sprintf(buf, SYSAQUA "Ofail:" SYSCYAN " %s", tct(GETOFAIL(thing), buf2));
         anotify_nolisten(player, buf, 1);
     }
     if (GETODROP(thing)) {
-        sprintf(buf, SYSAQUA "Odrop:" SYSCYAN " %s",
-                tct(GETODROP(thing), buf2));
+        sprintf(buf, SYSAQUA "Odrop:" SYSCYAN " %s", tct(GETODROP(thing), buf2));
         anotify_nolisten(player, buf, 1);
     }
 
     if (tp_who_doing && GETDOING(thing)) {
-        sprintf(buf, SYSAQUA "Doing:" SYSCYAN " %s",
-                tct(GETDOING(thing), buf2));
+        sprintf(buf, SYSAQUA "Doing:" SYSCYAN " %s", tct(GETDOING(thing), buf2));
         anotify_nolisten(player, buf, 1);
     }
     if (GETOECHO(thing)) {
-        sprintf(buf, SYSAQUA "Oecho:" SYSCYAN " %s",
-                tct(GETOECHO(thing), buf2));
+        sprintf(buf, SYSAQUA "Oecho:" SYSCYAN " %s", tct(GETOECHO(thing), buf2));
         anotify_nolisten(player, buf, 1);
     }
     if ((Typeof(thing) == TYPE_THING) && (FLAGS(thing) & ZOMBIE)
         && GETPECHO(thing)) {
-        sprintf(buf, SYSAQUA "Pecho:" SYSCYAN " %s",
-                tct(GETPECHO(thing), buf2));
+        sprintf(buf, SYSAQUA "Pecho:" SYSCYAN " %s", tct(GETPECHO(thing), buf2));
         anotify_nolisten(player, buf, 1);
     }
 
@@ -937,35 +869,24 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
     anotify_nolisten(player, buf, 1);
     time_tm = localtime((&(DBFETCH(thing)->ts.modified)));
     ref_tm = (DBFETCH(thing)->ts.dmodified);
-    format_time(buf2, BUFFER_LEN,
-                       (char *) SYSFOREST "Modified:" SYSGREEN
-                       " %a %b %e %T %Z %Y", time_tm);
+    format_time(buf2, BUFFER_LEN, (char *) SYSFOREST "Modified:" SYSGREEN " %a %b %e %T %Z %Y", time_tm);
     sprintf(buf, "%s by %s", buf2, ref_tm < 0 ? "*NOTHING*" : ansi_unparse_object(OWNER(player), ref_tm));
     anotify_nolisten(player, buf, 1);
     time_tm = localtime((&(DBFETCH(thing)->ts.lastused)));
     ref_tm = (DBFETCH(thing)->ts.dlastused);
-    format_time(buf2, BUFFER_LEN,
-                       (char *) SYSFOREST "Lastused:" SYSGREEN
-                       " %a %b %e %T %Z %Y", time_tm);
+    format_time(buf2, BUFFER_LEN, (char *) SYSFOREST "Lastused:" SYSGREEN " %a %b %e %T %Z %Y", time_tm);
     sprintf(buf, "%s by %s", buf2, ref_tm < 0 ? "*NOTHING*" : ansi_unparse_object(OWNER(player), ref_tm));
     anotify_nolisten(player, buf, 1);
     if (Typeof(thing) == TYPE_PROGRAM) {
-        sprintf(buf, SYSFOREST "Usecount:" SYSGREEN " %d     "
-                SYSFOREST "Instances:" SYSGREEN " %d",
-                DBFETCH(thing)->ts.usecount,
-                DBFETCH(thing)->sp.program.instances);
+        sprintf(buf, SYSFOREST "Usecount:" SYSGREEN " %d     " SYSFOREST "Instances:" SYSGREEN " %d", DBFETCH(thing)->ts.usecount, DBFETCH(thing)->sp.program.instances);
     } else
-        sprintf(buf, SYSFOREST "Usecount:" SYSGREEN " %d",
-                DBFETCH(thing)->ts.usecount);
+        sprintf(buf, SYSFOREST "Usecount:" SYSGREEN " %d", DBFETCH(thing)->ts.usecount);
     anotify_nolisten(player, buf, 1);
 
-    sprintf(buf, SYSVIOLET "In Memory:" SYSPURPLE " %d bytes",
-            size_object(thing, 0));
+    sprintf(buf, SYSVIOLET "In Memory:" SYSPURPLE " %d bytes", size_object(thing, 0));
     anotify_nolisten(player, buf, 1);
 
-    anotify_nolisten(player, SYSYELLOW
-                     "[ Use 'examine <object>=/' to list root properties. ]",
-                     1);
+    anotify_nolisten(player, SYSYELLOW "[ Use 'examine <object>=/' to list root properties. ]", 1);
 
     /* show him the contents */
     if (DBFETCH(thing)->contents != NOTHING) {
@@ -974,8 +895,7 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
         else
             anotify_nolisten(player, SYSBLUE "Contents:", 1);
         DOLIST(content, DBFETCH(thing)->contents) {
-            anotify_nolisten(player,
-                             ansi_unparse_object(OWNER(player), content), 1);
+            anotify_nolisten(player, ansi_unparse_object(OWNER(player), content), 1);
         }
     }
     switch (Typeof(thing)) {
@@ -985,12 +905,7 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
                 anotify_nolisten(player, SYSBLUE "Exits:", 1);
                 DOLIST(exit, DBFETCH(thing)->exits) {
                     strcpy(buf, ansi_unparse_object(OWNER(player), exit));
-                    anotify_fmt(player, "%s " SYSCYAN "to %s", buf,
-                                ansi_unparse_object(OWNER(player),
-                                                    DBFETCH(exit)->sp.exit.
-                                                    ndest >
-                                                    0 ? DBFETCH(exit)->sp.exit.
-                                                    dest[0] : NOTHING)
+                    anotify_fmt(player, "%s " SYSCYAN "to %s", buf, ansi_unparse_object(OWNER(player), DBFETCH(exit)->sp.exit.ndest > 0 ? DBFETCH(exit)->sp.exit.dest[0] : NOTHING)
                         );
                 }
             } else {
@@ -999,9 +914,7 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
 
             /* print dropto if present */
             if (DBFETCH(thing)->sp.room.dropto != NOTHING) {
-                sprintf(buf, SYSAQUA "Dropped objects go to: %s",
-                        ansi_unparse_object(OWNER(player),
-                                            DBFETCH(thing)->sp.room.dropto));
+                sprintf(buf, SYSAQUA "Dropped objects go to: %s", ansi_unparse_object(OWNER(player), DBFETCH(thing)->sp.room.dropto));
                 anotify_nolisten(player, buf, 1);
             }
             break;
@@ -1010,13 +923,9 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
             sprintf(buf, SYSAQUA "Home: %s", ansi_unparse_object(OWNER(player), DBFETCH(thing)->sp.thing.home)); /* home */
             anotify_nolisten(player, buf, 1);
             /* print location if player can link to it */
-            if (DBFETCH(thing)->location != NOTHING
-                && (controls(OWNER(player), DBFETCH(thing)->location)
-                    || can_link_to(OWNER(player), NOTYPE,
-                                   DBFETCH(thing)->location))) {
-                sprintf(buf, SYSAQUA "Location: %s",
-                        ansi_unparse_object(OWNER(player),
-                                            DBFETCH(thing)->location));
+            if (DBFETCH(thing)->location != NOTHING && (controls(OWNER(player), DBFETCH(thing)->location)
+                                                        || can_link_to(OWNER(player), NOTYPE, DBFETCH(thing)->location))) {
+                sprintf(buf, SYSAQUA "Location: %s", ansi_unparse_object(OWNER(player), DBFETCH(thing)->location));
                 anotify_nolisten(player, buf, 1);
             }
             /* print thing's actions, if any */
@@ -1024,12 +933,7 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
                 anotify_nolisten(player, SYSBLUE "Actions/exits:", 1);
                 DOLIST(exit, DBFETCH(thing)->exits) {
                     strcpy(buf, ansi_unparse_object(OWNER(player), exit));
-                    anotify_fmt(player, "%s " SYSCYAN "to %s", buf,
-                                ansi_unparse_object(OWNER(player),
-                                                    DBFETCH(exit)->sp.exit.
-                                                    ndest >
-                                                    0 ? DBFETCH(exit)->sp.exit.
-                                                    dest[0] : NOTHING)
+                    anotify_fmt(player, "%s " SYSCYAN "to %s", buf, ansi_unparse_object(OWNER(player), DBFETCH(exit)->sp.exit.ndest > 0 ? DBFETCH(exit)->sp.exit.dest[0] : NOTHING)
                         );
                 }
             } else {
@@ -1043,13 +947,9 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
             anotify_nolisten(player, buf, 1);
 
             /* print location if player can link to it */
-            if (DBFETCH(thing)->location != NOTHING
-                && (controls(OWNER(player), DBFETCH(thing)->location)
-                    || can_link_to(OWNER(player), NOTYPE,
-                                   DBFETCH(thing)->location))) {
-                sprintf(buf, SYSAQUA "Location: %s",
-                        ansi_unparse_object(OWNER(player),
-                                            DBFETCH(thing)->location));
+            if (DBFETCH(thing)->location != NOTHING && (controls(OWNER(player), DBFETCH(thing)->location)
+                                                        || can_link_to(OWNER(player), NOTYPE, DBFETCH(thing)->location))) {
+                sprintf(buf, SYSAQUA "Location: %s", ansi_unparse_object(OWNER(player), DBFETCH(thing)->location));
                 anotify_nolisten(player, buf, 1);
             }
             /* print player's actions, if any */
@@ -1057,12 +957,7 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
                 anotify_nolisten(player, SYSBLUE "Actions/exits:", 1);
                 DOLIST(exit, DBFETCH(thing)->exits) {
                     strcpy(buf, ansi_unparse_object(OWNER(player), exit));
-                    anotify_fmt(player, "%s " SYSCYAN "to %s", buf,
-                                ansi_unparse_object(player,
-                                                    DBFETCH(exit)->sp.exit.
-                                                    ndest >
-                                                    0 ? DBFETCH(exit)->sp.exit.
-                                                    dest[0] : NOTHING)
+                    anotify_fmt(player, "%s " SYSCYAN "to %s", buf, ansi_unparse_object(player, DBFETCH(exit)->sp.exit.ndest > 0 ? DBFETCH(exit)->sp.exit.dest[0] : NOTHING)
                         );
                 }
             } else {
@@ -1071,9 +966,7 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
             break;
         case TYPE_EXIT:
             if (DBFETCH(thing)->location != NOTHING) {
-                sprintf(buf, SYSAQUA "Source: %s",
-                        ansi_unparse_object(OWNER(player),
-                                            DBFETCH(thing)->location));
+                sprintf(buf, SYSAQUA "Source: %s", ansi_unparse_object(OWNER(player), DBFETCH(thing)->location));
                 anotify_nolisten(player, buf, 1);
             }
             /* print destinations */
@@ -1084,14 +977,10 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
                     case NOTHING:
                         break;
                     case HOME:
-                        anotify_nolisten(player, SYSAQUA "Destination: *HOME*",
-                                         1);
+                        anotify_nolisten(player, SYSAQUA "Destination: *HOME*", 1);
                         break;
                     default:
-                        sprintf(buf, SYSAQUA "Destination: %s",
-                                ansi_unparse_object(OWNER(player),
-                                                    (DBFETCH(thing)->sp.exit.
-                                                     dest)[i]));
+                        sprintf(buf, SYSAQUA "Destination: %s", ansi_unparse_object(OWNER(player), (DBFETCH(thing)->sp.exit.dest)[i]));
                         anotify_nolisten(player, buf, 1);
                         break;
                 }
@@ -1101,24 +990,18 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
             if (DBFETCH(thing)->sp.program.siz) {
                 struct timeval tv = DBFETCH(thing)->sp.program.proftime;
 
-                sprintf(buf, SYSVIOLET "Program compiled size: " SYSPURPLE
-                        "%d instructions", DBFETCH(thing)->sp.program.siz);
+                sprintf(buf, SYSVIOLET "Program compiled size: " SYSPURPLE "%d instructions", DBFETCH(thing)->sp.program.siz);
                 anotify_nolisten(player, buf, 1);
-                sprintf(buf, SYSVIOLET "Cumulative runtime: " SYSPURPLE
-                        "%ld.%06ld seconds", tv.tv_sec, (long int)tv.tv_usec);
+                sprintf(buf, SYSVIOLET "Cumulative runtime: " SYSPURPLE "%ld.%06ld seconds", tv.tv_sec, (long int) tv.tv_usec);
                 anotify_nolisten(player, buf, 1);
             } else {
                 anotify_nolisten(player, SYSVIOLET "Program not compiled.", 1);
             }
 
             /* print location if player can link to it */
-            if (DBFETCH(thing)->location != NOTHING
-                && (controls(OWNER(player), DBFETCH(thing)->location)
-                    || can_link_to(OWNER(player), NOTYPE,
-                                   DBFETCH(thing)->location))) {
-                sprintf(buf, SYSAQUA "Location: %s",
-                        ansi_unparse_object(OWNER(player),
-                                            DBFETCH(thing)->location));
+            if (DBFETCH(thing)->location != NOTHING && (controls(OWNER(player), DBFETCH(thing)->location)
+                                                        || can_link_to(OWNER(player), NOTYPE, DBFETCH(thing)->location))) {
+                sprintf(buf, SYSAQUA "Location: %s", ansi_unparse_object(OWNER(player), DBFETCH(thing)->location));
                 anotify_nolisten(player, buf, 1);
             }
             break;
@@ -1134,8 +1017,7 @@ do_score(dbref player)
 {
     char buf[BUFFER_LEN];
 
-    sprintf(buf, CINFO "You have %d %s.", DBFETCH(player)->sp.player.pennies,
-            DBFETCH(player)->sp.player.pennies == 1 ? tp_penny : tp_pennies);
+    sprintf(buf, CINFO "You have %d %s.", DBFETCH(player)->sp.player.pennies, DBFETCH(player)->sp.player.pennies == 1 ? tp_penny : tp_pennies);
 
     anotify_nolisten(player, buf, 1);
 }
@@ -1145,8 +1027,7 @@ do_inventory(dbref player)
 {
     dbref thing;
 
-    if ((thing = DBFETCH(player)->contents) == NOTHING &&
-        !count_details(player, player, "_obj")) {
+    if ((thing = DBFETCH(player)->contents) == NOTHING && !count_details(player, player, "_obj")) {
         anotify_nolisten(player, SYSBLUE "You aren't carrying anything.", 1);
     } else {
         anotify_nolisten(player, SYSBLUE "You are carrying:", 1);
@@ -1162,8 +1043,7 @@ do_inventory(dbref player)
 }
 
 char
-init_checkflags(dbref player, const char *flags,
-                struct flgchkdat *check)
+init_checkflags(dbref player, const char *flags, struct flgchkdat *check)
 {
     char buf[BUFFER_LEN];
     char *cptr;
@@ -1288,7 +1168,8 @@ init_checkflags(dbref player, const char *flags,
                     }
                     break;
                 case '^':
-                    check->loadedsize = (Mage(OWNER(player)) && *flags == '^');
+                    check->loadedsize = (Mage(OWNER(player))
+                                         && *flags == '^');
                     check->size = atoi(flags + 1);
                     check->issize = !mode;
                     while (isdigit(flags[1]))
@@ -1778,8 +1659,7 @@ checkflags(dbref what, struct flgchkdat check)
     if (check.forlink) {
         switch (Typeof(what)) {
             case TYPE_ROOM:
-                if ((DBFETCH(what)->sp.room.dropto == NOTHING) !=
-                    (!check.islinked))
+                if ((DBFETCH(what)->sp.room.dropto == NOTHING) != (!check.islinked))
                     return (0);
                 break;
             case TYPE_EXIT:
@@ -1798,8 +1678,7 @@ checkflags(dbref what, struct flgchkdat check)
     }
     if (check.forold) {
         if (((((current_systime) - DBFETCH(what)->ts.lastused) < tp_aging_time)
-             || (((current_systime) - DBFETCH(what)->ts.modified) <
-                 tp_aging_time))
+             || (((current_systime) - DBFETCH(what)->ts.modified) < tp_aging_time))
             != (!check.isold))
             return (0);
     }
@@ -1813,8 +1692,7 @@ checkflags(dbref what, struct flgchkdat check)
 
 
 void
-display_objinfo(dbref player, dbref obj,
-                char output_type)
+display_objinfo(dbref player, dbref obj, char output_type)
 {
     char buf[BUFFER_LEN];
     char buf2[BUFFER_LEN];
@@ -1824,15 +1702,12 @@ display_objinfo(dbref player, dbref obj,
 
     switch (output_type) {
         case 1:                /* owners */
-            sprintf(buf, "%-38.512s  %.512s", buf2,
-                    ansi_unparse_object(player, OWNER(obj)));
+            sprintf(buf, "%-38.512s  %.512s", buf2, ansi_unparse_object(player, OWNER(obj)));
             break;
         case 2:                /* links */
             switch (Typeof(obj)) {
                 case TYPE_ROOM:
-                    sprintf(buf, "%-38.512s  %.512s", buf2,
-                            ansi_unparse_object(player,
-                                                DBFETCH(obj)->sp.room.dropto));
+                    sprintf(buf, "%-38.512s  %.512s", buf2, ansi_unparse_object(player, DBFETCH(obj)->sp.room.dropto));
                     break;
                 case TYPE_EXIT:
                     if (DBFETCH(obj)->sp.exit.ndest == 0) {
@@ -1843,19 +1718,13 @@ display_objinfo(dbref player, dbref obj,
                         sprintf(buf, "%-38.512s  %.512s", buf2, "*METALINKED*");
                         break;
                     }
-                    sprintf(buf, "%-38.512s  %.512s", buf2,
-                            ansi_unparse_object(player,
-                                                DBFETCH(obj)->sp.exit.dest[0]));
+                    sprintf(buf, "%-38.512s  %.512s", buf2, ansi_unparse_object(player, DBFETCH(obj)->sp.exit.dest[0]));
                     break;
                 case TYPE_PLAYER:
-                    sprintf(buf, "%-38.512s  %.512s", buf2,
-                            ansi_unparse_object(player,
-                                                DBFETCH(obj)->sp.player.home));
+                    sprintf(buf, "%-38.512s  %.512s", buf2, ansi_unparse_object(player, DBFETCH(obj)->sp.player.home));
                     break;
                 case TYPE_THING:
-                    sprintf(buf, "%-38.512s  %.512s", buf2,
-                            ansi_unparse_object(player,
-                                                DBFETCH(obj)->sp.thing.home));
+                    sprintf(buf, "%-38.512s  %.512s", buf2, ansi_unparse_object(player, DBFETCH(obj)->sp.thing.home));
                     break;
                 default:
                     sprintf(buf, "%-38.512s  %.512s", buf2, "N/A");
@@ -1863,8 +1732,7 @@ display_objinfo(dbref player, dbref obj,
             }
             break;
         case 3:                /* locations */
-            sprintf(buf, "%-38.512s  %.512s", buf2,
-                    ansi_unparse_object(player, DBFETCH(obj)->location));
+            sprintf(buf, "%-38.512s  %.512s", buf2, ansi_unparse_object(player, DBFETCH(obj)->location));
             break;
         case 4:
             return;
@@ -1991,8 +1859,7 @@ do_trace(int descr, dbref player, const char *name, int depth)
 }
 
 void
-do_entrances(int descr, dbref player, const char *name,
-             const char *flags)
+do_entrances(int descr, dbref player, const char *name, const char *flags)
 {
     dbref i, thing;
     dbref j;
@@ -2077,8 +1944,7 @@ do_entrances(int descr, dbref player, const char *name,
 }
 
 void
-do_contents(int descr, dbref player, const char *name,
-            const char *flags)
+do_contents(int descr, dbref player, const char *name, const char *flags)
 {
     dbref thing;
     dbref i;
@@ -2152,11 +2018,14 @@ exit_matches_name(dbref exit, const char *name)
 {
     char buf[BUFFER_LEN];
     char *ptr, *ptr2;
-    
-    if (!OkObj(exit)) return 0;
-    if (!DBFETCH(exit)->sp.exit.ndest) return 0;
-    if (!OkObj((DBFETCH(exit)->sp.exit.dest)[0])) return 0;
-    
+
+    if (!OkObj(exit))
+        return 0;
+    if (!DBFETCH(exit)->sp.exit.ndest)
+        return 0;
+    if (!OkObj((DBFETCH(exit)->sp.exit.dest)[0]))
+        return 0;
+
     strcpy(buf, NAME(exit));
     for (ptr2 = ptr = buf; *ptr; ptr = ptr2) {
         while (*ptr2 && *ptr2 != ';')
@@ -2165,8 +2034,7 @@ exit_matches_name(dbref exit, const char *name)
             *ptr2++ = '\0';
         while (*ptr2 == ';')
             ptr2++;
-        if (string_prefix(name, ptr) && DBFETCH(exit)->sp.exit.ndest &&
-            Typeof((DBFETCH(exit)->sp.exit.dest)[0]) == TYPE_PROGRAM)
+        if (string_prefix(name, ptr) && DBFETCH(exit)->sp.exit.ndest && Typeof((DBFETCH(exit)->sp.exit.dest)[0]) == TYPE_PROGRAM)
             return 1;
     }
     return 0;
@@ -2181,8 +2049,7 @@ exit_match_exists(dbref player, dbref obj, const char *name)
     exit = DBFETCH(obj)->exits;
     while (exit != NOTHING) {
         if (exit_matches_name(exit, name)) {
-            sprintf(buf, "  %ss are trapped on %.2048s",
-                    name, ansi_unparse_object(player, obj));
+            sprintf(buf, "  %ss are trapped on %.2048s", name, ansi_unparse_object(player, obj));
             anotify_nolisten(player, buf, 1);
         }
         exit = DBFETCH(exit)->next;
@@ -2224,9 +2091,7 @@ do_sweep(int descr, dbref player, const char *name)
         return;
     }
 
-    if (*name
-        && (!controls(OWNER(player), thing) && !(POWERS(OWNER(player)) &
-            POW_SEARCH))) {
+    if (*name && (!controls(OWNER(player), thing) && !(POWERS(OWNER(player)) & POW_SEARCH))) {
         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
         return;
     }
@@ -2239,17 +2104,14 @@ do_sweep(int descr, dbref player, const char *name)
         switch (Typeof(ref)) {
             case TYPE_PLAYER:
                 if ( /* !Dark(thing) || */ online(ref)) {
-                    sprintf(buf, "  %s" NORMAL " is a %splayer.",
-                            ansi_unparse_object(player, ref),
-                            online(ref) ? "" : "sleeping ");
+                    sprintf(buf, "  %s" NORMAL " is a %splayer.", ansi_unparse_object(player, ref), online(ref) ? "" : "sleeping ");
                     anotify_nolisten(player, buf, 1);
                 }
                 break;
             case TYPE_THING:
                 if (FLAGS(ref) & (VEHICLE | ZOMBIE | LISTENER)) {
                     tellflag = 0;
-                    sprintf(buf, "  %.255s" NORMAL " is a",
-                            ansi_unparse_object(player, ref));
+                    sprintf(buf, "  %.255s" NORMAL " is a", ansi_unparse_object(player, ref));
                     if (FLAGS(ref) & ZOMBIE) {
                         tellflag = 1;
                         if (!online(OWNER(ref))) {
@@ -2265,10 +2127,7 @@ do_sweep(int descr, dbref player, const char *name)
                     if ((FLAGS(ref) & LISTENER) &&
                         (get_property(ref, "_listen") ||
                          get_property(ref, "_olisten") ||
-                         get_property(ref, "~listen") ||
-                         get_property(ref, "~olisten") ||
-                         get_property(ref, "@olisten") ||
-                         get_property(ref, "@listen"))) {
+                         get_property(ref, "~listen") || get_property(ref, "~olisten") || get_property(ref, "@olisten") || get_property(ref, "@listen"))) {
                         strcat(buf, " listener");
                         tellflag = 1;
                     }
@@ -2289,8 +2148,7 @@ do_sweep(int descr, dbref player, const char *name)
     loc = thing;
     while (loc != NOTHING) {
         if (!flag) {
-            anotify_nolisten(player,
-                             CINFO "Listening rooms down the environment:", 1);
+            anotify_nolisten(player, CINFO "Listening rooms down the environment:", 1);
             flag = 1;
         }
 
@@ -2301,13 +2159,9 @@ do_sweep(int descr, dbref player, const char *name)
              get_property(loc, "~olisten") ||
              get_property(loc, "_listen") ||
              get_property(loc, "_alisten") ||
-             get_property(loc, "_aolisten") ||
-             get_property(loc, "~alisten") ||
-             get_property(loc, "~aolisten") ||
-             get_property(loc, "@alisten") ||
-             get_property(loc, "~aolisten") || get_property(loc, "_olisten"))) {
-            sprintf(buf, "  %s" NORMAL " is a listening room.",
-                    ansi_unparse_object(player, loc));
+             get_property(loc, "_aolisten") || get_property(loc, "~alisten") || get_property(loc, "~aolisten") || get_property(loc, "@alisten") || get_property(loc, "~aolisten")
+             || get_property(loc, "_olisten"))) {
+            sprintf(buf, "  %s" NORMAL " is a listening room.", ansi_unparse_object(player, loc));
             anotify_nolisten(player, buf, 1);
         }
 

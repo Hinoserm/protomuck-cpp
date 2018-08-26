@@ -20,8 +20,8 @@
 void
 prim_ceil(PRIM_PROTOTYPE)
 {
-	double fresult;
-    
+    double fresult;
+
     if (oper[0].type != PROG_FLOAT)
         abort_interp("Non-float argument. (1)");
     if (!no_good(oper[0].data.fnumber)) {
@@ -30,14 +30,15 @@ prim_ceil(PRIM_PROTOTYPE)
         fresult = oper[0].data.fnumber;
         fr->error.error_flags.f_bounds = 1;
     }
-    
+
     PushFloat(fresult);
 }
+
 void
 prim_floor(PRIM_PROTOTYPE)
 {
-	double fresult;
-    
+    double fresult;
+
     if (oper[0].type != PROG_FLOAT)
         abort_interp("Non-float argument. (1)");
     if (!no_good(oper[0].data.fnumber)) {
@@ -46,14 +47,15 @@ prim_floor(PRIM_PROTOTYPE)
         fresult = oper[0].data.fnumber;
         fr->error.error_flags.f_bounds = 1;
     }
-    
+
     PushFloat(fresult);
 }
+
 void
 prim_sqrt(PRIM_PROTOTYPE)
 {
-	double fresult;
-    
+    double fresult;
+
     if (oper[0].type == PROG_INTEGER) {
         oper[0].type = PROG_FLOAT;
         oper[0].data.fnumber = oper[0].data.number;
@@ -68,39 +70,45 @@ prim_sqrt(PRIM_PROTOTYPE)
             fresult = sqrt((double) oper[0].data.fnumber);
         }
     } else {
-         if (ISNAN(oper[0].data.fnumber)) {
+        if (ISNAN(oper[0].data.fnumber)) {
             fresult = tp_alt_infinity_handler ? NAN : 0.0;
-            if (!tp_alt_infinity_handler) fr->error.error_flags.nan = 1;
-         } else {
+            if (!tp_alt_infinity_handler)
+                fr->error.error_flags.nan = 1;
+        } else {
             fresult = tp_alt_infinity_handler ? INF : 0.0;
-            if (!tp_alt_infinity_handler) fr->error.error_flags.f_bounds = 1;
-         }
+            if (!tp_alt_infinity_handler)
+                fr->error.error_flags.f_bounds = 1;
+        }
     }
-    
+
     PushFloat(fresult);
 }
+
 void
 prim_pi(PRIM_PROTOTYPE)
 {
-	double fresult;
-    
+    double fresult;
+
     fresult = F_PI;
     CHECKOFLOW(1);
     PushFloat(fresult);
 }
+
 void
 prim_epsilon(PRIM_PROTOTYPE)
 {
-	double fresult;
+    double fresult;
+
     fresult = DBL_EPSILON;
     CHECKOFLOW(1);
     PushFloat(fresult);
 }
+
 void
 prim_round(PRIM_PROTOTYPE)
 {
     double temp, tshift, tnum, fstore, fresult;
-    
+
     if (oper[0].type != PROG_INTEGER)
         abort_interp("Non-integer argument. (2)");
     if (oper[1].type != PROG_FLOAT)
@@ -121,22 +129,25 @@ prim_round(PRIM_PROTOTYPE)
         fstore = fstore / temp;
         fresult = fstore;
     } else {
-         if (ISNAN(oper[1].data.fnumber)) {
+        if (ISNAN(oper[1].data.fnumber)) {
             fresult = tp_alt_infinity_handler ? NAN : 0.0;
-            if (!tp_alt_infinity_handler) fr->error.error_flags.nan = 1;
-         } else {
+            if (!tp_alt_infinity_handler)
+                fr->error.error_flags.nan = 1;
+        } else {
             fresult = tp_alt_infinity_handler ? INF : 0.0;
-            if (!tp_alt_infinity_handler) fr->error.error_flags.f_bounds = 1;
-         }
+            if (!tp_alt_infinity_handler)
+                fr->error.error_flags.f_bounds = 1;
+        }
     }
-    
+
     PushFloat(fresult);
 }
+
 void
 prim_sin(PRIM_PROTOTYPE)
 {
-	double fresult;
-    
+    double fresult;
+
     if (oper[0].type == PROG_INTEGER) {
         oper[0].type = PROG_FLOAT;
         oper[0].data.fnumber = oper[0].data.number;
@@ -147,17 +158,19 @@ prim_sin(PRIM_PROTOTYPE)
         fresult = sin(oper[0].data.fnumber);
     } else {
         /* TODO: This should be NaN -- Alynna: alright, its NaN */
-            fresult = tp_alt_infinity_handler ? NAN : 0.0;
-            if (!tp_alt_infinity_handler) fr->error.error_flags.nan = 1;
+        fresult = tp_alt_infinity_handler ? NAN : 0.0;
+        if (!tp_alt_infinity_handler)
+            fr->error.error_flags.nan = 1;
     }
-    
+
     PushFloat(fresult);
 }
+
 void
 prim_cos(PRIM_PROTOTYPE)
 {
-	double fresult;
-    
+    double fresult;
+
     if (oper[0].type == PROG_INTEGER) {
         oper[0].type = PROG_FLOAT;
         oper[0].data.fnumber = oper[0].data.number;
@@ -167,17 +180,19 @@ prim_cos(PRIM_PROTOTYPE)
     if (!no_good(oper[0].data.fnumber)) {
         fresult = cos(oper[0].data.fnumber);
     } else {
-            fresult = tp_alt_infinity_handler ? NAN : 0.0;
-            if (!tp_alt_infinity_handler) fr->error.error_flags.nan = 1;
+        fresult = tp_alt_infinity_handler ? NAN : 0.0;
+        if (!tp_alt_infinity_handler)
+            fr->error.error_flags.nan = 1;
     }
-    
+
     PushFloat(fresult);
 }
+
 void
 prim_tan(PRIM_PROTOTYPE)
 {
-	double fresult;
-    
+    double fresult;
+
     if (oper[0].type == PROG_INTEGER) {
         oper[0].type = PROG_FLOAT;
         oper[0].data.fnumber = oper[0].data.number;
@@ -193,22 +208,25 @@ prim_tan(PRIM_PROTOTYPE)
             fr->error.error_flags.f_bounds = 1;
         }
     } else {
-         if (ISNAN(oper[0].data.fnumber)) {
+        if (ISNAN(oper[0].data.fnumber)) {
             fresult = tp_alt_infinity_handler ? NAN : 0.0;
-            if (!tp_alt_infinity_handler) fr->error.error_flags.nan = 1;
-         } else {
+            if (!tp_alt_infinity_handler)
+                fr->error.error_flags.nan = 1;
+        } else {
             fresult = tp_alt_infinity_handler ? INF : 0.0;
-            if (!tp_alt_infinity_handler) fr->error.error_flags.f_bounds = 1;
-         }
+            if (!tp_alt_infinity_handler)
+                fr->error.error_flags.f_bounds = 1;
+        }
     }
-    
+
     PushFloat(fresult);
 }
+
 void
 prim_asin(PRIM_PROTOTYPE)
 {
-	double fresult;
-    
+    double fresult;
+
     if (oper[0].type == PROG_INTEGER) {
         oper[0].type = PROG_FLOAT;
         oper[0].data.fnumber = oper[0].data.number;
@@ -221,14 +239,15 @@ prim_asin(PRIM_PROTOTYPE)
         fresult = tp_alt_infinity_handler ? NAN : 0.0;
         fr->error.error_flags.nan = 1;
     }
-    
+
     PushFloat(fresult);
 }
+
 void
 prim_acos(PRIM_PROTOTYPE)
 {
-	double fresult;
-    
+    double fresult;
+
     if (oper[0].type == PROG_INTEGER) {
         oper[0].type = PROG_FLOAT;
         oper[0].data.fnumber = oper[0].data.number;
@@ -241,14 +260,15 @@ prim_acos(PRIM_PROTOTYPE)
         fresult = tp_alt_infinity_handler ? NAN : 0.0;
         fr->error.error_flags.nan = 1;
     }
-    
+
     PushFloat(fresult);
 }
+
 void
 prim_atan(PRIM_PROTOTYPE)
 {
-	double fresult;
-    
+    double fresult;
+
     if (oper[0].type == PROG_INTEGER) {
         oper[0].type = PROG_FLOAT;
         oper[0].data.fnumber = oper[0].data.number;
@@ -260,14 +280,15 @@ prim_atan(PRIM_PROTOTYPE)
     } else {
         fresult = H_PI;
     }
-    
+
     PushFloat(fresult);
 }
+
 void
 prim_atan2(PRIM_PROTOTYPE)
 {
-	double fresult;
-    
+    double fresult;
+
     if (oper[1].type == PROG_INTEGER) {
         oper[1].type = PROG_FLOAT;
         oper[1].data.fnumber = oper[1].data.number;
@@ -281,15 +302,16 @@ prim_atan2(PRIM_PROTOTYPE)
     if (oper[0].type != PROG_FLOAT)
         abort_interp("Non-float argument. (2)");
     fresult = atan2(oper[1].data.fnumber, oper[0].data.fnumber);
-    
+
     PushFloat(fresult);
 }
+
 void
 prim_dist3d(PRIM_PROTOTYPE)
 {
     double dist;
     double x, y, z;
-    
+
     if (oper[2].type == PROG_INTEGER) {
         oper[2].type = PROG_FLOAT;
         oper[2].data.fnumber = oper[2].data.number;
@@ -312,15 +334,16 @@ prim_dist3d(PRIM_PROTOTYPE)
     y = oper[1].data.fnumber;
     z = oper[0].data.fnumber;
     dist = sqrt((x * x) + (y * y) + (z * z));
-    
+
     PushFloat(dist);
 }
+
 void
 prim_xyz_to_polar(PRIM_PROTOTYPE)
 {
     double dist, theta, phi;
     double x, y, z;
-    
+
     if (oper[2].type == PROG_INTEGER) {
         oper[2].type = PROG_FLOAT;
         oper[2].data.fnumber = oper[2].data.number;
@@ -357,17 +380,18 @@ prim_xyz_to_polar(PRIM_PROTOTYPE)
             phi = 0.0;
         }
     }
-    
+
     PushFloat(dist);
     PushFloat(theta);
     PushFloat(phi);
 }
+
 void
 prim_polar_to_xyz(PRIM_PROTOTYPE)
 {
     double x, y, z;
     double dist, theta, phi;
-    
+
     if (oper[2].type == PROG_INTEGER) {
         oper[2].type = PROG_FLOAT;
         oper[2].data.fnumber = oper[2].data.number;
@@ -399,16 +423,17 @@ prim_polar_to_xyz(PRIM_PROTOTYPE)
         y = (dist * sin(theta) * sin(phi));
         z = (dist * cos(phi));
     }
-    
+
     PushFloat(x);
     PushFloat(y);
     PushFloat(z);
 }
+
 void
 prim_exp(PRIM_PROTOTYPE)
 {
-	double fresult;
-    
+    double fresult;
+
     if (oper[0].type == PROG_INTEGER) {
         oper[0].type = PROG_FLOAT;
         oper[0].data.fnumber = oper[0].data.number;
@@ -424,14 +449,15 @@ prim_exp(PRIM_PROTOTYPE)
         fresult = tp_alt_infinity_handler ? NAN : 0.0;
         fr->error.error_flags.f_bounds = 1;
     }
-    
+
     PushFloat(fresult);
 }
+
 void
 prim_log(PRIM_PROTOTYPE)
 {
-	double fresult;
-    
+    double fresult;
+
     if (oper[0].type == PROG_INTEGER) {
         oper[0].type = PROG_FLOAT;
         oper[0].data.fnumber = oper[0].data.number;
@@ -447,14 +473,15 @@ prim_log(PRIM_PROTOTYPE)
         fresult = tp_alt_infinity_handler ? NAN : 0.0;
         fr->error.error_flags.imaginary = 1;
     }
-    
+
     PushFloat(fresult);
 }
+
 void
 prim_log10(PRIM_PROTOTYPE)
 {
-	double fresult;
-    
+    double fresult;
+
     if (oper[0].type == PROG_INTEGER) {
         oper[0].type = PROG_FLOAT;
         oper[0].data.fnumber = oper[0].data.number;
@@ -470,14 +497,15 @@ prim_log10(PRIM_PROTOTYPE)
         fresult = tp_alt_infinity_handler ? NAN : 0.0;
         fr->error.error_flags.imaginary = 1;
     }
-    
+
     PushFloat(fresult);
 }
+
 void
 prim_fabs(PRIM_PROTOTYPE)
 {
-	double fresult;
-    
+    double fresult;
+
     if (oper[0].type == PROG_INTEGER) {
         oper[0].type = PROG_FLOAT;
         oper[0].data.fnumber = oper[0].data.number;
@@ -490,25 +518,27 @@ prim_fabs(PRIM_PROTOTYPE)
         fresult = oper[0].data.fnumber;
         fr->error.error_flags.f_bounds = 1;
     }
-    
+
     PushFloat(fresult);
 }
+
 void
 prim_float(PRIM_PROTOTYPE)
 {
-	double fresult;
-    
+    double fresult;
+
     if (oper[0].type != PROG_INTEGER)
         abort_interp("Non-integer argument. (1)");
     fresult = oper[0].data.number;
-    
+
     PushFloat(fresult);
 }
+
 void
 prim_pow(PRIM_PROTOTYPE)
 {
-	double fresult;
-    
+    double fresult;
+
     if (oper[0].type == PROG_INTEGER) {
         oper[0].type = PROG_FLOAT;
         oper[0].data.fnumber = oper[0].data.number;
@@ -522,8 +552,7 @@ prim_pow(PRIM_PROTOTYPE)
     if (oper[0].type != PROG_FLOAT)
         abort_interp("Non-float argument. (2)");
     if (!no_good(oper[0].data.fnumber) && !no_good(oper[1].data.fnumber)) {
-        if (oper[1].data.fnumber < 0.0 &&
-            oper[0].data.fnumber != floor(oper[0].data.fnumber)) {
+        if (oper[1].data.fnumber < 0.0 && oper[0].data.fnumber != floor(oper[0].data.fnumber)) {
             fresult = tp_alt_infinity_handler ? NAN : 0.0;
             fr->error.error_flags.imaginary = 1;
         } else {
@@ -533,15 +562,16 @@ prim_pow(PRIM_PROTOTYPE)
         fresult = tp_alt_infinity_handler ? INF : 0.0;
         fr->error.error_flags.f_bounds = 1;
     }
-    
+
     PushFloat(fresult);
 }
+
 void
 prim_frand(PRIM_PROTOTYPE)
 {
     double tresult, fresult;
-	int result;
-    
+    int result;
+
     result = rand();
     tresult = (double) rand();
     if ((result < tresult) && (result != tresult)) {
@@ -557,11 +587,12 @@ prim_frand(PRIM_PROTOTYPE)
     CHECKOFLOW(1);
     PushFloat(fresult);
 }
+
 void
 prim_fmod(PRIM_PROTOTYPE)
 {
-	double fresult;
-    
+    double fresult;
+
     if (oper[0].type == PROG_INTEGER) {
         oper[0].type = PROG_FLOAT;
         oper[0].data.fnumber = oper[0].data.number;
@@ -580,15 +611,16 @@ prim_fmod(PRIM_PROTOTYPE)
     } else {
         fresult = fmod(oper[1].data.fnumber, oper[0].data.fnumber);
     }
-    
+
     PushFloat(fresult);
 }
+
 void
 prim_modf(PRIM_PROTOTYPE)
 {
     double tresult;
     double dresult, fresult;
-    
+
     if (oper[0].type == PROG_INTEGER) {
         oper[0].type = PROG_FLOAT;
         oper[0].data.fnumber = oper[0].data.number;
@@ -602,17 +634,18 @@ prim_modf(PRIM_PROTOTYPE)
         dresult = oper[0].data.fnumber;
         fr->error.error_flags.f_bounds = 1;
     }
-    
+
     tresult = dresult;
     CHECKOFLOW(2);
     PushFloat(tresult);
     PushFloat(fresult);
 }
+
 void
 prim_strtof(PRIM_PROTOTYPE)
 {
-	double fresult;
-    
+    double fresult;
+
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string argument. (1)");
     fresult = 0.0;
@@ -622,13 +655,15 @@ prim_strtof(PRIM_PROTOTYPE)
     } else {
         sscanf(oper[0].data.string->data, "%lg", &fresult);
     }
-    
+
     PushFloat(fresult);
 }
+
 void
 prim_ftostr(PRIM_PROTOTYPE)
 {
-	char buf[BUFFER_LEN];
+    char buf[BUFFER_LEN];
+
     if (oper[0].type == PROG_INTEGER) {
         oper[0].type = PROG_FLOAT;
         oper[0].data.fnumber = oper[0].data.number;
@@ -636,13 +671,15 @@ prim_ftostr(PRIM_PROTOTYPE)
     if (oper[0].type != PROG_FLOAT)
         abort_interp("Non-float argument. (1)");
     sprintf(buf, "%#.15g", oper[0].data.fnumber);
-    
+
     PushString(buf);
 }
+
 void
 prim_ftostrc(PRIM_PROTOTYPE)
 {
-	char buf[BUFFER_LEN];
+    char buf[BUFFER_LEN];
+
     if (oper[0].type == PROG_INTEGER) {
         oper[0].type = PROG_FLOAT;
         oper[0].data.fnumber = oper[0].data.number;
@@ -650,15 +687,17 @@ prim_ftostrc(PRIM_PROTOTYPE)
     if (oper[0].type != PROG_FLOAT)
         abort_interp("Non-float argument. (1)");
     sprintf(buf, "%.15g", oper[0].data.fnumber);
-    
+
     PushString(buf);
 }
+
 void
 prim_diff3(PRIM_PROTOTYPE)
 {
     double xout, yout, zout;
     double x, y, z;
     double x2, y2, z2;
+
     if (oper[2].type != PROG_FLOAT)
         abort_interp("Non-float argument. (4)");
     if (oper[1].type != PROG_FLOAT)

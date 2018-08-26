@@ -82,13 +82,15 @@ struct tune_str_entry tune_str_list[] = {
 #endif
     {"Identity", "servername", &tp_servername, WBOY, LMUF, 1},
     {"Legacy", "reg_email", &tp_reg_email, WBOY, LARCH, 1},
-    {"Props", "proplist_counter_fmt", &tp_proplist_counter_fmt, LARCH, LMUF, 1},
+    {"Props", "proplist_counter_fmt", &tp_proplist_counter_fmt, LARCH, LMUF,
+     1},
     {"Props", "proplist_entry_fmt", &tp_proplist_entry_fmt, LARCH, LMUF, 1},
     {"IdleTime", "unidle_command", &tp_unidle_command, LARCH, LMUF, 1},
-    {"IdleTime", "unidle_command_msg", &tp_unidle_command_msg, LARCH, LMUF, 1},
+    {"IdleTime", "unidle_command_msg", &tp_unidle_command_msg, LARCH, LMUF,
+     1},
     {"SSL", "ssl_keyfile_passwd", &tp_ssl_keyfile_passwd, WBOY, LBOY, 1},
     {"System", "reslvd_address", &tp_reslvd_address, WBOY, LWIZ, 1},
-	{"Props", "sex_prop", &tp_sex_prop, LARCH, LMUF, 1},
+    {"Props", "sex_prop", &tp_sex_prop, LARCH, LMUF, 1},
     {NULL, NULL, NULL, 0, 0, 0}
 };
 
@@ -162,11 +164,14 @@ int tp_playermax_limit = PLAYERMAX_LIMIT;
 int tp_process_timer_limit = 4;
 int tp_dump_copies = 10;
 int tp_min_progbreak_lev = 0;
+#ifdef MCP_SUPPORT
+int tp_mcp_muf_mlev = MCP_MUF_MLEV;
+#endif
 int tp_max_wiz_preempt_count = 0;
 int tp_wizhidden_access_bit = 3;
 int tp_userflag_mlev = 0;
 int tp_max_player_name_length = 16;
-
+int tp_max_per_slice = 10;
 int tp_wwwport = TINYPORT - 1;  /* hinoserm */
 
 #ifdef NEWHTTPD                 /* hinoserm */
@@ -179,6 +184,8 @@ int tp_web_max_users = 10;      /* hinoserm */
 #endif /* hinoserm */
 #ifdef SQL_SUPPORT
 int tp_mysql_result_limit = 40;
+int tp_mysql_log_lvl;
+int tp_mysql_thread_count;
 #endif
 struct tune_val_entry {
     const char *group;
@@ -193,7 +200,8 @@ struct tune_val_entry tune_val_list[] = {
     {"System", "sslport", &tp_sslport, WBOY, LMUF},
     {"System", "wwwport", &tp_wwwport, WBOY, LMUF},
     {"System", "puebloport", &tp_puebloport, WBOY, LMUF},
-    {"Currency", "max_object_endowment", &tp_max_object_endowment, LARCH, LMUF},
+    {"Currency", "max_object_endowment", &tp_max_object_endowment, LARCH,
+     LMUF},
     {"Currency", "object_cost", &tp_object_cost, LARCH, LMUF},
     {"Currency", "exit_cost", &tp_exit_cost, LARCH, LMUF},
     {"Currency", "link_cost", &tp_link_cost, LARCH, LMUF},
@@ -207,9 +215,11 @@ struct tune_val_entry tune_val_list[] = {
     {"System", "command_time_msec", &tp_command_time_msec, LARCH, LMUF},
     {"Database", "max_delta_objs", &tp_max_delta_objs, LARCH, LMUF},
     {"Database", "max_loaded_objs", &tp_max_loaded_objs, LARCH, LMUF},
-    {"Database", "wizhidden_access_bit", &tp_wizhidden_access_bit, WBOY, LMAGE},
+    {"Database", "wizhidden_access_bit", &tp_wizhidden_access_bit, WBOY,
+     LMAGE},
     {"Database", "userflag_mlev", &tp_userflag_mlev, LARCH, LMUF},
-    {"Database", "max_player_name_length", &tp_max_player_name_length, LARCH, LMUF},
+    {"Database", "max_player_name_length", &tp_max_player_name_length, LARCH,
+     LMUF},
     {"MUF", "max_process_limit", &tp_max_process_limit, LARCH, LMUF},
     {"MUF", "max_plyr_processes", &tp_max_plyr_processes, LARCH, LMUF},
     {"MUF", "max_instr_count", &tp_max_instr_count, LARCH, LMUF},
@@ -226,6 +236,10 @@ struct tune_val_entry tune_val_list[] = {
     {"Database", "dump_copies", &tp_dump_copies, WBOY, LMUF},
     {"MUF", "min_progbreak_lev", &tp_min_progbreak_lev, LARCH, LMAGE},
     {"MUF", "max_wiz_preempt_count", &tp_max_wiz_preempt_count, LARCH, LMAGE},
+    {"MUF", "max_per_slice", &tp_max_per_slice, LARCH, LMUF},
+#ifdef MCP_SUPPORT
+    {"MUF", "mcp_muf_mlev", &tp_mcp_muf_mlev, LARCH, LMAGE},
+#endif
 #ifdef SQL_SUPPORT
     {"MUF", "mysql_result_limit", &tp_mysql_result_limit, LBOY, LARCH},
 #endif
@@ -237,6 +251,8 @@ struct tune_val_entry tune_val_list[] = {
     {"HTTPD", "web_max_filesize", &tp_web_max_filesize, WBOY, LMUF}, /* hinoserm */
     {"HTTPD", "web_max_users", &tp_web_max_users, LARCH, LMUF}, /* hinoserm */
 #endif /* hinoserm */
+    {"HTTPD", "mysql_thread_count", &tp_mysql_thread_count, WBOY, LMUF}, /* hinoserm */
+    {"HTTPD", "mysql_log_level", &tp_mysql_log_lvl, LARCH, LMUF}, /* hinoserm */
     {NULL, NULL, NULL, 0, 0}
 };
 
@@ -264,12 +280,14 @@ struct tune_ref_entry {
 
 struct tune_ref_entry tune_ref_list[] = {
     {"System", "quit_prog", TYPE_PROGRAM, &tp_quit_prog, WBOY, LMAGE},
-    {"System", "login_who_prog", TYPE_PROGRAM, &tp_login_who_prog, WBOY, LMAGE},
+    {"System", "login_who_prog", TYPE_PROGRAM, &tp_login_who_prog, WBOY,
+     LMAGE},
     {"Pcreate", "player_start", TYPE_ROOM, &tp_player_start, LARCH, LMAGE},
     {"Pcreate", "player_prototype", TYPE_PLAYER, &tp_player_prototype, LARCH,
      LMAGE},
     {"MUF", "cron_prog", TYPE_PROGRAM, &tp_cron_prog, LARCH, LMAGE},
-    {"Building", "default_parent", TYPE_ROOM, &tp_default_parent, LARCH, LMAGE},
+    {"Building", "default_parent", TYPE_ROOM, &tp_default_parent, LARCH,
+     LMAGE},
 #ifdef NEWHTTPD                 /* hinoserm */
     {"System", "www_root", TYPE_ROOM, &tp_www_root, LARCH, LMAGE}, /* hinoserm */
 #endif /* hinoserm */
@@ -331,7 +349,9 @@ int tp_use_self_on_command = 1;
 int tp_quiet_moves = 0;
 int tp_quiet_connects = 0;
 int tp_proplist_int_counter = 0;
-
+#ifdef MCP_SUPPORT
+int tp_enable_mcp = 1;
+#endif
 #ifdef CONTROLS_SUPPORT
 int tp_wiz_realms = 1;
 #endif
@@ -350,11 +370,13 @@ int tp_allow_unidle = 0;
 int tp_alt_infinity_handler = 1;
 int tp_autolinking = 1;
 int tp_spaces_in_playernames = 0;
-int tp_mush_format_escapes = 0;
-int tp_strict_mush_escapes = 0;
+//int tp_mush_format_escapes = 0;
+//int tp_strict_mush_escapes = 0;
 int tp_ascii_descrs = 0;
-int tp_muf_profiling       = 0;
+int tp_muf_profiling = 0;
 int tp_player_aliasing = 1;
+int tp_dump_forking = 1;
+
 
 /* int tp_require_has_mpi_arg = 0; */
 
@@ -435,6 +457,9 @@ struct tune_bool_entry tune_bool_list[] = {
     {"Commands", "quiet_moves", &tp_quiet_moves, LARCH, LMUF},
     {"Commands", "quiet_connects", &tp_quiet_connects, LARCH, LMUF},
     {"Props", "proplist_int_counter", &tp_proplist_int_counter, LARCH, LMUF},
+#ifdef MCP_SUPPORT
+    {"System", "enable_mcp", &tp_enable_mcp, WBOY, LMUF},
+#endif
     {"Props", "enable_commandprops", &tp_enable_commandprops, WBOY, LMUF},
     {"MUF", "old_parseprop", &tp_old_parseprop, WBOY, LMUF},
     {"MPI", "mpi_needflag", &tp_mpi_needflag, WBOY, LMUF},
@@ -445,26 +470,29 @@ struct tune_bool_entry tune_bool_list[] = {
     {"System", "multi_wizlevels", &tp_multi_wizlevels, LBOY, LMUF},
     {"Database", "auto_archive", &tp_auto_archive, LBOY, LMAGE},
     {"MUF", "optimize_muf", &tp_optimize_muf, LBOY, LMAGE},
-	{"MUF", "muf_profiling", &tp_muf_profiling, LBOY, LMAGE},
+    {"MUF", "muf_profiling", &tp_muf_profiling, LBOY, LMAGE},
     {"MUF", "compatible_muf_perms", &tp_compatible_muf_perms, LBOY, LMAGE},
     {"Idletime", "allow_unidle", &tp_allow_unidle, LARCH, LMUF},
     {"Math", "alt_infinity_handler", &tp_alt_infinity_handler, LARCH, LMUF},
     {"MPI", "autolinking", &tp_autolinking, LARCH, LMUF},
-    {"Database", "spaces_in_playernames", &tp_spaces_in_playernames, LBOY, LMUF},
-    {"System", "mush_format_escapes", &tp_mush_format_escapes, LBOY, LMUF},
-    {"System", "strict_mush_escapes", &tp_strict_mush_escapes, LBOY, LMUF},
+    {"Database", "spaces_in_playernames", &tp_spaces_in_playernames, LBOY,
+     LMUF},
+//    {"System", "mush_format_escapes", &tp_mush_format_escapes, LBOY, LMUF},
+//    {"System", "strict_mush_escapes", &tp_strict_mush_escapes, LBOY, LMUF},
     {"System", "ascii_descrs", &tp_ascii_descrs, LBOY, LMUF},
     {"Commands", "player_aliasing", &tp_player_aliasing, LARCH, LMUF},
 /*    {"MPI", "require_has_mpi_arg", &tp_require_has_mpi_arg, LARCH, LMUF}, */
 #ifdef NEWHTTPD
     {"HTTPD", "web_allow_players", &tp_web_allow_players, LARCH, LMUF},
-    {"HTTPD", "web_allow_playerhtmuf", &tp_web_allow_playerhtmuf, LARCH, LMUF},
+    {"HTTPD", "web_allow_playerhtmuf", &tp_web_allow_playerhtmuf, LARCH,
+     LMUF},
     {"HTTPD", "web_allow_htmuf", &tp_web_allow_htmuf, LARCH, LMUF},
     {"HTTPD", "web_allow_vhosts", &tp_web_allow_vhosts, LARCH, LMUF},
     {"HTTPD", "web_allow_files", &tp_web_allow_files, LARCH, LMUF},
     {"HTTPD", "web_allow_dirlist", &tp_web_allow_dirlist, LARCH, LMUF},
     {"HTTPD", "web_allow_mpi", &tp_web_allow_mpi, LARCH, LMUF},
 #endif
+    {"Database", "dump_forking", &tp_dump_forking, LBOY, LMUF},
     {NULL, NULL, NULL, 0, 0}
 };
 
@@ -476,7 +504,7 @@ tune_parms_array(const char *pattern, int mlev)
     struct tune_val_entry *tval = tune_val_list;
     struct tune_ref_entry *tref = tune_ref_list;
     struct tune_bool_entry *tbool = tune_bool_list;
-    stk_array *nu = new_array_packed(0,0);
+    stk_array *nu = new_array_packed(0, 0);
     struct inst temp1;
     char pat[BUFFER_LEN];
     char buf[BUFFER_LEN];
@@ -513,7 +541,7 @@ tune_parms_array(const char *pattern, int mlev)
                 array_set_strkey_strval(&item, "type", "timespan");
                 array_set_strkey_strval(&item, "group", ttim->group);
                 array_set_strkey_strval(&item, "name", ttim->name);
-                array_set_strkey_intval(&item, "value", (int)*ttim->tim);
+                array_set_strkey_intval(&item, "value", (int) *ttim->tim);
                 array_set_strkey_intval(&item, "readmlev", ttim->readmlev);
                 array_set_strkey_intval(&item, "writemlev", ttim->writemlev);
                 temp1.type = PROG_ARRAY;
@@ -630,7 +658,7 @@ timestr_full(time_t dtime)
     minutes = dtime / 60;
     dtime %= 60;
 
-    sprintf(buf, "%3dd %2d:%02d:%02d", (int)days, (int)hours, (int)minutes, (int)dtime);
+    sprintf(buf, "%3dd %2d:%02d:%02d", (int) days, (int) hours, (int) minutes, (int) dtime);
 
     return buf;
 }
@@ -671,16 +699,13 @@ tune_show_strings(dbref player, char *name)
         strcpy(buf, tstr->name);
         if (MLevel(OWNER(player)) >= tstr->readmlev) {
             sprintf(buf, SYSCYAN "(str)  " SYSRED "%c" SYSGREEN "%-24s"
-                    SYSRED " = " SYSCYAN "%.4096s",
-                    (WLevel(OWNER(player)) >= tstr->writemlev) ? ' ' : '-',
-                    tstr->name, tct(*tstr->str, tbuf));
+                    SYSRED " = " SYSCYAN "%.4096s", (WLevel(OWNER(player)) >= tstr->writemlev) ? ' ' : '-', tstr->name, tct(*tstr->str, tbuf));
             anotify_nolisten2(player, buf);
             total++;
         }
         tstr++;
     }
-    anotify_fmt(player, CINFO "%d string-parm%s listed.", total,
-                (total == 1) ? "" : "s");
+    anotify_fmt(player, CINFO "%d string-parm%s listed.", total, (total == 1) ? "" : "s");
 }
 
 void
@@ -694,16 +719,13 @@ tune_show_times(dbref player, char *name)
         strcpy(buf, ttim->name);
         if (MLevel(OWNER(player)) >= ttim->readmlev) {
             sprintf(buf, SYSPURPLE "(time) " SYSRED "%c" SYSGREEN "%-24s"
-                    SYSRED " = " SYSPURPLE "%s",
-                    (WLevel(OWNER(player)) >= ttim->writemlev) ? ' ' : '-',
-                    ttim->name, timestr_full(*ttim->tim));
+                    SYSRED " = " SYSPURPLE "%s", (WLevel(OWNER(player)) >= ttim->writemlev) ? ' ' : '-', ttim->name, timestr_full(*ttim->tim));
             anotify_nolisten2(player, buf);
             total++;
         }
         ttim++;
     }
-    anotify_fmt(player, CINFO "%d time-parm%s listed.", total,
-                (total == 1) ? "" : "s");
+    anotify_fmt(player, CINFO "%d time-parm%s listed.", total, (total == 1) ? "" : "s");
 }
 
 void
@@ -717,16 +739,13 @@ tune_show_vals(dbref player, char *name)
         strcpy(buf, tval->name);
         if (MLevel(OWNER(player)) >= tval->readmlev) {
             sprintf(buf, SYSGREEN "(int)  " SYSRED "%c" SYSGREEN "%-24s"
-                    SYSRED " = " SYSYELLOW "%d",
-                    (WLevel(OWNER(player)) >= tval->writemlev) ? ' ' : '-',
-                    tval->name, *tval->val);
+                    SYSRED " = " SYSYELLOW "%d", (WLevel(OWNER(player)) >= tval->writemlev) ? ' ' : '-', tval->name, *tval->val);
             anotify_nolisten2(player, buf);
             total++;
         }
         tval++;
     }
-    anotify_fmt(player, CINFO "%d int-parm%s listed.", total,
-                (total == 1) ? "" : "s");
+    anotify_fmt(player, CINFO "%d int-parm%s listed.", total, (total == 1) ? "" : "s");
 }
 
 void
@@ -740,16 +759,13 @@ tune_show_refs(dbref player, char *name)
         strcpy(buf, tref->name);
         if (MLevel(OWNER(player)) >= tref->readmlev) {
             sprintf(buf, SYSYELLOW "(ref)  " SYSRED "%c" SYSGREEN "%-24s"
-                    SYSRED " = %s",
-                    (WLevel(OWNER(player)) >= tref->writemlev) ? ' ' : '-',
-                    tref->name, ansi_unparse_object(player, *tref->ref));
+                    SYSRED " = %s", (WLevel(OWNER(player)) >= tref->writemlev) ? ' ' : '-', tref->name, ansi_unparse_object(player, *tref->ref));
             anotify_nolisten2(player, buf);
             total++;
         }
         tref++;
     }
-    anotify_fmt(player, CINFO "%d ref-parm%s listed.", total,
-                (total == 1) ? "" : "s");
+    anotify_fmt(player, CINFO "%d ref-parm%s listed.", total, (total == 1) ? "" : "s");
 }
 
 void
@@ -763,16 +779,13 @@ tune_show_bool(dbref player, char *name)
         strcpy(buf, tbool->name);
         if (MLevel(OWNER(player)) >= tbool->readmlev) {
             sprintf(buf, SYSWHITE "(bool) " SYSRED "%c" SYSGREEN "%-24s"
-                    SYSRED " = " SYSBLUE "%s",
-                    (WLevel(OWNER(player)) >= tbool->writemlev) ? ' ' : '-',
-                    tbool->name, ((*tbool->boolv) ? "yes" : "no"));
+                    SYSRED " = " SYSBLUE "%s", (WLevel(OWNER(player)) >= tbool->writemlev) ? ' ' : '-', tbool->name, ((*tbool->boolv) ? "yes" : "no"));
             anotify_nolisten2(player, buf);
             total++;
         }
         tbool++;
     }
-    anotify_fmt(player, CINFO "%d bool-parm%s listed.", total,
-                (total == 1) ? "" : "s");
+    anotify_fmt(player, CINFO "%d bool-parm%s listed.", total, (total == 1) ? "" : "s");
 }
 
 void
@@ -789,12 +802,9 @@ tune_display_parms(dbref player, char *name)
 
     while (tstr->name) {
         strcpy(buf, tstr->name);
-        if ((MLevel(OWNER(player)) >= tstr->readmlev) &&
-            (!*name || equalstr(name, buf))) {
+        if ((MLevel(OWNER(player)) >= tstr->readmlev) && (!*name || equalstr(name, buf))) {
             sprintf(buf, SYSCYAN "(str)  " SYSRED "%c" SYSGREEN "%-24s"
-                    SYSRED " = " SYSCYAN "%.4096s",
-                    (WLevel(OWNER(player)) >= tstr->writemlev) ? ' ' : '-',
-                    tstr->name, tct(*tstr->str, tbuf));
+                    SYSRED " = " SYSCYAN "%.4096s", (WLevel(OWNER(player)) >= tstr->writemlev) ? ' ' : '-', tstr->name, tct(*tstr->str, tbuf));
             lastname = tstr->name;
             anotify_nolisten2(player, buf);
             total++;
@@ -804,12 +814,9 @@ tune_display_parms(dbref player, char *name)
 
     while (ttim->name) {
         strcpy(buf, ttim->name);
-        if ((MLevel(OWNER(player)) >= ttim->readmlev) &&
-            (!*name || equalstr(name, buf))) {
+        if ((MLevel(OWNER(player)) >= ttim->readmlev) && (!*name || equalstr(name, buf))) {
             sprintf(buf, SYSPURPLE "(time) " SYSRED "%c" SYSGREEN "%-24s"
-                    SYSRED " = " SYSPURPLE "%s",
-                    (WLevel(OWNER(player)) >= ttim->writemlev) ? ' ' : '-',
-                    ttim->name, timestr_full(*ttim->tim));
+                    SYSRED " = " SYSPURPLE "%s", (WLevel(OWNER(player)) >= ttim->writemlev) ? ' ' : '-', ttim->name, timestr_full(*ttim->tim));
             lastname = ttim->name;
             anotify_nolisten2(player, buf);
             total++;
@@ -819,12 +826,9 @@ tune_display_parms(dbref player, char *name)
 
     while (tval->name) {
         strcpy(buf, tval->name);
-        if ((MLevel(OWNER(player)) >= tval->readmlev) &&
-            (!*name || equalstr(name, buf))) {
+        if ((MLevel(OWNER(player)) >= tval->readmlev) && (!*name || equalstr(name, buf))) {
             sprintf(buf, SYSGREEN "(int)  " SYSRED "%c" SYSGREEN "%-24s"
-                    SYSRED " = " SYSYELLOW "%d",
-                    (WLevel(OWNER(player)) >= tval->writemlev) ? ' ' : '-',
-                    tval->name, *tval->val);
+                    SYSRED " = " SYSYELLOW "%d", (WLevel(OWNER(player)) >= tval->writemlev) ? ' ' : '-', tval->name, *tval->val);
             lastname = tval->name;
             anotify_nolisten2(player, buf);
             total++;
@@ -833,12 +837,9 @@ tune_display_parms(dbref player, char *name)
     }
     while (tref->name) {
         strcpy(buf, tref->name);
-        if ((MLevel(OWNER(player)) >= tref->readmlev) &&
-            (!*name || equalstr(name, buf))) {
+        if ((MLevel(OWNER(player)) >= tref->readmlev) && (!*name || equalstr(name, buf))) {
             sprintf(buf, SYSYELLOW "(ref)  " SYSRED "%c" SYSGREEN "%-24s"
-                    SYSRED " = %s",
-                    (WLevel(OWNER(player)) >= tref->writemlev) ? ' ' : '-',
-                    tref->name, ansi_unparse_object(player, *tref->ref));
+                    SYSRED " = %s", (WLevel(OWNER(player)) >= tref->writemlev) ? ' ' : '-', tref->name, ansi_unparse_object(player, *tref->ref));
             lastname = tref->name;
             anotify_nolisten2(player, buf);
             total++;
@@ -848,12 +849,10 @@ tune_display_parms(dbref player, char *name)
 
     while (tbool->name) {
         strcpy(buf, tbool->name);
-        if ((MLevel(OWNER(player)) >= tbool->readmlev) &&
-            (!*name || equalstr(name, buf))) {
-            sprintf(buf, SYSWHITE "(bool) " SYSRED "%c" SYSGREEN "%-24s" SYSRED
-                    " = " SYSBLUE "%s",
-                    (WLevel(OWNER(player)) >= tbool->writemlev) ? ' ' : '-',
-                    tbool->name, ((*tbool->boolv) ? "yes" : "no"));
+        if ((MLevel(OWNER(player)) >= tbool->readmlev) && (!*name || equalstr(name, buf))) {
+            sprintf(buf,
+                    SYSWHITE "(bool) " SYSRED "%c" SYSGREEN "%-24s" SYSRED
+                    " = " SYSBLUE "%s", (WLevel(OWNER(player)) >= tbool->writemlev) ? ' ' : '-', tbool->name, ((*tbool->boolv) ? "yes" : "no"));
             lastname = tbool->name;
             anotify_nolisten2(player, buf);
             total++;
@@ -863,11 +862,8 @@ tune_display_parms(dbref player, char *name)
     if ((total == 1) && lastname && *lastname) {
         do_sysparm(player, lastname);
     } else {
-        anotify_fmt(player, CINFO "%d sysparm%s listed.", total,
-                    (total == 1) ? "" : "s");
-        anotify(player,
-                SYSYELLOW
-                "@tune str, time, int, ref, or bool to list by data types.");
+        anotify_fmt(player, CINFO "%d sysparm%s listed.", total, (total == 1) ? "" : "s");
+        anotify(player, SYSYELLOW "@tune str, time, int, ref, or bool to list by data types.");
     }
 }
 
@@ -1012,7 +1008,7 @@ tune_freeparms(void)
 
     while (tstr->name) {
         if (!tstr->isdefault) {
-            delete[] *tstr->str;
+            delete[] * tstr->str;
         }
         tstr++;
     }
@@ -1041,7 +1037,7 @@ tune_setparm(const dbref player, const char *parmname, const char *val)
                 && (WLevel(OWNER(player)) < tstr->writemlev))
                 return TUNESET_NOPERM;
             if (!tstr->isdefault)
-                delete[] *tstr->str;
+                delete[] * tstr->str;
             if (*parmval == '-')
                 parmval++;
             *tstr->str = string_dup(parmval);
@@ -1091,8 +1087,7 @@ tune_setparm(const dbref player, const char *parmname, const char *val)
                     days = atoi(parmval);
                     break;
                 default:
-                    result = sscanf(parmval, "%dd %2d:%2d:%2d",
-                                    &days, &hrs, &mins, &secs);
+                    result = sscanf(parmval, "%dd %2d:%2d:%2d", &days, &hrs, &mins, &secs);
                     if (result != 4)
                         return 2;
                     break;
@@ -1140,10 +1135,8 @@ tune_setparm(const dbref player, const char *parmname, const char *val)
                 return 2;
             if (obj != -1 && tref->typ != NOTYPE && Typeof(obj) != tref->typ)
                 return 3;
-	    if ((!string_compare(parmname, "player_start") ||
-	         !string_compare(parmname, "default_parent")) &&
-		 obj == -1)
-		obj = 0;
+            if ((!string_compare(parmname, "player_start") || !string_compare(parmname, "default_parent")) && obj == -1)
+                obj = 0;
             *tref->ref = obj;
             return 0;
         }
@@ -1250,8 +1243,7 @@ do_tune(dbref player, char *parmname, char *parmval)
         result = tune_setparm(player, parmname, parmval);
         switch (result) {
             case TUNESET_SUCCESS:
-                log_status("TUNE: %s(%d) tuned %s to %s\n",
-                           NAME(player), player, parmname, parmval);
+                log_status("TUNE: %s(%d) tuned %s to %s\n", NAME(player), player, parmname, parmval);
                 anotify_nolisten2(player, CSUCC "Parameter set.");
                 tune_display_parms(player, parmname);
                 break;
@@ -1277,22 +1269,15 @@ do_tune(dbref player, char *parmname, char *parmval)
            anotify_nolisten2(player, CSUCC "Restored parameters from configuration file.");
            } else
          */
-        if (!string_compare(parmname, "strings") ||
-            !string_compare(parmname, "str"))
+        if (!string_compare(parmname, "strings") || !string_compare(parmname, "str"))
             tune_show_strings(player, parmname);
-        else if (!string_compare(parmname, "times") ||
-                 !string_compare(parmname, "time"))
+        else if (!string_compare(parmname, "times") || !string_compare(parmname, "time"))
             tune_show_times(player, parmname);
-        else if (!string_compare(parmname, "int") ||
-                 !string_compare(parmname, "ints"))
+        else if (!string_compare(parmname, "int") || !string_compare(parmname, "ints"))
             tune_show_vals(player, parmname);
-        else if (!string_compare(parmname, "ref") ||
-                 !string_compare(parmname, "refs") ||
-                 !string_compare(parmname, "dbrefs") ||
-                 !string_compare(parmname, "dbref"))
+        else if (!string_compare(parmname, "ref") || !string_compare(parmname, "refs") || !string_compare(parmname, "dbrefs") || !string_compare(parmname, "dbref"))
             tune_show_refs(player, parmname);
-        else if (!string_compare(parmname, "bool") ||
-                 !string_compare(parmname, "bools"))
+        else if (!string_compare(parmname, "bool") || !string_compare(parmname, "bools"))
             tune_show_bool(player, parmname);
         else
             tune_display_parms(player, parmname);

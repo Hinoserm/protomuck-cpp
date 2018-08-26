@@ -32,11 +32,11 @@ muf_event_queue_pfree(struct mufevent_process *ptr)
     if (ptr->filters) {
         for (i = 0; i < ptr->filtercount; i++) {
             if (ptr->filters[i]) {
-                delete[] ptr->filters[i];
+                delete[]ptr->filters[i];
                 ptr->filters[i] = NULL;
             }
         }
-        delete[] ptr->filters;
+        delete[]ptr->filters;
         ptr->filters = NULL;
         ptr->filtercount = 0;
     }
@@ -93,7 +93,8 @@ muf_event_register_specific(dbref player, dbref prog, struct frame *fr, int even
     }
     if (eventcount > 0) {
         //newproc->filters = (char **) malloc(eventcount * sizeof(char **));
-        newproc->filters = new char*[eventcount];
+        newproc->filters = new char *[eventcount];
+
         for (i = 0; i < eventcount; i++) {
             newproc->filters[i] = string_dup(eventids[i]);
         }
@@ -225,8 +226,7 @@ event_has_refs(dbref program, struct frame *fr)
     }
 
     for (loop = 0; loop < fr->argument.top; loop++) {
-        if (fr->argument.st[loop].type == PROG_ADD &&
-            fr->argument.st[loop].data.addr->progref == program) {
+        if (fr->argument.st[loop].type == PROG_ADD && fr->argument.st[loop].data.addr->progref == program) {
             return 1;
         }
     }
@@ -254,14 +254,11 @@ muf_event_dequeue(dbref prog, int sleeponly)
     while (proc) {
         tmp = proc;
         proc = proc->next;
-        if (prog == NOTHING ||
-            tmp->player == prog ||
-            tmp->prog == prog || event_has_refs(prog, tmp->fr)) {
+        if (prog == NOTHING || tmp->player == prog || tmp->prog == prog || event_has_refs(prog, tmp->fr)) {
             /* Added respect for the sleeponly parameter that is used
              * in other process dequeueing code. - Akari
              */
-            if (sleeponly == 0 ||
-                (sleeponly == 2 && tmp->fr->multitask != BACKGROUND)) {
+            if (sleeponly == 0 || (sleeponly == 2 && tmp->fr->multitask != BACKGROUND)) {
                 if (OkObj(tmp->player) && !tmp->fr->been_background) {
                     DBFETCH(tmp->player)->sp.player.block = 0;
                 }
@@ -296,8 +293,7 @@ muf_event_dequeue_descr(int descr, int sleeponly)
         tmp = proc;
         proc = proc->next;
         if (tmp->descr == descr) {
-            if (sleeponly == 0 ||
-                (sleeponly == 2 && tmp->fr->multitask != BACKGROUND)) {
+            if (sleeponly == 0 || (sleeponly == 2 && tmp->fr->multitask != BACKGROUND)) {
                 muf_event_purge(tmp->fr);
                 muf_event_process_free(tmp);
                 ++count;
@@ -313,7 +309,7 @@ descr_mufevent_queue(int descr)
     struct mufevent_process *ptr = mufevent_processes;
     int icount = 0;
 
-    while (ptr) {            
+    while (ptr) {
         if (ptr->fr && ptr->fr->descr == descr)
             icount++;
         ptr = ptr->next;
@@ -389,9 +385,7 @@ muf_event_list(dbref player, char *pat)
         sprintf(buf, pat,
                 proc->fr->pid, "--",
                 time_format_2((long) (rtime - proc->fr->started)),
-                (proc->fr->instcnt / 1000), pcnt, proc->prog,
-                (OkObj(proc->player)) ? NAME(proc->player) : "(Login)",
-                "EVENT_WAITFOR");
+                (proc->fr->instcnt / 1000), pcnt, proc->prog, (OkObj(proc->player)) ? NAME(proc->player) : "(Login)", "EVENT_WAITFOR");
         if (Wiz(OWNER(player)) || (OWNER(proc->prog) == OWNER(player))
             || (proc->player == player))
             notify_nolisten(player, buf, 1);
@@ -410,14 +404,11 @@ muf_event_count(struct frame *fr)
 {
     struct mufevent *ptr;
     int count = 0;
-#ifdef THREADED_SQL_SUPPORT
-	pthread_mutex_lock(&fr->mutex);
-#endif
+    std::scoped_lock lock{fr->mutex};
+
     for (ptr = fr->events; ptr; ptr = ptr->next)
         count++;
-#ifdef THREADED_SQL_SUPPORT
-	pthread_mutex_unlock(&fr->mutex);
-#endif
+
     return count;
 }
 
@@ -432,17 +423,14 @@ muf_event_exists(struct frame *fr, const char *eventid)
     struct mufevent *ptr;
     int count = 0;
     char pattern[BUFFER_LEN];
+    std::scoped_lock lock{fr->mutex};
 
     strcpy(pattern, eventid);
-#ifdef THREADED_SQL_SUPPORT
-	pthread_mutex_lock(&fr->mutex);
-#endif
+
     for (ptr = fr->events; ptr; ptr = ptr->next)
         if (equalstr(pattern, ptr->event))
             count++;
-#ifdef THREADED_SQL_SUPPORT
-	pthread_mutex_unlock(&fr->mutex);
-#endif
+
     return count;
 }
 
@@ -455,7 +443,7 @@ static void
 muf_event_free(struct mufevent *ptr)
 {
     CLEAR(&ptr->data);
-    delete[] ptr->event;
+    delete[]ptr->event;
     ptr->event = NULL;
     ptr->next = NULL;
     delete ptr;
@@ -502,33 +490,23 @@ muf_event_add(struct frame *fr, char *event, struct inst *val, int exclusive)
 {
     struct mufevent *newevent;
     struct mufevent *ptr;
-#ifdef THREADED_SQL_SUPPORT
-	pthread_mutex_lock(&fr->mutex);
-#endif
+    std::scoped_lock lock{fr->mutex};
+
     ptr = fr->events;
     while (ptr && ptr->next) {
         if (exclusive && !strcmp(event, ptr->event)) {
-#ifdef THREADED_SQL_SUPPORT
-            pthread_mutex_unlock(&fr->mutex);
-#endif
-			return;
+            return;
         }
         ptr = ptr->next;
     }
 
 
     if (exclusive && ptr && !strcmp(event, ptr->event)) {
-#ifdef THREADED_SQL_SUPPORT
-		pthread_mutex_unlock(&fr->mutex);
-#endif
         return;
-	}
+    }
 
     /* check for and process interrupts */
     if (muf_interrupt_check_byevent(fr, event, val)) {
-#ifdef THREADED_SQL_SUPPORT
-		pthread_mutex_unlock(&fr->mutex);
-#endif
         return;
     }
 
@@ -542,9 +520,6 @@ muf_event_add(struct frame *fr, char *event, struct inst *val, int exclusive)
     } else {
         ptr->next = newevent;
     }
-#ifdef THREADED_SQL_SUPPORT
-	pthread_mutex_unlock(&fr->mutex);
-#endif
 }
 
 /* struct mufevent* muf_event_pop_specific(struct frame* fr, int eventcount, const char** events)
@@ -561,16 +536,13 @@ muf_event_pop_specific(struct frame *fr, int eventcount, char **events)
     struct mufevent *tmp = NULL;
     struct mufevent *ptr = NULL;
     int i;
-#ifdef THREADED_SQL_SUPPORT
-	pthread_mutex_lock(&fr->mutex);
-#endif
+    std::scoped_lock lock{fr->mutex};
+
     for (i = 0; i < eventcount; i++) {
         if (fr->events && equalstr(events[i], fr->events->event)) {
             tmp = fr->events;
             fr->events = tmp->next;
-#ifdef THREADED_SQL_SUPPORT
-			pthread_mutex_unlock(&fr->mutex);
-#endif
+
             return tmp;
         }
     }
@@ -581,17 +553,13 @@ muf_event_pop_specific(struct frame *fr, int eventcount, char **events)
             if (equalstr(events[i], ptr->next->event)) {
                 tmp = ptr->next;
                 ptr->next = tmp->next;
-#ifdef THREADED_SQL_SUPPORT
-				pthread_mutex_unlock(&fr->mutex);
-#endif
+
                 return tmp;
             }
         }
         ptr = ptr->next;
     }
-#ifdef THREADED_SQL_SUPPORT
-	pthread_mutex_unlock(&fr->mutex);
-#endif
+
     return NULL;
 }
 
@@ -608,10 +576,8 @@ muf_event_remove(struct frame *fr, char *event, int which)
 {
     struct mufevent *tmp = NULL;
     struct mufevent *ptr = NULL;
+    std::scoped_lock lock{fr->mutex};
 
-#ifdef THREADED_SQL_SUPPORT
-	pthread_mutex_lock(&fr->mutex);
-#endif
     while (fr->events && !strcmp(event, fr->events->event)) {
         if (which == MUFEVENT_LAST) {
             tmp = fr->events;
@@ -621,9 +587,6 @@ muf_event_remove(struct frame *fr, char *event, int which)
             fr->events = tmp->next;
             muf_event_free(tmp);
             if (which == MUFEVENT_FIRST) {
-#ifdef THREADED_SQL_SUPPORT
-				pthread_mutex_unlock(&fr->mutex);
-#endif
                 return;
             }
         }
@@ -640,9 +603,6 @@ muf_event_remove(struct frame *fr, char *event, int which)
                 ptr->next = tmp->next;
                 muf_event_free(tmp);
                 if (which == MUFEVENT_FIRST) {
-#ifdef THREADED_SQL_SUPPORT
-					pthread_mutex_unlock(&fr->mutex);
-#endif
                     return;
                 }
             }
@@ -650,9 +610,6 @@ muf_event_remove(struct frame *fr, char *event, int which)
             ptr = ptr->next;
         }
     }
-#ifdef THREADED_SQL_SUPPORT
-	pthread_mutex_unlock(&fr->mutex);
-#endif
 }
 
 
@@ -679,16 +636,13 @@ static struct mufevent *
 muf_event_pop(struct frame *fr)
 {
     struct mufevent *ptr = NULL;
-#ifdef THREADED_SQL_SUPPORT
-    pthread_mutex_lock(&fr->mutex);
-#endif
+    std::scoped_lock lock{fr->mutex};
+
     if (fr->events) {
         ptr = fr->events;
         fr->events = fr->events->next;
     }
-#ifdef THREADED_SQL_SUPPORT
-	pthread_mutex_unlock(&fr->mutex);
-#endif
+
     return ptr;
 }
 
@@ -698,18 +652,14 @@ muf_event_pop(struct frame *fr)
 void
 muf_event_purge(struct frame *fr)
 {
-	struct mufevent *ptr = NULL;
-#ifdef THREADED_SQL_SUPPORT
-	pthread_mutex_lock(&fr->mutex);
-#endif
+    struct mufevent *ptr = NULL;
+    std::scoped_lock lock{fr->mutex};
+
     while (fr->events) {
-		ptr = fr->events;
+        ptr = fr->events;
         fr->events = fr->events->next;
         muf_event_free(ptr);
     }
-#ifdef THREADED_SQL_SUPPORT
-	pthread_mutex_unlock(&fr->mutex);
-#endif
 }
 
 /* void muf_event_process()
@@ -735,8 +685,7 @@ muf_event_process(void)
                 /* HACK:  This is probably inefficient to be walking this
                  * queue over and over. Hopefully it's usually a short list.
                  */
-                ev = muf_event_pop_specific(proc->fr, proc->filtercount,
-                                            proc->filters);
+                ev = muf_event_pop_specific(proc->fr, proc->filtercount, proc->filters);
             } else {
                 /* Pop first event off of prog's event queue. */
                 ev = muf_event_pop(proc->fr);
@@ -749,23 +698,20 @@ muf_event_process(void)
                      * Print an error, free the frame, and exit.
                      */
                     if (OkObj(proc->player))
-                        notify_nolisten(proc->player, "Program stack overflow.",
-                                        1);
+                        notify_nolisten(proc->player, "Program stack overflow.", 1);
                     prog_clean(proc->fr);
                 } else {
                     dbref current_program = NOTHING;
                     short block = 0, is_fg;
 
-                    if (delayed_shutdown
-                        && (proc->fr->shutdown_seen < delayed_shutdown) ) {
+                    if (delayed_shutdown && (proc->fr->shutdown_seen < delayed_shutdown)) {
                         /* Events processed by this function don't need
                          * SHUTDOWN events injected via interp_loop. */
                         proc->fr->shutdown_seen = delayed_shutdown;
                     }
 
                     if (OkObj(proc->player)) {
-                        current_program =
-                            DBFETCH(proc->player)->sp.player.curr_prog;
+                        current_program = DBFETCH(proc->player)->sp.player.curr_prog;
                         block = DBFETCH(proc->player)->sp.player.block;
                     } else {
                         if ((curdescr = get_descr(proc->descr, NOTHING)))
@@ -773,29 +719,25 @@ muf_event_process(void)
                     }
                     is_fg = (proc->fr->multitask != BACKGROUND);
 
-                    copyinst(&ev->data,
-                             &(proc->fr->argument.st[proc->fr->argument.top]));
+                    copyinst(&ev->data, &(proc->fr->argument.st[proc->fr->argument.top]));
                     proc->fr->argument.top++;
-                    push(proc->fr->argument.st, &(proc->fr->argument.top),
-                         PROG_STRING, MIPSCAST alloc_prog_string(ev->event));
+                    push(proc->fr->argument.st, &(proc->fr->argument.top), PROG_STRING, MIPSCAST alloc_prog_string(ev->event));
 
                     interp_loop(proc->player, proc->prog, proc->fr, 0);
 
                     if (!is_fg) {
                         if (OkObj(proc->player)) {
                             DBFETCH(proc->player)->sp.player.block = block;
-                            DBFETCH(proc->player)->sp.player.curr_prog =
-                                current_program;
+                            DBFETCH(proc->player)->sp.player.curr_prog = current_program;
                         } else {
                             if ((curdescr = get_descr(proc->descr, NOTHING)))
                                 curdescr->block = block;
                         }
                     }
                 }
-//                pthread_mutex_lock(&proc->fr->mutex);
+
                 muf_event_free(ev);
                 tmp = proc->next; /* proc->next might have changed */
-//                pthread_mutex_unlock(&proc->fr->mutex);
 
                 proc->fr = NULL; /* don't want to free the program itself */
                 muf_event_process_free(proc);
@@ -815,8 +757,7 @@ get_mufevent_pids(stk_array *nw, dbref ref)
     struct mufevent_process *proc = mufevent_processes;
 
     while (proc) {
-        if (proc->player == ref || proc->prog == ref || proc->fr->trig == ref
-            || ref < 0) {
+        if (proc->player == ref || proc->prog == ref || proc->fr->trig == ref || ref < 0) {
             temp1.type = PROG_INTEGER;
             temp1.data.number = proc->fr->pid;
             array_appenditem(&nw, &temp1);
@@ -900,6 +841,13 @@ get_mufevent_pidinfo(stk_array *nw, int pid)
         CLEAR(&temp1);
         CLEAR(&temp2);
         temp1.type = PROG_STRING;
+        temp1.data.string = alloc_prog_string("KINSTCNT");
+        temp2.type = PROG_FLOAT;
+        temp2.data.fnumber = ((double)proc->fr->instcnt / 1000);
+        array_setitem(&nw, &temp1, &temp2);
+        CLEAR(&temp1);
+        CLEAR(&temp2);
+        temp1.type = PROG_STRING;
         temp1.data.string = alloc_prog_string("DESCR");
         temp2.type = PROG_INTEGER;
         temp2.data.number = proc->fr->descr;
@@ -952,6 +900,37 @@ get_mufevent_pidinfo(stk_array *nw, int pid)
         array_setitem(&nw, &temp1, &temp2);
         CLEAR(&temp1);
         CLEAR(&temp2);
+
+        stk_array *nw2 = new_array_packed(0, 0);
+
+        if (proc->fr) {
+            for (int s = 0; s < (proc->fr->caller.top - 1); s++) {
+                struct inst temp3;
+
+                temp3.type = PROG_OBJECT;
+                temp3.data.objref = (dbref) proc->fr->caller.st[s];
+                array_appenditem(&nw2, &temp3);
+                CLEAR(&temp3);
+            }
+        }
+
+        temp1.type = PROG_STRING;
+        temp1.data.string = alloc_prog_string("CALLERS");
+        temp2.type = PROG_ARRAY;
+        temp2.data.array = nw2;
+        array_setitem(&nw, &temp1, &temp2);
+        CLEAR(&temp1);
+        CLEAR(&temp2);
+
+        if (proc->fr && proc->fr->timercount > 0) {
+            temp1.type = PROG_STRING;
+            temp1.data.string = alloc_prog_string("TIMERS");
+            temp2.type = PROG_ARRAY;
+            temp2.data.array = get_pidinfo_timers(pid);
+            array_setitem(&nw, &temp1, &temp2);
+            CLEAR(&temp1);
+            CLEAR(&temp2);
+        }
     }
     return nw;
 }
@@ -965,8 +944,7 @@ extern timequeue tqhead;        /* timequeue.c */
 /*  If we didn't move the timequeue items like this, SLEEP and    */
 /*   EVENT_WAITFOR and READ would all break.  -Hinoserm           */
 static int
-muf_interrupt_process(struct frame *fr, struct muf_interrupt *interrupt,
-                      const char *event, struct inst *val)
+muf_interrupt_process(struct frame *fr, struct muf_interrupt *interrupt, const char *event, struct inst *val)
 {
     struct muf_ainterrupt *a;
 
@@ -975,7 +953,7 @@ muf_interrupt_process(struct frame *fr, struct muf_interrupt *interrupt,
     a->ret = NULL;
     a->next = NULL;
 
-    /* log_status("muf_interrupt_process(): %p\n", a); */ /* for debugging */
+    /* log_status("muf_interrupt_process(): %p\n", a); *//* for debugging */
 
     if (!fr->ainttop)
         fr->ainttop = a;
@@ -987,6 +965,7 @@ muf_interrupt_process(struct frame *fr, struct muf_interrupt *interrupt,
     if (fr->ainttop == a) {
         struct mufevent_process *p;
         struct muf_qitem *q = new muf_qitem;
+
         q->type = 0;
         fr->qitem = q;
 
@@ -1014,8 +993,7 @@ muf_interrupt_process(struct frame *fr, struct muf_interrupt *interrupt,
 
             tmp = ptr = tqhead;
             while (ptr) {
-                if (fr == ptr->fr && ptr->typ == TQ_MUF_TYP
-                    && ptr->subtyp != TQ_MUF_TIMER) {
+                if (fr == ptr->fr && ptr->typ == TQ_MUF_TYP && ptr->subtyp != TQ_MUF_TIMER) {
                     q->type = 2;
                     q->t.tq = ptr;
                     if (tmp == ptr) {
@@ -1036,6 +1014,7 @@ muf_interrupt_process(struct frame *fr, struct muf_interrupt *interrupt,
             add_muf_delay_event(0, fr->descr, fr->player, NOTHING, NOTHING, fr->prog, fr, "INTERRUPT");
         } else {
             delete q;
+
             fr->qitem = NULL;
         }
     }
@@ -1082,13 +1061,14 @@ muf_interrupt_exit(struct frame *fr)
     if (!a)
         return 0;
 
-    /* log_status("muf_interrupt_pop_act(): %p\n", a); */ /* for debugging */
+    /* log_status("muf_interrupt_pop_act(): %p\n", a); *//* for debugging */
 
     if (!a->next) {
         fr->interrupted = 0;
         if (fr->qitem) {
             qtype = muf_interrupt_requeue(fr->qitem);
             delete fr->qitem;
+
             fr->qitem = NULL;
         }
     }
@@ -1098,7 +1078,7 @@ muf_interrupt_exit(struct frame *fr)
     fr->ainttop = a->next;
 
     CLEAR(a->data);
-    delete[] a->eventid;
+    delete[]a->eventid;
     delete a->data;
     delete a;
 
@@ -1111,7 +1091,7 @@ muf_interrupt_exit(struct frame *fr)
 struct muf_interrupt *
 muf_interrupt_find(struct frame *fr, const char *id)
 {
-    register struct muf_interrupt *e = fr->interrupts;
+    struct muf_interrupt *e = fr->interrupts;
 
     for (; e; e = e->next)
         if (!strcmp(e->id, id))
@@ -1125,11 +1105,10 @@ muf_interrupt_find(struct frame *fr, const char *id)
 /*   muf_interrupt_process() if a match is found.  Returns the    */
 /*   number of interrupts thrown.  -Hinoserm */
 int
-muf_interrupt_check_byevent(struct frame *fr, register const char *event,
-                            struct inst *val)
+muf_interrupt_check_byevent(struct frame *fr, const char *event, struct inst *val)
 {
-    register struct muf_interrupt *i;
-    register int cnt = 0;
+    struct muf_interrupt *i;
+    int cnt = 0;
 
     if (!fr->use_interrupts)
         return 0;
@@ -1152,18 +1131,20 @@ muf_interrupt_clean(struct frame *fr)
 
     while (i) {
         tmp = i->next;
-        delete[] i->id;
-        delete[] i->event;
+        delete[]i->id;
+        delete[]i->event;
         delete i;
+
         i = tmp;
     }
 
     while (a) {
         atmp = a->next;
         CLEAR(a->data);
-        delete[] a->eventid;
+        delete[]a->eventid;
         delete a->data;
         delete a;
+
         a = atmp;
     }
 
@@ -1185,9 +1166,10 @@ muf_interrupt_clean(struct frame *fr)
 void
 muf_event_add_pid(int pid, char *event, struct inst *val, int exclusive)
 {
-	struct frame *destfr;
+    struct frame *destfr;
+
     destfr = timequeue_pid_frame(pid);
     log_status("MUF_EVENT_ADD_PID(%i): Fr(%i) %s\r\n", pid, destfr, event);
-	if (destfr)
+    if (destfr)
         muf_event_add(destfr, event, val, exclusive);
 }

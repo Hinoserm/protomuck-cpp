@@ -28,6 +28,9 @@
  are compiled in.
  ************************************************************************/
 
+#define THREADED_SQL_SUPPORT
+//#define THREADED_DB_DUMP //Very broken
+
 /* UTF8_SUPPORT support will be moved to ./configure, it lives here for now. */
 #undef UTF8_SUPPORT
 
@@ -193,6 +196,10 @@
 
 #define MUF_EDIT_PRIMS
 
+/* Define this to enable support for MCP (MUD Client Protocol). */
+
+#define MCP_SUPPORT
+
 /* Define this to enable support for pre-Foxen5 (FB5) database
  * formats or if you need to build the "olddecompress" utility. 
  * This adds to ProtoMUCK's memory requirements, and should only
@@ -266,7 +273,7 @@
 
 /* Use to compress string data (recomended)
  */
-#undef COMPRESS
+#define COMPRESS
 
 /* To use a simple disk basing scheme where properties aren't loaded
  * from the input file until they are needed, define this. 
@@ -307,7 +314,7 @@
 /* More intensive database debugging. At the moment, this enables */
 /*  a valid_object check on every access to database objects.     */
 /*   -Hinoserm                                                    */
-#undef DBDEBUG
+#define DBDEBUG
 
 /* A little extra debugging info for read()/write() on process input/output */
 /* I put this in when I couldn't figure out why sockets were failing from */
@@ -552,6 +559,11 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <sys/types.h>
+
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <atomic>
 
 /* Alynna: I am just going to assume this works.  
  * Not touching VC++ with 10 foot pole.  :) */

@@ -277,8 +277,8 @@ equalstr(const char *pattern, const char *str)
     int result;
 
     result = smatch(strcpy(s1, pattern), strcpy(s2, str));
-    delete[] s1;
-    delete[] s2;
+    delete[]s1;
+    delete[]s2;
 
     return !result;
 }

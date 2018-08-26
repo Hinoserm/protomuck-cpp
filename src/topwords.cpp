@@ -103,8 +103,7 @@ queue_promote(struct queue_node *node)
     int oldval;
 
     oldval = node->val;
-    node->val =
-        (node->count * (node->len - 2)) + (node->spcount * (node->len - 1));
+    node->val = (node->count * (node->len - 2)) + (node->spcount * (node->len - 1));
 
     /* remove node from sizehash table if necessary */
     if (oldval && oldval < SIZE_HASH_SIZE) {

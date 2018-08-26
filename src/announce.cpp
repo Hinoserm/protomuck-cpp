@@ -87,8 +87,7 @@ main(int argc, char *argv[])
         exit(1);
     }
     if ((foo = fork()) != 0) {
-        fprintf(stderr, "announce: pid %d running on port %d\n", foo,
-                ntohs((u_short) sin.sin_port));
+        fprintf(stderr, "announce: pid %d running on port %d\n", foo, ntohs((u_short) sin.sin_port));
         _exit(0);
     } else {
 #ifdef PRIO_PROCESS

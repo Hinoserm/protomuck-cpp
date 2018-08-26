@@ -39,11 +39,11 @@ do_name(int descr, dbref player, const char *name, char *newname)
 {
     dbref thing;
     char *password;
-    char *placeholder = NULL; 
+    char *placeholder = NULL;
     char oldName[BUFFER_LEN];
     char nName[BUFFER_LEN];
     struct match_data md;
-    int failsafe = 0; 
+    int failsafe = 0;
 
     if (tp_db_readonly)
         return;
@@ -60,8 +60,7 @@ do_name(int descr, dbref player, const char *name, char *newname)
     thing = noisy_match_result(&md);
 
     if (thing != NOTHING && !(controls(player, thing)
-                              || (Typeof(thing) == TYPE_PLAYER
-                                  && (POWERS(player) & POW_PLAYER_CREATE)))) {
+                              || (Typeof(thing) == TYPE_PLAYER && (POWERS(player) & POW_PLAYER_CREATE)))) {
         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
         return;
     }
@@ -82,68 +81,60 @@ do_name(int descr, dbref player, const char *name, char *newname)
         if (Typeof(thing) == TYPE_PLAYER) {
             if (tp_wiz_name && (!Mage(player)
                                 && !(POWERS(player) & POW_PLAYER_CREATE))) {
-                anotify_nolisten2(player,
-                                  CINFO
-                                  "Only wizards can change player names.");
+                anotify_nolisten2(player, CINFO "Only wizards can change player names.");
                 return;
             }
-            
+
             /* split off password */
             /* Akari - 09/27/09 - @name for players now requires a
              * = sign to seperate off the password. */
             password = newname;
-            while (1)
-            {
+            while (1) {
                 /* Infinite loop failsafe check */
-                if ( failsafe++ > 100 )
-                    break; /* More than 10 spaces would just be egregious, right? */
+                if (failsafe++ > 100)
+                    break;      /* More than 10 spaces would just be egregious, right? */
 
                 /* Pass over the name. Find potential end */
-                for (;*password && !isspace(*password) && *password != '='; password++) ;
+                for (; *password && !isspace(*password) && *password != '='; password++) ;
                 /* If we're out of string, break out of the loop */
                 if (!(*password))
                     break;
- 
+
                 /* Mark this as a possible end of the entered name */
                 if (*password)
-                    placeholder = password;  
-                
+                    placeholder = password;
+
                 /* See if we encountered a =. If so, terminate the string, advance
                    1 character, and break the loop. */
-                if ( *password == '=' ) {
+                if (*password == '=') {
                     *placeholder = '\0';
                     password++;
                     break;
                 }
- 
+
                 /* Scan ahead to find if a = comes next */
                 while (*password && isspace(*password))
                     password++;
 
                 /* Now see if we stumbled across a = or more characters */
-                if ( *password && *password == '=' ) {
+                if (*password && *password == '=') {
                     /* Mark the end of the name */
                     *placeholder = '\0';
-                    password++; 
-                    break; /* Get out of the loop */
+                    password++;
+                    break;      /* Get out of the loop */
                 }
             }
-                  
+
             /* eat whitespace */
             while (*password && isspace(*password))
                 password++;
-            
+
             /* check for null password */
             if (!*password) {
-                anotify_nolisten2(player,
-                                  CINFO
-                                  "You must specify a password to change a player name.");
-                anotify_nolisten2(player,
-                                  CNOTE "E.g.: name player=newname=password");
+                anotify_nolisten2(player, CINFO "You must specify a password to change a player name.");
+                anotify_nolisten2(player, CNOTE "E.g.: name player=newname=password");
                 if (Wiz(OWNER(player)) || POWERS(player) & POW_PLAYER_CREATE)
-                    anotify_nolisten2(player,
-                                      SYSYELLOW
-                                      "Wizards may use 'yes' for non-wizard players.");
+                    anotify_nolisten2(player, SYSYELLOW "Wizards may use 'yes' for non-wizard players.");
                 return;
             }
             if (!(Wiz(player) || POWERS(player) & POW_PLAYER_CREATE)
@@ -155,14 +146,11 @@ do_name(int descr, dbref player, const char *name, char *newname)
             }
             if (string_compare(newname, NAME(thing))
                 && !ok_player_name(newname)) {
-                anotify_nolisten2(player,
-                                  CFAIL
-                                  "That name is either taken or invalid.");
+                anotify_nolisten2(player, CFAIL "That name is either taken or invalid.");
                 return;
             }
             /* everything ok, notify */
-            log_status("NAME: %s(%d) to %s by %s\n",
-                       NAME(thing), thing, newname, NAME(player));
+            log_status("NAME: %s(%d) to %s by %s\n", NAME(thing), thing, newname, NAME(player));
 
             /* remove alias sharing the new name, if present. */
             clear_alias(0, newname);
@@ -170,17 +158,15 @@ do_name(int descr, dbref player, const char *name, char *newname)
             strcpy(oldName, NAME(thing));
             strcpy(nName, newname);
             delete_player(thing);
-            delete[] NAME(thing);
+            delete[]NAME(thing);
             ts_modifyobject(player, thing);
             NAME(thing) = alloc_string(newname);
             add_player(thing);
-            anotify_fmt(player,
-                        CSUCC "Name changed from %s to %s.", oldName, nName);
+            anotify_fmt(player, CSUCC "Name changed from %s to %s.", oldName, nName);
             return;
         } else {
             if (!ok_name(newname)) {
-                anotify_nolisten2(player,
-                                  CFAIL "That is not a reasonable name.");
+                anotify_nolisten2(player, CFAIL "That is not a reasonable name.");
                 return;
             }
         }
@@ -188,16 +174,14 @@ do_name(int descr, dbref player, const char *name, char *newname)
         /* everything ok, change the name */
         strcpy(oldName, NAME(thing));
         strcpy(nName, newname);
-        delete[] NAME(thing);
+        delete[]NAME(thing);
         ts_modifyobject(player, thing);
         NAME(thing) = alloc_string(newname);
-        anotify_fmt(player,
-                    CSUCC "Name changed from %s to %s.", oldName, nName);
+        anotify_fmt(player, CSUCC "Name changed from %s to %s.", oldName, nName);
         DBDIRTY(thing);
         if (Typeof(thing) == TYPE_EXIT && MLevel(thing)) {
             SetMLevel(thing, 0);
-            anotify_nolisten2(player,
-                              CINFO "Action priority Level reset to zero.");
+            anotify_nolisten2(player, CINFO "Action priority Level reset to zero.");
         }
     }
 }
@@ -258,8 +242,7 @@ do_idescribe(int descr, dbref player, const char *name, const char *description)
 
 
 void
-do_ansidescribe(int descr, dbref player, const char *name,
-                const char *description)
+do_ansidescribe(int descr, dbref player, const char *name, const char *description)
 {
     dbref thing;
 
@@ -286,8 +269,7 @@ do_ansidescribe(int descr, dbref player, const char *name,
 }
 
 void
-do_iansidescribe(int descr, dbref player, const char *name,
-                 const char *description)
+do_iansidescribe(int descr, dbref player, const char *name, const char *description)
 {
     dbref thing;
 
@@ -315,8 +297,7 @@ do_iansidescribe(int descr, dbref player, const char *name,
 
 
 void
-do_htmldescribe(int descr, dbref player, const char *name,
-                const char *description)
+do_htmldescribe(int descr, dbref player, const char *name, const char *description)
 {
     dbref thing;
 
@@ -343,8 +324,7 @@ do_htmldescribe(int descr, dbref player, const char *name,
 }
 
 void
-do_ihtmldescribe(int descr, dbref player, const char *name,
-                 const char *description)
+do_ihtmldescribe(int descr, dbref player, const char *name, const char *description)
 {
     dbref thing;
 
@@ -609,14 +589,10 @@ do_conlock(int descr, dbref player, const char *name, const char *keyname)
 
     switch (thing = match_result(&md)) {
         case NOTHING:
-            anotify_nolisten2(player,
-                              CINFO
-                              "I don't see what you want to set the container-lock on!");
+            anotify_nolisten2(player, CINFO "I don't see what you want to set the container-lock on!");
             return;
         case AMBIGUOUS:
-            anotify_nolisten2(player,
-                              CINFO
-                              "I don't know which one you want to set the container-lock on!");
+            anotify_nolisten2(player, CINFO "I don't know which one you want to set the container-lock on!");
             return;
         default:
             if (!controls(player, thing)) {
@@ -684,9 +660,7 @@ do_flock(int descr, dbref player, const char *name, const char *keyname)
     }
 
     if (force_level) {
-        anotify_nolisten2(player,
-                          CFAIL
-                          "You can't use @flock from an @force or {force}.");
+        anotify_nolisten2(player, CFAIL "You can't use @flock from an @force or {force}.");
         return;
     }
 
@@ -740,8 +714,7 @@ do_chlock(int descr, dbref player, const char *name, const char *keyname)
             anotify_nolisten2(player, CINFO "I don't know which one you mean!");
             return;
         default:
-            if (!truecontrols(player, thing) &&
-                !((FLAGS(thing) & CHOWN_OK) && controls(player, thing))) {
+            if (!truecontrols(player, thing) && !((FLAGS(thing) & CHOWN_OK) && controls(player, thing))) {
                 anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
                 return;
             }
@@ -920,15 +893,14 @@ _do_unlink(int descr, dbref player, const char *name, int quiet)
                 switch (Typeof(exit)) {
                     case TYPE_EXIT:
                         if (DBFETCH(exit)->sp.exit.ndest != 0) {
-                            DBFETCH(OWNER(exit))->sp.player.pennies +=
-                                tp_link_cost;
+                            DBFETCH(OWNER(exit))->sp.player.pennies += tp_link_cost;
                             DBDIRTY(OWNER(exit));
                         }
                         ts_modifyobject(player, exit);
                         DBSTORE(exit, sp.exit.ndest, 0);
                         if (DBFETCH(exit)->sp.exit.dest) {
                             strcpy(destin, unparse_object(player, DBFETCH(exit)->sp.exit.dest[0]));
-                            delete[] DBFETCH(exit)->sp.exit.dest;
+                            delete[]DBFETCH(exit)->sp.exit.dest;
                             DBSTORE(exit, sp.exit.dest, NULL);
                         }
                         if (!quiet)
@@ -936,38 +908,29 @@ _do_unlink(int descr, dbref player, const char *name, int quiet)
                         if (MLevel(exit)) {
                             SetMLevel(exit, 0);
                             if (!quiet)
-                                anotify_nolisten2(player,
-                                                  CINFO
-                                                  "Action priority Level reset to 0.");
+                                anotify_nolisten2(player, CINFO "Action priority Level reset to 0.");
                         }
                         break;
                     case TYPE_ROOM:
                         ts_modifyobject(player, exit);
                         DBSTORE(exit, sp.room.dropto, NOTHING);
                         if (!quiet)
-                            anotify_fmt(player, CSUCC "Dropto removed from %s.",
-                                        unparse_object(player, exit));
+                            anotify_fmt(player, CSUCC "Dropto removed from %s.", unparse_object(player, exit));
                         break;
                     case TYPE_THING:
                         ts_modifyobject(player, exit);
                         DBSTORE(exit, sp.thing.home, OWNER(exit));
                         if (!quiet)
-                            anotify_fmt(player,
-                                        CSUCC "%s's home reset to owner.",
-                                        NAME(exit));
+                            anotify_fmt(player, CSUCC "%s's home reset to owner.", NAME(exit));
                         break;
                     case TYPE_PLAYER:
                         ts_modifyobject(player, exit);
                         DBSTORE(exit, sp.player.home, tp_player_start);
                         if (!quiet)
-                            anotify_fmt(player,
-                                        CSUCC
-                                        "%s's home reset to default player start room.",
-                                        NAME(exit));
+                            anotify_fmt(player, CSUCC "%s's home reset to default player start room.", NAME(exit));
                         break;
                     default:
-                        anotify_nolisten2(player,
-                                          CFAIL "You can't unlink that!");
+                        anotify_nolisten2(player, CFAIL "You can't unlink that!");
                         break;
                 }
             }
@@ -991,8 +954,7 @@ do_unlink_quiet(int descr, dbref player, const char *name)
  * re-link an exit object without having to use @unlink inbetween. 
  */
 void
-do_relink(int descr, dbref player, const char *thing_name,
-          const char *dest_name)
+do_relink(int descr, dbref player, const char *thing_name, const char *dest_name)
 {
     dbref thing;
     dbref dest;
@@ -1022,21 +984,16 @@ do_relink(int descr, dbref player, const char *thing_name,
                     anotify(player, CFAIL "Permission denied.");
                     return;
                 }
-            if (!Wizard(OWNER(player)) && (DBFETCH(player)->sp.player.pennies <
-                                           (tp_link_cost + tp_exit_cost))) {
-                anotify_fmt(player, CFAIL "It costs %d %s to link this exit.",
-                            (tp_link_cost + tp_exit_cost),
-                            (tp_link_cost + tp_exit_cost == 1) ? tp_penny :
-                            tp_pennies);
+            if (!Wizard(OWNER(player))
+                && (DBFETCH(player)->sp.player.pennies < (tp_link_cost + tp_exit_cost))) {
+                anotify_fmt(player, CFAIL "It costs %d %s to link this exit.", (tp_link_cost + tp_exit_cost), (tp_link_cost + tp_exit_cost == 1) ? tp_penny : tp_pennies);
                 return;
             }
             if (!Builder(player)) {
-                anotify(player,
-                        CFAIL "Only authoried builders may seize exits.");
+                anotify(player, CFAIL "Only authoried builders may seize exits.");
                 return;
             }
-            ndest = link_exit_dry(descr, player, thing, (char *) dest_name,
-                                  good_dest);
+            ndest = link_exit_dry(descr, player, thing, (char *) dest_name, good_dest);
             if (ndest == 0) {
                 anotify(player, CINFO "Invalid target.");
                 return;
@@ -1091,8 +1048,7 @@ do_relink(int descr, dbref player, const char *thing_name,
 
             if ((dest = noisy_match_result(&md)) == NOTHING) {
                 anotify(player, CFAIL "Unknown object type.");
-                log_status("PANIC: weird object: Typeof(%d) = %d\n", thing,
-                           Typeof(thing));
+                log_status("PANIC: weird object: Typeof(%d) = %d\n", thing, Typeof(thing));
                 return;
             }
     }
@@ -1138,13 +1094,9 @@ do_chown(int descr, dbref player, const char *name, const char *newowner)
         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
         return;
     }
-    if (!truecontrols(OWNER(player), thing) && (!(FLAGS(thing) & CHOWN_OK) ||
-                                                Typeof(thing) == TYPE_PROGRAM ||
-                                                !test_lock(descr, player, thing,
-                                                           CHLK_PROP))) {
+    if (!truecontrols(OWNER(player), thing) && (!(FLAGS(thing) & CHOWN_OK) || Typeof(thing) == TYPE_PROGRAM || !test_lock(descr, player, thing, CHLK_PROP))) {
         if (!(POWERS(player) & POW_CHOWN_ANYTHING)) {
-            anotify_nolisten2(player,
-                              CFAIL "You can't take possession of that.");
+            anotify_nolisten2(player, CFAIL "You can't take possession of that.");
             return;
         }
     }
@@ -1187,16 +1139,14 @@ do_chown(int descr, dbref player, const char *name, const char *newowner)
         char buf[BUFFER_LEN], buf1[BUFFER_LEN];
 
         strcpy(buf1, unparse_object(player, thing));
-        sprintf(buf, CSUCC "Owner of %s changed to you from %s.",
-                buf1, unparse_object(player, oldOwner));
+        sprintf(buf, CSUCC "Owner of %s changed to you from %s.", buf1, unparse_object(player, oldOwner));
         anotify_nolisten2(player, buf);
     } else {
         char buf[BUFFER_LEN], buf1[BUFFER_LEN], buf2[BUFFER_LEN];
 
         strcpy(buf1, unparse_object(player, thing));
         strcpy(buf2, unparse_object(player, owner));
-        sprintf(buf, CSUCC "Owner of %s changed to %s from %s.", buf1, buf2,
-                unparse_object(player, oldOwner));
+        sprintf(buf, CSUCC "Owner of %s changed to %s from %s.", buf1, buf2, unparse_object(player, oldOwner));
         anotify_nolisten2(player, buf);
     }
     DBDIRTY(thing);
@@ -1223,22 +1173,16 @@ do_sm(dbref player, dbref thing, int mlev)
     player = OWNER(player);
 
     if ((mlev > MLevel(player)) || (MLevel(thing) > MLevel(player)) ||
-        ((mlev > LMPI) && !Mage(player) && (Typeof(thing) != TYPE_PROGRAM)) ||
-        ((Typeof(thing) == TYPE_PLAYER) && !Man(player) && !Boy(player) &&
-         ((mlev >= LMAGE) || TMage(thing))
-        ) ||
-        ((Typeof(thing) == TYPE_PLAYER) && (!Wiz(player) ||
-                                            (mlev >= MLevel(player))
-                                            || (MLevel(thing) >= MLevel(player))
-         ) && !Man(player))
+        ((mlev > LMPI) && !Mage(player) && (Typeof(thing) != TYPE_PROGRAM)) || ((Typeof(thing) == TYPE_PLAYER) && !Man(player) && !Boy(player) && ((mlev >= LMAGE) || TMage(thing))
+        ) || ((Typeof(thing) == TYPE_PLAYER) && (!Wiz(player) || (mlev >= MLevel(player))
+                                                 || (MLevel(thing) >= MLevel(player))
+              ) && !Man(player))
         ) {
         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
         return;
     }
     if (force_level) {
-        anotify_nolisten2(player,
-                          CFAIL
-                          "Can't set this flag from an @force or {force}.");
+        anotify_nolisten2(player, CFAIL "Can't set this flag from an @force or {force}.");
         return;
     }
 
@@ -1306,9 +1250,7 @@ do_mush_set(int descr, dbref player, char *name, char *setting, char *command)
     }
 
     if (Prop_SysPerms(thing, prop)) {
-        anotify_nolisten2(player,
-                          CFAIL
-                          "That property is already used as a system property.");
+        anotify_nolisten2(player, CFAIL "That property is already used as a system property.");
     }
 
     if (!(*setting)) {
@@ -1330,7 +1272,7 @@ do_set(int descr, dbref player, const char *name, const char *flag)
     dbref thing;
     const char *p;
     object_flag_type f = 0, f2 = 0, f4 = 0;
-    int i=0;
+    int i = 0;
 
     if (tp_db_readonly)
         return;
@@ -1375,17 +1317,14 @@ do_set(int descr, dbref player, const char *name, const char *flag)
             for (type++; isspace(*type); type++) ;
 
             if (string_compare(type, "clear")) {
-                anotify_nolisten2(player,
-                                  CINFO
-                                  "Use '@set <obj>=:clear' to clear all props on an object.");
-                delete[] x;
+                anotify_nolisten2(player, CINFO "Use '@set <obj>=:clear' to clear all props on an object.");
+                delete[]x;
                 return;
             }
             remove_property_list(thing, Arch(OWNER(player)));
             ts_modifyobject(player, thing);
-            anotify_nolisten2(player,
-                              CSUCC "All user-owned properties removed.");
-            delete[] x;
+            anotify_nolisten2(player, CSUCC "All user-owned properties removed.");
+            delete[]x;
             return;
         }
         /* get rid of trailing spaces and slashes */
@@ -1400,19 +1339,17 @@ do_set(int descr, dbref player, const char *name, const char *flag)
             ival = atoi(++pclass);
 
         if (Prop_SysPerms(thing, type)) {
-            anotify_nolisten2(player,
-                              CFAIL
-                              "That property is already used as a system property.");
+            anotify_nolisten2(player, CFAIL "That property is already used as a system property.");
         }
 
         if (!WizHidden(OWNER(player)) && Prop_Hidden(type)) {
             anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
-            delete[] x;
+            delete[]x;
             return;
         }
         if (!Wiz(OWNER(player)) && Prop_SeeOnly(type)) {
             anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
-            delete[] x;
+            delete[]x;
             return;
         }
         if (!(*pclass)) {
@@ -1428,18 +1365,16 @@ do_set(int descr, dbref player, const char *name, const char *flag)
             }
             anotify_nolisten2(player, CSUCC "Property set.");
         }
-        delete[] x;
+        delete[]x;
         return;
     }
     /* identify flag */
     if (*p == '\0') {
         anotify_nolisten2(player, CINFO "You must specify a flag to set.");
         return;
-    } else if (string_prefix("ABODE", p) ||
-               string_prefix("AUTOSTART", p) || string_prefix("ABATE", p)) {
+    } else if (string_prefix("ABODE", p) || string_prefix("AUTOSTART", p) || string_prefix("ABATE", p)) {
         f = ABODE;
-    } else if (!string_compare("0", p) || !string_compare("M0", p) ||
-               !string_compare("W0", p)
+    } else if (!string_compare("0", p) || !string_compare("M0", p) || !string_compare("W0", p)
                || ((string_prefix("MEEPER", p) || string_prefix("MPI", p)
                     || string_prefix("MUCKER", p) || string_prefix("MAGE", p)
                     || string_prefix("WIZARD", p)
@@ -1454,8 +1389,7 @@ do_set(int descr, dbref player, const char *name, const char *flag)
     } else if (string_prefix("MPI", p) || string_prefix("MEEPER", p)) {
         do_sm(player, thing, LMPI);
         return;
-    } else if (!string_compare("1", p) || !string_compare("M1", p) ||
-               string_prefix("MUCKER", p)) {
+    } else if (!string_compare("1", p) || !string_compare("M1", p) || string_prefix("MUCKER", p)) {
         do_sm(player, thing, LM1);
         return;
     } else if (!string_compare("2", p) || !string_compare("M2", p)) {
@@ -1488,9 +1422,7 @@ do_set(int descr, dbref player, const char *name, const char *flag)
 
             for (; obj != NOTHING; obj = DBFETCH(obj)->next) {
                 if (Typeof(obj) == TYPE_PLAYER) {
-                    anotify_nolisten2(player,
-                                      CINFO
-                                      "That vehicle still has players in it!");
+                    anotify_nolisten2(player, CINFO "That vehicle still has players in it!");
                     return;
                 }
             }
@@ -1499,20 +1431,16 @@ do_set(int descr, dbref player, const char *name, const char *flag)
     } else if (string_prefix("LINK_OK", p)) {
         f = LINK_OK;
 
-    } else if (string_prefix("XFORCIBLE", p) ||
-               string_prefix("EXPANDED_DEBUG", p)) {
+    } else if (string_prefix("XFORCIBLE", p) || string_prefix("EXPANDED_DEBUG", p)) {
         if (force_level) {
-            anotify_nolisten2(player,
-                              CFAIL
-                              "Can't set this flag from an @force or {force}.");
+            anotify_nolisten2(player, CFAIL "Can't set this flag from an @force or {force}.");
             return;
         }
         f = XFORCIBLE;
 
     } else if ((string_prefix("DARK", p)) || (string_prefix("DEBUG", p))) {
         f = DARK;
-    } else if ((string_prefix("STICKY", p)) || (string_prefix("SETUID", p)) ||
-               (string_prefix("SILENT", p))) {
+    } else if ((string_prefix("STICKY", p)) || (string_prefix("SETUID", p)) || (string_prefix("SILENT", p))) {
         f = STICKY;
     } else if (string_prefix("QUELL", p)) {
         f = QUELL;
@@ -1521,7 +1449,7 @@ do_set(int descr, dbref player, const char *name, const char *flag)
     } else if (string_prefix("CHOWN_OK", p) || string_prefix("COLOR_ANSI", p)
                || string_prefix("COLOR_ON", p)) {
         f = CHOWN_OK;
-    } else if (string_prefix("256COLOR", p) || string_prefix("&", p)){
+    } else if (string_prefix("256COLOR", p) || string_prefix("&", p)) {
         f = F256COLOR;
 #ifdef CONTROLS_SUPPORT
     } else if (string_prefix("CONTROLS", p) || string_prefix("~", p)) {
@@ -1539,8 +1467,7 @@ do_set(int descr, dbref player, const char *name, const char *flag)
         f2 = F2GUEST;
     } else if (string_prefix("LOGWALL", p) || !string_compare("!", p)) {
         f2 = F2LOGWALL;
-    } else if (string_prefix("LIGHT", p) || !string_compare("O", p) ||
-               string_prefix("OLDCOMMENT", p)) {
+    } else if (string_prefix("LIGHT", p) || !string_compare("O", p) || string_prefix("OLDCOMMENT", p)) {
         f2 = F2LIGHT;
     } else if (string_prefix("MUFCOUNT", p) || !string_compare("+", p)) {
         f2 = F2MUFCOUNT;
@@ -1550,8 +1477,7 @@ do_set(int descr, dbref player, const char *name, const char *flag)
         f2 = F2ANTIPROTECT;
     } else if (string_prefix("EXAMINE_OK", p) || !string_compare("Y", p)) {
         f2 = F2EXAMINE_OK;
-    } else if (string_prefix("NO_COMMAND", p) ||
-               !string_compare("NO_OPTIMIZE", p)) {
+    } else if (string_prefix("NO_COMMAND", p) || !string_compare("NO_OPTIMIZE", p)) {
         f2 = F2NO_COMMAND;
     } else if (string_prefix("HIDDEN", p) || !string_compare("#", p)) {
         f2 = F2HIDDEN;
@@ -1559,28 +1485,28 @@ do_set(int descr, dbref player, const char *name, const char *flag)
         f2 = F2IDLE;
     } else if (string_prefix("SUSPECT", p) || !string_compare("_", p)) {
         f2 = F2SUSPECT;
-    } else if (string_prefix("MOBILE", p) || string_prefix("OFFER", p) ||
-               string_prefix("?", p) || (*tp_userflag_name
-                                         && string_prefix(tp_userflag_name,
-                                                          p))) {
+    } else if (string_prefix("MOBILE", p) || string_prefix("OFFER", p) || string_prefix("?", p) || (*tp_userflag_name && string_prefix(tp_userflag_name, p))) {
         f2 = F2MOBILE;
     } else {
-	i=0; while (i<32 && string_compare(lflag_name[i],p)) i++;
-	if (i == 32) {
+        i = 0;
+        while (i < 32 && string_compare(lflag_name[i], p))
+            i++;
+        if (i == 32) {
             anotify_nolisten2(player, CINFO "I don't recognize that flag.");
-	    return;
-	} else f4 = LFLAGx(i);
+            return;
+        } else
+            f4 = LFLAGx(i);
     }
     if ((Protect(thing) && !(MLevel(player) > MLevel(OWNER(thing))))
         && !(f2 == F2PROTECT)) {
         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
         return;
     }
-    if (f4) { /* LOCAL flags!  They are SO COOL! */
-	if (MLevel(player) < lflag_mlev[i]) {
+    if (f4) {                   /* LOCAL flags!  They are SO COOL! */
+        if (MLevel(player) < lflag_mlev[i]) {
             anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
-	    return;
-	}
+            return;
+        }
         /* else everything is ok, do the set */
         if (*flag == NOT_TOKEN) {
             /* reset the flag */
@@ -1595,9 +1521,9 @@ do_set(int descr, dbref player, const char *name, const char *flag)
             DBDIRTY(thing);
             anotify_nolisten2(player, CSUCC "Flag set.");
         }
-	return;
+        return;
     }
-    if (f) { /* old ass flags */
+    if (f) {                    /* old ass flags */
         /* check for restricted flag */
         if (restricted(player, thing, f)) {
             anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
@@ -1610,7 +1536,7 @@ do_set(int descr, dbref player, const char *name, const char *flag)
             FLAGS(thing) &= ~f;
             DBDIRTY(thing);
             anotify_nolisten2(player, CSUCC "Flag reset.");
-            if ( f == F256COLOR ) {
+            if (f == F256COLOR) {
                 /* Clear desrc flag from all player connections */
                 propagate_descr_flag(player, DF_256COLOR, 0);
             }
@@ -1620,7 +1546,7 @@ do_set(int descr, dbref player, const char *name, const char *flag)
             FLAGS(thing) |= f;
             DBDIRTY(thing);
             anotify_nolisten2(player, CSUCC "Flag set.");
-            if ( f == F256COLOR ) {
+            if (f == F256COLOR) {
                 /* We have to set the related descr flag on
                    all connections this player has */
                 propagate_descr_flag(player, DF_256COLOR, 1);
@@ -1628,7 +1554,7 @@ do_set(int descr, dbref player, const char *name, const char *flag)
         }
         return;
     }
-    if (f2) { /* New f(l)ags */
+    if (f2) {                   /* New f(l)ags */
         /* check for restricted flag */
         if (restricted2(player, thing, f2)) {
             anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
@@ -1648,19 +1574,18 @@ do_set(int descr, dbref player, const char *name, const char *flag)
             DBDIRTY(thing);
             anotify_nolisten2(player, CSUCC "Flag set.");
         }
-    return;
-    } 
-    if (f4) { /* LOCAL flags!  They are SO COOL! */
-	/* -1 = Free for all
-	    0 = Anything I control
-	   >0 = Mlevel required */
+        return;
+    }
+    if (f4) {                   /* LOCAL flags!  They are SO COOL! */
+        /* -1 = Free for all
+           0 = Anything I control
+           >0 = Mlevel required */
 
-	if (lflag_mlev[i]!=-1)
-	    if ((lflag_mlev[i]==0 && !controls(player, thing)) &&
-	        (lflag_mlev[i]>0 && MLevel(player) < lflag_mlev[i])) {
-        	anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
-		return;
-	    }
+        if (lflag_mlev[i] != -1)
+            if ((lflag_mlev[i] == 0 && !controls(player, thing)) && (lflag_mlev[i] > 0 && MLevel(player) < lflag_mlev[i])) {
+                anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
+                return;
+            }
         /* else everything is ok, do the set */
         if (*flag == NOT_TOKEN) {
             /* reset the flag */
@@ -1675,7 +1600,7 @@ do_set(int descr, dbref player, const char *name, const char *flag)
             DBDIRTY(thing);
             anotify_nolisten2(player, CSUCC "Flag set.");
         }
-    return;
+        return;
     }
 }
 
@@ -1743,9 +1668,7 @@ do_propset(int descr, dbref player, const char *name, const char *prop)
     }
 
     if (Prop_SysPerms(thing, pname)) {
-        anotify_nolisten2(player,
-                          CFAIL
-                          "That property is already used as a system property.");
+        anotify_nolisten2(player, CFAIL "That property is already used as a system property.");
     }
 
     if (!WizHidden(OWNER(player)) && Prop_Hidden(pname)) {
@@ -1794,9 +1717,7 @@ do_propset(int descr, dbref player, const char *name, const char *prop)
         set_property(thing, pname, &pdat);
     } else if (string_prefix("erase", type)) {
         if (*value) {
-            anotify_nolisten2(player,
-                              CINFO
-                              "Don't give a value when erasing a property.");
+            anotify_nolisten2(player, CINFO "Don't give a value when erasing a property.");
             return;
         }
         remove_property(thing, pname);
@@ -1804,36 +1725,34 @@ do_propset(int descr, dbref player, const char *name, const char *prop)
         return;
     } else {
         anotify_nolisten2(player, CINFO "What type of property?");
-        anotify_nolisten2(player,
-                          CNOTE
-                          "Valid types are string, int, float, dbref, lock, and erase.");
+        anotify_nolisten2(player, CNOTE "Valid types are string, int, float, dbref, lock, and erase.");
         return;
     }
     anotify_nolisten2(player, CSUCC "Property set.");
 }
 
-void 
+void
 lflags_update()
 {
     int i;
     PropPtr p;
     char buf[BUFFER_LEN];
 
-    for (i=0; i<32; i++) {
-	sprintf(buf, "@flags/%d/mlev", i);
-	p = get_property((dbref)0, buf);
-	if (!p)
-	    lflag_mlev[i] = 0;
-	else
-	    lflag_mlev[i] = PropDataVal(p);
-	sprintf(buf, "@flags/%d/name", i);
-	p = get_property((dbref)0, buf);
-	if (!p) {
-	    sprintf(buf,"LFLAG%d",i);
-	    strncpy(lflag_name[i], buf, 32);
-	} else {
-	    strncpy(lflag_name[i], PropDataUNCStr(p), 32);
-	}
+    for (i = 0; i < 32; i++) {
+        sprintf(buf, "@flags/%d/mlev", i);
+        p = get_property((dbref) 0, buf);
+        if (!p)
+            lflag_mlev[i] = 0;
+        else
+            lflag_mlev[i] = PropDataVal(p);
+        sprintf(buf, "@flags/%d/name", i);
+        p = get_property((dbref) 0, buf);
+        if (!p) {
+            sprintf(buf, "LFLAG%d", i);
+            strncpy(lflag_name[i], buf, 32);
+        } else {
+            strncpy(lflag_name[i], PropDataUNCStr(p), 32);
+        }
     }
 
 }
@@ -1849,9 +1768,10 @@ do_flags(int descr, dbref player, const char *args)
 
     char *buf = new char[256];
     char *lname = new char[32];
-    
+
     /* Sanity */
-    orig[0]=buf; orig[1]=lname;
+    orig[0] = buf;
+    orig[1] = lname;
 
     if (tp_db_readonly)
         return;
@@ -1861,49 +1781,52 @@ do_flags(int descr, dbref player, const char *args)
         return;
     }
 
-    if (!args || !string_compare(args,"#update")) {
-	/* Put flag update routine call right here. */
-	lflags_update();
-	anotify(player, "The Local DB flags have been read from /@flags/ on #0, and updated in memory.");
-	anotify(player, "Syntax: @flags <flagnum 0..31> <flagname> <mlevel to write>");
-	return;
+    if (!args || !string_compare(args, "#update")) {
+        /* Put flag update routine call right here. */
+        lflags_update();
+        anotify(player, "The Local DB flags have been read from /@flags/ on #0, and updated in memory.");
+        anotify(player, "Syntax: @flags <flagnum 0..31> <flagname> <mlevel to write>");
+        return;
     }
 
-    if (!string_compare(args,"#list")) {
-	anotify_fmt(player,"%8s%40s%8s","Flag","Flag Name","Level");
-	for (i=0; i<32; i++)
-    	    anotify_fmt(player,"%8d%40s%8d",i,lflag_name[i],lflag_mlev[i]);
-	return;
+    if (!string_compare(args, "#list")) {
+        anotify_fmt(player, "%8s%40s%8s", "Flag", "Flag Name", "Level");
+        for (i = 0; i < 32; i++)
+            anotify_fmt(player, "%8d%40s%8d", i, lflag_name[i], lflag_mlev[i]);
+        return;
     }
 
     i = sscanf(args, "%d %s %d", &lflag, lname, &lmlev);
     if (i != 3) {
-	anotify_fmt(player, "Syntax: @flags <flagnum 0..31> <flagname> <mlevel to write> (%d arguments detected, 3 were needed)",i);
-	return;
+        anotify_fmt(player, "Syntax: @flags <flagnum 0..31> <flagname> <mlevel to write> (%d arguments detected, 3 were needed)", i);
+        return;
     }
 
     /* Arg 1: The flag number. */
     if (lflag < 0 || lflag > 31) {
-	anotify(player, "Invalid local flag number.  Must be between 0 and 31.  See help @flags for more info.");
-	return;
+        anotify(player, "Invalid local flag number.  Must be between 0 and 31.  See help @flags for more info.");
+        return;
     }
 
     /* Arg 2: The flag name.  Defaults to LFLAG* */
-    if (!lname || !*lname) sprintf(lname, "LFLAG%d", lflag);
+    if (!lname || !*lname)
+        sprintf(lname, "LFLAG%d", lflag);
 
     /* Arg 3: The write mlevel.  Local flags are always readable. */
     if (lmlev < -1 || lmlev > 9) {
-	anotify(player, "Invalid MLevel.  Must be between -1 and 9.  See help @flags for more info.");
-	return;
+        anotify(player, "Invalid MLevel.  Must be between -1 and 9.  See help @flags for more info.");
+        return;
     }
 
     /* Now we do the actual work. */
-    buf = orig[0]; memset(buf, 0, sizeof(buf));
+    buf = orig[0];
+    memset(buf, 0, BUFFER_LEN);
     pdat.flags = PROP_STRTYP;
     pdat.data.str = lname;
     sprintf(buf, "@flags/%d/name", lflag);
     set_property(0, buf, &pdat);
-    buf = orig[0]; memset(buf, 0, sizeof(buf));
+    buf = orig[0];
+    memset(buf, 0, BUFFER_LEN);
     pdat.flags = PROP_INTTYP;
     pdat.data.val = lmlev;
     sprintf(buf, "@flags/%d/mlev", lflag);
@@ -1911,8 +1834,8 @@ do_flags(int descr, dbref player, const char *args)
     lflags_update();
     anotify_fmt(player, SYSGREEN "Local flag %d was named %s and given an mlevel of %d.", lflag, lname, lmlev);
 
-    delete[] orig[0];
-    delete[] orig[1];
+    delete[]orig[0];
+    delete[]orig[1];
     return;
 }
 
@@ -1942,7 +1865,8 @@ do_flags(int descr, dbref player, const char *args)
  * of the @alias/names/ propdir.
  */
 void
-do_alias(dbref player, const char *arg1, const char *arg2, int delimited) {
+do_alias(dbref player, const char *arg1, const char *arg2, int delimited)
+{
     dbref target = player;
     const char *name, *alias;
 
@@ -1960,22 +1884,18 @@ do_alias(dbref player, const char *arg1, const char *arg2, int delimited) {
         /* stop players from setting an @alias when they're @tuned off - note
          * that this won't stop them from clearing one they've already set. */
         if (!tp_player_aliasing && alias) {
-            anotify_nolisten2(player, CFAIL
-                              "The @alias command is disabled on this site, sorry.");
+            anotify_nolisten2(player, CFAIL "The @alias command is disabled on this site, sorry.");
             return;
         }
 
-        if (*name != '\0' &&
-            string_compare(name, "me")) {
-            anotify_nolisten2(player, CFAIL
-                              "Only mages can specify the name of a player.");
+        if (*name != '\0' && string_compare(name, "me")) {
+            anotify_nolisten2(player, CFAIL "Only mages can specify the name of a player.");
             return;
         }
     }
 
     /* validate target - re-aliasing a player using their old alias is fine. */
-    if (*name != '\0' && strcmp(name, "me") &&
-            ((target = lookup_player(name)) == NOTHING) ) {
+    if (*name != '\0' && strcmp(name, "me") && ((target = lookup_player(name)) == NOTHING)) {
         anotify_nolisten2(player, CINFO "Who?");
         return;
     }
@@ -1997,13 +1917,14 @@ do_alias(dbref player, const char *arg1, const char *arg2, int delimited) {
                 break;
         }
     }
-    
+
 
     return;
 }
 
 void
-do_encoding(int descr, dbref player, const char *arg) {
+do_encoding(int descr, dbref player, const char *arg)
+{
 
     struct descriptor_data *d = descrdata_by_descr(descr);
 
@@ -2023,21 +1944,21 @@ do_encoding(int descr, dbref player, const char *arg) {
         return;
     }
 
-    if (!string_compare(arg, "ASCII") || !string_compare(arg, "ANSI") ||
-        !string_compare(arg, "1") ) { 
+    if (!string_compare(arg, "ASCII") || !string_compare(arg, "ANSI") || !string_compare(arg, "1")) {
         d->encoding = 1;
         anotify(player, CSUCC "Encoding set.");
 #ifdef UTF8_SUPPORT
-    } else if ( !string_compare(arg, "UTF-8")   || !string_compare(arg, "UTF8") ||
-                !string_compare(arg, "UNICODE") || !string_compare(arg, "2") ) {
+    } else if (!string_compare(arg, "UTF-8") || !string_compare(arg, "UTF8")
+               || !string_compare(arg, "UNICODE")
+               || !string_compare(arg, "2")) {
         d->encoding = 2;
         anotify(player, CSUCC "Encoding set.");
 #endif
-    } else if ( !string_compare(arg, "RAW") || !string_compare(arg, "0") ) {
+    } else if (!string_compare(arg, "RAW") || !string_compare(arg, "0")) {
         d->encoding = 0;
         anotify(player, CSUCC "Encoding set.");
         anotify(player, CFAIL "Warning: Your terminal may render garbage in this mode.");
-    } else { /* unrecognized, show help */
+    } else {                    /* unrecognized, show help */
         anotify(player, CFAIL "Unrecognized encoding type.");
         anotify(player, CINFO "Supported encodings:");
 #ifdef UTF8_SUPPORT

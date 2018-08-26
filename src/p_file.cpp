@@ -16,12 +16,21 @@
 #include "interp.h"
 
 char *tempc = NULL;
-char *directory = (char *)"$";
+char *directory = (char *) "$";
 
 
 #ifdef WIN_VC
-int getuid(void) { return 0; }
-int getgid(void) { return 0; }
+int
+getuid(void)
+{
+    return 0;
+}
+
+int
+getgid(void)
+{
+    return 0;
+}
 #endif
 
 char *
@@ -52,23 +61,23 @@ parse_token(char *filename)
     char *temp;
 
     if (strstr(filename, "$WELCOME.TXT") != NULL)
-        return (char *)"data/welcome.txt";
+        return (char *) "data/welcome.txt";
     if (strstr(filename, "$WELCOME.HTML") != NULL)
-        return (char *)"data/welcome.html";
+        return (char *) "data/welcome.html";
     if (strstr(filename, "$NEWS.TXT") != NULL)
-        return (char *)"data/news.txt";
+        return (char *) "data/news.txt";
     if (strstr(filename, "$MOTD.TXT") != NULL)
-        return (char *)"data/motd.txt";
+        return (char *) "data/motd.txt";
     if (strstr(filename, "$CONNECT.TXT") != NULL)
-        return (char *)"data/connect.txt";
+        return (char *) "data/connect.txt";
     if (strstr(filename, "$HELP.TXT") != NULL)
-        return (char *)"data/help.txt";
+        return (char *) "data/help.txt";
     if (strstr(filename, "$MAN.TXT") != NULL)
-        return (char *)"data/man.txt";
+        return (char *) "data/man.txt";
     if (strstr(filename, "$SYSPARMS.TXT") != NULL)
-        return (char *)"data/sysparms.txt";
+        return (char *) "data/sysparms.txt";
     if (strstr(filename, "$MPIHELP.TXT") != NULL)
-        return (char *)"data/mpihelp.txt";
+        return (char *) "data/mpihelp.txt";
     if ((temp = strstr(filename, "$NEWS/")) != NULL) {
         char tempBuf[BUFFER_LEN] = "";
         char tempBuf2[BUFFER_LEN] = "data/news/";
@@ -272,9 +281,7 @@ prim_fwrite(PRIM_PROTOTYPE)
         fclose(fh);
         result = 1;
         if (tp_log_files)
-            log2filetime("logs/files", "#%d by %s FWRITE: %s \n", program,
-                         unparse_object(PSafe, PSafe),
-                         oper2->data.string->data);
+            log2filetime("logs/files", "#%d by %s FWRITE: %s \n", program, unparse_object(PSafe, PSafe), oper2->data.string->data);
     }
     CLEAR(oper1);
     CLEAR(oper2);
@@ -334,9 +341,7 @@ prim_fappend(PRIM_PROTOTYPE)
         fclose(fh);
         result = 1;
         if (tp_log_files)
-            log2filetime("logs/files", "#%d by %s FAPPEND: %s \n", program,
-                         unparse_object(PSafe, PSafe),
-                         oper1->data.string->data);
+            log2filetime("logs/files", "#%d by %s FAPPEND: %s \n", program, unparse_object(PSafe, PSafe), oper1->data.string->data);
     }
     CLEAR(oper1);
     CLEAR(oper2);
@@ -401,9 +406,7 @@ prim_fread(PRIM_PROTOTYPE)
         fclose(fh);
 
         if (tp_log_files)
-            log2filetime("logs/files", "#%d by %s FREAD: %s \n", program,
-                         unparse_object(PSafe, PSafe),
-                         oper2->data.string->data);
+            log2filetime("logs/files", "#%d by %s FREAD: %s \n", program, unparse_object(PSafe, PSafe), oper2->data.string->data);
     }
 
     CLEAR(oper1);
@@ -486,9 +489,7 @@ prim_freadn(PRIM_PROTOTYPE)
 /*      if (tempBuf[0] != EOF) */
 /*          result = 1; */
         if (tp_log_files)
-            log2filetime("logs/files", "#%d by %s FREADN: %s \n", program,
-                         unparse_object(PSafe, PSafe),
-                         oper3->data.string->data);
+            log2filetime("logs/files", "#%d by %s FREADN: %s \n", program, unparse_object(PSafe, PSafe), oper3->data.string->data);
     }
     CLEAR(oper1);
     CLEAR(oper2);
@@ -543,9 +544,7 @@ prim_fcr(PRIM_PROTOTYPE)
         fclose(fh);
         result = 1;
         if (tp_log_files)
-            log2filetime("logs/files", "#%d by %s FCR: %s \n", program,
-                         unparse_object(PSafe, PSafe),
-                         oper1->data.string->data);
+            log2filetime("logs/files", "#%d by %s FCR: %s \n", program, unparse_object(PSafe, PSafe), oper1->data.string->data);
     }
     CLEAR(oper1);
     PushInt(result);
@@ -581,16 +580,12 @@ prim_fpublish(PRIM_PROTOTYPE)
         abort_interp("Invalid shortcut used.");
 #endif
 #ifndef WIN_VC
-    result =
-        !chmod(filename,
-               S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IXGRP | S_IROTH |
-               S_IXOTH);
+    result = !chmod(filename, S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
 #else
-	result = 0;
+    result = 0;
 #endif
     if (tp_log_files)
-        log2filetime("logs/files", "#%d by %s FCHMOD: %s \n", program,
-                     unparse_object(PSafe, PSafe), oper1->data.string->data);
+        log2filetime("logs/files", "#%d by %s FCHMOD: %s \n", program, unparse_object(PSafe, PSafe), oper1->data.string->data);
     CLEAR(oper1);
     PushInt(result);
 }
@@ -639,9 +634,7 @@ prim_bread(PRIM_PROTOTYPE)
         fseek(fh, (int) offset, SEEK_SET);
         result = fgetc(fh);
         if (tp_log_files)
-            log2filetime("logs/files", "#%d by %s BREAD: %s \n", program,
-                         unparse_object(PSafe, PSafe),
-                         oper2->data.string->data);
+            log2filetime("logs/files", "#%d by %s BREAD: %s \n", program, unparse_object(PSafe, PSafe), oper2->data.string->data);
         if (result == EOF) {
             result = -2;
         }
@@ -704,9 +697,7 @@ prim_bwrite(PRIM_PROTOTYPE)
         fclose(fh);
         result = 1;
         if (tp_log_files)
-            log2filetime("logs/files", "#%d by %s BWRITE : %s \n", program,
-                         unparse_object(PSafe, PSafe),
-                         oper2->data.string->data);
+            log2filetime("logs/files", "#%d by %s BWRITE : %s \n", program, unparse_object(PSafe, PSafe), oper2->data.string->data);
     }
     CLEAR(oper1);
     CLEAR(oper2);
@@ -757,9 +748,7 @@ prim_bappend(PRIM_PROTOTYPE)
         fputc(tempdat, fh);
         result = 1;
         if (tp_log_files)
-            log2filetime("logs/files", "#%d by %s BAPPEND : %s \n", program,
-                         unparse_object(PSafe, PSafe),
-                         oper1->data.string->data);
+            log2filetime("logs/files", "#%d by %s BAPPEND : %s \n", program, unparse_object(PSafe, PSafe), oper1->data.string->data);
     }
     fclose(fh);
     CLEAR(oper1);
@@ -804,9 +793,7 @@ prim_fsize(PRIM_PROTOTYPE)
         fseek(fh, (int) 0, SEEK_END);
         offset = ftell(fh);
         if (tp_log_files)
-            log2filetime("logs/files", "#%d by %s FSIZE: %s \n", program,
-                         unparse_object(PSafe, PSafe),
-                         oper1->data.string->data);
+            log2filetime("logs/files", "#%d by %s FSIZE: %s \n", program, unparse_object(PSafe, PSafe), oper1->data.string->data);
         fclose(fh);
     }
     CLEAR(oper1);
@@ -844,8 +831,7 @@ prim_fstats(PRIM_PROTOTYPE)
 #endif
     stat(filename, &fs);
     if (tp_log_files)
-        log2filetime("logs/files", "#%d by %s FSTATS : %s \n", program,
-                     unparse_object(PSafe, PSafe), oper1->data.string->data);
+        log2filetime("logs/files", "#%d by %s FSTATS : %s \n", program, unparse_object(PSafe, PSafe), oper1->data.string->data);
     CLEAR(oper1);
     CHECKOFLOW(6);
     PushInt(fs.st_gid);
@@ -861,6 +847,7 @@ prim_curid(PRIM_PROTOTYPE)
 {
     int curuid = getuid();
     int curgid = getgid();
+
 #ifndef PROTO_AS_ROOT
     if (getuid() == 0)
         abort_interp("Muck is running under root privs, file prims disabled.");
@@ -868,8 +855,7 @@ prim_curid(PRIM_PROTOTYPE)
     if (mlev < LBOY)
         abort_interp("BOY primitive only.");
     if (tp_log_files)
-        log2filetime("logs/files", "#%d by %s CURID \n", program,
-                     unparse_object(PSafe, PSafe));
+        log2filetime("logs/files", "#%d by %s CURID \n", program, unparse_object(PSafe, PSafe));
     PushInt(curgid);
     PushInt(curuid);
 }
@@ -890,8 +876,7 @@ prim_fsinfo(PRIM_PROTOTYPE)
     /* Free Files, Block Size (bytes), and Max Name Length. */
     statfs("/", &fs);
     if (tp_log_files)
-        log2filetime("logs/files", "#%d by %s FSINFO \n", program,
-                     unparse_object(PSafe, PSafe));
+        log2filetime("logs/files", "#%d by %s FSINFO \n", program, unparse_object(PSafe, PSafe));
     CHECKOFLOW(8);
     PushInt(fs.f_type);
     PushInt(fs.f_blocks);
@@ -941,8 +926,7 @@ prim_frm(PRIM_PROTOTYPE)
 #endif
     result = unlink(filename);
     if (tp_log_files)
-        log2filetime("logs/files", "#%d by %s FRM: %s \n", program,
-                     unparse_object(PSafe, PSafe), oper1->data.string->data);
+        log2filetime("logs/files", "#%d by %s FRM: %s \n", program, unparse_object(PSafe, PSafe), oper1->data.string->data);
     CLEAR(oper1);
     PushInt(result);
 }
@@ -994,9 +978,7 @@ prim_fren(PRIM_PROTOTYPE)
 #endif
     result = rename(oldname, newname);
     if (tp_log_files)
-        log2filetime("logs/files", "#%d by %s FREN: %s -> %s \n", program,
-                     unparse_object(PSafe, PSafe), oper2->data.string->data,
-                     oper1->data.string->data);
+        log2filetime("logs/files", "#%d by %s FREN: %s -> %s \n", program, unparse_object(PSafe, PSafe), oper2->data.string->data, oper1->data.string->data);
     CLEAR(oper1);
     CLEAR(oper2);
     PushInt(result);
@@ -1079,12 +1061,10 @@ prim_freadto(PRIM_PROTOTYPE)
         i++;
         tempBuf[i] = '\0';
         fclose(fh);
-        if (tempBuf[0] != EOF) 
-            result = 1; 
+        if (tempBuf[0] != EOF)
+            result = 1;
         if (tp_log_files)
-            log2filetime("logs/files", "#%d by %s FREADN: %s \n", program,
-                         unparse_object(PSafe, PSafe),
-                         oper3->data.string->data);
+            log2filetime("logs/files", "#%d by %s FREADN: %s \n", program, unparse_object(PSafe, PSafe), oper3->data.string->data);
     }
     CLEAR(oper1);
     CLEAR(oper2);
@@ -1263,15 +1243,15 @@ void
 prim_rmdir(PRIM_PROTOTYPE)
 {
     char *directoryName;
-    
+
     CHECKOP(1);
     oper1 = POP();
 
 #ifndef PROTO_AS_ROOT
-    if (getuid() == 0 )
+    if (getuid() == 0)
         abort_interp("Muck is running under root privs, file prims disabled.");
 #endif
-    
+
     if (mlev < LBOY)
         abort_interp("BOY primitive only.");
     if (oper1->type != PROG_STRING)
@@ -1292,9 +1272,7 @@ prim_rmdir(PRIM_PROTOTYPE)
 #endif
     result = rmdir(directoryName);
     if (tp_log_files)
-        log2filetime("logs/files", "#%d by %s RMDIR: %s \n", program,
-                     unparse_object(PSafe, PSafe),
-                     oper1->data.string->data);
+        log2filetime("logs/files", "#%d by %s RMDIR: %s \n", program, unparse_object(PSafe, PSafe), oper1->data.string->data);
     CLEAR(oper1);
     PushInt(result);
 }

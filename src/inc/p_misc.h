@@ -44,6 +44,8 @@ extern void prim_touch(PRIM_PROTOTYPE);
 extern void prim_use(PRIM_PROTOTYPE);
 extern void prim_MD5hash(PRIM_PROTOTYPE);
 extern void prim_SHA1hash(PRIM_PROTOTYPE);
+extern void prim_funcprof_array(PRIM_PROTOTYPE);
+extern void prim_backtrace(PRIM_PROTOTYPE);
 
 /* From p_html.c */
 extern void prim_commandtext(PRIM_PROTOTYPE);
@@ -102,7 +104,9 @@ extern void prim_escape_url(PRIM_PROTOTYPE);
                         { "MD5HASH",               LM1,     1, prim_MD5hash },            \
                         { "SHA1HASH",              LM1,     1, prim_SHA1hash },           \
                         { "ENQUEUE",               LARCH,   4, prim_enqueue },            \
-                        { "GET_READ_WANTS_BLANKS", LM1,     0, prim_get_read_wants_blanks }
+                        { "GET_READ_WANTS_BLANKS", LM1,     0, prim_get_read_wants_blanks }, \
+                        { "FUNCPROF_ARRAY",        LARCH,   1, prim_funcprof_array },     \
+                        { "BACKTRACE",             LARCH,   1, prim_backtrace }
    
 
 #define PRIMS_MISC_CNT 50

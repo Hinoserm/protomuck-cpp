@@ -57,6 +57,9 @@ extern void prim_ansi_unparseobj(PRIM_PROTOTYPE);
 extern void prim_ansi_name(PRIM_PROTOTYPE);
 extern void prim_base64encode(PRIM_PROTOTYPE);
 extern void prim_base64decode(PRIM_PROTOTYPE);
+extern void prim_str2hex(PRIM_PROTOTYPE);
+extern void prim_hex2str(PRIM_PROTOTYPE);
+extern void prim_hex2base64str(PRIM_PROTOTYPE);
 #ifdef UTF8_SUPPORT
 extern void prim_wcharlen(PRIM_PROTOTYPE);
 extern void prim_wcharlen_slice(PRIM_PROTOTYPE);
@@ -121,7 +124,10 @@ extern void prim_wcharlen_slice(PRIM_PROTOTYPE);
 								{ "ANSI_UNPARSEOBJ",		LM1, 1, prim_ansi_unparseobj },				\
 								{ "ANSI_NAME",				LM1, 1, prim_ansi_name },					\
 								{ "BASE64ENCODE",			LM1, 1, prim_base64encode },				\
-								{ "BASE64DECODE",			LM1, 1, prim_base64decode }
+								{ "BASE64DECODE",			LM1, 1, prim_base64decode },                \
+                                { "STR2HEX",                LM1, 1, prim_str2hex },                     \
+                                { "HEX2STR",                LM1, 1, prim_hex2str },                     \
+                                { "HEX2BASE64STR",          LM1, 1, prim_hex2base64str }
 
 #define PRIMS_STRINGS_CNT 60
 

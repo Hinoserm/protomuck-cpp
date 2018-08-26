@@ -31,6 +31,9 @@ typedef struct stk_array_t {
 	} data;
 } stk_array;
 
+
+
+stk_array *array_decouple(stk_array *arr);
 stk_array *new_array_dictionary(void);
 stk_array *new_array_packed(int size, int presize);
 void array_free(stk_array * arr);

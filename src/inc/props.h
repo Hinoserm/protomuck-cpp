@@ -105,7 +105,7 @@ typedef struct plist *PropPtr;
 /* property access macros */
 #define Prop_ReadOnly(name) \
     (Prop_Check(name, PROP_RDONLY) || Prop_Check(name, PROP_RDONLY2))
-#define Prop_Private(name) 1 //Prop_Check(name, PROP_PRIVATE)
+#define Prop_Private(name) Prop_Check(name, PROP_PRIVATE)
 #define Prop_SeeOnly(name) Prop_Check(name, PROP_SEEONLY)
 #define Prop_Hidden(name) Prop_Check(name, PROP_HIDDEN)
 
@@ -200,14 +200,13 @@ extern int propdir_check(PropPtr l, char *path);
 extern void db_putprop(FILE * f, const char *dir, PropPtr p);
 extern int db_get_single_prop(FILE * f, dbref obj, int pos);
 extern void db_getprops(FILE * f, dbref obj);
-extern void db_dump_props(FILE * f, dbref obj);
+extern void db_dump_props(FILE * f, struct object *o);
 
 
 /* From property.c */
 
 extern void db_putprop(FILE * f, const char *dir, PropPtr p);
-extern void db_dump_props(FILE * f, dbref obj);
-extern void db_dump_props_rec(dbref obj, FILE * f, const char *dir, PropPtr p);
+extern void db_dump_props_rec(struct object *o, FILE * f, const char *dir, PropPtr p);
 extern void db_getprops(FILE * f, dbref obj);
 extern char *displayprop(dbref player, dbref obj, const char *name, char *buf);
 extern int size_properties(dbref player, int load);

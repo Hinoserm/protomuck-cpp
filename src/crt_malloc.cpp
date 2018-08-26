@@ -119,8 +119,8 @@
 /* per allocated block, but can be some    */
 /* help in tracking down obscure memory    */
 /* trashing pointer bugs.                  */
-/* #ifndef CRT_DEBUG_ALSO */         /* Let user set switch in extern head file. */
-/* #define CRT_DEBUG_ALSO FALSE */    /* Default to reasonable val if s/he didn't. */
+                                                                                                                                                                                                                                         /* #ifndef CRT_DEBUG_ALSO *//* Let user set switch in extern head file. */
+                                                                                                                                                                                                                                                                                    /* #define CRT_DEBUG_ALSO FALSE *//* Default to reasonable val if s/he didn't. */
 /* #endif */
 
 /* When debugging is selected, we check the */
@@ -163,6 +163,7 @@
 #if defined(HAVE_PTHREAD_H)
 /* this should allow CrT to run thread-safe */
 pthread_mutex_t CrTmutex;
+
 #define LOCKCRT() { pthread_mutex_lock(&CrTmutex); }
 #define UNLOCKCRT() { pthread_mutex_unlock(&CrTmutex); }
 #endif
@@ -196,7 +197,7 @@ struct CrT_header_rec {
     struct CrT_header_rec *next;
     struct CrT_header_rec *prev;
     char *end;
-#endif /* CRT_DEBUG_ALSO */
+#endif                          /* CRT_DEBUG_ALSO */
 };
 typedef struct CrT_header_rec A_Header;
 typedef struct CrT_header_rec *Header;
@@ -293,6 +294,7 @@ static Header just_touched[CRT_NEW_TO_CHECK] = {
     &root, &root, &root, &root,
 
 };
+
 static int next_touched = 0;    /* Always indexes above. */
 
 #endif
@@ -428,7 +430,7 @@ blocks_sort(                    /* Sort 'b1' on 'live_bytes'. */
 static Block
 block_alloc(const char *file, int line)
 {
-    Block b = (Block)malloc(sizeof(A_Block));
+    Block b = (Block) malloc(sizeof(A_Block));
 
     b->file = file;
     b->line = line;
@@ -476,9 +478,7 @@ CrT_timestr(time_t when)
     struct tm *da_time;
 
     da_time = localtime(&when);
-    sprintf(buf, "%02d%02d%02d%02d",
-            da_time->tm_mday, da_time->tm_hour, da_time->tm_min,
-            da_time->tm_sec);
+    sprintf(buf, "%02d%02d%02d%02d", da_time->tm_mday, da_time->tm_hour, da_time->tm_min, da_time->tm_sec);
     return buf;
 }
 
@@ -516,19 +516,10 @@ summarize(void (*fn) (char *)
 
         sprintf(buf,
                 "%13s%5d:%7ld %8ld %7ld %8ld %8s %7ld %8ld",
-                b->file,
-                b->line,
-                b->live_blocks,
-                b->live_bytes,
-                b->max_blocks,
-                b->max_bytes,
-                CrT_timestr(b->max_bytes_time), b->tot_allocs_done,
-                b->tot_bytes_alloc);
+                b->file, b->line, b->live_blocks, b->live_bytes, b->max_blocks, b->max_bytes, CrT_timestr(b->max_bytes_time), b->tot_allocs_done, b->tot_bytes_alloc);
         X(buf);
     }
-    sprintf(buf,
-            " Cumulative totals:%7d %8d                           %7d %8d",
-            sum_blks, sum_byts, sum_totblks, sum_totbyts);
+    sprintf(buf, " Cumulative totals:%7d %8d                           %7d %8d", sum_blks, sum_byts, sum_totblks, sum_totbyts);
     X(buf);
 }
 
@@ -542,12 +533,12 @@ void
 CrT_summarize(dbref player)
 {
 #if defined(HAVE_PTHREAD_H)
-	LOCKCRT();
+    LOCKCRT();
 #endif
     summarize_player = player;
     summarize(summarize_notify);
 #if defined(HAVE_PTHREAD_H)
-	UNLOCKCRT();
+    UNLOCKCRT();
 #endif
 }
 
@@ -566,7 +557,7 @@ void
 CrT_summarize_to_file(const char *file, const char *comment)
 {
 #if defined(HAVE_PTHREAD_H)
-	LOCKCRT();
+    LOCKCRT();
 #endif
     if ((summarize_fd = fopen(file, "a")) == 0)
         return;
@@ -583,7 +574,7 @@ CrT_summarize_to_file(const char *file, const char *comment)
 
     fclose(summarize_fd);
 #if defined(HAVE_PTHREAD_H)
-	UNLOCKCRT();
+    UNLOCKCRT();
 #endif
 }
 
@@ -608,8 +599,7 @@ crash(char *err, Header m, const char *file, int line)
 {
     char buf[256];
 
-    sprintf(buf, "%s: at %s:%d in block from %s:%d", err, file, line,
-            m->b->file, m->b->line);
+    sprintf(buf, "%s: at %s:%d in block from %s:%d", err, file, line, m->b->file, m->b->line);
     crash2(buf);                /* Makes above easy to read from dbx 'where'.   */
 }
 
@@ -685,7 +675,7 @@ void *
 CrT_malloc(size_t size, const char *file, int line)
 {
 #if defined(HAVE_PTHREAD_H)
-	LOCKCRT();
+    LOCKCRT();
 #endif
     Block b = block_find(file, line);
 
@@ -732,7 +722,7 @@ CrT_malloc(size_t size, const char *file, int line)
     if (b->live_blocks > b->max_blocks)
         b->max_blocks = b->live_blocks;
 #if defined(HAVE_PTHREAD_H)
-	UNLOCKCRT();
+    UNLOCKCRT();
 #endif
     return (void *) (m + 1);
 }
@@ -744,7 +734,7 @@ void *
 CrT_calloc(size_t num, size_t siz, const char *file, int line)
 {
 #if defined(HAVE_PTHREAD_H)
-	LOCKCRT();
+    LOCKCRT();
 #endif
     size_t size = siz * num;
     Block b = block_find(file, line);
@@ -793,7 +783,7 @@ CrT_calloc(size_t num, size_t siz, const char *file, int line)
     if (b->live_blocks > b->max_blocks)
         b->max_blocks = b->live_blocks;
 #if defined(HAVE_PTHREAD_H)
-	UNLOCKCRT();
+    UNLOCKCRT();
 #endif
     return (void *) (m + 1);
 }
@@ -805,7 +795,7 @@ void *
 CrT_realloc(void *p, size_t size, const char *file, int line)
 {
 #if defined(HAVE_PTHREAD_H)
-	LOCKCRT();
+    LOCKCRT();
 #endif
     Header m = ((Header) p) - 1;
     Block b = m->b;
@@ -867,7 +857,7 @@ CrT_realloc(void *p, size_t size, const char *file, int line)
         b->max_bytes_time = time(NULL);
     }
 #if defined(HAVE_PTHREAD_H)
-	UNLOCKCRT();
+    UNLOCKCRT();
 #endif
     return (void *) (m + 1);
 }
@@ -879,7 +869,7 @@ void
 CrT_free(void *p, const char *file, int line)
 {
 #if defined(HAVE_PTHREAD_H)
-	LOCKCRT();
+    LOCKCRT();
 #endif
     Header m = ((Header) p) - 1;
     Block b = m->b;
@@ -918,7 +908,7 @@ CrT_free(void *p, const char *file, int line)
 
     free(m);
 #if defined(HAVE_PTHREAD_H)
-	UNLOCKCRT();
+    UNLOCKCRT();
 #endif
 }
 
@@ -987,13 +977,13 @@ CrT_string_dup(const char *s, const char *file, int line)
 void
 CrT_pthread_init(void)
 {
-	/* initialize the mutex */
-	pthread_mutexattr_t myMutexAttr;
+    /* initialize the mutex */
+    pthread_mutexattr_t myMutexAttr;
 
-	pthread_mutexattr_init(&myMutexAttr);
-	pthread_mutexattr_settype(&myMutexAttr, PTHREAD_MUTEX_RECURSIVE_NP);
-	pthread_mutex_init(&CrTmutex, &myMutexAttr);
-	pthread_mutexattr_destroy(&myMutexAttr);
+    pthread_mutexattr_init(&myMutexAttr);
+    pthread_mutexattr_settype(&myMutexAttr, PTHREAD_MUTEX_RECURSIVE_NP);
+    pthread_mutex_init(&CrTmutex, &myMutexAttr);
+    pthread_mutexattr_destroy(&myMutexAttr);
 }
 #endif
 

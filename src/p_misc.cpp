@@ -12,18 +12,18 @@
 #include "strings.h"
 #include "interp.h"
 extern struct line *read_program(dbref i);
-extern int tune_setparm(const dbref player, const char *parmname,
-                        const char *val);
-extern struct frame* aForceFrameStack[9];
+extern int tune_setparm(const dbref player, const char *parmname, const char *val);
+extern struct frame *aForceFrameStack[9];
 void
 prim_time(PRIM_PROTOTYPE)
 {
     struct tm *time_tm;
-	int result;
-    
+    int result;
+
     CHECKOFLOW(3);
     {
         time_t lt;
+
         lt = time(NULL);
         time_tm = localtime(&lt);
         result = time_tm->tm_sec;
@@ -34,15 +34,17 @@ prim_time(PRIM_PROTOTYPE)
         PushInt(result);
     }
 }
+
 void
 prim_date(PRIM_PROTOTYPE)
 {
     struct tm *time_tm;
-	int result;
-    
+    int result;
+
     CHECKOFLOW(3);
     {
         time_t lt;
+
         lt = time(NULL);
         time_tm = localtime(&lt);
         result = time_tm->tm_mday;
@@ -53,38 +55,41 @@ prim_date(PRIM_PROTOTYPE)
         PushInt(result);
     }
 }
+
 void
 prim_gmtoffset(PRIM_PROTOTYPE)
 {
-	int result;
-    
+    int result;
+
     CHECKOFLOW(1);
-    result = (int)get_tz_offset();
+    result = (int) get_tz_offset();
     PushInt(result);
 }
+
 void
 prim_systime(PRIM_PROTOTYPE)
 {
-	int result;
-    
-    result = (int)time(NULL);
+    int result;
+
+    result = (int) time(NULL);
     CHECKOFLOW(1);
     PushInt(result);
 }
+
 void
 prim_timesplit(PRIM_PROTOTYPE)
 {
     struct tm *time_tm;
-	int result;
+    int result;
     time_t tt;
-    
-                  /* integer: time */
+
+    /* integer: time */
     if (oper[0].type != PROG_INTEGER)
         abort_interp("Invalid argument");
-    tt = (time_t)oper[0].data.number;
+    tt = (time_t) oper[0].data.number;
     time_tm = localtime(&tt);
     CHECKOFLOW(8);
-    
+
     result = time_tm->tm_sec;
     PushInt(result);
     result = time_tm->tm_min;
@@ -102,37 +107,40 @@ prim_timesplit(PRIM_PROTOTYPE)
     result = time_tm->tm_yday + 1;
     PushInt(result);
 }
+
 void
 prim_timefmt(PRIM_PROTOTYPE)
 {
     struct tm *time_tm;
-	char buf[BUFFER_LEN];
+    char buf[BUFFER_LEN];
     time_t tt;
-    
-                  /* integer: time */
-                  /* string: format */
+
+    /* integer: time */
+    /* string: format */
     if (oper[1].type != PROG_STRING)
         abort_interp("Invalid argument (1)");
     if (oper[1].data.string == (struct shared_string *) NULL)
         abort_interp("Illegal NULL string (1)");
     if (oper[0].type != PROG_INTEGER)
         abort_interp("Invalid argument (2)");
-    tt = (time_t)oper[0].data.number;
+    tt = (time_t) oper[0].data.number;
     time_tm = localtime(&tt);
     if (!format_time(buf, BUFFER_LEN, oper[1].data.string->data, time_tm))
         abort_interp("Operation would result in overflow");
     CHECKOFLOW(1);
-    
+
     PushString(buf);
 }
+
 void
 prim_queue(PRIM_PROTOTYPE)
 {
     dbref temproom;
-	int result;
-	struct inst *oper3;
+    int result;
+    struct inst *oper3;
+
     /* int dbref string -- */
-    
+
     if (oper[2].type != PROG_INTEGER)
         abort_interp("Non-integer argument (1)");
     if (oper[1].type != PROG_OBJECT)
@@ -147,21 +155,20 @@ prim_queue(PRIM_PROTOTYPE)
         temproom = DBFETCH(PSafe)->location;
     else
         temproom = oper3->data.objref;
-    result =
-        add_muf_delayq_event(oper[2].data.number, fr->descr, player, temproom,
-                             NOTHING, oper[1].data.objref,
-                             DoNullInd(oper[0].data.string), "Queued Event.", 0);
-    
+    result = add_muf_delayq_event(oper[2].data.number, fr->descr, player, temproom, NOTHING, oper[1].data.objref, DoNullInd(oper[0].data.string), "Queued Event.", 0);
+
     PushInt(result);
 }
+
 void
 prim_enqueue(PRIM_PROTOTYPE)
 {
     dbref temproom;
-	int result;
-	struct inst *oper4;
+    int result;
+    struct inst *oper4;
+
     /* int dbref string -- */
-    
+
     if (oper[2].type != PROG_INTEGER && oper[2].type != PROG_STRING)
         abort_interp("Argument must be integer or string (1)");
     if (oper[1].type != PROG_OBJECT)
@@ -172,36 +179,36 @@ prim_enqueue(PRIM_PROTOTYPE)
         abort_interp("Object must be a program (2)");
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string argument (3)");
-    if (Typeof(oper[3].data.objref) != TYPE_PLAYER && Typeof(oper[3].data.objref) != TYPE_THING)
+    if (!OkObj(oper[3].data.objref)
+        || (Typeof(oper[3].data.objref) != TYPE_PLAYER && Typeof(oper[3].data.objref) != TYPE_THING))
         abort_interp("Object must be a player or thing. (4)");
     if ((oper4 = fr->variables + 1)->type != PROG_OBJECT)
         temproom = DBFETCH(PSafe)->location;
     else
         temproom = oper4->data.objref;
     if (oper[2].type == PROG_INTEGER) {
-    result =
-        add_muf_delayq_event(oper[2].data.number, dbref_first_descr(oper[3].data.objref), oper[3].data.objref, temproom,
-                             NOTHING, oper[1].data.objref,
-                             DoNullInd(oper[0].data.string), "Queued Event.", 0);
+        result =
+            add_muf_delayq_event(oper[2].data.number,
+                                 dbref_first_descr(oper[3].data.objref),
+                                 oper[3].data.objref, temproom, NOTHING, oper[1].data.objref, DoNullInd(oper[0].data.string), "Queued Event.", 0);
     } else {
-    result =
-        add_muf_delayq_event(0, dbref_first_descr(oper[3].data.objref), oper[3].data.objref, temproom,
-                             NOTHING, oper[1].data.objref,
-                             DoNullInd(oper[0].data.string), DoNullInd(oper[2].data.string), 0);
+        result =
+            add_muf_delayq_event(0, dbref_first_descr(oper[3].data.objref),
+                                 oper[3].data.objref, temproom, NOTHING, oper[1].data.objref, DoNullInd(oper[0].data.string), DoNullInd(oper[2].data.string), 0);
     }
-    
+
     PushInt(result);
 }
+
 void
 prim_kill(PRIM_PROTOTYPE)
 {
     /* i -- i */
-	int result;
-    
+    int result;
+
     if (oper[0].type != PROG_INTEGER)
         abort_interp("Non-integer argument (1)");
     if (oper[0].data.number == fr->pid) {
-        
         do_abort_silent(fr);
     } else {
         if (mlev < LMAGE) {
@@ -210,16 +217,17 @@ prim_kill(PRIM_PROTOTYPE)
             }
         }
         result = dequeue_process(oper[0].data.number);
-        
+
     }
     PushInt(result);
 }
+
 void
 prim_timestamps(PRIM_PROTOTYPE)
 {
-	int result;
-	dbref ref;
-    
+    int result;
+    dbref ref;
+
     if (oper[0].type != PROG_OBJECT)
         abort_interp("Non-object argument (1)");
     ref = oper[0].data.objref;
@@ -227,22 +235,23 @@ prim_timestamps(PRIM_PROTOTYPE)
         abort_interp("Dbref is not an object nor garbage.");
     CHECKREMOTE(ref);
     CHECKOFLOW(4);
-    
-    result = (int)DBFETCH(ref)->ts.created;
+
+    result = (int) DBFETCH(ref)->ts.created;
     PushInt(result);
-    result = (int)DBFETCH(ref)->ts.modified;
+    result = (int) DBFETCH(ref)->ts.modified;
     PushInt(result);
-    result = (int)DBFETCH(ref)->ts.lastused;
+    result = (int) DBFETCH(ref)->ts.lastused;
     PushInt(result);
     result = DBFETCH(ref)->ts.usecount;
     PushInt(result);
 }
+
 void
 prim_refstamps(PRIM_PROTOTYPE)
 {
-	int result;
-	dbref ref;
-    
+    int result;
+    dbref ref;
+
     if (oper[0].type != PROG_OBJECT)
         abort_interp("Non-object argument (1)");
     ref = oper[0].data.objref;
@@ -250,7 +259,7 @@ prim_refstamps(PRIM_PROTOTYPE)
         abort_interp("Dbref is not an object nor garbage.");
     CHECKREMOTE(ref);
     CHECKOFLOW(3);
-    
+
     result = DBFETCH(ref)->ts.dcreated;
     PushObject(result);
     result = DBFETCH(ref)->ts.dmodified;
@@ -258,11 +267,12 @@ prim_refstamps(PRIM_PROTOTYPE)
     result = DBFETCH(ref)->ts.dlastused;
     PushObject(result);
 }
+
 void
 prim_touch(PRIM_PROTOTYPE)
 {
-	dbref ref;
-    
+    dbref ref;
+
     if (oper[0].type != PROG_OBJECT)
         abort_interp("Non-object argument (1)");
     ref = oper[0].data.objref;
@@ -270,13 +280,14 @@ prim_touch(PRIM_PROTOTYPE)
         abort_interp("Dbref is not an object nor garbage.");
     CHECKREMOTE(ref);
     ts_useobject(program, ref);
-    
+
 }
+
 void
 prim_use(PRIM_PROTOTYPE)
 {
-	dbref ref;
-    
+    dbref ref;
+
     if (oper[0].type != PROG_OBJECT)
         abort_interp("Non-object argument (1)");
     ref = oper[0].data.objref;
@@ -284,8 +295,9 @@ prim_use(PRIM_PROTOTYPE)
         abort_interp("Dbref is not an object nor garbage.");
     CHECKREMOTE(ref);
     ts_lastuseobject(program, ref);
-    
+
 }
+
 extern int top_pid;
 struct forvars *copy_fors(struct forvars *);
 struct tryvars *copy_trys(struct tryvars *);
@@ -294,12 +306,12 @@ prim_fork(PRIM_PROTOTYPE)
 {
     int i, result;
     struct frame *tmpfr;
-    
+
     CHECKOFLOW(1);
     fr->pc = pc;
     //tmpfr = (struct frame *) calloc(1, sizeof(struct frame));
     tmpfr = new frame;
-    memset(tmpfr, 0, sizeof(struct frame)); // TODO: Fix later when C++ support is better -hinoserm june 23 2014
+    //memset(tmpfr, 0, sizeof(struct frame)); // TODO: Fix later when C++ support is better -hinoserm june 23 2014
 
     tmpfr->next = NULL;
     tmpfr->system.top = fr->system.top;
@@ -368,14 +380,11 @@ prim_fork(PRIM_PROTOTYPE)
     tmpfr->waitees = NULL;
     tmpfr->dlogids = NULL;
     tmpfr->timercount = 0;
-	tmpfr->use_interrupts = 1;
+    tmpfr->use_interrupts = fr->use_interrupts;
     tmpfr->interrupt_count = 0;
     tmpfr->interrupts = NULL;
     tmpfr->ainttop = NULL;
     tmpfr->aintbot = NULL;
-#ifdef THREADED_SQL_SUPPORT
-	pthread_mutex_init(&tmpfr->mutex, NULL);
-#endif
     /* child process gets a 0 returned on the stack */
     result = 0;
     push(tmpfr->argument.st, &(tmpfr->argument.top), PROG_INTEGER, MIPSCAST & result);
@@ -385,30 +394,34 @@ prim_fork(PRIM_PROTOTYPE)
         result = -1;
     PushInt(result);
 }
+
 void
 prim_pid(PRIM_PROTOTYPE)
 {
-	int result;
-    
+    int result;
+
     CHECKOFLOW(1);
     result = fr->pid;
     PushInt(result);
 }
+
 void
 prim_stats(PRIM_PROTOTYPE)
 {
-	dbref ref;
+    dbref ref;
+
     /* A WhiteFire special. :) */
-    
+
     if (mlev < LM2)
         abort_interp("M2 prim");
     if (!valid_player(&oper[0]) && (oper[0].data.objref != NOTHING))
         abort_interp("non-player argument (1)");
     ref = oper[0].data.objref;
-    
+
     {
         dbref i;
         int rooms, exits, things, players, programs, garbage;
+
         /* tmp, ref */
         rooms = exits = things = players = programs = garbage = 0;
         for (i = 0; i < db_top; i++) {
@@ -447,36 +460,39 @@ prim_stats(PRIM_PROTOTYPE)
         /* push results */
     }
 }
+
 void
 prim_abort(PRIM_PROTOTYPE)
 {
-	char buf[BUFFER_LEN];
-    
+    char buf[BUFFER_LEN];
+
     if (oper[0].type != PROG_STRING)
         abort_interp("Invalid argument");
     strcpy(buf, DoNullInd(oper[0].data.string));
     abort_interp(buf);
 }
+
 void
 prim_ispidp(PRIM_PROTOTYPE)
 {
     int result;
-    int nCurFr = 0; 
+    int nCurFr = 0;
+
     /* i -- i */
-    
+
     if (oper[0].type != PROG_INTEGER)
         abort_interp("Non-integer argument (1)");
     if (oper[0].data.number == fr->pid) {
         result = 1;
-    } else if ( force_level > 0 ) {
+    } else if (force_level > 0) {
         /* if this was called from a FORCE   
          * search the global force processes stack
          * to see if our PID is in there instead 
          */
         result = 0;
-        for ( ; nCurFr < 9; ++nCurFr ) {
-            if ( aForceFrameStack[nCurFr]) {
-                if ( aForceFrameStack[nCurFr]->pid == oper[0].data.number ) {
+        for (; nCurFr < 9; ++nCurFr) {
+            if (aForceFrameStack[nCurFr]) {
+                if (aForceFrameStack[nCurFr]->pid == oper[0].data.number) {
                     result = 1;
                 }
             }
@@ -484,15 +500,16 @@ prim_ispidp(PRIM_PROTOTYPE)
     } else {
         result = in_timequeue(oper[0].data.number);
     }
-    
+
     PushInt(result);
 }
+
 void
 prim_getpids(PRIM_PROTOTYPE)
 {
     stk_array *nw;
-	struct inst temp1;
-    
+    struct inst temp1;
+
     if (oper[0].type != PROG_OBJECT)
         abort_interp("Non-object argument (1)");
     nw = get_pids(oper[0].data.objref);
@@ -503,9 +520,10 @@ prim_getpids(PRIM_PROTOTYPE)
         array_appenditem(&nw, &temp1);
         CLEAR(&temp1);
     }
-    
+
     PushArrayRaw(nw);
 }
+
 void
 prim_getpidinfo(PRIM_PROTOTYPE)
 {
@@ -514,6 +532,7 @@ prim_getpidinfo(PRIM_PROTOTYPE)
     time_t rtime = current_systime;
     time_t etime = 0;
     double pcnt = 0.0;
+
     /* int */
 
     if (oper[0].type != PROG_INTEGER)
@@ -586,7 +605,7 @@ prim_getpidinfo(PRIM_PROTOTYPE)
         temp1.type = PROG_STRING; /* CPU */
         temp1.data.string = alloc_prog_string("CPU");
         temp2.type = PROG_FLOAT;
-        temp2.data.fnumber = (float) pcnt;
+        temp2.data.fnumber = (double) pcnt;
         array_setitem(&nw, &temp1, &temp2);
         CLEAR(&temp1);
         CLEAR(&temp2);
@@ -618,17 +637,54 @@ prim_getpidinfo(PRIM_PROTOTYPE)
         array_setitem(&nw, &temp1, &temp2);
         CLEAR(&temp1);
         CLEAR(&temp2);
+        temp1.type = PROG_STRING;
+        temp1.data.string = alloc_prog_string("KINSTCNT");
+        temp2.type = PROG_FLOAT;
+        temp2.data.fnumber = ((double)fr->instcnt / 1000);
+        array_setitem(&nw, &temp1, &temp2);
+        CLEAR(&temp1);
+        CLEAR(&temp2);
+
+        stk_array *nw2 = new_array_packed(0, 0);
+
+        for (int s = 0; s < (fr->caller.top - 1); s++) {
+            struct inst temp3;
+
+            temp3.type = PROG_OBJECT;
+            temp3.data.objref = (dbref) fr->caller.st[s];
+            array_appenditem(&nw2, &temp3);
+            CLEAR(&temp3);
+        }
+
+        temp1.type = PROG_STRING;
+        temp1.data.string = alloc_prog_string("CALLERS");
+        temp2.type = PROG_ARRAY;
+        temp2.data.array = nw2;
+        array_setitem(&nw, &temp1, &temp2);
+        CLEAR(&temp1);
+        CLEAR(&temp2);
+        
+        if (fr->timercount > 0) {
+            temp1.type = PROG_STRING;
+            temp1.data.string = alloc_prog_string("TIMERS");
+            temp2.type = PROG_ARRAY;
+            temp2.data.array = get_pidinfo_timers(fr->pid);
+            array_setitem(&nw, &temp1, &temp2);
+            CLEAR(&temp1);
+            CLEAR(&temp2);
+        }
     } else                      /* not current PID */
         nw = get_pidinfo(oper[0].data.number);
-    
+
     PushArrayRaw(nw);
 }
+
 void
 prim_parselock(PRIM_PROTOTYPE)
 {
     struct boolexp *lok;
-    
-                  /* string: lock string */
+
+    /* string: lock string */
     CHECKOFLOW(1);
     if (oper[0].type != PROG_STRING)
         abort_interp("Invalid argument");
@@ -637,51 +693,56 @@ prim_parselock(PRIM_PROTOTYPE)
     } else {
         lok = TRUE_BOOLEXP;
     }
-    
+
     PushLock(lok);
     free_boolexp(lok);
 }
+
 void
 prim_unparselock(PRIM_PROTOTYPE)
 {
     const char *ptr;
-    
-                  /* lock: lock */
+    char ubuf[BUFFER_LEN];
+
+    /* lock: lock */
     if (oper[0].type != PROG_LOCK)
         abort_interp("Invalid argument");
     if (oper[0].data.lock != (struct boolexp *) TRUE_BOOLEXP) {
-        ptr = unparse_boolexp(ProgUID, oper[0].data.lock, 0);
+        ptr = unparse_boolexp(ubuf, ProgUID, oper[0].data.lock, 0);
     } else {
         ptr = NULL;
     }
     CHECKOFLOW(1);
-    
+
     if (ptr) {
         PushString(ptr);
     } else {
         PushNullStr;
     }
 }
+
 void
 prim_prettylock(PRIM_PROTOTYPE)
 {
     const char *ptr;
-    
-                  /* lock: lock */
+    char ubuf[BUFFER_LEN];
+
+    /* lock: lock */
     if (oper[0].type != PROG_LOCK)
         abort_interp("Invalid argument");
-    ptr = unparse_boolexp(ProgUID, oper[0].data.lock, 1);
+    ptr = unparse_boolexp(ubuf, ProgUID, oper[0].data.lock, 1);
     CHECKOFLOW(1);
-    
+
     PushString(ptr);
 }
+
 void
 prim_cancallp(PRIM_PROTOTYPE)
 {
-	int result;
-    
-                  /* string: public function name */
-                  /* dbref: Program dbref to check */
+    int result;
+
+    /* string: public function name */
+    /* dbref: Program dbref to check */
     if (oper[1].type != PROG_OBJECT)
         abort_interp("Expected dbref argument. (1)");
     if (!valid_object(&oper[1]))
@@ -694,39 +755,40 @@ prim_cancallp(PRIM_PROTOTYPE)
         abort_interp("Invalid Null string argument. (2)");
     if (!(DBFETCH(oper[1].data.objref)->sp.program.code)) {
         struct line *tmpline;
+
         tmpline = DBFETCH(oper[1].data.objref)->sp.program.first;
-        DBFETCH(oper[1].data.objref)->sp.program.first =
-            ((struct line *) read_program(oper[1].data.objref));
+        DBFETCH(oper[1].data.objref)->sp.program.first = ((struct line *) read_program(oper[1].data.objref));
         do_compile(fr->descr, OWNER(oper[1].data.objref), oper[1].data.objref, 0);
         free_prog_text(DBFETCH(oper[1].data.objref)->sp.program.first);
         DBFETCH(oper[1].data.objref)->sp.program.first = tmpline;
     }
     result = 0;
-    if (ProgMLevel(oper[1].data.objref) > 0 &&
-        (mlev >= 4 || OWNER(oper[1].data.objref) == ProgUID
-         || Linkable(oper[1].data.objref))
+    if (ProgMLevel(oper[1].data.objref) > 0 && (mlev >= 4 || OWNER(oper[1].data.objref) == ProgUID || Linkable(oper[1].data.objref))
         ) {
         struct publics *pbs;
+
         pbs = DBFETCH(oper[1].data.objref)->sp.program.pubs;
         while (pbs) {
             if (!string_compare(oper[0].data.string->data, pbs->subname))
                 break;
             pbs = pbs->next;
         }
-        if (pbs) 
-	    if ((!pbs->self && (mlev >= pbs->mlev)) || (pbs->self && (oper[1].data.objref == program)))
-        	result = 1;
+        if (pbs)
+            if ((!pbs->self && (mlev >= pbs->mlev))
+                || (pbs->self && (oper[1].data.objref == program)))
+                result = 1;
     }
     CHECKOFLOW(1);
-    
+
     PushInt(result);
 }
+
 void
 prim_timer_start(PRIM_PROTOTYPE)
 {
-    
-                  /* string: timer id */
-                  /* int: delay length in seconds */
+
+    /* string: timer id */
+    /* int: delay length in seconds */
     if (fr->timercount > tp_process_timer_limit)
         abort_interp("Too many timers!");
     if (oper[1].type != PROG_INTEGER)
@@ -734,51 +796,55 @@ prim_timer_start(PRIM_PROTOTYPE)
     if (oper[0].type != PROG_STRING)
         abort_interp("Expected a string timer id. (2)");
     dequeue_timers(fr->pid, (char *) DoNullInd(oper[0].data.string));
-    add_muf_timer_event(fr->descr, player, program, fr, oper[1].data.number,
-                        (char *) DoNullInd(oper[0].data.string));
-    
+    add_muf_timer_event(fr->descr, player, program, fr, oper[1].data.number, (char *) DoNullInd(oper[0].data.string));
+
 }
+
 void
 prim_timer_stop(PRIM_PROTOTYPE)
 {
-    
-                  /* string: timer id */
+
+    /* string: timer id */
     if (oper[0].type != PROG_STRING)
         abort_interp("Expected a string timer id. (2)");
     dequeue_timers(fr->pid, (char *) DoNullInd(oper[0].data.string));
-    
+
 }
+
 void
 prim_event_exists(PRIM_PROTOTYPE)
 {
-	int result;
-    
-                  /* str: eventID to look for */
+    int result;
+
+    /* str: eventID to look for */
     if (oper[0].type != PROG_STRING || !oper[0].data.string)
         abort_interp("Expected a non-null string eventid to search for.");
     result = muf_event_exists(fr, oper[0].data.string->data);
-    
+
     PushInt(result);
 }
+
 void
 prim_event_count(PRIM_PROTOTYPE)
 {
-	int result;
+    int result;
+
     CHECKOFLOW(1);
     result = muf_event_count(fr);
     PushInt(result);
 }
+
 void
 prim_event_send(PRIM_PROTOTYPE)
 {
     struct frame *destfr;
     stk_array *arr;
     struct inst temp1;
-	char buf[BUFFER_LEN];
-    
-                  /* any: data to pass */
-                  /* string: event id */
-                  /* int: process id to send to */
+    char buf[BUFFER_LEN];
+
+    /* any: data to pass */
+    /* string: event id */
+    /* int: process id to send to */
     if (oper[2].type != PROG_INTEGER)
         abort_interp("Expected an integer process id. (1)");
     if (oper[1].type != PROG_STRING)
@@ -803,41 +869,44 @@ prim_event_send(PRIM_PROTOTYPE)
         muf_event_add(destfr, buf, &temp1, 0);
         CLEAR(&temp1);
     }
-    
+
 }
+
 void
 prim_pnameokp(PRIM_PROTOTYPE)
 {
-	int result;
-    
+    int result;
+
     if (oper[0].type != PROG_STRING)
         abort_interp("Player name string expected.");
     if (!oper[0].data.string)
         result = 0;
     else
         result = ok_player_name(oper[0].data.string->data);
-    
+
     PushInt(result);
 }
+
 void
 prim_nameokp(PRIM_PROTOTYPE)
 {
-	int result;
-    
+    int result;
+
     if (oper[0].type != PROG_STRING)
         abort_interp("Object name string expected.");
     if (!oper[0].data.string)
         result = 0;
     else
         result = ok_name(oper[0].data.string->data);
-    
+
     PushInt(result);
 }
+
 void
 prim_watchpid(PRIM_PROTOTYPE)
 {
     struct frame *frame;
-    
+
     if (mlev < 3) {
         abort_interp("Mucker level 3 required.");
     }
@@ -852,6 +921,7 @@ prim_watchpid(PRIM_PROTOTYPE)
     if (frame) {
         struct mufwatchpidlist **cur;
         struct mufwatchpidlist *waitee;
+
         for (cur = &frame->waiters; *cur; cur = &(*cur)->next) {
             if ((*cur)->pid == oper[0].data.number) {
                 break;
@@ -874,35 +944,40 @@ prim_watchpid(PRIM_PROTOTYPE)
         }
     } else {
         char buf[64];
+
         sprintf(buf, "PROC.EXIT.%d", oper[0].data.number);
         muf_event_add(fr, buf, &oper[0], 0);
     }
-    
+
 }
+
 void
 prim_read_wants_blanks(PRIM_PROTOTYPE)
 {
     fr->wantsblanks = !(fr->wantsblanks);
 }
+
 void
 prim_get_read_wants_blanks(PRIM_PROTOTYPE)
 {
-	int result;
+    int result;
+
     CHECKOFLOW(1);
-	result = (int)fr->wantsblanks;
+    result = (int) fr->wantsblanks;
     PushInt(result);
 }
+
 void
 prim_debugger_break(PRIM_PROTOTYPE)
 {
     int i = 0;
+
     if (fr->brkpt.count >= MAX_BREAKS)
         abort_interp("Too many breakpoints set.");
     fr->brkpt.force_debugging = 1;
     if (fr->brkpt.count != 1 || fr->brkpt.temp[0] != 1 ||
         fr->brkpt.level[0] != -1 || fr->brkpt.line[0] != -1 ||
-        fr->brkpt.linecount[0] != -2 || fr->brkpt.pc[0] != NULL ||
-        fr->brkpt.pccount[0] != -2 || fr->brkpt.prog[0] != program) {
+        fr->brkpt.linecount[0] != -2 || fr->brkpt.pc[0] != NULL || fr->brkpt.pccount[0] != -2 || fr->brkpt.prog[0] != program) {
         /* need to make initial breakpoint */
         i = fr->brkpt.count++;
         fr->brkpt.temp[i] = 1;
@@ -914,11 +989,13 @@ prim_debugger_break(PRIM_PROTOTYPE)
         fr->brkpt.prog[i] = NOTHING;
     }
 }
+
 void
 prim_debug_on(PRIM_PROTOTYPE)
 {
     FLAGS(program) |= DARK;
 }
+
 void
 prim_debug_off(PRIM_PROTOTYPE)
 {
@@ -929,25 +1006,26 @@ void
 prim_debug_line(PRIM_PROTOTYPE)
 {
     if (!(FLAGS(program) & DARK)) {
-		char buf[BUFFER_LEN];
-        char *mesg = debug_inst(fr, 0, pc, fr->pid, arg, buf, sizeof(buf), *top, program);
+        char buf[BUFFER_LEN];
+        char *mesg = debug_inst(fr, 0, pc, fr->pid, arg, buf, sizeof(buf), *top,
+                                program);
 
-		if (controls(PSafe, program))
-			notify_nolisten(PSafe, mesg, 1);
+        if (controls(PSafe, program))
+            notify_nolisten(PSafe, mesg, 1);
 
-		if ((FLAG2(program) & F2PARENT) && PSafe != OWNER(program))
-			notify_nolisten(OWNER(program), mesg, 1);
+        if ((FLAG2(program) & F2PARENT) && PSafe != OWNER(program))
+            notify_nolisten(OWNER(program), mesg, 1);
     }
 }
 
 void
 prim_debug_line_str(PRIM_PROTOTYPE)
 {
-	char buf[BUFFER_LEN];
+    char buf[BUFFER_LEN];
     char *mesg = debug_inst(fr, 0, pc, fr->pid, arg, buf, sizeof(buf), *top, program);
 
-	CHECKOFLOW(1);
-	PushString(mesg);
+    CHECKOFLOW(1);
+    PushString(mesg);
 }
 
 
@@ -956,83 +1034,85 @@ prim_systime_precise(PRIM_PROTOTYPE)
 {
     struct timeval fulltime;
     double dbltime;
-    
+
     gettimeofday(&fulltime, (struct timezone *) 0);
     CHECKOFLOW(1);
     dbltime = fulltime.tv_sec + (((double) fulltime.tv_usec) / 1.0e6);
     PushFloat(dbltime);
 }
+
 void
 prim_htoi(PRIM_PROTOTYPE)
 {
-	int result, tmp;
-    
+    int result, tmp;
+
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string argument. (1)");
     result = 0;
     if (oper[0].data.string) {
         for (tmp = 0; oper[0].data.string->data[tmp]; ++tmp) {
-            result +=
-                (oper[0].data.string->data[tmp] >=
-                 'A' ? ((oper[0].data.string->data[tmp] & 0xdf) - 'A') +
-                 10 : (oper[0].data.string->data[tmp] - '0'));
+            result += (oper[0].data.string->data[tmp] >= 'A' ? ((oper[0].data.string->data[tmp] & 0xdf) - 'A') + 10 : (oper[0].data.string->data[tmp] - '0'));
             if (oper[0].data.string->data[tmp + 1] != '\0')
                 result *= 16;
         }
     }
-    
+
     PushInt(result);
 }
+
 void
 prim_itoh(PRIM_PROTOTYPE)
 {
-	char buf[BUFFER_LEN];
-    
+    char buf[BUFFER_LEN];
+
     if (oper[0].type != PROG_INTEGER)
         abort_interp("Non-integer argument. (1)");
     sprintf(buf, "%.2X", oper[0].data.number);
-    
+
     PushString(buf);
 }
+
 void
 prim_MD5hash(PRIM_PROTOTYPE)
 {
     char hexout[33];
-    
+
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string argument. (1)");
     if (!oper[0].data.string) {
-		MD5hex((char *)hexout, "", 0);
-	} else {
-		MD5hex((char *)hexout, oper[0].data.string->data, oper[0].data.string->length);
-	}
-	
-    PushString(hexout); 
+        MD5hex((char *) hexout, "", 0);
+    } else {
+        MD5hex((char *) hexout, oper[0].data.string->data, oper[0].data.string->length);
+    }
+
+    PushString(hexout);
 }
+
 void
 prim_SHA1hash(PRIM_PROTOTYPE)
 {
     char hexout[41];
-    
+
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string argument. (1)");
     if (!oper[0].data.string) {
-		SHA1hex((char *)hexout, "", 0);
-	} else {
-		SHA1hex((char *)hexout, oper[0].data.string->data, oper[0].data.string->length);
-	}
-	
-    PushString(hexout); 
+        SHA1hex((char *) hexout, "", 0);
+    } else {
+        SHA1hex((char *) hexout, oper[0].data.string->data, oper[0].data.string->length);
+    }
+
+    PushString(hexout);
 }
+
 void
 prim_onevent(PRIM_PROTOTYPE)
 {
     struct muf_interrupt *e;
-    
-                  /* keep in queue */
-                  /* function addr */
-                  /* interrupt id  */
-                  /* event id      */
+
+    /* keep in queue */
+    /* function addr */
+    /* interrupt id  */
+    /* event id      */
     if (oper[1].type != PROG_ADD)
         abort_interp("Expected a function address. (2)");
     if (oper[2].type != PROG_STRING)
@@ -1062,11 +1142,193 @@ prim_onevent(PRIM_PROTOTYPE)
     e->event = alloc_string(oper[3].data.string->data);
     e->addr = oper[1].data.addr->data;
     e->keep = (oper[0].data.number != 0);
-    
+
 }
+
 void
 prim_interrupt_level(PRIM_PROTOTYPE)
 {
     CHECKOFLOW(1);
     PushInt(fr->interrupted);
+}
+
+void
+prim_funcprof_array(PRIM_PROTOTYPE)
+{
+    int i;
+    stk_array *nw = NULL;
+    struct inst temp1;
+    struct inst temp2;
+    char buf[BUFFER_LEN];
+
+    if (oper[0].type != PROG_INTEGER && oper[0].type != PROG_OBJECT)
+        abort_interp("Dbref or integer expected. (1)");
+
+    if (oper[0].type == PROG_OBJECT) {
+        nw = new_array_dictionary();
+
+        for (i = db_top; i-- > 0;) {
+            if (i == oper[0].data.objref && Typeof(i) == TYPE_PROGRAM && DBFETCH(i)->sp.program.code && DBFETCH(i)->sp.program.fprofile) {
+                struct funcprof *fpe = DBFETCH(i)->sp.program.fprofile;
+
+                while (fpe) {
+                    stk_array *nw2 = new_array_dictionary();
+
+                    temp1.type = PROG_STRING;
+                    temp1.data.string = alloc_prog_string("lasttotal");
+                    temp2.type = PROG_FLOAT;
+                    temp2.data.fnumber = fpe->lasttotal;
+                    array_setitem(&nw2, &temp1, &temp2);
+                    CLEAR(&temp1);
+                    CLEAR(&temp2);
+
+                    temp1.type = PROG_STRING;
+                    temp1.data.string = alloc_prog_string("starttime");
+                    temp2.type = PROG_FLOAT;
+                    temp2.data.fnumber = fpe->starttime;
+                    array_setitem(&nw2, &temp1, &temp2);
+                    CLEAR(&temp1);
+
+                    CLEAR(&temp2);
+
+                    temp1.type = PROG_STRING;
+                    temp1.data.string = alloc_prog_string("totaltime");
+                    temp2.type = PROG_FLOAT;
+                    temp2.data.fnumber = fpe->totaltime;
+                    array_setitem(&nw2, &temp1, &temp2);
+                    CLEAR(&temp1);
+                    CLEAR(&temp2);
+
+                    temp1.type = PROG_STRING;
+                    temp1.data.string = alloc_prog_string("usecount");
+                    temp2.type = PROG_INTEGER;
+                    temp2.data.number = (int) fpe->usecount;
+                    array_setitem(&nw2, &temp1, &temp2);
+                    CLEAR(&temp1);
+                    CLEAR(&temp2);
+
+                    temp1.type = PROG_STRING;
+                    temp1.data.string = alloc_prog_string("usecount_s");
+                    temp2.type = PROG_STRING;
+                    sprintf(buf, "%ld", fpe->usecount);
+                    temp2.data.string = alloc_prog_string(buf);
+                    array_setitem(&nw2, &temp1, &temp2);
+                    CLEAR(&temp1);
+                    CLEAR(&temp2);
+
+                    temp1.type = PROG_STRING;
+                    temp1.data.string = alloc_prog_string("funcname");
+                    temp2.type = PROG_STRING;
+                    temp2.data.string = alloc_prog_string(fpe->funcname);
+                    array_setitem(&nw2, &temp1, &temp2);
+                    CLEAR(&temp1);
+                    CLEAR(&temp2);
+
+                    temp1.type = PROG_STRING;
+                    temp1.data.string = alloc_prog_string(fpe->funcname);
+                    temp2.type = PROG_ARRAY;
+                    temp2.data.array = nw2;
+                    array_setitem(&nw, &temp1, &temp2);
+                    CLEAR(&temp1);
+                    CLEAR(&temp2);
+
+                    fpe = fpe->next;
+                }
+                break;
+            }
+        }
+    } else if (oper[0].type == PROG_INTEGER) {
+        int pid = oper[0].data.number;
+        timequeue ptr = tqhead;
+
+        nw = new_array_packed(0, 0);
+
+        while (ptr) {
+            if (ptr->eventnum == pid) {
+                if (ptr->typ != TQ_MUF_TYP || ptr->subtyp != TQ_MUF_TIMER) {
+                    break;
+                }
+            }
+            ptr = ptr->next;
+        }
+
+        if (ptr && (ptr->eventnum == pid) && ptr->fr && (ptr->typ != TQ_MUF_TYP || ptr->subtyp != TQ_MUF_TIMER)
+            && ptr->fr->fprofile) {
+            struct funcprof *fpe = ptr->fr->fprofile;
+
+            while (fpe) {
+                stk_array *nw2 = new_array_dictionary();
+
+                temp1.type = PROG_STRING;
+                temp1.data.string = alloc_prog_string("lasttotal");
+                temp2.type = PROG_FLOAT;
+                temp2.data.fnumber = fpe->lasttotal;
+                array_setitem(&nw2, &temp1, &temp2);
+                CLEAR(&temp1);
+                CLEAR(&temp2);
+
+                temp1.type = PROG_STRING;
+                temp1.data.string = alloc_prog_string("starttime");
+                temp2.type = PROG_FLOAT;
+                temp2.data.fnumber = fpe->starttime;
+                array_setitem(&nw2, &temp1, &temp2);
+                CLEAR(&temp1);
+                CLEAR(&temp2);
+
+                temp1.type = PROG_STRING;
+                temp1.data.string = alloc_prog_string("totaltime");
+                temp2.type = PROG_FLOAT;
+                temp2.data.fnumber = fpe->totaltime;
+                array_setitem(&nw2, &temp1, &temp2);
+                CLEAR(&temp1);
+                CLEAR(&temp2);
+
+                temp1.type = PROG_STRING;
+                temp1.data.string = alloc_prog_string("usecount");
+                temp2.type = PROG_INTEGER;
+                temp2.data.number = (int) fpe->usecount;
+                array_setitem(&nw2, &temp1, &temp2);
+                CLEAR(&temp1);
+                CLEAR(&temp2);
+
+                temp1.type = PROG_STRING;
+                temp1.data.string = alloc_prog_string("usecount_s");
+                temp2.type = PROG_STRING;
+                sprintf(buf, "%ld", fpe->usecount);
+                temp2.data.string = alloc_prog_string(buf);
+                array_setitem(&nw2, &temp1, &temp2);
+                CLEAR(&temp1);
+                CLEAR(&temp2);
+
+                temp1.type = PROG_STRING;
+                temp1.data.string = alloc_prog_string("funcname");
+                temp2.type = PROG_STRING;
+                temp2.data.string = alloc_prog_string(fpe->funcname);
+                array_setitem(&nw2, &temp1, &temp2);
+                CLEAR(&temp1);
+                CLEAR(&temp2);
+
+                temp2.type = PROG_ARRAY;
+                temp2.data.array = nw2;
+                array_appenditem(&nw, &temp2);
+                CLEAR(&temp2);
+
+                fpe = fpe->next;
+            }
+        }
+
+
+    }
+
+    if (nw)
+        PushArrayRaw(nw);
+}
+
+void
+prim_backtrace(PRIM_PROTOTYPE)
+{
+    if (!valid_player(&oper[0]) && (oper[0].data.objref != NOTHING))
+        abort_interp("non-player argument (1)");
+
+    muf_backtrace(oper[0].data.objref, program, ADDR_SIZE, fr);
 }

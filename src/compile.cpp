@@ -18,9 +18,9 @@
 #include "nan.h"
 #endif
 #ifdef JSON_SUPPORT
-#include <jansson.h> /* for encoding/decoding flag defs */
+#include <jansson.h>            /* for encoding/decoding flag defs */
 #endif /* JSON_SUPPORT */
- 
+
 
 /* This file contains code for doing "byte-compilation" of
    mud-forth programs.  As such, it contains many internal
@@ -129,9 +129,9 @@ typedef struct COMPILE_STATE_T {
     int localvartypes[MAX_VAR];
     const char *scopedvars[MAX_VAR];
     int scopedvartypes[MAX_VAR];
-	const char *staticvars[MAX_VAR];
-	int staticvartypes[MAX_VAR];
-	int staticvarcnt;
+    const char *staticvars[MAX_VAR];
+    int staticvartypes[MAX_VAR];
+    int staticvarcnt;
 
     struct line *curr_line;     /* current line */
     int lineno;                 /* current line number */
@@ -181,6 +181,9 @@ struct prog_addr *alloc_addr(COMPSTATE *, int, struct inst *);
 struct INTERMEDIATE *prealloc_inst(COMPSTATE *cstat);
 struct INTERMEDIATE *new_inst(COMPSTATE *);
 void cleanpubs(struct publics *mypub);
+#ifdef MCP_SUPPORT
+void clean_mcpbinds(struct mcp_binding *mcpbinds);
+#endif /* MCP_SUPPORT */
 void cleanup(COMPSTATE *);
 void add_proc(COMPSTATE *, const char *, struct INTERMEDIATE *, int rettype);
 void add_label(COMPSTATE *, const char *, struct INTERMEDIATE *);
@@ -189,11 +192,9 @@ void add_loop_exit(COMPSTATE *, struct INTERMEDIATE *);
 int in_loop(COMPSTATE *cstat);
 int innermost_control_type(COMPSTATE *cstat);
 int count_trys_inside_loop(COMPSTATE *cstat);
-struct INTERMEDIATE *locate_control_structure(COMPSTATE *cstat, int type1,
-                                              int type2);
+struct INTERMEDIATE *locate_control_structure(COMPSTATE *cstat, int type1, int type2);
 struct INTERMEDIATE *innermost_control_place(COMPSTATE *cstat, int type1);
-struct INTERMEDIATE *pop_control_structure(COMPSTATE *cstat, int type1,
-                                           int type2);
+struct INTERMEDIATE *pop_control_structure(COMPSTATE *cstat, int type1, int type2);
 struct INTERMEDIATE *pop_loop_exit(COMPSTATE *);
 void resolve_loop_addrs(COMPSTATE *, int where);
 int add_variable(COMPSTATE *, const char *, int valtype);
@@ -235,15 +236,14 @@ do_abort_compile(COMPSTATE *cstat, const char *c)
 
     sprintf(_buf, "Error in line %d: %s", cstat->lineno, c);
     if (cstat->line_copy) {
-        delete[] cstat->line_copy;
+        delete[]cstat->line_copy;
         cstat->line_copy = NULL;
     }
     if (((FLAGS(cstat->player) & INTERACTIVE)
          && !(FLAGS(cstat->player) & READMODE)) || cstat->force_err_display) {
         notify_nolisten(cstat->player, _buf, 1);
     } else {
-        log_muf("MUF compiler warning in program %d:\n%s\n", cstat->program,
-                _buf);
+        log_muf("MUF compiler warning in program %d:\n%s\n", cstat->program, _buf);
     }
     cstat->compile_err++;
     if (cstat->compile_err > 1) {
@@ -265,6 +265,10 @@ do_abort_compile(COMPSTATE *cstat, const char *c)
     free_prog(cstat->program);
     cleanpubs(DBFETCH(cstat->program)->sp.program.pubs);
     DBFETCH(cstat->program)->sp.program.pubs = NULL;
+#ifdef MCP_SUPPORT
+    clean_mcpbinds(DBFETCH(cstat->program)->sp.program.mcpbinds);
+    DBFETCH(cstat->program)->sp.program.mcpbinds = NULL;
+#endif /* MCP_SUPPORT */
     DBFETCH(cstat->program)->sp.program.proftime.tv_sec = 0;
     DBFETCH(cstat->program)->sp.program.proftime.tv_usec = 0;
 }
@@ -290,7 +294,7 @@ get_address(COMPSTATE *cstat, struct INTERMEDIATE *dest, int offset)
         cstat->addrcount = 0;
         cstat->addrmax = ADDRLIST_ALLOC_CHUNK_SIZE;
         //cstat->addrlist = (struct INTERMEDIATE **)malloc(cstat->addrmax * sizeof(struct INTERMEDIATE *));
-        cstat->addrlist = new INTERMEDIATE*[cstat->addrmax];
+        cstat->addrlist = new INTERMEDIATE *[cstat->addrmax];
         //cstat->addroffsets = (int *)malloc(cstat->addrmax * sizeof(int));
         cstat->addroffsets = new int[cstat->addrmax];
     }
@@ -303,16 +307,18 @@ get_address(COMPSTATE *cstat, struct INTERMEDIATE *dest, int offset)
         //cstat->addrmax += ADDRLIST_ALLOC_CHUNK_SIZE;
         //cstat->addrlist = (struct INTERMEDIATE **) realloc(cstat->addrlist, cstat->addrmax * sizeof(struct INTERMEDIATE *));
         //cstat->addroffsets = (int *) realloc(cstat->addroffsets, cstat->addrmax * sizeof(int));
-        struct INTERMEDIATE **itmp = new INTERMEDIATE*[cstat->addrmax+ADDRLIST_ALLOC_CHUNK_SIZE];
+        struct INTERMEDIATE **itmp = new INTERMEDIATE *[cstat->addrmax + ADDRLIST_ALLOC_CHUNK_SIZE];
+
         for (int i = 0; i < cstat->addrcount; i++)
             itmp[i] = cstat->addrlist[i];
-        delete[] cstat->addrlist;
+        delete[]cstat->addrlist;
         cstat->addrlist = itmp;
 
-        int *otmp = new int[cstat->addrmax+ADDRLIST_ALLOC_CHUNK_SIZE];
+        int *otmp = new int[cstat->addrmax + ADDRLIST_ALLOC_CHUNK_SIZE];
+
         for (int i = 0; i < cstat->addrcount; i++)
             otmp[i] = cstat->addroffsets[i];
-        delete[] cstat->addroffsets;
+        delete[]cstat->addroffsets;
         cstat->addroffsets = otmp;
 
         cstat->addrmax += ADDRLIST_ALLOC_CHUNK_SIZE;
@@ -338,8 +344,7 @@ fix_addresses(COMPSTATE *cstat)
 
     /* repoint publics to targets */
     for (pub = cstat->currpubs; pub; pub = pub->next)
-        pub->addr.no = cstat->addrlist[pub->addr.no]->no +
-            cstat->addroffsets[pub->addr.no];
+        pub->addr.no = cstat->addrlist[pub->addr.no]->no + cstat->addroffsets[pub->addr.no];
 
     /* repoint addresses to targets */
     for (ptr = cstat->first_word; ptr; ptr = ptr->next) {
@@ -349,8 +354,7 @@ fix_addresses(COMPSTATE *cstat)
             case PROG_TRY:
             case PROG_JMP:
             case PROG_EXEC:
-                ptr->in.data.number = cstat->addrlist[ptr->in.data.number]->no +
-                    cstat->addroffsets[ptr->in.data.number];
+                ptr->in.data.number = cstat->addrlist[ptr->in.data.number]->no + cstat->addroffsets[ptr->in.data.number];
                 break;
             default:
                 break;
@@ -364,9 +368,9 @@ free_addresses(COMPSTATE *cstat)
     cstat->addrcount = 0;
     cstat->addrmax = 0;
     if (cstat->addrlist)
-        delete[] cstat->addrlist;
+        delete[]cstat->addrlist;
     if (cstat->addroffsets)
-        delete[] cstat->addroffsets;
+        delete[]cstat->addroffsets;
     cstat->addrlist = NULL;
 }
 
@@ -418,7 +422,7 @@ kill_def(COMPSTATE *cstat, const char *defname)
     hash_data *exp = find_hash(defname, cstat->defhash, DEFHASHSIZE);
 
     if (exp) {
-        delete[] exp->pval;
+        delete[]exp->pval;
         (void) free_hash(defname, cstat->defhash, DEFHASHSIZE);
     }
 }
@@ -476,10 +480,11 @@ include_defs(COMPSTATE *cstat, dbref i)
 void
 include_internal_defs(COMPSTATE *cstat)
 {
-	int i;
-	char buf[BUFFER_LEN];
+    int i;
+    char buf[BUFFER_LEN];
+
 #ifdef MODULAR_SUPPORT
-	struct module *m = modules;
+    struct module *m = modules;
 #endif
 
     /* Create standard server defines */
@@ -505,20 +510,20 @@ include_internal_defs(COMPSTATE *cstat)
     insert_intdef(cstat, "sorttype_natural_nocase_ascend", SORTTYPE_NATURAL_NOCASE_ASCEND);
     insert_intdef(cstat, "sorttype_natural_case_descend", SORTTYPE_NATURAL_CASE_DESCEND);
     insert_intdef(cstat, "sorttype_natural_nocase_descend", SORTTYPE_NATURAL_NOCASE_DESCEND);
-    insert_intdef(cstat, "filter_caseless",    FILTER_CASELESS);
-	insert_intdef(cstat, "filter_equal",       FILTER_EQUAL);
-	insert_intdef(cstat, "filter_greater",     FILTER_GREATER);
-	insert_intdef(cstat, "filter_lesser",      FILTER_LESSER);
-	insert_intdef(cstat, "filter_notequal",    FILTER_NOTEQUAL);
-	insert_intdef(cstat, "filter_smatch",      FILTER_SMATCH);
-	insert_intdef(cstat, "filter_prop_dbref",  FILTER_PROP_DBREF);
-	insert_intdef(cstat, "filter_prop_exists", FILTER_PROP_EXISTS);
-	insert_intdef(cstat, "filter_prop_float",  FILTER_PROP_FLOAT);
-	insert_intdef(cstat, "filter_prop_int",    FILTER_PROP_INT);
-	insert_intdef(cstat, "filter_prop_lock",   FILTER_PROP_LOCK);
-	insert_intdef(cstat, "filter_prop_number", FILTER_PROP_NUMBER);
-	insert_intdef(cstat, "filter_prop_string", FILTER_PROP_STRING);
-	insert_intdef(cstat, "filter_propname_smatch", FILTER_PROPNAME_SMATCH);
+    insert_intdef(cstat, "filter_caseless", FILTER_CASELESS);
+    insert_intdef(cstat, "filter_equal", FILTER_EQUAL);
+    insert_intdef(cstat, "filter_greater", FILTER_GREATER);
+    insert_intdef(cstat, "filter_lesser", FILTER_LESSER);
+    insert_intdef(cstat, "filter_notequal", FILTER_NOTEQUAL);
+    insert_intdef(cstat, "filter_smatch", FILTER_SMATCH);
+    insert_intdef(cstat, "filter_prop_dbref", FILTER_PROP_DBREF);
+    insert_intdef(cstat, "filter_prop_exists", FILTER_PROP_EXISTS);
+    insert_intdef(cstat, "filter_prop_float", FILTER_PROP_FLOAT);
+    insert_intdef(cstat, "filter_prop_int", FILTER_PROP_INT);
+    insert_intdef(cstat, "filter_prop_lock", FILTER_PROP_LOCK);
+    insert_intdef(cstat, "filter_prop_number", FILTER_PROP_NUMBER);
+    insert_intdef(cstat, "filter_prop_string", FILTER_PROP_STRING);
+    insert_intdef(cstat, "filter_propname_smatch", FILTER_PROPNAME_SMATCH);
 
     /* Make defines for compatability to removed primitives */
     insert_def(cstat, "nextthing", "#-1 \"\" \"T\" findnext");
@@ -571,7 +576,8 @@ include_internal_defs(COMPSTATE *cstat)
     insert_def(cstat, "end", "break then dup");
     insert_def(cstat, "default", "pop 1 if");
     insert_def(cstat, "endcase", "pop pop 1 until");
-    insert_def(cstat, "sockopen", "nbsockopen \"Operation now in progress\" over strcmp not if pop 1 10 1 for 10 = if \"timed out\" break then dup sockcheck dup 1 = if pop \"noerr\" break then -1 = if \"refused\" break then 1 sleep repeat then");
+    insert_def(cstat, "sockopen",
+               "nbsockopen \"Operation now in progress\" over strcmp not if pop 1 10 1 for 10 = if \"timed out\" break then dup sockcheck dup 1 = if pop \"noerr\" break then -1 = if \"refused\" break then 1 sleep repeat then");
     insert_def(cstat, "sockrecv", "nbsockrecv swap pop");
     /* MUF Error defines */
     insert_def(cstat, "err_divzero?", "0 is_set?");
@@ -579,7 +585,7 @@ include_internal_defs(COMPSTATE *cstat)
     insert_def(cstat, "err_imaginary?", "2 is_set?");
     insert_def(cstat, "err_fbounds?", "3 is_set?");
     insert_def(cstat, "err_ibounds?", "4 is_set?");
-	/* Read Wants Blanks defines */
+    /* Read Wants Blanks defines */
     insert_def(cstat, "read_wants_blanks?", "get_read_wants_blanks");
     insert_def(cstat, "read_wants_blanks_on", "get_read_wants_blanks not if read_wants_blanks then");
     insert_def(cstat, "read_wants_blanks_off", "get_read_wants_blanks if read_wants_blanks then");
@@ -632,8 +638,43 @@ include_internal_defs(COMPSTATE *cstat)
     insert_def(cstat, "IPV6?", "1");
 #else
     insert_def(cstat, "IPV6?", "0");
-#endif 
-    insert_def(cstat, "sock6open", "nbsock6open \"Operation now in progress\" over strcmp not if pop 1 10 1 for 10 = if \"timed out\" break then dup sockcheck dup 1 = if pop \"noerr\" break then -1 = if \"refused\" break then 1 sleep repeat then");
+#endif
+    insert_def(cstat, "sock6open",
+               "nbsock6open \"Operation now in progress\" over strcmp not if pop 1 10 1 for 10 = if \"timed out\" break then dup sockcheck dup 1 = if pop \"noerr\" break then -1 = if \"refused\" break then 1 sleep repeat then");
+
+#ifdef MCP_SUPPORT
+    /* GUI dialog types */
+    insert_def(cstat, "d_simple", "\"simple\"");
+    insert_def(cstat, "d_tabbed", "\"tabbed\"");
+    insert_def(cstat, "d_helper", "\"helper\"");
+
+    /* GUI control types */
+    insert_def(cstat, "c_menu", "\"menu\"");
+    insert_def(cstat, "c_datum", "\"datum\"");
+    insert_def(cstat, "c_label", "\"text\"");
+    insert_def(cstat, "c_image", "\"image\"");
+    insert_def(cstat, "c_hrule", "\"hrule\"");
+    insert_def(cstat, "c_vrule", "\"vrule\"");
+    insert_def(cstat, "c_button", "\"button\"");
+    insert_def(cstat, "c_checkbox", "\"checkbox\"");
+    insert_def(cstat, "c_radiobtn", "\"radio\"");
+    insert_def(cstat, "c_edit", "\"edit\"");
+    insert_def(cstat, "c_multiedit", "\"multiedit\"");
+    insert_def(cstat, "c_combobox", "\"combobox\"");
+    insert_def(cstat, "c_spinner", "\"spinner\"");
+    insert_def(cstat, "c_scale", "\"scale\"");
+    insert_def(cstat, "c_listbox", "\"listbox\"");
+    insert_def(cstat, "c_frame", "\"frame\"");
+    insert_def(cstat, "c_notebook", "\"notebook\"");
+
+    /* Backwards compatibility for old GUI dialog creation prims */
+    insert_def(cstat, "gui_dlog_simple",
+               "d_simple 0 array_make_dict gui_dlog_create");
+    insert_def(cstat, "gui_dlog_tabbed",
+               "d_tabbed swap \"panes\" over array_keys array_make \"names\" 4 rotate array_vals array_make 2 array_make_dict gui_dlog_create");
+    insert_def(cstat, "gui_dlog_helper",
+               "d_helper swap \"panes\" over array_keys array_make \"names\" 4 rotate array_vals array_make 2 array_make_dict gui_dlog_create");
+#endif
 
     /* for SOCK_SETOPT */
     insert_def(cstat, "NOQUEUE", "0");
@@ -647,6 +688,7 @@ include_internal_defs(COMPSTATE *cstat)
     insert_def(cstat, "reg_icase", MUF_RE_ICASE_STR);
     insert_def(cstat, "reg_all", MUF_RE_ALL_STR);
     insert_def(cstat, "reg_extended", MUF_RE_EXTENDED_STR);
+    insert_def(cstat, "reg_capture", MUF_RE_CAPTURE_STR);
 #endif
 
     /* Some math stuff */
@@ -723,36 +765,36 @@ include_internal_defs(COMPSTATE *cstat)
     insert_def(cstat, "SSL_SOCKOPEN", "SSL_NBSOCKOPEN");
 #endif
 
-	for (i = 0; i < BASE_MAX; i++) {
-		sprintf(buf,  "prim(%s)", primlist[i].name);
-		insert_def(cstat, buf, "\"system\"");
-	}
+    for (i = 0; i < BASE_MAX; i++) {
+        sprintf(buf, "prim(%s)", primlist[i].name);
+        insert_def(cstat, buf, "\"system\"");
+    }
 
 #ifdef MODULAR_SUPPORT
-	while (m) {
-		if (!m->next)
-			break;
+    while (m) {
+        if (!m->next)
+            break;
 
-		m = m->next;
-	}
+        m = m->next;
+    }
 
-	while (m) {
-		char buf2[BUFFER_LEN];
+    while (m) {
+        char buf2[BUFFER_LEN];
 
-		sprintf(buf,  "module(%s)", m->info->name);
-		sprintf(buf2, "%d", (m->info->version ? m->info->version : 1));
+        sprintf(buf, "module(%s)", m->info->name);
+        sprintf(buf2, "%d", (m->info->version ? m->info->version : 1));
         insert_def(cstat, buf, buf2);
 
-		for (i = 0; m->prims[i].name; i++) {
-			sprintf(buf,  "modprim(%s)", m->prims[i].name);
-			sprintf(buf2, "\"%s\"",      m->info->name);
-			insert_def(cstat, buf, buf2);
-			sprintf(buf, "prim(%s)", m->prims[i].name);
-			insert_def(cstat, buf, buf2);
-		}
+        for (i = 0; m->prims[i].name; i++) {
+            sprintf(buf, "modprim(%s)", m->prims[i].name);
+            sprintf(buf2, "\"%s\"", m->info->name);
+            insert_def(cstat, buf, buf2);
+            sprintf(buf, "prim(%s)", m->prims[i].name);
+            insert_def(cstat, buf, buf2);
+        }
 
-		m = m->prev;
-	};
+        m = m->prev;
+    };
 #endif
 
 #ifdef JSON_SUPPORT
@@ -811,6 +853,10 @@ uncompile_program(dbref i)
     free_prog(i);
     cleanpubs(DBFETCH(i)->sp.program.pubs);
     DBFETCH(i)->sp.program.pubs = NULL;
+#ifdef MCP_SUPPORT
+    clean_mcpbinds(DBFETCH(i)->sp.program.mcpbinds);
+    DBFETCH(i)->sp.program.mcpbinds = NULL;
+#endif
     DBFETCH(i)->sp.program.proftime.tv_sec = 0;
     DBFETCH(i)->sp.program.proftime.tv_usec = 0;
     DBFETCH(i)->sp.program.code = NULL;
@@ -847,24 +893,19 @@ do_proginfo(dbref player, const char *arg)
     if (*arg != '#') {
         anotify_nolisten(player, SYSYELLOW "Usage: @proginfo #prognum", 1);
         if (Mage(OWNER(player))) {
-            anotify_nolisten(player, SYSAQUA "Inst Object ProgSz Insts "
-                             SYSBROWN "Name", 1);
+            anotify_nolisten(player, SYSAQUA "Inst Object ProgSz Insts " SYSBROWN "Name", 1);
             for (i = 0; i < db_top; i++) {
                 if (Typeof(i) == TYPE_PROGRAM && DBFETCH(i)->sp.program.siz) {
                     tcnt += ccnt = DBFETCH(i)->sp.program.instances;
                     tsize += csize = size_object(i, 0);
                     timem += cimem = size_prog(i);
                     tinst += cinst = DBFETCH(i)->sp.program.siz;
-                    sprintf(buf, SYSCYAN "%4d %6d %6d %5d %s " SYSRED "by "
-                            SYSGREEN "%s",
-                            ccnt, csize, cimem, cinst,
-                            ansi_unparse_object(player, i), NAME(OWNER(i))
+                    sprintf(buf, SYSCYAN "%4d %6d %6d %5d %s " SYSRED "by " SYSGREEN "%s", ccnt, csize, cimem, cinst, ansi_unparse_object(player, i), NAME(OWNER(i))
                         );
                     anotify_nolisten(player, buf, 1);
                 }
             }
-            sprintf(buf, SYSAQUA "%4d %6d %6d %5d " SYSBROWN "Total",
-                    tcnt, tsize, timem, tinst);
+            sprintf(buf, SYSAQUA "%4d %6d %6d %5d " SYSBROWN "Total", tcnt, tsize, timem, tinst);
             anotify_nolisten(player, buf, 1);
         }
         return;
@@ -876,12 +917,9 @@ do_proginfo(dbref player, const char *arg)
         return;
     }
 
-    anotify_nolisten(player, SYSYELLOW
-                     "Age: 1 = cleanable, 0 = used recently", 1);
+    anotify_nolisten(player, SYSYELLOW "Age: 1 = cleanable, 0 = used recently", 1);
     sprintf(buf, "AI: %d Age: %d Instances: %d",
-            (FLAGS(thing) & (ABODE | INTERNAL)),
-            (now - DBFETCH(thing)->ts.lastused) > tp_clean_interval,
-            DBFETCH(thing)->sp.program.instances);
+            (FLAGS(thing) & (ABODE | INTERNAL)), (now - DBFETCH(thing)->ts.lastused) > tp_clean_interval, DBFETCH(thing)->sp.program.instances);
     notify(player, buf);
 }
 
@@ -893,8 +931,7 @@ free_unused_programs()
     time_t now = current_systime;
 
     for (i = 0; i < db_top; i++) {
-        if ((Typeof(i) == TYPE_PROGRAM) && !(FLAGS(i) & (ABODE | INTERNAL)) &&
-            (now - DBFETCH(i)->ts.lastused > tp_clean_interval)
+        if ((Typeof(i) == TYPE_PROGRAM) && !(FLAGS(i) & (ABODE | INTERNAL)) && (now - DBFETCH(i)->ts.lastused > tp_clean_interval)
             && (DBFETCH(i)->sp.program.instances == 0)) {
             uncompile_program(i);
         }
@@ -906,8 +943,7 @@ free_unused_programs()
 
 /* checks code for valid fetch-and-clear optims and does them */
 void
-MaybeOptimizeVarsAt(COMPSTATE *cstat, struct INTERMEDIATE *first, int AtNo,
-                    int BangNo)
+MaybeOptimizeVarsAt(COMPSTATE *cstat, struct INTERMEDIATE *first, int AtNo, int BangNo)
 {
 /* AtNo is the primitive reference # for @
  * BangNo is the primitive reference # for !
@@ -927,9 +963,7 @@ MaybeOptimizeVarsAt(COMPSTATE *cstat, struct INTERMEDIATE *first, int AtNo,
                 /* Don't trust physical @ or !'s in-code as they may be
                  * used for indirect referencing of scoped variables */
                 /* Don't trust any explict JMPs in the code */
-                if ((curr->in.data.number == AtNo) ||
-                    (curr->in.data.number == BangNo) ||
-                    (curr->in.data.number == IN_JMP)) {
+                if ((curr->in.data.number == AtNo) || (curr->in.data.number == BangNo) || (curr->in.data.number == IN_JMP)) {
                     return;
                 }
                 if (lvarflag) {
@@ -937,9 +971,7 @@ MaybeOptimizeVarsAt(COMPSTATE *cstat, struct INTERMEDIATE *first, int AtNo,
                      * EXIT escape the code path without leaving lvar scope
                      * EXECUTE escape path without leaving lvar scope
                      * CALLS cause re-entrancy problems */
-                    if (curr->in.data.number == IN_RET ||
-                        curr->in.data.number == IN_EXECUTE ||
-                        curr->in.data.number == IN_CALL) {
+                    if (curr->in.data.number == IN_RET || curr->in.data.number == IN_EXECUTE || curr->in.data.number == IN_CALL) {
                         return;
                     }
                 }
@@ -1194,8 +1226,7 @@ OptimizeIntermediate(COMPSTATE *cstat)
             case PROG_TRY:
             case PROG_JMP:
             case PROG_EXEC:
-                i = cstat->addrlist[curr->in.data.number]->no +
-                    cstat->addroffsets[curr->in.data.number];
+                i = cstat->addrlist[curr->in.data.number]->no + cstat->addroffsets[curr->in.data.number];
                 Flags[i] |= IMMFLAG_REFERENCED;
                 break;
         }
@@ -1254,10 +1285,9 @@ OptimizeIntermediate(COMPSTATE *cstat)
                         /* "" strcmp 0 = into not */
                         if (IntermediateIsPrimitive(curr->next, StrcmpNo)) {
                             if (IntermediateIsInteger(curr->next->next, 0)) {
-                                if (IntermediateIsPrimitive
-                                    (curr->next->next->next, EqualsNo)) {
+                                if (IntermediateIsPrimitive(curr->next->next->next, EqualsNo)) {
                                     if (curr->in.data.string)
-                                        delete[] curr->in.data.string;
+                                        delete[]curr->in.data.string;
                                     curr->in.type = PROG_PRIMITIVE;
                                     curr->in.data.number = NotNo;
                                     RemoveNextIntermediate(cstat, curr);
@@ -1271,10 +1301,9 @@ OptimizeIntermediate(COMPSTATE *cstat)
                         /* "" stringcmp 0 = into not */
                         if (IntermediateIsPrimitive(curr->next, StringcmpNo)) {
                             if (IntermediateIsInteger(curr->next->next, 0)) {
-                                if (IntermediateIsPrimitive
-                                    (curr->next->next->next, EqualsNo)) {
+                                if (IntermediateIsPrimitive(curr->next->next->next, EqualsNo)) {
                                     if (curr->in.data.string)
-                                        delete[] curr->in.data.string;
+                                        delete[]curr->in.data.string;
                                     curr->in.type = PROG_PRIMITIVE;
                                     curr->in.data.number = NotNo;
                                     RemoveNextIntermediate(cstat, curr);
@@ -1323,8 +1352,7 @@ OptimizeIntermediate(COMPSTATE *cstat)
                         /* int int / into Div */
                         if (IntermediateIsPrimitive(curr->next->next, DivNo)) {
                             if (curr->next->in.data.number != 0) {
-                                curr->in.data.number /= curr->next->in.data.
-                                    number;
+                                curr->in.data.number /= curr->next->in.data.number;
                                 RemoveNextIntermediate(cstat, curr);
                                 RemoveNextIntermediate(cstat, curr);
                                 advance = 0;
@@ -1335,8 +1363,7 @@ OptimizeIntermediate(COMPSTATE *cstat)
                         /* int int % into Result */
                         if (IntermediateIsPrimitive(curr->next->next, ModNo)) {
                             if (curr->next->in.data.number != 0) {
-                                curr->in.data.number %= curr->next->in.data.
-                                    number;
+                                curr->in.data.number %= curr->next->in.data.number;
                                 RemoveNextIntermediate(cstat, curr);
                                 RemoveNextIntermediate(cstat, curr);
                                 advance = 0;
@@ -1420,8 +1447,9 @@ OptimizeIntermediate(COMPSTATE *cstat)
                     }
                 }
 
-                /* 2 rotate into swap */ /* -2 rotate into swap */
-                if (IntermediateIsInteger(curr, 2) || IntermediateIsInteger(curr, -2)) {
+                /* 2 rotate into swap *//* -2 rotate into swap */
+                if (IntermediateIsInteger(curr, 2)
+                    || IntermediateIsInteger(curr, -2)) {
                     if (ContiguousIntermediates(Flags, curr->next, 1)) {
                         if (IntermediateIsPrimitive(curr->next, RotateNo)) {
                             curr->in.type = PROG_PRIMITIVE;
@@ -1432,12 +1460,14 @@ OptimizeIntermediate(COMPSTATE *cstat)
                     }
                 }
 
-                /* 1 rotate into nothing */ /* 0 rotate into nothing */ /* -1 rotate into nothing */
-                if (IntermediateIsInteger(curr, 1) || IntermediateIsInteger(curr, 0) || IntermediateIsInteger(curr, -1)) {
+                /* 1 rotate into nothing *//* 0 rotate into nothing *//* -1 rotate into nothing */
+                if (IntermediateIsInteger(curr, 1)
+                    || IntermediateIsInteger(curr, 0)
+                    || IntermediateIsInteger(curr, -1)) {
                     if (ContiguousIntermediates(Flags, curr->next, 1)) {
                         if (IntermediateIsPrimitive(curr->next, RotateNo)) {
                             RemoveNextIntermediate(cstat, curr);
-							RemoveIntermediate(cstat, curr);
+                            RemoveIntermediate(cstat, curr);
                             advance = 0;
                         }
                     }
@@ -1526,7 +1556,7 @@ OptimizeIntermediate(COMPSTATE *cstat)
         if (curr->in.type == PROG_SVAR_AT || curr->in.type == PROG_LVAR_AT)
             MaybeOptimizeVarsAt(cstat, curr, AtNo, BangNo);
 
-    delete[] Flags;
+    delete[]Flags;
     return (old_instr_count - cstat->nowords);
 }
 
@@ -1562,10 +1592,10 @@ do_compile(int descr, dbref player_in, dbref program_in, int force_err_display)
         cstat.localvartypes[i] = 0;
         cstat.scopedvars[i] = NULL;
         cstat.scopedvartypes[i] = 0;
-		cstat.staticvars[i] = NULL;
+        cstat.staticvars[i] = NULL;
         cstat.staticvartypes[i] = 0;
     }
-	cstat.staticvarcnt = 0;
+    cstat.staticvarcnt = 0;
     cstat.curr_line = DBFETCH(program_in)->sp.program.first;
     cstat.lineno = 1;
     cstat.next_char = NULL;
@@ -1598,6 +1628,10 @@ do_compile(int descr, dbref player_in, dbref program_in, int force_err_display)
     free_prog(cstat.program);
     cleanpubs(DBFETCH(cstat.program)->sp.program.pubs);
     DBFETCH(cstat.program)->sp.program.pubs = NULL;
+#ifdef MCP_SUPPORT
+    clean_mcpbinds(DBFETCH(cstat.program)->sp.program.mcpbinds);
+    DBFETCH(cstat.program)->sp.program.mcpbinds = NULL;
+#endif
     DBFETCH(cstat.program)->sp.program.proftime.tv_sec = 0;
     DBFETCH(cstat.program)->sp.program.proftime.tv_usec = 0;
     DBFETCH(cstat.program)->sp.program.profstart = current_systime;
@@ -1612,7 +1646,7 @@ do_compile(int descr, dbref player_in, dbref program_in, int force_err_display)
 
         /* test for errors */
         if (cstat.compile_err) {
-            delete[] token;
+            delete[]token;
             return;
         }
 
@@ -1627,7 +1661,7 @@ do_compile(int descr, dbref player_in, dbref program_in, int force_err_display)
         while (cstat.curr_word && cstat.curr_word->next)
             cstat.curr_word = cstat.curr_word->next;
 
-        delete[] token;
+        delete[]token;
     }
 
     if (cstat.compile_err)
@@ -1658,15 +1692,12 @@ do_compile(int descr, dbref player_in, dbref program_in, int force_err_display)
 
             percent = ((double) (optimcount)
                        / (double) instrCount) * 100;
-            sprintf(buf2, "Program optimized by %d instructions "
-                    "in %d %s. (%#.4g%%)", optimcount, passcount,
-                    passcount == 1 ? "pass" : "passes", percent);
+            sprintf(buf2, "Program optimized by %d instructions " "in %d %s. (%#.4g%%)", optimcount, passcount, passcount == 1 ? "pass" : "passes", percent);
             strcpy(buf, SYSFOREST);
             strcat(buf, buf2);
             anotify_nolisten(cstat.player, buf, 1);
         } else if (force_err_display) {
-            anotify_nolisten(cstat.player, SYSBROWN
-                             "No optimization possible.", 1);
+            anotify_nolisten(cstat.player, SYSBROWN "No optimization possible.", 1);
         }
     }
 
@@ -1689,53 +1720,51 @@ do_compile(int descr, dbref player_in, dbref program_in, int force_err_display)
     if (cstat.compile_err)
         return;
 
-	if (cstat.staticvarcnt) {
-		//DBFETCH(cstat.program)->sp.program.staticvars = (struct inst *) calloc(cstat.staticvarcnt, sizeof(struct inst));
+    if (cstat.staticvarcnt) {
+        //DBFETCH(cstat.program)->sp.program.staticvars = (struct inst *) calloc(cstat.staticvarcnt, sizeof(struct inst));
         DBFETCH(cstat.program)->sp.program.staticvars = new inst[cstat.staticvarcnt];
-		for (i = 0; i < cstat.staticvarcnt; i++) {
-			DBFETCH(cstat.program)->sp.program.staticvars[i].type = PROG_INTEGER;
-			DBFETCH(cstat.program)->sp.program.staticvars[i].data.number = 0;
-		}
-		DBFETCH(cstat.program)->sp.program.staticvarcnt = cstat.staticvarcnt;
-	}
-
+        for (i = 0; i < cstat.staticvarcnt; i++) {
+            DBFETCH(cstat.program)->sp.program.staticvars[i].type = PROG_INTEGER;
+            DBFETCH(cstat.program)->sp.program.staticvars[i].data.number = 0;
+        }
+        DBFETCH(cstat.program)->sp.program.staticvarcnt = cstat.staticvarcnt;
+    }
 #ifdef MODULAR_SUPPORT
-	for (i = 0; i < DBFETCH(cstat.program)->sp.program.siz; i++) {
-		if (DBFETCH(cstat.program)->sp.program.code[i].type == PROG_MODPRIM) {
-			struct module *m = DBFETCH(cstat.program)->sp.program.code[i].data.modprim->mod;
-			struct mod_proglist *prm = m->progs;
+    for (i = 0; i < DBFETCH(cstat.program)->sp.program.siz; i++) {
+        if (DBFETCH(cstat.program)->sp.program.code[i].type == PROG_MODPRIM) {
+            struct module *m = DBFETCH(cstat.program)->sp.program.code[i].data.modprim->mod;
+            struct mod_proglist *prm = m->progs;
 
-			DBFETCH(cstat.program)->sp.program.code[i].data.modprim->links++;
+            DBFETCH(cstat.program)->sp.program.code[i].data.modprim->links++;
 
-			while (prm) {
-				if (prm->prog == cstat.program)
-					break;
-				
-				prm = prm->next;
-			}
+            while (prm) {
+                if (prm->prog == cstat.program)
+                    break;
 
-			if (!prm) {
-				prm = new mod_proglist;
-				prm->prog = cstat.program;
-				prm->prev = NULL;
-				prm->next = m->progs;
-				if (m->progs)
-					m->progs->prev = prm;
-				m->progs = prm;
-				log_status("MODULE: Added prog %d to module %s because of %s.\r\n", prm->prog, m->info->name, DBFETCH(cstat.program)->sp.program.code[i].data.modprim->name);
-			}
-		}
-	}
+                prm = prm->next;
+            }
+
+            if (!prm) {
+                prm = new mod_proglist;
+                prm->prog = cstat.program;
+                prm->prev = NULL;
+                prm->next = m->progs;
+                if (m->progs)
+                    m->progs->prev = prm;
+                m->progs = prm;
+                log_status("MODULE: Added prog %d to module %s because of %s.\r\n", prm->prog, m->info->name, DBFETCH(cstat.program)->sp.program.code[i].data.modprim->name);
+            }
+        }
+    }
 #endif
 
-	set_start(&cstat);
+    set_start(&cstat);
     cleanup(&cstat);
     DBFETCH(cstat.program)->sp.program.instances = 0;
 
     /* restart AUTOSTART program. */
     if ((FLAGS(cstat.program) & ABODE) && TMage(OWNER(cstat.program)))
-        add_muf_queue_event(-1, OWNER(cstat.program), NOTHING, NOTHING,
-                            cstat.program, "Startup", "Queued Event.", 0);
+        add_muf_queue_event(-1, OWNER(cstat.program), NOTHING, NOTHING, cstat.program, "Startup", "Queued Event.", 0);
 
 }
 
@@ -1779,7 +1808,7 @@ next_word(COMPSTATE *cstat, const char *token)
     else if (special(token))
         new_word = process_special(cstat, token);
 #ifdef MODULAR_SUPPORT
-	else if (modprim(token))
+    else if (modprim(token))
         new_word = modprim_word(cstat, token);
 #endif
     else if (primitive(token))
@@ -1817,12 +1846,11 @@ advance_line(COMPSTATE *cstat)
     cstat->lineno++;
     cstat->macrosubs = 0;
     if (cstat->line_copy) {
-        delete[] cstat->line_copy;
+        delete[]cstat->line_copy;
         cstat->line_copy = NULL;
     }
     if (cstat->curr_line)
-        cstat->next_char = (cstat->line_copy =
-                            alloc_string(cstat->curr_line->this_line));
+        cstat->next_char = (cstat->line_copy = alloc_string(cstat->curr_line->this_line));
     else
         cstat->next_char = (cstat->line_copy = NULL);
 }
@@ -1880,7 +1908,7 @@ next_token(COMPSTATE *cstat)
 
     if (temp[0] == BEGINDIRECTIVE) {
         result = do_directive(cstat, temp);
-        delete[] temp;
+        delete[]temp;
         if (!result) {          /* changed to abort compiling on directive errors. -Akari */
             cstat->compile_err = 1;
             return NULL;
@@ -1891,22 +1919,24 @@ next_token(COMPSTATE *cstat)
         if (temp[1]) {
             expansion = temp;
             temp = new char[strlen(expansion)];
+
             strcpy(temp, (expansion + 1));
-            delete[] expansion;
+            delete[]expansion;
         }
         return (temp);
     }
     if ((expansion = expand_def(cstat, temp))) {
-        delete[] temp;
+        delete[]temp;
         if (++cstat->macrosubs > SUBSTITUTIONS) {
             abort_compile(cstat, "Too many macro substitutions.");
         } else {
             //temp = (char *) malloc(strlen(cstat->next_char) + strlen(expansion) + 21);
             temp = new char[strlen(cstat->next_char) + strlen(expansion) + 21]; //blackjack?
+
             strcpy(temp, expansion);
             strcat(temp, cstat->next_char);
-            delete[] expansion;
-            delete[] cstat->line_copy;
+            delete[]expansion;
+            delete[]cstat->line_copy;
             cstat->next_char = cstat->line_copy = temp;
             return next_token(cstat);
         }
@@ -1973,8 +2003,7 @@ do_comment_new(COMPSTATE *cstat)
         if (!cstat->curr_line) {
             char tbuf[BUFFER_LEN];
 
-            sprintf(tbuf, "Unterminated comment starting in line %d.",
-                    startLine);
+            sprintf(tbuf, "Unterminated comment starting in line %d.", startLine);
             v_abort_compile(cstat, tbuf);
         }
     } while (1);
@@ -2036,16 +2065,13 @@ do_directive(COMPSTATE *cstat, char *direct)
     if (!string_compare(temp, "define")) {
         tmpname = (char *) next_token_raw(cstat);
         if (!tmpname)
-            abort_compile(cstat,
-                          "Unexpected end of file looking for $define name.");
+            abort_compile(cstat, "Unexpected end of file looking for $define name.");
         i = 0;
-        while ((tmpptr = (char *) next_token_raw(cstat)) &&
-               (string_compare(tmpptr, "$enddef"))) {
+        while ((tmpptr = (char *) next_token_raw(cstat)) && (string_compare(tmpptr, "$enddef"))) {
             char *cp;
 
             for (cp = tmpptr; i < (BUFFER_LEN / 2) && *cp;) {
-                if (*tmpptr == BEGINSTRING && cp != tmpptr &&
-                    (*cp == ENDSTRING || *cp == BEGINESCAPE)) {
+                if (*tmpptr == BEGINSTRING && cp != tmpptr && (*cp == ENDSTRING || *cp == BEGINESCAPE)) {
                     temp[i++] = BEGINESCAPE;
                 }
                 temp[i++] = *cp++;
@@ -2053,7 +2079,7 @@ do_directive(COMPSTATE *cstat, char *direct)
             if (*tmpptr == BEGINSTRING)
                 temp[i++] = ENDSTRING;
             temp[i++] = ' ';
-            delete[] tmpptr;
+            delete[]tmpptr;
             if (i > (BUFFER_LEN / 2))
                 abort_compile(cstat, "$define definition too long.");
         }
@@ -2061,11 +2087,10 @@ do_directive(COMPSTATE *cstat, char *direct)
             i--;
         temp[i] = '\0';
         if (!tmpptr)
-            abort_compile(cstat,
-                          "Unexpected end of file in $define definition.");
-        delete[] tmpptr;
+            abort_compile(cstat, "Unexpected end of file in $define definition.");
+        delete[]tmpptr;
         (void) insert_def(cstat, tmpname, temp);
-        delete[] tmpname;
+        delete[]tmpname;
 
     } else if (!string_compare(temp, "beta")) {
         int progver;
@@ -2077,14 +2102,13 @@ do_directive(COMPSTATE *cstat, char *direct)
             progver = atoi(tmpname);
         }
         if (progver <= 0) {
-            abort_compile(cstat,
-                          "You must provide a valid beta version number of 1 or greater.");
+            abort_compile(cstat, "You must provide a valid beta version number of 1 or greater.");
         }
         while (*cstat->next_char)
             cstat->next_char++;
         advance_line(cstat);
         add_property(cstat->program, "_Beta", NULL, progver);
-        delete[] tmpname;
+        delete[]tmpname;
 
     } else if (!string_compare(temp, "alpha")) {
         int progver;
@@ -2096,14 +2120,13 @@ do_directive(COMPSTATE *cstat, char *direct)
             progver = atoi(tmpname);
         }
         if (progver <= 0) {
-            abort_compile(cstat,
-                          "You must provide a valid alpha version number of 1 or greater.");
+            abort_compile(cstat, "You must provide a valid alpha version number of 1 or greater.");
         }
         while (*cstat->next_char)
             cstat->next_char++;
         advance_line(cstat);
         add_property(cstat->program, "_Alpha", NULL, progver);
-        delete[] tmpname;
+        delete[]tmpname;
 
     } else if (!string_compare(temp, "log_status")) {
         while (*cstat->next_char && isspace(*cstat->next_char))
@@ -2114,8 +2137,7 @@ do_directive(COMPSTATE *cstat, char *direct)
         if (tmpname && *tmpname) {
             log_status("%s", tmpname);
         } else {
-            abort_compile(cstat,
-                          "No data given for the status log and show to LOGWALL admin.");
+            abort_compile(cstat, "No data given for the status log and show to LOGWALL admin.");
         }
         while (*cstat->next_char)
             cstat->next_char++;
@@ -2171,34 +2193,31 @@ do_directive(COMPSTATE *cstat, char *direct)
     } else if (!string_compare(temp, "def")) {
         tmpname = (char *) next_token_raw(cstat);
         if (!tmpname)
-            abort_compile(cstat,
-                          "Unexpected end of file looking for $def name.");
+            abort_compile(cstat, "Unexpected end of file looking for $def name.");
         (void) insert_def(cstat, tmpname, cstat->next_char);
         while (*cstat->next_char)
             cstat->next_char++;
         advance_line(cstat);
-        delete[] tmpname;
+        delete[]tmpname;
 
     } else if (!string_compare(temp, "version")) {
         tmpname = (char *) next_token_raw(cstat);
         if (!ifloat(tmpname))
-            abort_compile(cstat,
-                          "Expected a floating point number for the version.");
+            abort_compile(cstat, "Expected a floating point number for the version.");
         add_property(cstat->program, "_Version", tmpname, 0);
         while (*cstat->next_char)
             cstat->next_char++;
         advance_line(cstat);
-        delete[] tmpname;
+        delete[]tmpname;
     } else if (!string_compare(temp, "lib-version")) {
         tmpname = (char *) next_token_raw(cstat);
         if (!ifloat(tmpname))
-            abort_compile(cstat,
-                          "Expected a floating point number for the version.");
+            abort_compile(cstat, "Expected a floating point number for the version.");
         while (*cstat->next_char)
             cstat->next_char++;
         add_property(cstat->program, "_Lib-Version", tmpname, 0);
         advance_line(cstat);
-        delete[] tmpname;
+        delete[]tmpname;
     } else if (!string_compare(temp, "author")) {
         while (*cstat->next_char && isspace(*cstat->next_char))
             cstat->next_char++; /* eating leading spaces */
@@ -2237,12 +2256,12 @@ do_directive(COMPSTATE *cstat, char *direct)
         } else {
             i = cstat->program;
         }
-        delete[] tmpname;
+        delete[]tmpname;
         if (!OkObj(i) || (Typeof(i) == TYPE_GARBAGE))
             abort_compile(cstat, "I don't understand what program you want to check in ifcancall.");
         tmpname = (char *) next_token_raw(cstat);
         if (!tmpname || !*tmpname) {
-            delete[] tmpptr;
+            delete[]tmpptr;
             abort_compile(cstat, "I don't understand what function you want to check for.");
         }
         while (*cstat->next_char)
@@ -2258,9 +2277,7 @@ do_directive(COMPSTATE *cstat, char *direct)
             DBFETCH(i)->sp.program.first = tmpline;
         }
         j = 0;
-        if (MLevel(OWNER(i)) > 0 &&
-            (MLevel(OWNER(cstat->program)) >= 4
-             || OWNER(i) == OWNER(cstat->program) || Linkable(i))
+        if (MLevel(OWNER(i)) > 0 && (MLevel(OWNER(cstat->program)) >= 4 || OWNER(i) == OWNER(cstat->program) || Linkable(i))
             ) {
             struct publics *pbs;
 
@@ -2273,25 +2290,23 @@ do_directive(COMPSTATE *cstat, char *direct)
             if (pbs && MLevel(OWNER(cstat->program)) >= pbs->mlev)
                 j = 1;
         }
-        delete[] tmpname;
+        delete[]tmpname;
         if (!string_compare(temp, "ifncancall"))
             j = !j;
         if (!j) {
             i = 0;
-            while ((tmpptr = (char *) next_token_raw(cstat)) &&
-                   (i || ((string_compare(tmpptr, "$else"))
-                          && (string_compare(tmpptr, "$endif"))))) {
+            while ((tmpptr = (char *) next_token_raw(cstat)) && (i || ((string_compare(tmpptr, "$else"))
+                                                                       && (string_compare(tmpptr, "$endif"))))) {
                 if (is_preprocessor_conditional(tmpptr))
                     i++;
                 else if (!string_compare(tmpptr, "$endif"))
                     i--;
-                delete[] tmpptr;
+                delete[]tmpptr;
             }
             if (!tmpptr) {
-                abort_compile(cstat,
-                              "Unexpected end of file in $ifcancall clause.");
+                abort_compile(cstat, "Unexpected end of file in $ifcancall clause.");
             }
-            delete[] tmpptr;
+            delete[]tmpptr;
         }
 
     } else if (!string_compare(temp, "ifauthor")
@@ -2317,46 +2332,45 @@ do_directive(COMPSTATE *cstat, char *direct)
         } else {
             i = cstat->program;
         }
-        delete[] tmpname;
+        delete[]tmpname;
         if (!OkObj(i)
             || (Typeof(i) == TYPE_GARBAGE))
-            abort_compile(cstat,
-                          "I don't understand what object you want to check with $ifauthor.");
+            abort_compile(cstat, "I don't understand what object you want to check with $ifauthor.");
         tmpptr = (char *) get_property_class(i, "_Author");
         if (!tmpptr || !*tmpptr) {
             tmpptr = new char[8];
+
             strcpy(tmpptr, "Unknown");
             needFree = 1;
         }
 
         tmpname = (char *) cstat->next_char;
         if (!tmpname || !*tmpname) {
-            delete[] tmpptr;
+            delete[]tmpptr;
             abort_compile(cstat, "I don't understand what author you are checking for with $ifauthor.");
         }
         while (*cstat->next_char)
             cstat->next_char++;
         advance_line(cstat);
         if (needFree)
-            delete[] tmpptr;
+            delete[]tmpptr;
         j = equalstr(tmpptr, tmpname);
         if (!string_compare(temp, "ifnauthor"))
             j = !j;
         if (j) {
             i = 0;
-            while ((tmpptr = (char *) next_token_raw(cstat)) &&
-                   (i || ((string_compare(tmpptr, "$else"))
-                          && (string_compare(tmpptr, "$endif"))))) {
+            while ((tmpptr = (char *) next_token_raw(cstat)) && (i || ((string_compare(tmpptr, "$else"))
+                                                                       && (string_compare(tmpptr, "$endif"))))) {
                 if (is_preprocessor_conditional(tmpptr))
                     i++;
                 else if (!string_compare(tmpptr, "$endif"))
                     i--;
-                delete[] tmpptr;
+                delete[]tmpptr;
             }
             if (!tmpptr) {
                 abort_compile(cstat, "Unexpected end of file in $ifauthor clause.");
             }
-            delete[] tmpptr;
+            delete[]tmpptr;
         }
 
     } else if (!string_compare(temp, "ifver")
@@ -2386,7 +2400,7 @@ do_directive(COMPSTATE *cstat, char *direct)
         } else {
             i = cstat->program;
         }
-        delete[] tmpname;
+        delete[]tmpname;
         if (!OkObj(i) || (Typeof(i) == TYPE_GARBAGE))
             abort_compile(cstat, "I don't understand what object you want to check with $ifver.");
         if (!string_compare(temp, "ifver") || !string_compare(temp, "ifnver")) {
@@ -2396,14 +2410,15 @@ do_directive(COMPSTATE *cstat, char *direct)
         }
         if (!tmpptr || !*tmpptr) {
             tmpptr = new char[4];
+
             strcpy(tmpptr, "0.0");
             needFree = 1;
         }
 
         tmpname = (char *) next_token_raw(cstat);
         if (!tmpname || !*tmpname) {
-            delete[] tmpptr;
-            delete[] tmpname;
+            delete[]tmpptr;
+            delete[]tmpname;
             abort_compile(cstat, "I don't understand what version you want to compare to with $ifver.");
         }
         if (!tmpptr || !ifloat(tmpptr)) {
@@ -2412,13 +2427,13 @@ do_directive(COMPSTATE *cstat, char *direct)
             sscanf(tmpptr, "%lg", &verflt);
         }
         if (needFree)
-            delete[] tmpptr;
+            delete[]tmpptr;
         if (!tmpname || !ifloat(tmpname)) {
             checkflt = 0.0;
         } else {
             sscanf(tmpname, "%lg", &checkflt);
         }
-        delete[] tmpname;
+        delete[]tmpname;
         while (*cstat->next_char)
             cstat->next_char++;
         advance_line(cstat);
@@ -2428,20 +2443,18 @@ do_directive(COMPSTATE *cstat, char *direct)
             j = !j;
         if (!j) {
             i = 0;
-            while ((tmpptr = (char *) next_token_raw(cstat)) &&
-                   (i || ((string_compare(tmpptr, "$else"))
-                          && (string_compare(tmpptr, "$endif"))))) {
+            while ((tmpptr = (char *) next_token_raw(cstat)) && (i || ((string_compare(tmpptr, "$else"))
+                                                                       && (string_compare(tmpptr, "$endif"))))) {
                 if (is_preprocessor_conditional(tmpptr))
                     i++;
                 else if (!string_compare(tmpptr, "$endif"))
                     i--;
-                delete[] tmpptr;
+                delete[]tmpptr;
             }
             if (!tmpptr) {
-                abort_compile(cstat,
-                              "Unexpected end of file in $ifver clause.");
+                abort_compile(cstat, "Unexpected end of file in $ifver clause.");
             }
-            delete[] tmpptr;
+            delete[]tmpptr;
         }
 
     } else if (!string_compare(temp, "ifbeta")
@@ -2469,21 +2482,20 @@ do_directive(COMPSTATE *cstat, char *direct)
         } else {
             i = cstat->program;
         }
-        delete[] tmpname;
+        delete[]tmpname;
         if (!OkObj(i)
             || (Typeof(i) == TYPE_GARBAGE))
-            abort_compile(cstat,
-                          "I don't understand what object you want to check with $ifbeta or $ifalpha.");
-        if (!string_compare(temp, "ifbeta") || !string_compare(temp, "ifnbeta")) {
+            abort_compile(cstat, "I don't understand what object you want to check with $ifbeta or $ifalpha.");
+        if (!string_compare(temp, "ifbeta")
+            || !string_compare(temp, "ifnbeta")) {
             vernum = get_property_value(i, "_Beta");
         } else {
             vernum = get_property_value(i, "_Alpha");
         }
         tmpname = (char *) next_token_raw(cstat);
         if (!tmpname || !*tmpname) {
-            delete[] tmpptr;
-            abort_compile(cstat,
-                          "I don't understand what version you want to compare to with $alpha or $beta.");
+            delete[]tmpptr;
+            abort_compile(cstat, "I don't understand what version you want to compare to with $alpha or $beta.");
         }
         if (vernum < 0)
             vernum = 0;
@@ -2494,7 +2506,7 @@ do_directive(COMPSTATE *cstat, char *direct)
             if (checknum <= 0)
                 checknum = 0;
         }
-        delete[] tmpname;
+        delete[]tmpname;
         while (*cstat->next_char)
             cstat->next_char++;
         advance_line(cstat);
@@ -2504,17 +2516,19 @@ do_directive(COMPSTATE *cstat, char *direct)
             j = !j;             /* ifnbeta or ifnalpha we want the opposite */
         if (!j) {
             i = 0;
-            while ((tmpptr = (char *) next_token_raw(cstat)) && (i || ((string_compare(tmpptr, "$else")) && (string_compare(tmpptr, "$endif"))))) {
+            while ((tmpptr = (char *) next_token_raw(cstat))
+                   && (i || ((string_compare(tmpptr, "$else"))
+                             && (string_compare(tmpptr, "$endif"))))) {
                 if (is_preprocessor_conditional(tmpptr))
                     i++;
                 else if (!string_compare(tmpptr, "$endif"))
                     i--;
-                delete[] tmpptr;
+                delete[]tmpptr;
             }
             if (!tmpptr) {
                 abort_compile(cstat, "Unexpected end of file in $ifbeta or $ifalpha clause.");
             }
-            delete[] tmpptr;
+            delete[]tmpptr;
         }
     } else if (!string_compare(temp, "pubdef")) {
         char *holder = NULL;
@@ -2523,8 +2537,10 @@ do_directive(COMPSTATE *cstat, char *direct)
         holder = tmpname;
         if (!tmpname)
             abort_compile(cstat, "Unexpected end of file looking for $pubdef name.");
-        if (string_compare(tmpname, ":") && (index(tmpname, '/') || index(tmpname, ':') || Prop_SeeOnly(tmpname) || Prop_Hidden(tmpname))) {
-            delete[] tmpname;
+        if (string_compare(tmpname, ":")
+            && (index(tmpname, '/') || index(tmpname, ':')
+                || Prop_SeeOnly(tmpname) || Prop_Hidden(tmpname))) {
+            delete[]tmpname;
             abort_compile(cstat, "Invalid $pubdef name.  No /, :, @, nor ~ are allowed.");
         } else {
             if (!string_compare(tmpname, ":")) {
@@ -2564,9 +2580,10 @@ do_directive(COMPSTATE *cstat, char *direct)
         while (*cstat->next_char)
             cstat->next_char++;
         advance_line(cstat);
-        delete[] holder;
+        delete[]holder;
 
-    } else if (!string_compare(temp, "iflib") || !string_compare(temp, "ifnlib")) {
+    } else if (!string_compare(temp, "iflib")
+               || !string_compare(temp, "ifnlib")) {
         struct match_data md;
 
         tmpname = (char *) next_token_raw(cstat);
@@ -2585,8 +2602,9 @@ do_directive(COMPSTATE *cstat, char *direct)
             strcpy(match_args, tempa);
             strcpy(match_cmdname, tempb);
         }
-        delete[] tmpname;
-        if ((!OkObj(i) || (Typeof(i) == TYPE_GARBAGE)) ? 0 : (Typeof(i) == TYPE_PROGRAM)) {
+        delete[]tmpname;
+        if ((!OkObj(i)
+             || (Typeof(i) == TYPE_GARBAGE)) ? 0 : (Typeof(i) == TYPE_PROGRAM)) {
             j = 1;
         } else {
             j = 0;
@@ -2595,19 +2613,18 @@ do_directive(COMPSTATE *cstat, char *direct)
             j = !j;
         if (!j) {
             i = 0;
-            while ((tmpptr = (char *) next_token_raw(cstat)) &&
-                   (i || ((string_compare(tmpptr, "$else"))
-                          && (string_compare(tmpptr, "$endif"))))) {
+            while ((tmpptr = (char *) next_token_raw(cstat)) && (i || ((string_compare(tmpptr, "$else"))
+                                                                       && (string_compare(tmpptr, "$endif"))))) {
                 if (is_preprocessor_conditional(tmpptr))
                     i++;
                 else if (!string_compare(tmpptr, "$endif"))
                     i--;
-                delete[] tmpptr;
+                delete[]tmpptr;
             }
             if (!tmpptr) {
                 abort_compile(cstat, "Unexpected end of file in $iflib clause.");
             }
-            delete[] tmpptr;
+            delete[]tmpptr;
         }
 
     } else if (!string_compare(temp, "ansi")) {
@@ -2615,8 +2632,7 @@ do_directive(COMPSTATE *cstat, char *direct)
 
         while (*cstat->next_char && isspace(*cstat->next_char))
             cstat->next_char++; /* eating leading spaces */
-        if (((FLAGS(cstat->player) & INTERACTIVE) &&
-             !(FLAGS(cstat->player) & READMODE)) || cstat->force_err_display)
+        if (((FLAGS(cstat->player) & INTERACTIVE) && !(FLAGS(cstat->player) & READMODE)) || cstat->force_err_display)
             anotify_nolisten(cstat->player, cstat->next_char, 1);
         while (*cstat->next_char)
             cstat->next_char++;
@@ -2627,15 +2643,11 @@ do_directive(COMPSTATE *cstat, char *direct)
         tmpname = (char *) next_token_raw(cstat);
         holder = tmpname;
         if (!tmpname)
-            abort_compile(cstat,
-                          "Unexpected end of file looking for $lib/def name.");
+            abort_compile(cstat, "Unexpected end of file looking for $lib/def name.");
 
-        if (index(tmpname, '/') ||
-            index(tmpname, ':') ||
-            Prop_SeeOnly(tmpname) || Prop_Hidden(tmpname)) {
-            delete[] tmpname;
-            abort_compile(cstat,
-                          "Invalid $libdef name. No /, :, @, nor ~ allowed.");
+        if (index(tmpname, '/') || index(tmpname, ':') || Prop_SeeOnly(tmpname) || Prop_Hidden(tmpname)) {
+            delete[]tmpname;
+            abort_compile(cstat, "Invalid $libdef name. No /, :, @, nor ~ allowed.");
         } else {                /* okay string */
             char propname[BUFFER_LEN];
             char defstr[BUFFER_LEN];
@@ -2663,7 +2675,7 @@ do_directive(COMPSTATE *cstat, char *direct)
         while (*cstat->next_char)
             cstat->next_char++;
         advance_line(cstat);
-        delete[] holder;
+        delete[]holder;
     } else if (!string_compare(temp, "include")) {
         tmpname = (char *) next_token_raw(cstat);
         if (!tmpname)
@@ -2682,7 +2694,7 @@ do_directive(COMPSTATE *cstat, char *direct)
                 strcpy(match_args, tempa);
                 strcpy(match_cmdname, tempb);
             }
-            delete[] tmpname;
+            delete[]tmpname;
             if (!OkObj(i)
                 || (Typeof(i) == TYPE_GARBAGE))
                 abort_compile(cstat, "I don't understand what object you want to $include.");
@@ -2691,7 +2703,7 @@ do_directive(COMPSTATE *cstat, char *direct)
             int inc_type;
 
             inc_type = atoi(tmpname);
-            delete[] tmpname;
+            delete[]tmpname;
             if (inc_type == 0) {
                 cstat->use_macros = 1;
                 include_defs(cstat, OWNER(cstat->program));
@@ -2709,27 +2721,28 @@ do_directive(COMPSTATE *cstat, char *direct)
         if (!tmpname)
             abort_compile(cstat, "Unexpected end of file looking for name to $undef.");
         kill_def(cstat, tmpname);
-        delete[] tmpname;
+        delete[]tmpname;
 
     } else if (!string_compare(temp, "echo")) {
         while (*cstat->next_char && isspace(*cstat->next_char))
             cstat->next_char++; /* eating leading spaces */
-        if (((FLAGS(cstat->player) & INTERACTIVE) &&
-             !(FLAGS(cstat->player) & READMODE)) || cstat->force_err_display)
+        if (((FLAGS(cstat->player) & INTERACTIVE) && !(FLAGS(cstat->player) & READMODE)) || cstat->force_err_display)
             notify_nolisten(cstat->player, cstat->next_char, 1);
         while (*cstat->next_char)
             cstat->next_char++;
         advance_line(cstat);
 
-    } else if (!string_compare(temp, "ifdef") || !string_compare(temp, "ifndef")) {
+    } else if (!string_compare(temp, "ifdef")
+               || !string_compare(temp, "ifndef")) {
         char temp2[BUFFER_LEN];
 
         tmpname = (char *) next_token_raw(cstat);
         if (!tmpname)
             abort_compile(cstat, "Unexpected end of file looking for $ifdef condition.");
         strcpy(temp2, tmpname);
-        delete[] tmpname;
-        for (i = 1; temp2[i] && (temp2[i] != '=') && (temp2[i] != '>') && (temp2[i] != '<'); i++) ;
+        delete[]tmpname;
+        for (i = 1; temp2[i] && (temp2[i] != '=') && (temp2[i] != '>')
+             && (temp2[i] != '<'); i++) ;
         tmpname = &(temp2[i]);
         i = (temp2[i] == '>') ? 1 : ((temp2[i] == '=') ? 0 : ((temp2[i] == '<') ? -1 : -2));
         *tmpname = '\0';
@@ -2738,49 +2751,48 @@ do_directive(COMPSTATE *cstat, char *direct)
         if (i == -2) {
             j = (!tmpptr);
             if (tmpptr)
-                delete[] tmpptr;
+                delete[]tmpptr;
         } else {
             if (!tmpptr) {
                 j = 1;
             } else {
                 j = string_compare(tmpptr, tmpname);
                 j = !((!i && !j) || ((i * j) > 0));
-                delete[] tmpptr;
+                delete[]tmpptr;
             }
         }
         if (!string_compare(temp, "ifndef"))
             j = !j;
         if (j) {
             i = 0;
-            while ((tmpptr = (char *) next_token_raw(cstat)) &&
-                   (i || ((string_compare(tmpptr, "$else"))
-                          && (string_compare(tmpptr, "$endif"))))) {
+            while ((tmpptr = (char *) next_token_raw(cstat)) && (i || ((string_compare(tmpptr, "$else"))
+                                                                       && (string_compare(tmpptr, "$endif"))))) {
                 if (is_preprocessor_conditional(tmpptr))
                     i++;
                 else if (!string_compare(tmpptr, "$endif"))
                     i--;
-                delete[] tmpptr;
+                delete[]tmpptr;
             }
             if (!tmpptr) {
-                abort_compile(cstat,
-                              "Unexpected end of file in $ifdef clause.");
+                abort_compile(cstat, "Unexpected end of file in $ifdef clause.");
             }
-            delete[] tmpptr;
+            delete[]tmpptr;
         }
 
     } else if (!string_compare(temp, "else")) {
         i = 0;
-        while ((tmpptr = (char *) next_token_raw(cstat)) && (i || (string_compare(tmpptr, "$endif")))) {
+        while ((tmpptr = (char *) next_token_raw(cstat))
+               && (i || (string_compare(tmpptr, "$endif")))) {
             if (is_preprocessor_conditional(tmpptr))
                 i++;
             else if (!string_compare(tmpptr, "$endif"))
                 i--;
-            delete[] tmpptr;
+            delete[]tmpptr;
         }
         if (!tmpptr) {
             abort_compile(cstat, "Unexpected end of file in $else clause.");
         }
-        delete[] tmpptr;
+        delete[]tmpptr;
 
     } else if (!string_compare(temp, "endif")) {
 
@@ -2856,7 +2868,7 @@ process_special(COMPSTATE *cstat, const char *token)
 
         strcpy(buf, proc_name);
         if (proc_name)
-            delete[] proc_name;
+            delete[]proc_name;
         proc_name = buf;
 
         if (*proc_name && buf[strlen(buf) - 1] == '[') {
@@ -2890,8 +2902,10 @@ process_special(COMPSTATE *cstat, const char *token)
 
             do {
                 varspec = next_token(cstat);
-                if (!varspec)
+                if (!varspec) {
+                    free_intermediate_node(nw);
                     abort_compile(cstat, "Unexpected end of file within procedure arguments declaration.");
+                }
 
                 if (!strcmp(varspec, "]")) {
                     argsdone = 1;
@@ -2905,8 +2919,11 @@ process_special(COMPSTATE *cstat, const char *token)
                         varname = varspec;
                     }
                     if (*varname) {
-                        if (add_scopedvar(cstat, varname, PROG_UNTYPED) < 0)
+                        if (add_scopedvar(cstat, varname, PROG_UNTYPED) < 0) {
+                            delete varspec;
+                            free_intermediate_node(nw);
                             abort_compile(cstat, "Variable limit exceeded.");
+                        }
 
                         nw->in.data.mufproc->vars ++;
 
@@ -2914,7 +2931,7 @@ process_special(COMPSTATE *cstat, const char *token)
                     }
                 }
                 if (varspec)
-                    delete[] varspec;
+                    delete[]varspec;
             } while (!argsdone);
         }
 
@@ -2925,8 +2942,7 @@ process_special(COMPSTATE *cstat, const char *token)
         int i, varcnt;
 
         if (cstat->control_stack)
-            abort_compile(cstat,
-                          "Unexpected end of procedure definition. (Usually unterminated if-then or loops.)");
+            abort_compile(cstat, "Unexpected end of procedure definition. (Usually unterminated if-then or loops.)");
         if (!cstat->curr_proc)
             abort_compile(cstat, "Procedure end without body.");
         nw = new_inst(cstat);
@@ -2938,7 +2954,8 @@ process_special(COMPSTATE *cstat, const char *token)
 
         if (varcnt) {
             //cstat->curr_proc->in.data.mufproc->varnames = (const char **) calloc(varcnt, sizeof(char *));
-            cstat->curr_proc->in.data.mufproc->varnames = new const char *[varcnt]();
+            cstat->curr_proc->in.data.mufproc->varnames = new const char *[varcnt] ();
+
             for (i = 0; i < varcnt; ++i) {
                 cstat->curr_proc->in.data.mufproc->varnames[i] = cstat->scopedvars[i];
                 cstat->scopedvars[i] = 0;
@@ -2960,15 +2977,17 @@ process_special(COMPSTATE *cstat, const char *token)
                     cstat->procs->lnotes = n->next;
                     n->code->in.data.number = get_address(cstat, l->code, 0);
 
-                    delete[] n->name;
+                    delete[]n->name;
                     delete n;
-                } cstat->procs->lnotes = NULL;
+                }
+                cstat->procs->lnotes = NULL;
 
                 for (l = cstat->procs->labels; l; l = tmpl) {
                     tmpl = l->next;
-                    delete[] l->name;
+                    delete[]l->name;
                     delete l;
-                } cstat->procs->labels = NULL;
+                }
+                cstat->procs->labels = NULL;
             } else {
                 sprintf(buf, "Unrecognized word '%s.", cstat->procs->lnotes->name);
                 abort_compile(cstat, buf);
@@ -2996,8 +3015,7 @@ process_special(COMPSTATE *cstat, const char *token)
                 abort_compile(cstat, "Unterminated TRY-CATCH block at ELSE.");
                 break;
             case CTYPE_CATCH:
-                abort_compile(cstat,
-                              "Unterminated CATCH-ENDCATCH block at ELSE.");
+                abort_compile(cstat, "Unterminated CATCH-ENDCATCH block at ELSE.");
                 break;
             case CTYPE_FOR:
             case CTYPE_BEGIN:
@@ -3031,8 +3049,7 @@ process_special(COMPSTATE *cstat, const char *token)
                 abort_compile(cstat, "Unterminated TRY-CATCH block at THEN.");
                 break;
             case CTYPE_CATCH:
-                abort_compile(cstat,
-                              "Unterminated CATCH-ENDCATCH block at THEN.");
+                abort_compile(cstat, "Unterminated CATCH-ENDCATCH block at THEN.");
                 break;
             case CTYPE_FOR:
             case CTYPE_BEGIN:
@@ -3110,8 +3127,7 @@ process_special(COMPSTATE *cstat, const char *token)
                 abort_compile(cstat, "Unterminated TRY-CATCH block at UNTIL.");
                 break;
             case CTYPE_CATCH:
-                abort_compile(cstat,
-                              "Unterminated CATCH-ENDCATCH block at UNTIL.");
+                abort_compile(cstat, "Unterminated CATCH-ENDCATCH block at UNTIL.");
                 break;
             case CTYPE_IF:
             case CTYPE_ELSE:
@@ -3254,8 +3270,7 @@ process_special(COMPSTATE *cstat, const char *token)
                 abort_compile(cstat, "Unterminated TRY-CATCH block at REPEAT.");
                 break;
             case CTYPE_CATCH:
-                abort_compile(cstat,
-                              "Unterminated CATCH-ENDCATCH block at REPEAT.");
+                abort_compile(cstat, "Unterminated CATCH-ENDCATCH block at REPEAT.");
                 break;
             case CTYPE_IF:
             case CTYPE_ELSE:
@@ -3391,7 +3406,7 @@ process_special(COMPSTATE *cstat, const char *token)
         struct PROC_LIST *p;
         struct publics *pub;
         int wizflag = 0;
-    int selfflag = 0;
+        int selfflag = 0;
         int wizlevel = LMAGE;
 
         if (!string_compare(token, "MAGECALL")) {
@@ -3406,9 +3421,10 @@ process_special(COMPSTATE *cstat, const char *token)
         } else if (!string_compare(token, "BOYCALL")) {
             wizflag = 1;
             wizlevel = LBOY;
-        } else if (!string_compare(token, "SELFCALL") || !string_compare(token, "SAFECALL")) {
-        selfflag = 1;
-    }
+        } else if (!string_compare(token, "SELFCALL")
+                   || !string_compare(token, "SAFECALL")) {
+            selfflag = 1;
+        }
         if (cstat->curr_proc)
             abort_compile(cstat, "PUBLIC or WIZCALL declaration within procedure.");
         tok = next_token(cstat);
@@ -3426,11 +3442,11 @@ process_special(COMPSTATE *cstat, const char *token)
             cstat->currpubs->next = NULL;
             cstat->currpubs->subname = (char *) string_dup(tok);
             if (tok)
-                delete[] tok;
+                delete[]tok;
             cstat->currpubs->addr.no = get_address(cstat, p->code, 0);
             cstat->currpubs->mlev = wizflag ? wizlevel : 1;
             cstat->currpubs->self = selfflag;
-			cstat->currpubs->usecount = 0;
+            cstat->currpubs->usecount = 0;
             return 0;
         }
         for (pub = cstat->currpubs; pub;) {
@@ -3446,7 +3462,7 @@ process_special(COMPSTATE *cstat, const char *token)
                     pub->next = NULL;
                     pub->subname = (char *) string_dup(tok);
                     if (tok)
-                        delete[] tok;
+                        delete[]tok;
                     pub->addr.no = get_address(cstat, p->code, 0);
                     pub->mlev = wizflag ? wizlevel : 1;
                     pub->self = selfflag;
@@ -3463,7 +3479,7 @@ process_special(COMPSTATE *cstat, const char *token)
             if (add_scopedvar(cstat, tok, PROG_UNTYPED) < 0)
                 abort_compile(cstat, "Variable limit exceeded.");
             if (tok)
-                delete[] tok;
+                delete[]tok;
             cstat->curr_proc->in.data.mufproc->vars ++;
         } else {
             tok = next_token(cstat);
@@ -3472,7 +3488,7 @@ process_special(COMPSTATE *cstat, const char *token)
             if (!add_variable(cstat, tok, PROG_UNTYPED))
                 abort_compile(cstat, "Variable limit exceeded.");
             if (tok)
-                delete[] tok;
+                delete[]tok;
         }
         return 0;
     } else if (!string_compare(token, "VAR!")) {
@@ -3485,7 +3501,7 @@ process_special(COMPSTATE *cstat, const char *token)
             if (add_scopedvar(cstat, tok, PROG_UNTYPED) < 0)
                 abort_compile(cstat, "Variable limit exceeded.");
             if (tok)
-                delete[] tok;
+                delete[]tok;
 
             nw = new_inst(cstat);
             nw->no = cstat->nowords++;
@@ -3505,7 +3521,7 @@ process_special(COMPSTATE *cstat, const char *token)
         if (!tok || (add_localvar(cstat, tok, PROG_UNTYPED) == -1))
             abort_compile(cstat, "Local variable limit exceeded.");
         if (tok)
-            delete[] tok;
+            delete[]tok;
         return 0;
     } else if (!string_compare(token, "SVAR")) {
         if (cstat->curr_proc)
@@ -3514,7 +3530,7 @@ process_special(COMPSTATE *cstat, const char *token)
         if (!tok || (add_staticvar(cstat, tok, PROG_UNTYPED) == -1))
             abort_compile(cstat, "Static variable limit exceeded.");
         if (tok)
-            delete[] tok;
+            delete[]tok;
         return 0;
     } else {
         sprintf(buf, "Unrecognized special form %s found. (%d)", token, cstat->lineno);
@@ -3529,31 +3545,31 @@ extern struct module *modules;
 int
 modprim(const char *token)
 {
-	struct mod_primlist *mpr = NULL;
-	struct module *m;
-	int i;
+    struct mod_primlist *mpr = NULL;
+    struct module *m;
+    int i;
 
-	m = modules;
-	while (m) {
-		if (m->prims) {
-			for (i = 0; m->prims[i].name; i++) {
-				if (!string_compare(m->prims[i].name, token)) {
-					mpr = &m->prims[i]; 
-					break;
-				}
-			}
+    m = modules;
+    while (m) {
+        if (m->prims) {
+            for (i = 0; m->prims[i].name; i++) {
+                if (!string_compare(m->prims[i].name, token)) {
+                    mpr = &m->prims[i];
+                    break;
+                }
+            }
 
-			if (mpr)
-				break;
-		}
+            if (mpr)
+                break;
+        }
 
-		m = m->next;
-	}
-	
-	if (mpr)
-		return 1;
-	else
-		return 0;
+        m = m->next;
+    }
+
+    if (mpr)
+        return 1;
+    else
+        return 0;
 }
 
 /* return modular prim word. */
@@ -3562,27 +3578,27 @@ modprim_word(COMPSTATE *cstat, const char *token)
 {
     struct INTERMEDIATE *nw, *cur;
     struct mod_primlist *mpr = NULL;
-	struct module *m;
-	int i;
+    struct module *m;
+    int i;
 
     cur = nw = new_inst(cstat);
 
-	m = modules;
-	while (m) {
-		if (m->prims) {
-			for (i = 0; m->prims[i].name; i++) {
-				if (!string_compare(m->prims[i].name, token)) {
-					mpr = &m->prims[i]; 
-					break;
-				}
-			}
+    m = modules;
+    while (m) {
+        if (m->prims) {
+            for (i = 0; m->prims[i].name; i++) {
+                if (!string_compare(m->prims[i].name, token)) {
+                    mpr = &m->prims[i];
+                    break;
+                }
+            }
 
-			if (mpr)
-				break;
-		}
+            if (mpr)
+                break;
+        }
 
-		m = m->next;
-	}  
+        m = m->next;
+    }
 
     cur->no = cstat->nowords++;
     cur->in.type = PROG_MODPRIM;
@@ -3643,6 +3659,7 @@ string_word(COMPSTATE *cstat, const char *token)
     nw->in.data.string = alloc_prog_string(token);
     return nw;
 }
+
 /* return self pushing word (float) */ struct INTERMEDIATE *
 float_word(COMPSTATE *cstat, const char *token)
 {
@@ -3672,6 +3689,7 @@ float_word(COMPSTATE *cstat, const char *token)
 #endif
     return nw;
 }
+
 /* return self pushing word (number) */ struct INTERMEDIATE *
 number_word(COMPSTATE *cstat, const char *token)
 {
@@ -3916,8 +3934,7 @@ object_word(COMPSTATE *cstat, const char *token)
 
 /* add procedure to procedures list */
 void
-add_proc(COMPSTATE *cstat, const char *proc_name,
-         struct INTERMEDIATE *place, int rettype)
+add_proc(COMPSTATE *cstat, const char *proc_name, struct INTERMEDIATE *place, int rettype)
 {
     struct PROC_LIST *nw;
 
@@ -3962,6 +3979,7 @@ add_control_structure(COMPSTATE *cstat, int typ, struct INTERMEDIATE *place)
     nu->extra = 0;
     cstat->control_stack = nu;
 }
+
 /* add while to current loop's list of exits remaining to be resolved. */ void
 add_loop_exit(COMPSTATE *cstat, struct INTERMEDIATE *place)
 {
@@ -4011,6 +4029,7 @@ innermost_control_type(COMPSTATE *cstat)
 
     return ctrl->type;
 }
+
 /* Returns number of TRYs before topmost Loop */ int
 count_trys_inside_loop(COMPSTATE *cstat)
 {
@@ -4064,6 +4083,7 @@ innermost_control_place(COMPSTATE *cstat, int type1)
 
     return ctrl->place;
 }
+
 /* Pops off the innermost control structure and returns the place. */ struct INTERMEDIATE *
 pop_control_structure(COMPSTATE *cstat, int type1, int type2)
 {
@@ -4082,6 +4102,7 @@ pop_control_structure(COMPSTATE *cstat, int type1, int type2)
 
     return place;
 }
+
 /* pops first while off the innermost control structure, if it's a loop. */ struct INTERMEDIATE *
 pop_loop_exit(COMPSTATE *cstat)
 {
@@ -4104,6 +4125,7 @@ pop_loop_exit(COMPSTATE *cstat)
     tofree = parent->extra;
     parent->extra = parent->extra->extra;
     delete tofree;
+
     return temp;
 }
 
@@ -4119,6 +4141,7 @@ resolve_loop_addrs(COMPSTATE *cstat, int where)
         eef->next->in.data.number = where;
     }
 }
+
 /* adds variable.  Return 0 if no space left */ int
 add_variable(COMPSTATE *cstat, const char *varname, int valtype)
 {
@@ -4135,6 +4158,7 @@ add_variable(COMPSTATE *cstat, const char *varname, int valtype)
     cstat->variabletypes[i] = valtype;
     return i;
 }
+
 /* adds local variable.  Return 0 if no space left */ int
 add_scopedvar(COMPSTATE *cstat, const char *varname, int valtype)
 {
@@ -4151,6 +4175,7 @@ add_scopedvar(COMPSTATE *cstat, const char *varname, int valtype)
     cstat->scopedvartypes[i] = valtype;
     return i;
 }
+
 /* adds local variable.  Return 0 if no space left */ int
 add_localvar(COMPSTATE *cstat, const char *varname, int valtype)
 {
@@ -4167,6 +4192,7 @@ add_localvar(COMPSTATE *cstat, const char *varname, int valtype)
     cstat->localvartypes[i] = valtype;
     return i;
 }
+
 /* adds static variable.  Return 0 if no space left */ int
 add_staticvar(COMPSTATE *cstat, const char *varname, int valtype)
 {
@@ -4181,9 +4207,10 @@ add_staticvar(COMPSTATE *cstat, const char *varname, int valtype)
 
     cstat->staticvars[i] = alloc_string(varname);
     cstat->staticvartypes[i] = valtype;
-	cstat->staticvarcnt++;
+    cstat->staticvarcnt++;
     return i;
 }
+
 /* predicates for procedure calls */ int
 special(const char *token)
 {
@@ -4335,6 +4362,7 @@ primitive(const char *token)
     primnum = get_primitive(token);
     return (primnum && primnum <= BASE_MAX - PRIMS_INTERNAL_CNT);
 }
+
 /* return primitive instruction */ int
 get_primitive(const char *token)
 {
@@ -4346,6 +4374,7 @@ get_primitive(const char *token)
         return (hd->ival);
     }
 }
+
 /* clean up as nicely as we can. */ void
 cleanpubs(struct publics *mypub)
 {
@@ -4353,11 +4382,28 @@ cleanpubs(struct publics *mypub)
 
     while (mypub) {
         tmppub = mypub->next;
-        delete[] mypub->subname;
+        delete[]mypub->subname;
         delete mypub;
+
         mypub = tmppub;
     }
 }
+
+#ifdef MCP_SUPPORT
+void
+clean_mcpbinds(struct mcp_binding *mypub)
+{
+    struct mcp_binding *tmppub;
+
+    while (mypub) {
+        tmppub = mypub->next;
+        free(mypub->pkgname);
+        free(mypub->msgname);
+        free(mypub);
+        mypub = tmppub;
+    }
+}
+#endif
 
 void
 append_intermediate_chain(struct INTERMEDIATE *chain, struct INTERMEDIATE *add)
@@ -4366,6 +4412,7 @@ append_intermediate_chain(struct INTERMEDIATE *chain, struct INTERMEDIATE *add)
         chain = chain->next;
     chain->next = add;
 }
+
 /* free resources used by INTERMEDIATE struct */ void
 free_intermediate_node(struct INTERMEDIATE *wd)
 {
@@ -4373,17 +4420,17 @@ free_intermediate_node(struct INTERMEDIATE *wd)
 
     if (wd->in.type == PROG_STRING) {
         if (wd->in.data.string)
-            delete[] wd->in.data.string;
+            delete[]wd->in.data.string;
     }
 
     if (wd->in.type == PROG_FUNCTION) {
-        delete[] wd->in.data.mufproc->procname;
+        delete[]wd->in.data.mufproc->procname;
         varcnt = wd->in.data.mufproc->vars;
 
         if (wd->in.data.mufproc->varnames) {
             for (j = 0; j < varcnt; ++j)
-                delete[] wd->in.data.mufproc->varnames[j];
-            delete[] wd->in.data.mufproc->varnames;
+                delete[]wd->in.data.mufproc->varnames[j];
+            delete[]wd->in.data.mufproc->varnames;
         }
         delete wd->in.data.mufproc;
     }
@@ -4402,6 +4449,7 @@ free_intermediate_chain(struct INTERMEDIATE *wd)
         wd = tempword;
     }
 }
+
 void
 cleanup(COMPSTATE *cstat)
 {
@@ -4416,7 +4464,8 @@ cleanup(COMPSTATE *cstat)
     for (eef = cstat->control_stack; eef; eef = tempif) {
         tempif = eef->next;
         delete eef;
-    } cstat->control_stack = 0;
+    }
+    cstat->control_stack = 0;
 
     for (p = cstat->procs; p; p = tempp) {
         struct LABEL_LIST *l = p->labels, *tmpl;
@@ -4426,19 +4475,20 @@ cleanup(COMPSTATE *cstat)
 
         for (; l; l = tmpl) {
             tmpl = l->next;
-            delete[] l->name;
+            delete[]l->name;
             delete l;
         }
 
         for (; n; n = tmpn) {
             tmpn = n->next;
-            delete[] n->name;
+            delete[]n->name;
             delete n;
         }
 
-        delete[] p->name;
+        delete[]p->name;
         delete p;
-    } cstat->procs = 0;
+    }
+    cstat->procs = 0;
 
     /* for (l = cstat->labels; l; l = templ) {
        templ = l->next;
@@ -4450,22 +4500,22 @@ cleanup(COMPSTATE *cstat)
     free_addresses(cstat);
 
     for (i = RES_VAR; i < MAX_VAR && cstat->variables[i]; i++) {
-        delete[] cstat->variables[i];
+        delete[]cstat->variables[i];
         cstat->variables[i] = 0;
     }
 
     for (i = 0; i < MAX_VAR && cstat->scopedvars[i]; i++) {
-        delete[] cstat->scopedvars[i];
+        delete[]cstat->scopedvars[i];
         cstat->scopedvars[i] = 0;
     }
 
     for (i = 0; i < MAX_VAR && cstat->localvars[i]; i++) {
-        delete[] cstat->localvars[i];
+        delete[]cstat->localvars[i];
         cstat->localvars[i] = 0;
     }
-	
-	for (i = 0; i < MAX_VAR && cstat->staticvars[i]; i++) {
-        delete[] cstat->staticvars[i];
+
+    for (i = 0; i < MAX_VAR && cstat->staticvars[i]; i++) {
+        delete[]cstat->staticvars[i];
         cstat->staticvars[i] = 0;
     }
 }
@@ -4504,7 +4554,7 @@ copy_program(COMPSTATE *cstat)
             case PROG_LVAR_AT:
             case PROG_LVAR_AT_CLEAR:
             case PROG_LVAR_BANG:
-			case PROG_STVAR:
+            case PROG_STVAR:
             case PROG_VAR:
                 code[i].data.number = curr->in.data.number;
                 break;
@@ -4512,19 +4562,20 @@ copy_program(COMPSTATE *cstat)
                 code[i].data.fnumber = curr->in.data.fnumber;
                 break;
             case PROG_STRING:
-                code[i].data.string = curr->in.data.string ?
-                    alloc_prog_string(curr->in.data.string->data) : 0;
+                code[i].data.string = curr->in.data.string ? alloc_prog_string(curr->in.data.string->data) : 0;
                 break;
             case PROG_FUNCTION:
                 //code[i].data.mufproc = (struct muf_proc_data *) malloc(sizeof(struct muf_proc_data));
                 code[i].data.mufproc = new muf_proc_data;
                 code[i].data.mufproc->procname = string_dup(curr->in.data.mufproc->procname);
                 code[i].data.mufproc->vars = varcnt = curr->in.data.mufproc->vars;
+
                 code[i].data.mufproc->args = curr->in.data.mufproc->args;
                 if (varcnt) {
                     if (curr->in.data.mufproc->varnames) {
                         //code[i].data.mufproc->varnames = (const char **) calloc(varcnt, sizeof(char *));
-                        code[i].data.mufproc->varnames = new const char*[varcnt]();
+                        code[i].data.mufproc->varnames = new const char *[varcnt] ();
+
                         for (j = 0; j < varcnt; ++j)
                             code[i].data.mufproc->varnames[j] = string_dup(curr->in.data.mufproc->varnames[j]);
                     } else {
@@ -4550,9 +4601,9 @@ copy_program(COMPSTATE *cstat)
                 code[i].data.labelname = curr->in.data.labelname;
                 break;
 #ifdef MODULAR_SUPPORT
-			case PROG_MODPRIM:
-				code[i].data.modprim = curr->in.data.modprim;
-				break;
+            case PROG_MODPRIM:
+                code[i].data.modprim = curr->in.data.modprim;
+                break;
 #endif
             default:
                 v_abort_compile(cstat, "Unknown type compile!  Internal error.");
@@ -4569,9 +4620,9 @@ set_start(COMPSTATE *cstat)
     DBFETCH(cstat->program)->sp.program.siz = cstat->nowords;
 
     /* address instr no is resolved before this gets called. */
-    DBFETCH(cstat->program)->sp.program.start =
-        (DBFETCH(cstat->program)->sp.program.code + cstat->procs->code->no);
+    DBFETCH(cstat->program)->sp.program.start = (DBFETCH(cstat->program)->sp.program.code + cstat->procs->code->no);
 }
+
 /* allocate and initialize data linked structure. */ struct INTERMEDIATE *
 alloc_inst(void)
 {
@@ -4587,6 +4638,7 @@ alloc_inst(void)
     nw->in.data.number = 0;
     return nw;
 }
+
 struct INTERMEDIATE *
 prealloc_inst(COMPSTATE *cstat)
 {
@@ -4646,77 +4698,75 @@ void
 free_prog(dbref prog)
 {
     int i;
-	struct funcprof *fpr;
+    struct funcprof *fpr;
     struct inst *c = DBFETCH(prog)->sp.program.code;
     int siz = DBFETCH(prog)->sp.program.siz;
 
     if (c) {
         if (DBFETCH(prog)->sp.program.instances) {
-            fprintf(stderr, "Freeing program %s with %d instances reported\n",
-                    unparse_object(MAN, prog),
-                    DBFETCH(prog)->sp.program.instances);
+            fprintf(stderr, "Freeing program %s with %d instances reported\n", unparse_object(MAN, prog), DBFETCH(prog)->sp.program.instances);
         }
         i = scan_instances(prog);
 
         if (i) {
-            fprintf(stderr, "Freeing program %s with %d instances found\n",
-                    unparse_object(GOD, prog), i);
+            fprintf(stderr, "Freeing program %s with %d instances found\n", unparse_object(GOD, prog), i);
         }
         for (i = 0; i < siz; i++) {
             if (c[i].type == PROG_ADD) {
                 if (c[i].data.addr->links != 1) {
-                    fprintf(stderr,
-                            "Freeing address in %s with link count %d\n",
-                            unparse_object(MAN, prog), c[i].data.addr->links);
+                    fprintf(stderr, "Freeing address in %s with link count %d\n", unparse_object(MAN, prog), c[i].data.addr->links);
                 }
                 delete c[i].data.addr;
+
 #ifdef MODULAR_SUPPORT
-			} else if (c[i].type == PROG_MODPRIM) {
-				struct module *m = c[i].data.modprim->mod;
-				struct mod_proglist *prm = m->progs;
+            } else if (c[i].type == PROG_MODPRIM) {
+                struct module *m = c[i].data.modprim->mod;
+                struct mod_proglist *prm = m->progs;
 
-				c[i].data.modprim->links--;
+                c[i].data.modprim->links--;
 
-				while (prm) {
-					if (prm->prog == prog) {
-						if (prm->next)
-						   prm->next->prev = prm->prev;
-						if (prm->prev)
-							prm->prev->next = prm->next;
-						if (prm == m->progs)
-							m->progs = m->progs->next;
-							log_status("MODULE: Removed prog %d from module %s because of %s.\r\n", prog, m->info->name,c[i].data.modprim->name);
-						delete prm;
-						break;
-					}
-					
-					prm = prm->next;
-				}
+                while (prm) {
+                    if (prm->prog == prog) {
+                        if (prm->next)
+                            prm->next->prev = prm->prev;
+                        if (prm->prev)
+                            prm->prev->next = prm->next;
+                        if (prm == m->progs)
+                            m->progs = m->progs->next;
+                        log_status("MODULE: Removed prog %d from module %s because of %s.\r\n", prog, m->info->name, c[i].data.modprim->name);
+                        delete prm;
+
+                        break;
+                    }
+
+                    prm = prm->next;
+                }
 #endif /* MODULAR_SUPPORT */
             } else {
                 CLEAR(c + i);
             }
         }
-        delete[] c;
+        delete[]c;
     }
     DBFETCH(prog)->sp.program.code = 0;
     DBFETCH(prog)->sp.program.siz = 0;
     DBFETCH(prog)->sp.program.start = 0;
 
-	while (DBFETCH(prog)->sp.program.fprofile) {
-		fpr = DBFETCH(prog)->sp.program.fprofile->next;
-		delete[] DBFETCH(prog)->sp.program.fprofile->funcname;
-		delete DBFETCH(prog)->sp.program.fprofile;
-		DBFETCH(prog)->sp.program.fprofile = fpr;
-	}
+    while (DBFETCH(prog)->sp.program.fprofile) {
+        fpr = DBFETCH(prog)->sp.program.fprofile->next;
+        delete[]DBFETCH(prog)->sp.program.fprofile->funcname;
+        delete DBFETCH(prog)->sp.program.fprofile;
 
-	if (DBFETCH(prog)->sp.program.staticvarcnt) {
-		for (i = 0; i < DBFETCH(prog)->sp.program.staticvarcnt; i++)
-			CLEAR(&DBFETCH(prog)->sp.program.staticvars[i]);
+        DBFETCH(prog)->sp.program.fprofile = fpr;
+    }
 
-		delete DBFETCH(prog)->sp.program.staticvars;
-		DBFETCH(prog)->sp.program.staticvarcnt = 0;
-	}
+    if (DBFETCH(prog)->sp.program.staticvarcnt) {
+        for (i = 0; i < DBFETCH(prog)->sp.program.staticvarcnt; i++)
+            CLEAR(&DBFETCH(prog)->sp.program.staticvars[i]);
+
+        delete[]DBFETCH(prog)->sp.program.staticvars;
+        DBFETCH(prog)->sp.program.staticvarcnt = 0;
+    }
 }
 
 long
@@ -4745,7 +4795,7 @@ size_prog(dbref prog)
         } else if (c[i].type == PROG_STRING && c[i].data.string) {
             byts += strlen(c[i].data.string->data) + 1;
             byts += sizeof(struct shared_string);
-        } else if ((c[i].type == PROG_ADD))
+        } else if (c[i].type == PROG_ADD)
             byts += sizeof(struct prog_addr);
     }
     byts += size_pubs(DBFETCH(prog)->sp.program.pubs);
@@ -4777,10 +4827,10 @@ init_primitives(void)
 {
     int i;
 
-	for (i = 0; primlist[i].func; i++);
-	BASE_MAX = i;
+    for (i = 0; primlist[i].func; i++) ;
+    BASE_MAX = i;
 
-	printf("PRIM_CNT: %d\r\n", BASE_MAX);
+    printf("PRIM_CNT: %d\r\n", BASE_MAX);
 
     clear_primitives();
     for (i = BASE_MIN; i <= BASE_MAX; i++) {

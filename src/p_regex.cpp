@@ -27,11 +27,11 @@
 #include "interp.h"
 #include "props.h"
 
-#define MUF_RE_CACHE_ITEMS 64
+#define MUF_RE_CACHE_ITEMS 256
 
 extern int prop_read_perms(dbref player, dbref obj, const char *name, int mlev);
-extern int prop_write_perms(dbref player, dbref obj, const char *name,
-                            int mlev);
+extern int prop_write_perms(dbref player, dbref obj, const char *name, int mlev);
+
 /*
    Non-PCRE regex was deprecated in FBMUCK and we have followed suit. While
    it would be nice to support both PCRE and non-PCRE flavored regexps, this
@@ -47,15 +47,16 @@ typedef struct {
     int hits;
     int flags;
     /* regex_t re; */
-    pcre* re;
-    pcre_extra* extra;
+    pcre *re;
+    pcre_extra *extra;
 } muf_re;
 
 static muf_re muf_re_cache[MUF_RE_CACHE_ITEMS];
 
 void
-show_re_cache(dbref player) {
-    muf_re* re;
+show_re_cache(dbref player)
+{
+    muf_re *re;
     size_t tmp;
     int idx = 0;
     int patterns = 0;
@@ -68,15 +69,13 @@ show_re_cache(dbref player) {
         return;
     }
 
-    anotify(player, SYSYELLOW "idx hits flags studied? pattern"); 
-    while (idx <= MUF_RE_CACHE_ITEMS) {
+    anotify(player, SYSYELLOW "idx hits flags studied? pattern");
+    for (idx = 0; idx < MUF_RE_CACHE_ITEMS; idx++) {
         re = &muf_re_cache[idx];
 
         if (re->re) {
             patterns++;
-            notify_fmt(player, "%3i %4i %5i        %i \"%s\"",
-                       idx, re->hits, re->flags,
-                         (re->extra != NULL), DoNullInd(re->pattern));
+            notify_fmt(player, "%3i %4i %5i        %i \"%s\"", idx, re->hits, re->flags, (re->extra != NULL), DoNullInd(re->pattern));
             pcre_fullinfo(re->re, NULL, PCRE_INFO_SIZE, &tmp);
             size_re = size_re + tmp;
             if (re->extra) {
@@ -85,29 +84,30 @@ show_re_cache(dbref player) {
                 size_extra = size_extra + tmp;
             }
         }
-        idx++;
     }
     anotify_fmt(player, SYSPURPLE "\n%i compiled patterns are using %zd bytes of RAM.", patterns, size_re);
     anotify_fmt(player, SYSGREEN "%i study instances are using are using %zd bytes of RAM.", studies, size_extra);
 }
 
-muf_re* muf_re_get(struct shared_string* pattern, int flags, const char** errmsg)
+muf_re *
+muf_re_get(struct shared_string *pattern, int flags, const char **errmsg)
 {
-    int     idx = (phash(DoNullInd(pattern), MUF_RE_CACHE_ITEMS) + flags) % MUF_RE_CACHE_ITEMS;
-    muf_re* re  = &muf_re_cache[idx];
-    int     erroff;
-    const char* errstr;
+    int idx = (phash(DoNullInd(pattern), MUF_RE_CACHE_ITEMS) + flags) % MUF_RE_CACHE_ITEMS;
+    muf_re *re = &muf_re_cache[idx];
+    int erroff;
+    const char *errstr;
 
-    if (re->pattern)
-    {
-        if ((flags != re->flags) || strcmp(DoNullInd(pattern), DoNullInd(re->pattern)))
-        {
+    if (re->pattern) {
+        if ((flags != re->flags)
+            || strcmp(DoNullInd(pattern), DoNullInd(re->pattern))) {
             pcre_free(re->re);
             if (re->extra)
                 pcre_free(re->extra);
 
-            if (re->pattern && (--re->pattern->links == 0))
-                delete[] re->pattern;
+            if (re->pattern && (--re->pattern->links == 0)) {
+                delete[]re->pattern;
+                re->pattern = NULL;
+            }
         } else {
             re->hits++;
             if (!re->extra && re->hits > 2) {
@@ -121,8 +121,7 @@ muf_re* muf_re_get(struct shared_string* pattern, int flags, const char** errmsg
     }
 
     re->re = pcre_compile(DoNullInd(pattern), flags, errmsg, &erroff, NULL);
-    if (re->re == NULL)
-    {
+    if (re->re == NULL) {
         re->pattern = NULL;
         return NULL;
     }
@@ -130,27 +129,37 @@ muf_re* muf_re_get(struct shared_string* pattern, int flags, const char** errmsg
     re->pattern = pattern;
     re->pattern->links++;
 
-    re->flags   = flags;
-    re->hits    = 1;
-    re->extra   = NULL;
+    re->flags = flags;
+    re->hits = 1;
+    re->extra = NULL;
 
     return re;
 }
 
-const char* muf_re_error(int err)
+const char *
+muf_re_error(int err)
 {
-    switch(err)
-    {
-        case PCRE_ERROR_NOMATCH:        return "No matches";
-        case PCRE_ERROR_NULL:           return "Internal error: NULL arg to pcre_exec()";
-        case PCRE_ERROR_BADOPTION:      return "Invalid regexp option.";
-        case PCRE_ERROR_BADMAGIC:       return "Internal error: bad magic number.";
-        case PCRE_ERROR_UNKNOWN_NODE:   return "Internal error: bad regexp node.";
-        case PCRE_ERROR_NOMEMORY:       return "Out of memory.";
-        case PCRE_ERROR_NOSUBSTRING:    return "No substring.";
-        case PCRE_ERROR_MATCHLIMIT:     return "Match recursion limit exceeded.";
-        case PCRE_ERROR_CALLOUT:        return "Internal error: callout error.";
-        default:            return "Unknown error";
+    switch (err) {
+        case PCRE_ERROR_NOMATCH:
+            return "No matches";
+        case PCRE_ERROR_NULL:
+            return "Internal error: NULL arg to pcre_exec()";
+        case PCRE_ERROR_BADOPTION:
+            return "Invalid regexp option.";
+        case PCRE_ERROR_BADMAGIC:
+            return "Internal error: bad magic number.";
+        case PCRE_ERROR_UNKNOWN_NODE:
+            return "Internal error: bad regexp node.";
+        case PCRE_ERROR_NOMEMORY:
+            return "Out of memory.";
+        case PCRE_ERROR_NOSUBSTRING:
+            return "No substring.";
+        case PCRE_ERROR_MATCHLIMIT:
+            return "Match recursion limit exceeded.";
+        case PCRE_ERROR_CALLOUT:
+            return "Internal error: callout error.";
+        default:
+            return "Unknown error";
     }
 }
 
@@ -159,15 +168,15 @@ const char* muf_re_error(int err)
 void
 prim_regexp(PRIM_PROTOTYPE)
 {
-    stk_array*  nu_val  = 0;
-    stk_array*  nu_idx  = 0;
-    int         matches[MATCH_ARR_SIZE];
-    muf_re*     re;
-    char*       text;
-    int         flags   = 0;
-    int         len, i;
-    int         matchcnt = 0;
-    const char* errstr;
+    stk_array *nu_val = 0;
+    stk_array *nu_idx = 0;
+    int matches[MATCH_ARR_SIZE];
+    muf_re *re;
+    char *text;
+    int flags = 0;
+    int len, i;
+    int matchcnt = 0;
+    const char *errstr;
     char buf[BUFFER_LEN];
 
     if (oper[2].type != PROG_STRING)
@@ -187,19 +196,15 @@ prim_regexp(PRIM_PROTOTYPE)
     if ((re = muf_re_get(oper[1].data.string, flags, &errstr)) == NULL)
         abort_interp(errstr);
 
-    text    = (char *)DoNullInd(oper[2].data.string);
-    len     = strlen(text);
+    text = (char *) DoNullInd(oper[2].data.string);
+    len = strlen(text);
 
-    if ((matchcnt = pcre_exec(re->re, re->extra, text, len, 0, 0, matches, MATCH_ARR_SIZE)) < 0)
-    {
-        if (matchcnt != PCRE_ERROR_NOMATCH)
-        {
+    if ((matchcnt = pcre_exec(re->re, re->extra, text, len, 0, 0, matches, MATCH_ARR_SIZE)) < 0) {
+        if (matchcnt != PCRE_ERROR_NOMATCH) {
             abort_interp(muf_re_error(matchcnt));
         }
 
-        if (((nu_val = new_array_packed(0,0)) == NULL) ||
-            ((nu_idx = new_array_packed(0,0)) == NULL))
-        {
+        if (((nu_val = new_array_packed(0, 0)) == NULL) || ((nu_idx = new_array_packed(0, 0)) == NULL)) {
             if (nu_val != NULL)
                 array_free(nu_val);
 
@@ -208,12 +213,8 @@ prim_regexp(PRIM_PROTOTYPE)
 
             abort_interp("Out of memory");
         }
-    }
-    else
-    {
-        if (((nu_val = new_array_packed(matchcnt, 0)) == NULL) ||
-            ((nu_idx = new_array_packed(matchcnt, 0)) == NULL))
-        {
+    } else {
+        if (((nu_val = new_array_packed(matchcnt, 0)) == NULL) || ((nu_idx = new_array_packed(matchcnt, 0)) == NULL)) {
             if (nu_val != NULL)
                 array_free(nu_val);
 
@@ -223,21 +224,20 @@ prim_regexp(PRIM_PROTOTYPE)
             abort_interp("Out of memory");
         }
 
-        for(i = 0; i < matchcnt; i++)
-        {
-            int substart = matches[i*2];
-            int subend = matches[i*2+1];
+        for (i = 0; i < matchcnt; i++) {
+            int substart = matches[i * 2];
+            int subend = matches[i * 2 + 1];
             struct inst idx, val;
-            stk_array*  nu;
+            stk_array *nu;
 
             if ((substart >= 0) && (subend >= 0) && (substart < len))
-                snprintf(buf, BUFFER_LEN, "%.*s", (int)(subend - substart), &text[substart]);
+                snprintf(buf, BUFFER_LEN, "%.*s", (int) (subend - substart), &text[substart]);
             else
                 buf[0] = '\0';
 
-            idx.type        = PROG_INTEGER;
+            idx.type = PROG_INTEGER;
             idx.data.number = i;
-            val.type        = PROG_STRING;
+            val.type = PROG_STRING;
             val.data.string = alloc_prog_string(buf);
 
             array_setitem(&nu_val, &idx, &val);
@@ -245,17 +245,16 @@ prim_regexp(PRIM_PROTOTYPE)
             CLEAR(&idx);
             CLEAR(&val);
 
-            if ((nu = new_array_packed(2, 0)) == NULL)
-            {
+            if ((nu = new_array_packed(2, 0)) == NULL) {
                 array_free(nu_val);
                 array_free(nu_idx);
 
                 abort_interp("Out of memory");
             }
 
-            idx.type        = PROG_INTEGER;
+            idx.type = PROG_INTEGER;
             idx.data.number = 0;
-            val.type        = PROG_INTEGER;
+            val.type = PROG_INTEGER;
             val.data.number = substart + 1;
 
             array_setitem(&nu, &idx, &val);
@@ -263,9 +262,9 @@ prim_regexp(PRIM_PROTOTYPE)
             CLEAR(&idx);
             CLEAR(&val);
 
-            idx.type        = PROG_INTEGER;
+            idx.type = PROG_INTEGER;
             idx.data.number = 1;
-            val.type        = PROG_INTEGER;
+            val.type = PROG_INTEGER;
             val.data.number = subend - substart;
 
             array_setitem(&nu, &idx, &val);
@@ -273,10 +272,10 @@ prim_regexp(PRIM_PROTOTYPE)
             CLEAR(&idx);
             CLEAR(&val);
 
-            idx.type        = PROG_INTEGER;
+            idx.type = PROG_INTEGER;
             idx.data.number = i;
-            val.type        = PROG_ARRAY;
-            val.data.array  = nu;
+            val.type = PROG_ARRAY;
+            val.data.array = nu;
 
             array_setitem(&nu_idx, &idx, &val);
 
@@ -292,16 +291,16 @@ prim_regexp(PRIM_PROTOTYPE)
 void
 prim_regsub(PRIM_PROTOTYPE)
 {
-    int         matches[MATCH_ARR_SIZE];
-    int         flags       = 0;
+    int matches[MATCH_ARR_SIZE];
+    int flags = 0;
     char buf[BUFFER_LEN];
-    char*       write_ptr   = buf;
-    int         write_left  = BUFFER_LEN - 1;
-    muf_re*     re;
-    char*       text;
-    char*       textstart;
-    const char* errstr;
-    int         matchcnt, len;
+    char *write_ptr = buf;
+    int write_left = BUFFER_LEN - 1;
+    muf_re *re;
+    char *text;
+    char *textstart;
+    const char *errstr;
+    int matchcnt, len;
 
     if (oper[3].type != PROG_STRING)
         abort_interp("Non-string argument (1)");
@@ -334,89 +333,73 @@ prim_regsub(PRIM_PROTOTYPE)
     }
 
 
-    textstart = text = (char *)DoNullInd(oper[3].data.string);
+    textstart = text = (char *) DoNullInd(oper[3].data.string);
 
     len = strlen(textstart);
-    while((*text != '\0') && (write_left > 0))
-    {
-        if ((matchcnt = pcre_exec(re->re, re->extra, textstart, len, text-textstart, 0, matches, MATCH_ARR_SIZE)) < 0)
-        {
-            if (matchcnt != PCRE_ERROR_NOMATCH)
-            {
+    while ((*text != '\0') && (write_left > 0)) {
+        if ((matchcnt = pcre_exec(re->re, re->extra, textstart, len, text - textstart, 0, matches, MATCH_ARR_SIZE)) < 0) {
+            if (matchcnt != PCRE_ERROR_NOMATCH) {
                 abort_interp(muf_re_error(matchcnt));
             }
 
-            while((write_left > 0) && (*text != '\0'))
-            {
+            while ((write_left > 0) && (*text != '\0')) {
                 *write_ptr++ = *text++;
                 write_left--;
             }
 
             break;
-        }
-        else
-        {
-            int         allstart    = matches[0];
-            int         allend      = matches[1];
-            int         substart    = -1;
-            int         subend      = -1;
-            char*       read_ptr    = (char *)DoNullInd(oper[1].data.string);
-            int         count;
+        } else {
+            int allstart = matches[0];
+            int allend = matches[1];
+            int substart = -1;
+            int subend = -1;
+            char *read_ptr = (char *) DoNullInd(oper[1].data.string);
+            int count;
 
-            for(count = allstart-(text-textstart); (write_left > 0) && (*text != '\0') && (count > 0); count--)
-            {
+            for (count = allstart - (text - textstart); (write_left > 0) && (*text != '\0') && (count > 0); count--) {
                 *write_ptr++ = *text++;
                 write_left--;
             }
 
-            while((write_left > 0) && (*read_ptr != '\0'))
-            {
-                if (*read_ptr == '\\')
-                {
-                    if (!isdigit(*(++read_ptr)))
-                    {
+            while ((write_left > 0) && (*read_ptr != '\0')) {
+                if (*read_ptr == '\\') {
+                    if (!isdigit(*(++read_ptr))) {
                         *write_ptr++ = *read_ptr++;
                         write_left--;
-                    }
-                    else
-                    {
+                    } else {
                         int idx = (*read_ptr++) - '0';
 
-                        if ((idx < 0) || (idx >= matchcnt))
-                        {
+                        if ((idx < 0) || (idx >= matchcnt)) {
                             abort_interp("Invalid \\subexp in substitution string. (3)");
                         }
 
-                        substart = matches[idx*2];
-                        subend = matches[idx*2+1];
+                        substart = matches[idx * 2];
+                        subend = matches[idx * 2 + 1];
 
-                        if ((substart >= 0) && (subend >= 0) && (substart < len))
-                        {
-                            char* ptr = &textstart[substart];
+                        if ((substart >= 0) && (subend >= 0)
+                            && (substart < len)) {
+                            char *ptr = &textstart[substart];
 
                             count = subend - substart;
 
-                            if (count > write_left)
-                            {
+                            if (count > write_left) {
                                 abort_interp("Operation would result in overflow");
                             }
 
-                            for(; (write_left > 0) && (count > 0) && (*ptr != '\0'); count--)
-                            {
+                            for (; (write_left > 0) && (count > 0)
+                                 && (*ptr != '\0'); count--) {
                                 *write_ptr++ = *ptr++;
                                 write_left--;
                             }
                         }
                     }
-                }
-                else
-                {
+                } else {
                     *write_ptr++ = *read_ptr++;
                     write_left--;
                 }
             }
 
-            for(count = allend - allstart; (*text != '\0') && (count > 0); count--)
+            for (count = allend - allstart; (*text != '\0') && (count > 0); count--)
                 text++;
 
             if (allstart == allend && *text) {
@@ -425,10 +408,8 @@ prim_regsub(PRIM_PROTOTYPE)
             }
         }
 
-        if ((oper[0].data.number & MUF_RE_ALL) == 0)
-        {
-            while((write_left > 0) && (*text != '\0'))
-            {
+        if ((oper[0].data.number & MUF_RE_ALL) == 0) {
+            while ((write_left > 0) && (*text != '\0')) {
                 *write_ptr++ = *text++;
                 write_left--;
             }
@@ -452,16 +433,16 @@ prim_array_regsub(PRIM_PROTOTYPE)
     struct inst *in;
     stk_array *arr;
     stk_array *nw;
-    int         matches[MATCH_ARR_SIZE];
-    int         flags       = 0;
+    int matches[MATCH_ARR_SIZE];
+    int flags = 0;
     char buf[BUFFER_LEN];
-    char*       write_ptr   = buf;
-    int         write_left  = BUFFER_LEN - 1;
-    muf_re*     re;
-    char*       text;
-    char*       textstart;
-    const char* errstr;
-    int         matchcnt, len;
+    char *write_ptr = buf;
+    int write_left = BUFFER_LEN - 1;
+    muf_re *re;
+    char *text;
+    char *textstart;
+    const char *errstr;
+    int matchcnt, len;
     struct inst temp1;
     struct inst temp2;
 
@@ -491,8 +472,7 @@ prim_array_regsub(PRIM_PROTOTYPE)
     nw = new_array_dictionary();
     arr = oper[3].data.array;
 
-    if (!re->extra
-        && ((oper[0].data.number & MUF_RE_ALL ) || array_count(arr) > 2)) {
+    if (!re->extra && ((oper[0].data.number & MUF_RE_ALL) || array_count(arr) > 2)) {
         /* Study the pattern if the user requested recursive substitution, or
          * if the input array contains at least three items. */
         re->extra = pcre_study(re->re, 0, &errstr);
@@ -506,93 +486,73 @@ prim_array_regsub(PRIM_PROTOTYPE)
             write_left = BUFFER_LEN - 1;
 
             in = array_getitem(arr, &temp1);
-            textstart = text = (char *)DoNullInd(in->data.string);
+            textstart = text = (char *) DoNullInd(in->data.string);
             len = strlen(textstart);
 
-            while((*text != '\0') && (write_left > 0))
-            {
-                if ((matchcnt = pcre_exec(re->re, re->extra, textstart, len,
-                                          text-textstart, 0, matches,
-                                          MATCH_ARR_SIZE)) < 0)
-                {
-                    if (matchcnt != PCRE_ERROR_NOMATCH)
-                    {
+            while ((*text != '\0') && (write_left > 0)) {
+                if ((matchcnt = pcre_exec(re->re, re->extra, textstart, len, text - textstart, 0, matches, MATCH_ARR_SIZE)) < 0) {
+                    if (matchcnt != PCRE_ERROR_NOMATCH) {
                         abort_interp(muf_re_error(matchcnt));
                     }
 
-                    while((write_left > 0) && (*text != '\0'))
-                    {
+                    while ((write_left > 0) && (*text != '\0')) {
                         *write_ptr++ = *text++;
                         write_left--;
                     }
 
                     break;
-                }
-                else
-                {
-                    int         allstart    = matches[0];
-                    int         allend      = matches[1];
-                    int         substart    = -1;
-                    int         subend      = -1;
-                    char*       read_ptr    = (char *)DoNullInd(oper[1].data.string);
-                    int         count;
+                } else {
+                    int allstart = matches[0];
+                    int allend = matches[1];
+                    int substart = -1;
+                    int subend = -1;
+                    char *read_ptr = (char *) DoNullInd(oper[1].data.string);
+                    int count;
 
-                    for(count = allstart-(text-textstart);
-                                (write_left > 0) && (*text != '\0') && (count > 0);
-                                count--)
-                    {
+                    for (count = allstart - (text - textstart); (write_left > 0) && (*text != '\0') && (count > 0); count--) {
                         *write_ptr++ = *text++;
                         write_left--;
                     }
 
-                    while((write_left > 0) && (*read_ptr != '\0'))
-                    {
-                        if (*read_ptr == '\\')
-                        {
-                            if (!isdigit(*(++read_ptr)))
-                            {
+                    while ((write_left > 0) && (*read_ptr != '\0')) {
+                        if (*read_ptr == '\\') {
+                            if (!isdigit(*(++read_ptr))) {
                                 *write_ptr++ = *read_ptr++;
                                 write_left--;
-                            }
-                            else
-                            {
+                            } else {
                                 int idx = (*read_ptr++) - '0';
 
-                                if ((idx < 0) || (idx >= matchcnt))
-                                {
+                                if ((idx < 0) || (idx >= matchcnt)) {
                                     abort_interp("Invalid \\subexp in substitution string. (3)");
                                 }
 
-                                substart = matches[idx*2];
-                                subend = matches[idx*2+1];
+                                substart = matches[idx * 2];
+                                subend = matches[idx * 2 + 1];
 
-                                if ((substart >= 0) && (subend >= 0) && (substart < len))
-                                {
-                                    char* ptr = &textstart[substart];
+                                if ((substart >= 0) && (subend >= 0)
+                                    && (substart < len)) {
+                                    char *ptr = &textstart[substart];
 
                                     count = subend - substart;
 
-                                    if (count > write_left)
-                                    {
+                                    if (count > write_left) {
                                         abort_interp("Operation would result in overflow");
                                     }
 
-                                    for(; (write_left > 0) && (count > 0) && (*ptr != '\0'); count--)
-                                    {
+                                    for (; (write_left > 0) && (count > 0)
+                                         && (*ptr != '\0'); count--) {
                                         *write_ptr++ = *ptr++;
                                         write_left--;
                                     }
                                 }
                             }
-                        }
-                        else
-                        {
+                        } else {
                             *write_ptr++ = *read_ptr++;
                             write_left--;
                         }
                     }
 
-                    for(count = allend - allstart; (*text != '\0') && (count > 0); count--)
+                    for (count = allend - allstart; (*text != '\0') && (count > 0); count--)
                         text++;
 
                     if (allstart == allend && *text) {
@@ -601,10 +561,8 @@ prim_array_regsub(PRIM_PROTOTYPE)
                     }
                 }
 
-                if ((oper[0].data.number & MUF_RE_ALL) == 0)
-                {
-                    while((write_left > 0) && (*text != '\0'))
-                    {
+                if ((oper[0].data.number & MUF_RE_ALL) == 0) {
+                    while ((write_left > 0) && (*text != '\0')) {
                         *write_ptr++ = *text++;
                         write_left--;
                     }
@@ -631,12 +589,12 @@ prim_array_regsub(PRIM_PROTOTYPE)
 void
 prim_regmatch(PRIM_PROTOTYPE)
 {
-    muf_re*     re;
-    char*       text;
-    int         flags;
-    int         matchcnt = 0;
-    const char* errstr = NULL;
-    int         result = 0;
+    muf_re *re;
+    char *text;
+    int flags = 0;
+    int matchcnt = 0;
+    const char *errstr = NULL;
+    int result = 0;
 
     if (oper[2].type != PROG_STRING)
         abort_interp("Non-string argument (1)");
@@ -653,8 +611,8 @@ prim_regmatch(PRIM_PROTOTYPE)
      * default option to optimize the majority of lazy user input.
      * -brevantes */
 
-    flags = PCRE_NO_AUTO_CAPTURE;
-
+    if (!(oper[0].data.number & MUF_RE_CAPTURE))
+        flags = PCRE_NO_AUTO_CAPTURE;
     if (oper[0].data.number & MUF_RE_ICASE)
         flags |= PCRE_CASELESS;
     if (oper[0].data.number & MUF_RE_EXTENDED)
@@ -664,15 +622,13 @@ prim_regmatch(PRIM_PROTOTYPE)
     if (errstr)
         abort_interp(errstr)
 
-    text    = (char *)DoNullInd(oper[2].data.string);
+            text = (char *) DoNullInd(oper[2].data.string);
 
     if ((matchcnt = regmatch_exec(re, text)) < 0) {
-        if (matchcnt != PCRE_ERROR_NOMATCH)
-        {
+        if (matchcnt != PCRE_ERROR_NOMATCH) {
             abort_interp(muf_re_error(matchcnt));
         }
-    }
-    else
+    } else
         /* Returning matchcnt isn't useful in match-only mode. */
         result = 1;
 
@@ -685,11 +641,11 @@ prim_array_regmatchkey(PRIM_PROTOTYPE)
     struct inst *in;
     stk_array *arr;
     stk_array *nw;
-    muf_re* re;
-    char* text;
+    muf_re *re;
+    char *text;
     int flags;
     int matchcnt = 0;
-    const char* errstr = NULL;
+    const char *errstr = NULL;
     struct inst temp1;
 
     if (oper[2].type != PROG_ARRAY)
@@ -710,7 +666,7 @@ prim_array_regmatchkey(PRIM_PROTOTYPE)
     if (errstr)
         abort_interp(errstr)
 
-    nw = new_array_dictionary();
+            nw = new_array_dictionary();
     arr = oper[2].data.array;
 
     if (re && !re->extra && array_count(arr) > 2) {
@@ -724,7 +680,7 @@ prim_array_regmatchkey(PRIM_PROTOTYPE)
     if (array_first(arr, &temp1)) {
         do {
             if (temp1.type == PROG_STRING) {
-                text    = (char *)DoNullInd(temp1.data.string);
+                text = (char *) DoNullInd(temp1.data.string);
 
                 if ((matchcnt = regmatch_exec(re, text)) < 0) {
                     if (matchcnt != PCRE_ERROR_NOMATCH)
@@ -745,11 +701,11 @@ prim_array_regmatchval(PRIM_PROTOTYPE)
     struct inst *in;
     stk_array *arr;
     stk_array *nw;
-    muf_re* re;
-    char* text;
+    muf_re *re;
+    char *text;
     int flags;
     int matchcnt = 0;
-    const char* errstr = NULL;
+    const char *errstr = NULL;
     struct inst temp1;
 
     if (oper[2].type != PROG_ARRAY)
@@ -770,7 +726,7 @@ prim_array_regmatchval(PRIM_PROTOTYPE)
     if (errstr)
         abort_interp(errstr)
 
-    nw = new_array_dictionary();
+            nw = new_array_dictionary();
     arr = oper[2].data.array;
 
     if (re && !re->extra && array_count(arr) > 2) {
@@ -785,7 +741,7 @@ prim_array_regmatchval(PRIM_PROTOTYPE)
         do {
             in = array_getitem(arr, &temp1);
             if (in->type == PROG_STRING) {
-                text    = (char *)DoNullInd(in->data.string);
+                text = (char *) DoNullInd(in->data.string);
                 if ((matchcnt = regmatch_exec(re, text)) < 0) {
                     if (matchcnt != PCRE_ERROR_NOMATCH)
                         abort_interp(muf_re_error(matchcnt));
@@ -793,7 +749,7 @@ prim_array_regmatchval(PRIM_PROTOTYPE)
                     array_setitem(&nw, &temp1, in);
                 }
             } else if (in->type == PROG_OBJECT) {
-                text    = (char *) NAME(in->data.objref);
+                text = (char *) NAME(in->data.objref);
                 if ((matchcnt = regmatch_exec(re, text)) < 0) {
                     if (matchcnt != PCRE_ERROR_NOMATCH)
                         abort_interp(muf_re_error(matchcnt));
@@ -814,12 +770,12 @@ prim_array_regfilter_prop(PRIM_PROTOTYPE)
     struct inst *in;
     stk_array *arr;
     stk_array *nu;
-    char* prop;
-    const char* ptr;
-    muf_re* re;
+    char *prop;
+    const char *ptr;
+    muf_re *re;
     int flags;
     int matchcnt = 0;
-    const char* errstr = NULL;
+    const char *errstr = NULL;
     struct inst temp1;
     dbref ref;
 
@@ -839,7 +795,7 @@ prim_array_regfilter_prop(PRIM_PROTOTYPE)
     while ((ptr = index(ptr, PROPDIR_DELIMITER)))
         if (!(*(++ptr)))
             abort_interp("Cannot access a propdir directly.");
-    nu = new_array_packed(0,0);
+    nu = new_array_packed(0, 0);
     arr = oper[3].data.array;
 
     flags = PCRE_NO_AUTO_CAPTURE;
@@ -853,13 +809,13 @@ prim_array_regfilter_prop(PRIM_PROTOTYPE)
     if (errstr)
         abort_interp(errstr)
 
-    if (re && !re->extra && array_count(arr) > 2) {
-        /* This pattern is getting used 3 or more times, let's study it. A null
-         * return is okay, that just means there's nothing to optimize. */
-        re->extra = pcre_study(re->re, 0, &errstr);
-        if (errstr)
-            abort_interp(errstr);
-    }
+            if (re && !re->extra && array_count(arr) > 2) {
+            /* This pattern is getting used 3 or more times, let's study it. A null
+             * return is okay, that just means there's nothing to optimize. */
+            re->extra = pcre_study(re->re, 0, &errstr);
+            if (errstr)
+                abort_interp(errstr);
+        }
 
     prop = (char *) DoNullInd(oper[2].data.string);
     if (array_first(arr, &temp1)) {
@@ -894,11 +850,11 @@ prim_regfind_array(PRIM_PROTOTYPE)
     dbref ref, who;
     const char *name;
     stk_array *nw;
-    muf_re* re;
-    char* text = NULL;
+    muf_re *re;
+    char *text = NULL;
     int flags;
     int matchcnt = 0;
-    const char* errstr = NULL;
+    const char *errstr = NULL;
 
     if (oper[0].type != PROG_INTEGER)
         abort_interp("Non-integer argument (4)");
@@ -923,37 +879,35 @@ prim_regfind_array(PRIM_PROTOTYPE)
     if (errstr)
         abort_interp(errstr)
 
-    /* We're scanning a chunk of the DB, so studying should pay off.
-     * A null return is fine, it just means we can't optimize further. */
-    if (re && !re->extra) {
-        re->extra = pcre_study(re->re, 0, &errstr);
-        if (errstr)
-            abort_interp(errstr);
-    }
+            /* We're scanning a chunk of the DB, so studying should pay off.
+             * A null return is fine, it just means we can't optimize further. */
+            if (re && !re->extra) {
+            re->extra = pcre_study(re->re, 0, &errstr);
+            if (errstr)
+                abort_interp(errstr);
+        }
 
     who = oper[3].data.objref;
     name = DoNullInd(oper[2].data.string);
 
     init_checkflags(PSafe, DoNullInd(oper[1].data.string), &check);
-    nw = new_array_packed(0,0);
+    nw = new_array_packed(0, 0);
 
     /* The "result = array_appendref" stuff was copied from find_array. I'm
      * making sure these alterations work as-is before attempting to remove it.
      * -brevantes */
     for (ref = (dbref) 0; ref < db_top; ref++) {
-        if (((who == NOTHING) ? 1 : (OWNER(ref) == who)) &&
-            checkflags(ref, check) && NAME(ref)) {
+        if (((who == NOTHING) ? 1 : (OWNER(ref) == who)) && checkflags(ref, check) && NAME(ref)) {
             if (!*name)
                 array_appendref(&nw, ref);
             else
-                text = (char *)NAME(ref);
-                if ((matchcnt = regmatch_exec(re, text)) < 0)
-                {
-                    if (matchcnt != PCRE_ERROR_NOMATCH)
-                        abort_interp(muf_re_error(matchcnt));
-                } else {
-                    array_appendref(&nw, ref);
-                }
+                text = (char *) NAME(ref);
+            if ((matchcnt = regmatch_exec(re, text)) < 0) {
+                if (matchcnt != PCRE_ERROR_NOMATCH)
+                    abort_interp(muf_re_error(matchcnt));
+            } else {
+                array_appendref(&nw, ref);
+            }
         }
     }
 
@@ -966,11 +920,11 @@ prim_regfindnext(PRIM_PROTOTYPE)
     struct flgchkdat check;
     dbref who, item, ref, i;
     const char *name;
-    muf_re* re;
-    char* text;
+    muf_re *re;
+    char *text;
     int flags;
     int matchcnt = 0;
-    const char* errstr = NULL;
+    const char *errstr = NULL;
 
     if (oper[0].type != PROG_INTEGER)
         abort_interp("Non-integer argument (5)");
@@ -986,8 +940,7 @@ prim_regfindnext(PRIM_PROTOTYPE)
         abort_interp("Expected dbref argument. (1)");
     if (oper[4].data.objref < NOTHING || oper[4].data.objref >= db_top)
         abort_interp("Bad object. (1)");
-    if (oper[3].data.objref != NOTHING &&
-        Typeof(oper[3].data.objref) == TYPE_GARBAGE)
+    if (oper[3].data.objref != NOTHING && Typeof(oper[3].data.objref) == TYPE_GARBAGE)
         abort_interp("Owner dbref is garbage. (2)");
 
     item = oper[4].data.objref;
@@ -999,11 +952,9 @@ prim_regfindnext(PRIM_PROTOTYPE)
 
     if (mlev < 3) {
         if (who == NOTHING) {
-            abort_interp
-                ("Permission denied.  Owner inspecific searches require Mucker Level 3.");
+            abort_interp("Permission denied.  Owner inspecific searches require Mucker Level 3.");
         } else if (who != ProgUID) {
-            abort_interp
-                ("Permission denied.  Searching for other people's stuff requires Mucker Level 3.");
+            abort_interp("Permission denied.  Searching for other people's stuff requires Mucker Level 3.");
         }
     }
 
@@ -1018,13 +969,13 @@ prim_regfindnext(PRIM_PROTOTYPE)
     if (errstr)
         abort_interp(errstr)
 
-    /* We're scanning a chunk of the DB, so studying should pay off.
-     * A null return is fine, it just means we can't optimize further. */
-    if (re && !re->extra) {
-        re->extra = pcre_study(re->re, 0, &errstr);
-        if (errstr)
-            abort_interp(errstr);
-    }
+            /* We're scanning a chunk of the DB, so studying should pay off.
+             * A null return is fine, it just means we can't optimize further. */
+            if (re && !re->extra) {
+            re->extra = pcre_study(re->re, 0, &errstr);
+            if (errstr)
+                abort_interp(errstr);
+        }
 
     if (item == NOTHING) {
         item = 0;
@@ -1035,8 +986,7 @@ prim_regfindnext(PRIM_PROTOTYPE)
     ref = NOTHING;
     init_checkflags(PSafe, DoNullInd(oper[1].data.string), &check);
     for (i = item; i < db_top; i++) {
-        if ((who == NOTHING || OWNER(i) == who) &&
-            checkflags(i, check) && NAME(i)) {
+        if ((who == NOTHING || OWNER(i) == who) && checkflags(i, check) && NAME(i)) {
             if (!*name) {
                 ref = i;
                 break;

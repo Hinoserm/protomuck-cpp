@@ -8,7 +8,7 @@
  * compatible systems by Peter A. Torkelson, aka WhiteFire.
  */
 
-                                                                                                                                                                                                                                     /* #define _POSIX_SOURCE *//* Solaris needs this */
+                                                                                                                                                                                                                                                                                                                                                                                                                                                             /* #define _POSIX_SOURCE *//* Solaris needs this */
 #ifdef SOLARIS
 #  ifndef _POSIX_SOURCE
 #    define _POSIX_SOURCE       /* Solaris needs this */
@@ -168,8 +168,8 @@ set_signals(void)
 
 /* Shutdown the muck */
 
-extern int shutdown_flag;
-extern int restart_flag;
+//extern int shutdown_flag;
+//extern int restart_flag;
 
 RETSIGTYPE
 sig_shutdown(int i)
@@ -213,8 +213,9 @@ sig_reap_resolver(int i)
 
     if (resolverpid && resolverpid == pid && WIFSIGNALED(status)) {
         spawn_resolver();
-        log_status("RES: Resolver restarted. (signal %d)\n", WTERMSIG(status));
-        
+        //As it turns out, you can't do this safely in a pthreads program. -hinoserm
+        //log_status("RES: Resolver restarted. (signal %d)\n", WTERMSIG(status));
+
 #if !defined(SYSV) && !defined(_POSIX_VERSION) && !defined(ULTRIX) && !defined(WIN_VC)
         return 0;
 #endif
@@ -225,15 +226,14 @@ sig_reap_resolver(int i)
     /* but only if ProtoMUCK is using forked dumps. -hinoserm */
     if (tp_dbdump_warning && dumper_pid && dumper_pid == pid) {
         if (WIFSIGNALED(status)) {
-            log_status("WARNING!!! Forked dump process terminated with abnormal"
-                       " signal %d! This usually means the dumper process"
-                       " crashed and your database _WAS NOT SAVED_! Check the"
-                       " logs for possible information.", WTERMSIG(status));
+            log_status
+                ("WARNING!!! Forked dump process terminated with abnormal"
+                 " signal %d! This usually means the dumper process" " crashed and your database _WAS NOT SAVED_! Check the" " logs for possible information.", WTERMSIG(status));
         } else if (WIFEXITED(status) && WEXITSTATUS(status)) {
-            log_status("WARNING!!! Forked dump process terminated with abnormal"
-                       " return code %d! This usually means the dumper process"
-                       " crashed and your database _WAS NOT SAVED_! Check the"
-                       " logs for possible information.", WEXITSTATUS(status));
+            log_status
+                ("WARNING!!! Forked dump process terminated with abnormal"
+                 " return code %d! This usually means the dumper process"
+                 " crashed and your database _WAS NOT SAVED_! Check the" " logs for possible information.", WEXITSTATUS(status));
         } else
             wall_and_flush(tp_dumpdone_mesg);
     }

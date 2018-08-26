@@ -17,27 +17,27 @@ extern int kill_macro(const char *, dbref, struct macrotable **);
 void
 prim_priminfo_array(PRIM_PROTOTYPE)
 {
-	int i;
-	stk_array *nu;
+    int i;
+    stk_array *nu;
 
-	if (oper[0].type != PROG_STRING)
+    if (oper[0].type != PROG_STRING)
         abort_interp("Non-string argument. (1)");
 
-	nu = new_array_dictionary();
+    nu = new_array_dictionary();
 
-	for (i = 0; primlist[i].func; i++) {
-		if (!oper[0].data.string || equalstr(DoNullInd(oper[0].data.string), (const char *)primlist[i].name)) {
-			stk_array *nu2 = new_array_dictionary();
+    for (i = 0; primlist[i].func; i++) {
+        if (!oper[0].data.string || equalstr(DoNullInd(oper[0].data.string), (const char *) primlist[i].name)) {
+            stk_array *nu2 = new_array_dictionary();
 
-			array_set_strkey_strval(&nu2, "name", primlist[i].name);
-			array_set_strkey_intval(&nu2, "nargs", primlist[i].nargs);
-			array_set_strkey_intval(&nu2, "mlev", primlist[i].mlev);
+            array_set_strkey_strval(&nu2, "name", primlist[i].name);
+            array_set_strkey_intval(&nu2, "nargs", primlist[i].nargs);
+            array_set_strkey_intval(&nu2, "mlev", primlist[i].mlev);
 
-			array_set_strkey_arrval(&nu, primlist[i].name, nu2);
-		}
-	}
+            array_set_strkey_arrval(&nu, primlist[i].name, nu2);
+        }
+    }
 
-	PushArrayRaw(nu);
+    PushArrayRaw(nu);
 }
 
 void
@@ -45,9 +45,10 @@ prim_kill_macro(PRIM_PROTOTYPE)
 {
     /* name -- result */
     char tmp[BUFFER_LEN];
-	int result;
+    int result;
+
     result = 0;
-    
+
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string argument. (1)");
     if (!oper[0].data.string)
@@ -55,12 +56,12 @@ prim_kill_macro(PRIM_PROTOTYPE)
     if (mlev < LWIZ)
         abort_interp("Permission denied.");
     strcpy(tmp, (const char *) oper[0].data.string->data);
-    
+
     result = kill_macro(tmp, player, &macrotop);
     PushInt(result);
 }
-extern int insert_macro(const char *, const char *, dbref,
-                        struct macrotable **);
+
+extern int insert_macro(const char *, const char *, dbref, struct macrotable **);
 void
 prim_insert_macro(PRIM_PROTOTYPE)
 {
@@ -68,9 +69,9 @@ prim_insert_macro(PRIM_PROTOTYPE)
     int result = 0;
     char namebuf[BUFFER_LEN];
     char defbuf[BUFFER_LEN];
-    
-                  /* definition */
-                  /* macro name */
+
+    /* definition */
+    /* macro name */
     if (oper[0].type != PROG_STRING || oper[1].type != PROG_STRING)
         abort_interp("Requires two string arguments.");
     if (!oper[0].data.string || !oper[0].data.string)
@@ -79,10 +80,11 @@ prim_insert_macro(PRIM_PROTOTYPE)
         abort_interp("Permission denied.");
     strcpy(namebuf, (const char *) oper[1].data.string->data);
     strcpy(defbuf, (const char *) oper[0].data.string->data);
-    
+
     result = insert_macro(namebuf, defbuf, player, &macrotop);
     PushInt(result);
 }
+
 stk_array *
 make_macros_array(stk_array *dict, struct macrotable *node)
 {
@@ -93,10 +95,12 @@ make_macros_array(stk_array *dict, struct macrotable *node)
     make_macros_array(dict, node->right);
     return dict;
 }
+
 void
 prim_get_macros_array(PRIM_PROTOTYPE)
 {
     stk_array *nw;
+
     /* -- dict<full macro table> */
     if (mlev < LMAGE)
         abort_interp("Permission denied.");
@@ -105,15 +109,17 @@ prim_get_macros_array(PRIM_PROTOTYPE)
     make_macros_array(nw, macrotop);
     PushArrayRaw(nw);
 }
+
 void
 prim_program_linecount(PRIM_PROTOTYPE)
 {
     struct line *curr;
-	dbref ref;
-	int result;
+    dbref ref;
+    int result;
+
     /* dbref -- int */
-    
-                  /* dbref */
+
+    /* dbref */
     if (!valid_object(&oper[0]))
         abort_interp("Non-object argument. (1)");
     ref = oper[0].data.objref;
@@ -131,9 +137,10 @@ prim_program_linecount(PRIM_PROTOTYPE)
     }
     if (!(FLAGS(ref) & INTERNAL))
         free_prog_text(DBFETCH(ref)->sp.program.first);
-    
+
     PushInt(result);
 }
+
 void
 prim_program_getlines(PRIM_PROTOTYPE)
 {
@@ -144,12 +151,13 @@ prim_program_getlines(PRIM_PROTOTYPE)
     struct line *curr;          /* current line */
     struct line *first;         /* first line in program */
     struct line *segment;       /* starting line in our segment of interest */
-	dbref ref;
+    dbref ref;
+
     /* dbref start stop -- arr */
-    
-                  /* stop */
-                  /* start */
-                  /* dbref */
+
+    /* stop */
+    /* start */
+    /* dbref */
     if (!valid_object(&oper[2]))
         abort_interp("Invalid object dbref (1).");
     if (oper[1].type != PROG_INTEGER)
@@ -171,7 +179,7 @@ prim_program_getlines(PRIM_PROTOTYPE)
         start = 1;
     if (end && start > end)
         abort_interp("Illogical line range.");
-    
+
     curr = first = read_program(ref); /* load the code */
     /* find our line */
     for (i = 1; curr && i < start; ++i)
@@ -194,6 +202,7 @@ prim_program_getlines(PRIM_PROTOTYPE)
     free_prog_text(first);
     PushArrayRaw(ary);
 }
+
 void
 prim_program_deletelines(PRIM_PROTOTYPE)
 {
@@ -204,11 +213,12 @@ prim_program_deletelines(PRIM_PROTOTYPE)
     int end = 0;
     int count = 0;
     int i = 0;
+
     /* ref start end -- i<lines actually deleted> */
-    
-                  /* end */
-                  /* start */
-                  /* program */
+
+    /* end */
+    /* start */
+    /* program */
     if (mlev < LBOY)
         abort_interp("Permission denied.");
     if (oper[0].type != PROG_INTEGER || oper[1].type != PROG_INTEGER)
@@ -218,7 +228,7 @@ prim_program_deletelines(PRIM_PROTOTYPE)
     theprog = oper[2].data.objref;
     start = oper[1].data.number;
     end = oper[0].data.number;
-    
+
     if (Typeof(theprog) != TYPE_PROGRAM)
         abort_interp("Object must be a program. (1)");
     if (start < 1 || end < 1 || end < start)
@@ -254,6 +264,7 @@ prim_program_deletelines(PRIM_PROTOTYPE)
     DBFETCH(theprog)->sp.program.first = NULL;
     PushInt(count);
 }
+
 void
 prim_program_insertlines(PRIM_PROTOTYPE)
 {
@@ -267,11 +278,12 @@ prim_program_insertlines(PRIM_PROTOTYPE)
     struct inst temp1;
     int endline = 0;
     int replacedFirst = 0;      /* this keeps us from inserting at first over */
+
     /* ref i<start> arr<lines> */
-    
-                  /* lines */
-                  /* start line */
-                  /* program ref */
+
+    /* lines */
+    /* start line */
+    /* program ref */
     if (mlev < LBOY)
         abort_interp("Permission denied.");
     if (!valid_object(&oper[2]))
@@ -286,7 +298,7 @@ prim_program_insertlines(PRIM_PROTOTYPE)
     if (start < 1)
         abort_interp("Start point must be greater than 0.");
     theprog = oper[2].data.objref;
-    
+
     lines = oper[0].data.array;
     if (Typeof(theprog) != TYPE_PROGRAM)
         abort_interp("Object must be a program. (1)");
@@ -303,7 +315,7 @@ prim_program_insertlines(PRIM_PROTOTYPE)
         curr = curr->next;      /* move to the insert point */
     }
     if (array_first(lines, &temp1)) {
-		struct inst *oper4;
+        struct inst *oper4;
 
         do {
             new_line = get_new_line(); /* allocate new line */
@@ -347,14 +359,11 @@ prim_program_insertlines(PRIM_PROTOTYPE)
             curr = new_line;    /* move curr to insert after it next */
         } while (array_next(lines, &temp1));
     }
-    log_status("PROGRAM EDITED: %s by %s(%d)\n",
-               unparse_object(PSafe, theprog),
-               OkObj(player) ? NAME(player) : "(login)", player);
+    log_status("PROGRAM EDITED: %s by %s(%d)\n", unparse_object(PSafe, theprog), OkObj(player) ? NAME(player) : "(login)", player);
     if (tp_log_programs)
-        log_program_text(DBFETCH(theprog)->sp.program.first, player,
-                         oper[2].data.objref);
+        log_program_text(DBFETCH(theprog)->sp.program.first, player, oper[2].data.objref);
     endline = DBFETCH(theprog)->sp.program.curr_line;
-    
+
     write_program(DBFETCH(theprog)->sp.program.first, theprog);
     free_prog_text(DBFETCH(theprog)->sp.program.first);
     DBFETCH(theprog)->sp.program.first = NULL;

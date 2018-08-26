@@ -37,10 +37,14 @@ char	*rindex();
 extern const char *strencrypt(const char *data, const char *key);
 extern const char *strdecrypt(const char *data, const char *key);
 extern void MD5hash(void *dest, const void *orig, int len);
-extern void MD5hex(void *dest, const void *orig, int len);
-extern void SHA1hash(void *dest, const void *orig, int len);
-extern void SHA1hex(void *dest, const void *orig, int len);
+extern void MD5hex(char *dest, const char *orig, int len);
+extern void SHA1hash(unsigned char *dest, const char *orig, int len);
+extern void SHA1hex(char *dest, const char *orig, int len);
 extern int base64tohex(char *dest, int olen, const char *orig, int ilen);
 extern int hextobase64(char *dest, int olen, const char *orig, int ilen);
-extern int strtohex(char *dest, int olen, const char *orig, int ilen);
+extern int strtohex(char *dest, int olen, const char *orig, int ilen, bool uppercase = 1);
 extern int hextostr(char *dest, int olen, const char *orig, int ilen);
+extern size_t escapestr(char *obuf, const size_t olen, const char *ibuf, const size_t ilen, bool *truncated = NULL);
+
+std::string strToHex(const std::string &in, bool uppercase = true);       
+std::string hexToStr(const std::string &in);

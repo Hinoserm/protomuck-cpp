@@ -141,16 +141,21 @@ extern dbref find_uid(dbref player, struct frame *fr, int st, dbref program);
 			   && !controls(ProgUID, x)) \
                  abort_interp("Mucker Level 2 required to get remote info.");
 
-#define PushObject(x)   push(arg, top, PROG_OBJECT, MIPSCAST &x)
-#define PushInt(x)      push(arg, top, PROG_INTEGER, MIPSCAST &x)
-#define PushFloat(x)    push(arg, top, PROG_FLOAT, MIPSCAST &x)
-#define PushLock(x)     push(arg, top, PROG_LOCK, MIPSCAST copy_bool(x))
-#define PushTrueLock(x) push(arg, top, PROG_LOCK, MIPSCAST TRUE_BOOLEXP)
+extern void push(struct inst *stack, int *top, const char *str); /* interp.cpp */
+extern void push(struct inst *stack, int *top, const char *str, int len); /* interp.cpp */
+extern void push(struct inst *stack, int *top, const std::string & str);
 
-#define PushMark()      push(arg, top, PROG_MARK, MIPSCAST 0)
-#define PushStrRaw(x)   push(arg, top, PROG_STRING, MIPSCAST x)
-#define PushString(x)   PushStrRaw(alloc_prog_string(x))
-#define PushNullStr     PushStrRaw(0)
+#define PushObject(x)       push(arg, top, PROG_OBJECT, MIPSCAST &x)
+#define PushInt(x)          push(arg, top, PROG_INTEGER, MIPSCAST &x)
+#define PushFloat(x)        push(arg, top, PROG_FLOAT, MIPSCAST &x)
+#define PushLock(x)         push(arg, top, PROG_LOCK, MIPSCAST copy_bool(x))
+#define PushTrueLock(x)     push(arg, top, PROG_LOCK, MIPSCAST TRUE_BOOLEXP)
+
+#define PushMark()          push(arg, top, PROG_MARK, MIPSCAST 0)
+#define PushStrRaw(x)       push(arg, top, PROG_STRING, MIPSCAST x)
+#define PushNullStr         PushStrRaw(0)
+#define PushString(x)       push(arg, top, x)
+#define PushStringL(x,y)    push(arg, top, x, y)
 
 #define PushArrayRaw(x) push(arg, top, PROG_ARRAY, MIPSCAST x)
 #define PushNullArray   PushArrayRaw(0)
@@ -185,6 +190,7 @@ extern dbref find_uid(dbref player, struct frame *fr, int st, dbref program);
 # include "p_props.h"
 # include "p_stack.h"
 # include "p_strings.h"
+# include "p_mcp.h"
 # include "p_float.h"
 # include "p_error.h"
 # include "p_file.h"

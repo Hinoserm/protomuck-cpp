@@ -9,9 +9,9 @@
 #include "externs.h"
 
 static hash_tab player_list[PLAYER_HASH_SIZE];
+
 /* alias buffer - always has enough space to store @alias related prop paths */
-static char abuf[BUFFER_LEN + ( sizeof(ALIASDIR_CUR) > sizeof(ALIASDIR_LAST) ?
-                                sizeof(ALIASDIR_CUR) : sizeof(ALIASDIR_LAST) ) ];
+static char abuf[BUFFER_LEN + (sizeof(ALIASDIR_CUR) > sizeof(ALIASDIR_LAST) ? sizeof(ALIASDIR_CUR) : sizeof(ALIASDIR_LAST))];
 
 bool
 check_password(dbref player, const char *check_pw)
@@ -61,7 +61,7 @@ set_password(dbref player, const char *password)
         return 0;
 
     if (!password || !*password) {
-        delete[] DBFETCH(player)->sp.player.password;
+        delete[]DBFETCH(player)->sp.player.password;
 
         if (!db_hash_passwords) {
             DBFETCH(player)->sp.player.password = NULL;
@@ -79,7 +79,7 @@ set_password(dbref player, const char *password)
     if (!ok_password(password))
         return 0;
 
-    delete[] DBFETCH(player)->sp.player.password;
+    delete[]DBFETCH(player)->sp.player.password;
 
     if (db_hash_passwords) {
         char hashbuf[BUFFER_LEN];
@@ -111,31 +111,29 @@ lookup_alias(const char *name, int checkname)
      * exact target name, and this can be skipped. 'checkname' is used to signal
      * whether or not it's safe to skip this check.
      */
-    if (checkname &&
-        find_hash(name, player_list, PLAYER_HASH_SIZE) != NULL) {
+    if (checkname && find_hash(name, player_list, PLAYER_HASH_SIZE) != NULL) {
         return NOTHING;
     }
 
     sprintf(abuf, ALIASDIR_CUR "%s", name);
-    if (*name != '\0' &&
-        (pptr = get_property(0, abuf)) &&
-        PropType(pptr) == PROP_REFTYP) {
+    if (*name != '\0' && (pptr = get_property(0, abuf)) && PropType(pptr) == PROP_REFTYP) {
         alias = PropDataRef(pptr);
         if (Typeof(alias) == TYPE_PLAYER) {
             return alias;
         } else {
             /* bogus prop, kill it */
-            remove_property(0, abuf); 
+            remove_property(0, abuf);
         }
     }
-    
+
     return NOTHING;
 }
 
 /* killold probably isn't necessary, but there's no sense in clearing the old
  * alias hint if it's going to get overwritten by the caller anyway. */
 int
-rotate_alias(dbref target, int killold) {
+rotate_alias(dbref target, int killold)
+{
     const char *oldalias = NULL;
     PropPtr pptr;
     int valid;
@@ -163,7 +161,8 @@ rotate_alias(dbref target, int killold) {
 }
 
 void
-clear_alias(dbref target, const char *alias) {
+clear_alias(dbref target, const char *alias)
+{
     if (target) {
         rotate_alias(target, 1);
         return;
@@ -179,12 +178,14 @@ clear_alias(dbref target, const char *alias) {
 }
 
 int
-set_alias(dbref target, const char *alias, int rotate) {
+set_alias(dbref target, const char *alias, int rotate)
+{
     PData pdat;
     const char *p = alias;
 
     /* is the new alias legal? */
-    while (*p && *p != ':' && *p != PROPDIR_DELIMITER) p++;
+    while (*p && *p != ':' && *p != PROPDIR_DELIMITER)
+        p++;
     if (*p || !ok_player_name(alias)) {
         return NOTHING;
     }
@@ -193,13 +194,13 @@ set_alias(dbref target, const char *alias, int rotate) {
     if (lookup_alias(alias, 0) != NOTHING) {
         return AMBIGUOUS;
     }
-    
+
     /* set the new alias */
     sprintf(abuf, ALIASDIR_CUR "%s", alias);
     pdat.flags = PROP_REFTYP;
     pdat.data.ref = target;
     set_property(0, abuf, &pdat);
-    
+
     if (rotate) {
         rotate_alias(target, 0);
         /* set the "last alias" hint */
@@ -363,8 +364,7 @@ do_password(dbref player, const char *old, const char *newobj)
     }
 
     if (!check_password(player, old)) {
-        anotify_nolisten2(player,
-                          CFAIL "Syntax: @password <oldpass>=<newpass>");
+        anotify_nolisten2(player, CFAIL "Syntax: @password <oldpass>=<newpass>");
     } else if (!ok_password(newobj)) {
         anotify_nolisten2(player, CFAIL "Bad new password.");
     } else {
@@ -408,8 +408,7 @@ delete_player(dbref who)
     if (result) {
         int i;
 
-        wall_wizards(MARK
-                     "WARNING: Playername hashtable is inconsistent.  Rebuilding it.");
+        wall_wizards(MARK "WARNING: Playername hashtable is inconsistent.  Rebuilding it.");
         clear_players();
         for (i = db_top; i-- > 0;) {
             if (Typeof(i) == TYPE_PLAYER) {
@@ -418,8 +417,7 @@ delete_player(dbref who)
         }
         result = free_hash(NAME(who), player_list, PLAYER_HASH_SIZE);
         if (result) {
-            wall_wizards(MARK
-                         "WARNING: Playername hashtable still inconsistent after rebuild.");
+            wall_wizards(MARK "WARNING: Playername hashtable still inconsistent after rebuild.");
         }
     }
 

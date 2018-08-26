@@ -93,7 +93,7 @@ class http {
                                            /************************************/
         /* Functions */
         void log(int debuglvl, char *format, ...);
-        void process_input(const char *input);
+        void process_input(const char *input, const size_t length);
         void disconnect(void);
         int processcontent(const char in);
         int sendfile(const char *filename);
@@ -121,6 +121,6 @@ class http {
 #endif /* NEWHTTPD */
 
 /* For some reason, lots of things use these. */
-extern int http_decode64(const char *in, unsigned inlen, char *out);
-extern int http_encode64(const char *_in, unsigned inlen, char *_out);
+extern std::string http_encode64(const std::string &in);
+extern std::string http_decode64(const std::string &in);
 #endif

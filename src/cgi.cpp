@@ -1,16 +1,12 @@
 #include "config.h"
 #include "cgi.h"
+#include <cstdlib>
+#include <string.h>
 
 #ifdef BUFFER_LEN
 #undef BUFFER_LEN
 #endif
 #define BUFFER_LEN 4096
-
-#ifdef WIN_VC
-# define vcSTRCASECMP(x,y) stricmp((x),(y))
-#else
-# define vcSTRCASECMP(x,y) strcasecmp((x),(y))
-#endif
 
 /** Convert a two-char hex string into the char it represents **/
 char
@@ -28,7 +24,7 @@ x2c(char *what)
 void
 unescape_url(char *url)
 {
-    register int i, j;
+    int i, j;
     char *p;
 
     for (p = url; *p; p++)
@@ -38,7 +34,8 @@ unescape_url(char *url)
     for (i = 0, j = 0; url[j]; ++i, ++j) {
         if ((url[i] = url[j]) == '%') {
             url[i] = x2c(&url[j + 1]);
-            if (!url[j+1] || !url[j+2]) break;
+            if (!url[j + 1] || !url[j + 2])
+                break;
             j += 2;
         }
     }
@@ -69,14 +66,14 @@ getvalue(char *string)
     cgi++;
 
     result = strdup(cgi);
-    delete[] buf;
+    delete[]buf;
     return (result);
 }
 
 char *
 getcgivar(char *cgistring, char *param)
 {
-    register int i;
+    int i;
 
     char *result = NULL;
     char cgiinput[BUFFER_LEN];
@@ -94,18 +91,18 @@ getcgivar(char *cgistring, char *param)
     while (nvpair) {
         char *test = getparam(nvpair);
 
-        if (!vcSTRCASECMP(test, param)) {
+        if (!strcasecmp(test, param)) {
             result = getvalue(nvpair);
-            delete[] test;
+            delete[]test;
             break;
         }
-        delete[] test;
+        delete[]test;
         nvpair = strtok(NULL, "&");
     }
 
     unescape_url(result);
     strcpy(result2, result);
-    delete[] result;
+    delete[]result;
     return (result2);
 }
 
@@ -141,7 +138,7 @@ isvalid_cgichar(char c)
 /*      (c == PLUS) ||
  *      (c == TAB) || 
  *      (c == ATSIGN) ||
- */     (c == PERCENT))
+ */ (c == PERCENT))
         return (1);
 
     else

@@ -11,7 +11,8 @@
 
 /* these arrays MUST agree with what's in inst.h */
 const char *base_inst[] = {
-    "JMP", "READ", "TREAD", "SLEEP", "CALL", "EXECUTE", "EXIT", "EVENT_WAITFOR",
+    "JMP", "READ", "TREAD", "SLEEP", "CALL", "EXECUTE", "EXIT",
+    "EVENT_WAITFOR",
     "CATCH", "CATCH_DETAILED",
     PRIMS_CONNECTS_NAMES,
     PRIMS_DB_NAMES,
@@ -29,6 +30,9 @@ const char *base_inst[] = {
     PRIMS_FILE_NAMES,
 #endif
     PRIMS_ARRAY_NAMES,
+#ifdef MCP_SUPPORT
+    PRIMS_MCP_NAMES,
+#endif
 #ifdef MUF_SOCKETS
     PRIMS_SOCKET_NAMES,
 #endif
@@ -46,14 +50,14 @@ const char *base_inst[] = {
 };
 
 int
-check_file(FILE *file, const char *onwhat)
+check_file(FILE * file, const char *onwhat)
 {
     char buf[BUFFER_LEN];
     char topic[BUFFER_LEN];
     char *p;
     register int arglen, found;
 
-    fseek(file, 0, SEEK_SET); /* start at the beginning */
+    fseek(file, 0, SEEK_SET);   /* start at the beginning */
 
     *topic = '\0';
     strcpy(topic, onwhat);
@@ -107,8 +111,8 @@ main(int argc, char *argv[])
 
         for (i = 0; i < BASE_MAX; i++)
             if (base_inst[i][0] != ' ')
-            if (!check_file(f, base_inst[i]))
-                printf("| %3d: %-55s |\n", ++count, base_inst[i]);
+                if (!check_file(f, base_inst[i]))
+                    printf("| %3d: %-55s |\n", ++count, base_inst[i]);
 
         if (!count)
             printf("| No undocumented primitives! Yay!                             |\n");
@@ -117,5 +121,5 @@ main(int argc, char *argv[])
         fclose(f);
     }
 
-	return 0;
+    return 0;
 }

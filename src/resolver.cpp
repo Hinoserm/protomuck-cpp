@@ -377,8 +377,7 @@ addrout(int a, int prt, int myprt)
     }
 
     a = ntohl(a);
-    sprintf(tmpbuf, "%d.%d.%d.%d",
-            (a >> 24) & 0xff, (a >> 16) & 0xff, (a >> 8) & 0xff, a & 0xff);
+    sprintf(tmpbuf, "%d.%d.%d.%d", (a >> 24) & 0xff, (a >> 16) & 0xff, (a >> 8) & 0xff, a & 0xff);
     hostadd_timestamp(a, tmpbuf);
     ptr = get_username(htonl(a), prt, myprt);
     if (ptr) {

@@ -100,6 +100,11 @@ extern int tp_dump_copies;
 extern int tp_min_progbreak_lev;
 extern int tp_max_wiz_preempt_count;
 extern int tp_mysql_result_limit;
+extern int tp_max_per_slice;
+
+#ifdef MCP_SUPPORT
+extern int tp_mcp_muf_mlev;
+#endif
 
 #ifdef NEWHTTPD                 /* hinoserm */
 extern int tp_wwwport;          /* hinoserm */
@@ -111,6 +116,10 @@ extern int tp_web_max_files;    /* hinoserm */
 extern int tp_web_max_filesize; /* hinoserm */
 extern int tp_web_max_users;    /* hinoserm */
 #endif                          /* hinoserm */
+
+extern int tp_mysql_log_lvl;
+extern int tp_mysql_thread_count;
+
 
 /* dbrefs */
 extern dbref tp_quit_prog;
@@ -179,6 +188,9 @@ extern int tp_use_self_on_command;
 extern int tp_quiet_moves;
 extern int tp_quiet_connects;
 extern int tp_proplist_int_counter;
+#ifdef MCP_SUPPORT
+extern int tp_enable_mcp;
+#endif
 #ifdef CONTROLS_SUPPORT
 extern int tp_wiz_realms;
 #endif
@@ -197,11 +209,12 @@ extern int tp_allow_unidle;
 extern int tp_alt_infinity_handler;
 extern int tp_autolinking;
 extern int tp_spaces_in_playernames;
-extern int tp_mush_format_escapes;
-extern int tp_strict_mush_escapes;
+//extern int tp_mush_format_escapes;
+//extern int tp_strict_mush_escapes;
 extern int tp_ascii_descrs;
 extern int tp_muf_profiling;
 extern int tp_player_aliasing;
+extern int tp_dump_forking;
 
 /* extern int tp_require_has_mpi_arg; */
 #ifdef NEWHTTPD                         /* hinoserm */

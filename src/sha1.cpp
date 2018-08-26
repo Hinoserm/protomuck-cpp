@@ -35,6 +35,10 @@
 #include "strings.h"
 #include "sha1.h"
 
+#ifdef USE_SSL
+# include <openssl/sha.h>
+#else
+
 /*
  *  Define the SHA1 circular left shift macro
  */
@@ -142,8 +146,7 @@ SHA1Result(SHA1Context * context, uint8_t * Message_Digest)
 
     for (i = 0; i < SHA1HashSize; ++i)
 
-        Message_Digest[i] =
-            context->Intermediate_Hash[i >> 2] >> 8 * (3 - (i & 0x03));
+        Message_Digest[i] = context->Intermediate_Hash[i >> 2] >> 8 * (3 - (i & 0x03));
 
     return 1;
 
@@ -192,8 +195,7 @@ SHA1Input(SHA1Context * context, const uint8_t * message_array, unsigned length)
 
     while (length-- && !context->Corrupted) {
 
-        context->Message_Block[context->Message_Block_Index++] =
-            (*message_array & 0xFF);
+        context->Message_Block[context->Message_Block_Index++] = (*message_array & 0xFF);
 
         context->Length_Low += 8;
 
@@ -266,8 +268,7 @@ SHA1ProcessMessageBlock(SHA1Context * context)
 
         W[t] = (uint32_t) (context->Message_Block[t * 4] << 24) & 0xFF000000;
 
-        W[t] |=
-            (uint32_t) (context->Message_Block[t * 4 + 1] << 16) & 0x00FF0000;
+        W[t] |= (uint32_t) (context->Message_Block[t * 4 + 1] << 16) & 0x00FF0000;
 
         W[t] |= (context->Message_Block[t * 4 + 2] << 8) & 0x0000FF00;
 
@@ -277,8 +278,7 @@ SHA1ProcessMessageBlock(SHA1Context * context)
 
     for (t = 16; t < 80; t++) {
 
-        W[t] =
-            SHA1CircularShift(1, W[t - 3] ^ W[t - 8] ^ W[t - 14] ^ W[t - 16]);
+        W[t] = SHA1CircularShift(1, W[t - 3] ^ W[t - 8] ^ W[t - 14] ^ W[t - 16]);
 
         W[t] &= 0xFFFFFFFF;
 
@@ -296,8 +296,7 @@ SHA1ProcessMessageBlock(SHA1Context * context)
 
     for (t = 0; t < 20; t++) {
 
-        temp = SHA1CircularShift(5, A) +
-            ((B & C) | ((~B) & D)) + E + W[t] + K[0];
+        temp = SHA1CircularShift(5, A) + ((B & C) | ((~B) & D)) + E + W[t] + K[0];
 
         temp &= 0xFFFFFFFF;
 
@@ -337,8 +336,7 @@ SHA1ProcessMessageBlock(SHA1Context * context)
 
     for (t = 40; t < 60; t++) {
 
-        temp = SHA1CircularShift(5, A) +
-            ((B & C) | (B & D) | (C & D)) + E + W[t] + K[2];
+        temp = SHA1CircularShift(5, A) + ((B & C) | (B & D) | (C & D)) + E + W[t] + K[2];
 
         temp &= 0xFFFFFFFF;
 
@@ -376,20 +374,15 @@ SHA1ProcessMessageBlock(SHA1Context * context)
 
     }
 
-    context->Intermediate_Hash[0] =
-        (context->Intermediate_Hash[0] + A) & 0xFFFFFFFF;
+    context->Intermediate_Hash[0] = (context->Intermediate_Hash[0] + A) & 0xFFFFFFFF;
 
-    context->Intermediate_Hash[1] =
-        (context->Intermediate_Hash[1] + B) & 0xFFFFFFFF;
+    context->Intermediate_Hash[1] = (context->Intermediate_Hash[1] + B) & 0xFFFFFFFF;
 
-    context->Intermediate_Hash[2] =
-        (context->Intermediate_Hash[2] + C) & 0xFFFFFFFF;
+    context->Intermediate_Hash[2] = (context->Intermediate_Hash[2] + C) & 0xFFFFFFFF;
 
-    context->Intermediate_Hash[3] =
-        (context->Intermediate_Hash[3] + D) & 0xFFFFFFFF;
+    context->Intermediate_Hash[3] = (context->Intermediate_Hash[3] + D) & 0xFFFFFFFF;
 
-    context->Intermediate_Hash[4] =
-        (context->Intermediate_Hash[4] + E) & 0xFFFFFFFF;
+    context->Intermediate_Hash[4] = (context->Intermediate_Hash[4] + E) & 0xFFFFFFFF;
 
     context->Message_Block_Index = 0;
 
@@ -474,41 +467,33 @@ SHA1PadMessage(SHA1Context * context)
 
 }
 
+#endif /* USE_SSL */
+
 // ProtoMUCK specific code
 
 void
-SHA1hash(void *dest, const void *orig, int len)
+SHA1hash(unsigned char *dest, const char *orig, int len)
 {
-
+#ifndef USE_SSL
     struct SHA1Context context;
 
     SHA1Reset(&context);
-
     SHA1Input(&context, (const unsigned char *) orig, len);
-
     SHA1Result(&context, (uint8_t *) dest);
-
+#else
+    SHA_CTX ctx;
+    SHA1_Init(&ctx);
+    SHA1_Update(&ctx, orig, len);
+    SHA1_Final(dest, &ctx);
+#endif
 }
 
 /* dest buffer MUST be at least 41 chars long. */
 void
-SHA1hex(void *dest, const void *orig, int len)
+SHA1hex(char *dest, const char *orig, int len)
 {
-
-    unsigned char *tmp = new unsigned char[20];
+    unsigned char tmp[20];
 
     SHA1hash(tmp, orig, len);
-
-    unsigned char i;
-
-    int j;
-
-    for (j = 0; j <= 19; ++j) {
-
-        i = (unsigned char) tmp[j];
-
-        sprintf((char *) dest + (j * 2), "%.2X", (unsigned char) i);
-
-    }
-    delete[] tmp;
+    strtohex(dest, 41, (const char *)tmp, 20);
 }

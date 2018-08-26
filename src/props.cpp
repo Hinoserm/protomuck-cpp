@@ -62,8 +62,7 @@ static void
 fixup_height(PropPtr node)
 {
     if (node)
-        node->height = 1 + max(height_of(AVL_LF(node)),
-                               height_of(AVL_RT(node)));
+        node->height = 1 + max(height_of(AVL_LF(node)), height_of(AVL_RT(node)));
 }
 
 static PropPtr
@@ -164,7 +163,8 @@ alloc_propnode(const char *name)
     AVL_RT(new_node) = NULL;
     new_node->height = 1;
 
-    new_node->key = new char[strlen(name)+1];
+    new_node->key = new char[strlen(name) + 1];
+
     strcpy(PropName(new_node), name);
     SetPFlagsRaw(new_node, PROP_DIRTYP);
     SetPDataVal(new_node, 0);
@@ -177,12 +177,12 @@ free_propnode(PropPtr p)
 {
     if (!(PropFlags(p) & PROP_ISUNLOADED)) {
         if (PropType(p) == PROP_STRTYP)
-            delete[] PropDataStr(p);
+            delete[]PropDataStr(p);
         if (PropType(p) == PROP_LOKTYP)
             free_boolexp(PropDataLok(p));
     }
 
-    delete[] p->key;
+    delete[]p->key;
     delete p;
 }
 
@@ -191,7 +191,7 @@ clear_propnode(PropPtr p)
 {
     if (!(PropFlags(p) & PROP_ISUNLOADED)) {
         if (PropType(p) == PROP_STRTYP) {
-            delete[] PropDataStr(p);
+            delete[]PropDataStr(p);
             PropDataStr(p) = NULL;
         }
         if (PropType(p) == PROP_LOKTYP)
@@ -398,7 +398,7 @@ copy_proplist(dbref obj, PropPtr *new2, PropPtr old)
 int
 size_proplist(PropPtr avl)
 {
-    register int bytes = 0;
+    int bytes = 0;
 
     if (!avl)
         return 0;

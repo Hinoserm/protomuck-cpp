@@ -41,8 +41,7 @@ playmidi(dbref player, char *musicurl, char *volume)
     strcpy(buf, "");
 
     if (FLAG2(player) & F2PUEBLO) {
-        sprintf(buf, "<img xch_sound=play href=\"%s\" xch_volume=%s>", musicurl,
-                volume);
+        sprintf(buf, "<img xch_sound=play href=\"%s\" xch_volume=%s>", musicurl, volume);
     }
 
     return (buf);

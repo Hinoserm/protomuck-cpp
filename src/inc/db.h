@@ -41,16 +41,14 @@
 /* compression stuff */
 #ifdef COMPRESS
 extern const char *puncompress(const char *);
-extern const char *pcompress(const char *);
 
-#define alloc_compressed(x) alloc_string(pcompress(x))
-#define get_compress(x) pcompress(x)
 #define get_uncompress(x) puncompress(x)
 #else /* COMPRESS */
-#define alloc_compressed(x) alloc_string(x)
-#define get_compress(x) (x)
 #define get_uncompress(x) (x)
 #endif /* COMPRESS */
+
+#define alloc_compressed(x) alloc_string(x)
+#define get_compress(x) (x)
 
 /* smallest possible numbers to use before a float is considered to be '0' or
    'false'. */
@@ -891,6 +889,7 @@ struct funcprof {
 	double endtime;
 	double totaltime;
 	double lasttotal;
+    dbref progref;
 	long usecount;
 
 	struct funcprof *next;
@@ -909,77 +908,81 @@ struct mysql_conn {
 	struct mysql_conn *prev;
 };
 
-struct mysql_frames {
+struct mysql_queries {
     struct frame *fr;
-	int id;
-	struct mysql_frames *next;
-	struct mysql_frames *prev;
+    char *hostname;
+	char *username;
+	char *password;
+	char *database;
+    char *query;
+    int timeout;
+    int id;
+    bool running;
+    struct mysql_queries *next;
+	struct mysql_queries *prev;
 };
 
-extern struct mysql_frames *mysql_frlist;
-extern pthread_mutex_t mysql_frlist_mutex;
-
 extern struct mysql_conn *mysql_cpool;
-extern pthread_mutex_t mysql_cpool_mutex;
+extern std::recursive_mutex mysql_cpool_mutex;
 
 #endif /* THREADED_SQL_SUPPORT */
 
 /* frame data structure necessary for executing programs */
 struct frame {
-    struct frame *next;
+    struct frame *next = NULL;
 #ifdef THREADED_SQL_SUPPORT
-	pthread_mutex_t mutex;
+	std::recursive_mutex mutex;
 #endif
-    struct muf_interrupt *interrupts;   /* linked list of MUF interrupts */ 
-    struct muf_ainterrupt *ainttop;     /* active interrupts, top of list */
-    struct muf_ainterrupt *aintbot;     /* active interrupts, bottom of list */
-    struct muf_qitem      *qitem;       /* queue item, if any, to return later. */
+    struct muf_interrupt *interrupts = NULL;   /* linked list of MUF interrupts */ 
+    struct muf_ainterrupt *ainttop = NULL;     /* active interrupts, top of list */
+    struct muf_ainterrupt *aintbot = NULL;     /* active interrupts, bottom of list */
+    struct muf_qitem      *qitem = NULL;       /* queue item, if any, to return later. */
     struct sysstack system;             /* system stack */
     struct stack argument;              /* argument stack */
     struct callstack caller;            /* caller prog stack */
     struct forstack fors;               /* for loop stack */
     struct trystack trys;               /* try block stack */
-    struct localvars* lvars;            /* local variables */
-    short   use_interrupts;             /* ==1 if interrupts are enabled for this program */
+    struct localvars* lvars = NULL;     /* local variables */
+    short   use_interrupts = 0;         /* ==1 if interrupts are enabled for this program */
     vars    variables;                  /* global variables */
-    struct inst *pc;                    /* next executing instruction */ 
-    int     writeonly;                  /* This program should not do reads */
-    int     multitask;                  /* This program's multitasking mode */
-    int     perms;                      /* permissions restrictions on program */
-    int     level;                      /* prevent interp call loops */
-    int     preemptlimit;               /* cap preempt insts in _/instlimit prop */
-    int     interrupt_count;            /* number of interrupts thrown */
-    int     interrupted;                /* level of interrupts the program is currently in */
-    short   already_created;            /* this prog already created an object */
-    short   been_background;            /* this prog has run in the background */
-    short   skip_declare;               /* tells interp to skip next scoped var decl */
-    short   wantsblanks;                /* tells interps to accept blank reads */
-    dbref   trig;                       /* triggering object */
-    dbref   prog;                       /* program dbref */
-    dbref   player;                     /* person who ran the program */
+    struct inst *pc = NULL;             /* next executing instruction */ 
+    int     writeonly = 0;              /* This program should not do reads */
+    int     multitask = 0;              /* This program's multitasking mode */
+    int     perms = 0;                  /* permissions restrictions on program */
+    int     level = 0;                  /* prevent interp call loops */
+    int     preemptlimit = 0;           /* cap preempt insts in _/instlimit prop */
+    int     interrupt_count = 0;        /* number of interrupts thrown */
+    int     interrupted = 0;            /* level of interrupts the program is currently in */
+    short   already_created = 0;        /* this prog already created an object */
+    short   been_background = 0;        /* this prog has run in the background */
+    short   skip_declare = 0;           /* tells interp to skip next scoped var decl */
+    short   wantsblanks = 0;            /* tells interps to accept blank reads */
+    dbref   trig = -1;                  /* triggering object */
+    dbref   prog = -1;                  /* program dbref */
+    dbref   player = -1;                /* person who ran the program */
     time_t  started;                    /* When this program started. */
-    unsigned int instcnt;               /* How many instructions have run. */
-    int     timercount;                 /* How many timers currently exist. */
-    int     pid;                        /* what is the process id? */
-    struct descriptor_data *d;          /* descriptor (mostly for web stuff) -hinoserm */
-    char    *errorstr;                  /* the error string thrown */
-    char    *errorinst;                 /* the instruction name that threw an error */
-    dbref   errorprog;                  /* the program that threw an error */
-    int     errorline;                  /* the program line that threw an error */
-    int     err;                        /* has the program errored?  Setting to -1 causes silent abort (no try-catch) */
-    int     aborted;                    /* indicates program aborted */
-	struct inst oper[6];                /* this replaces oper1,oper2,etc */
-    int     nargs;                      /* number of items initalized in oper array */
-    int     descr;                      /* Descriptor of running player */
-    int     shutdown_seen;              /* Queues SHUTDOWN events during delayed shutdown */
-    struct scopedvar_t *svars;          /* Variables with function scoping. */
-    struct mufevent *events;            /* MUF event list. */
+    long long instcnt = 0;              /* How many instructions have run. */
+    int     timercount = 0;             /* How many timers currently exist. */
+    int     pid = 0;                    /* what is the process id? */
+    struct descriptor_data *d = NULL;   /* descriptor (mostly for web stuff) -hinoserm */
+    char    *errorstr = NULL;           /* the error string thrown */
+    char    *errorinst = NULL;          /* the instruction name that threw an error */
+    dbref   errorprog = -1;             /* the program that threw an error */
+    int     errorline = 0;              /* the program line that threw an error */
+    int     err = 0;                    /* has the program errored?  Setting to -1 causes silent abort (no try-catch) */
+    int     aborted = 0;                /* indicates program aborted */
+    struct inst oper[6];                /* this replaces oper1,oper2,etc */
+    int     nargs = 0;                  /* number of items initalized in oper array */
+    int     descr = 0;                  /* Descriptor of running player */
+    int     shutdown_seen = 0;          /* Queues SHUTDOWN events during delayed shutdown */
+    struct scopedvar_t *svars = NULL;   /* Variables with function scoping. */
+    struct mufevent *events   = NULL;   /* MUF event list. */
     struct debuggerdata brkpt;          /* info the debugger needs */
     struct timeval proftime;            /* profiling timing code */
     struct timeval totaltime;           /* profiling timing code */
-    struct dlogidlist *dlogids;         /* List of dlogids this frame uses. */
-    struct mufwatchpidlist *waiters;
-    struct mufwatchpidlist *waitees;
+    struct dlogidlist *dlogids = NULL;  /* List of dlogids this frame uses. */
+    struct mufwatchpidlist *waiters = NULL;
+    struct mufwatchpidlist *waitees = NULL;
     union {
             struct {
             unsigned int div_zero:1;	/* Divide by zero */
@@ -990,7 +993,7 @@ struct frame {
         } error_flags;
         int is_flags;
     } error;
-    struct funcprof *fprofile;
+    struct funcprof *fprofile = NULL;
 };
 
 struct publics {
@@ -1005,6 +1008,17 @@ struct publics {
     struct publics *next;
 };
 
+#ifdef MCP_SUPPORT
+
+struct mcp_binding {
+        struct mcp_binding *next;
+
+        char *pkgname;
+        char *msgname;
+        struct inst *addr;
+};
+
+#endif
 
 /* union of type-specific fields */
 
@@ -1043,6 +1057,9 @@ union specific {      /* I've been railroaded! */
 	struct inst *start;	      /* place to start executing */
 	struct line *first;	      /* first line */
 	struct publics *pubs;	      /* public subroutine addresses */
+#ifdef MCP_SUPPORT
+        struct mcp_binding *mcpbinds;   /* MCP message bindings. */
+#endif
       struct timeval proftime;      /* Profiling time spent in this program */
       time_t profstart;             /* Time when profiling started for this prog */
       unsigned int profuses;        /* # calls to this program while profiling */
@@ -1137,8 +1154,6 @@ extern int fetch_propvals(dbref obj, const char *dir);
 
 extern dbref getparent(dbref obj);
 
-extern dbref db_write_deltas(FILE *f);
-
 extern void free_prog_text(struct line * l);
 
 extern void write_program(struct line * first, dbref i);
@@ -1158,7 +1173,7 @@ extern dbref getref(FILE *);	/* Read a database reference from a file. */
 extern void putref(FILE *, dbref);	/* Write one ref to the file */
 extern struct boolexp *getboolexp(FILE *);	/* get a boolexp */
 extern void putboolexp(FILE *, struct boolexp *);	/* put a boolexp */
-extern int db_write_object(FILE *, dbref);	/* write one object to file */
+extern int db_write_object(FILE * f, struct object *o);	/* write one object to file */
 extern dbref db_write(FILE * f);/* write db to file, return # of objects */
 extern dbref db_read(FILE * f);	/* read db from file, return # of objects */
 
@@ -1195,6 +1210,8 @@ extern int db_hash_split(const char *hashin, int *tagout, char *hashout, char *s
 extern int db_hash_compare(const char *hash, const char *password);
 extern int db_hash_oldconvert(char *out, const char *hash);
 
+
+extern int db_write_threaded(void);
 
 /*
   Usage guidelines:

@@ -17,8 +17,7 @@ char match_cmdname[BUFFER_LEN]; /* triggering command */
 char match_args[BUFFER_LEN];    /* remaining text */
 
 void
-init_match(int descr, dbref player, const char *name, int type,
-           struct match_data *md)
+init_match(int descr, dbref player, const char *name, int type, struct match_data *md)
 {
     md->exact_match = md->last_match = NOTHING;
     md->match_count = 0;
@@ -34,16 +33,14 @@ init_match(int descr, dbref player, const char *name, int type,
 }
 
 void
-init_match_check_keys(int descr, dbref player, const char *name, int type,
-                      struct match_data *md)
+init_match_check_keys(int descr, dbref player, const char *name, int type, struct match_data *md)
 {
     init_match(descr, player, name, type, md);
     md->check_keys = 1;
 }
 
 void
-init_match_remote(int descr, dbref player, dbref what, const char *name,
-                  int type, struct match_data *md)
+init_match_remote(int descr, dbref player, dbref what, const char *name, int type, struct match_data *md)
 {
     init_match(descr, player, name, type, md);
     md->match_from = what;
@@ -71,8 +68,10 @@ choose_thing(int descr, dbref thing1, dbref thing2, struct match_data *md)
         }
     }
     /* Alynna: prefer anything else over exits */
-    if (Typeof(thing1) == TYPE_EXIT && !(Typeof(thing2) == TYPE_EXIT)) return thing2;
-    if (Typeof(thing2) == TYPE_EXIT && !(Typeof(thing1) == TYPE_EXIT)) return thing1;
+    if (Typeof(thing1) == TYPE_EXIT && !(Typeof(thing2) == TYPE_EXIT))
+        return thing2;
+    if (Typeof(thing2) == TYPE_EXIT && !(Typeof(thing1) == TYPE_EXIT))
+        return thing1;
 
     if (md->check_keys) {
         has1 = could_doit(descr, md->match_who, thing1);
@@ -94,8 +93,7 @@ match_player(struct match_data *md)
     dbref match;
     const char *p;
 
-    if (*(md->match_name) == LOOKUP_TOKEN
-        && (payfor(OWNER(md->match_from), tp_lookup_cost))) {
+    if (*(md->match_name) == LOOKUP_TOKEN && (payfor(OWNER(md->match_from), tp_lookup_cost))) {
         for (p = (md->match_name) + 1; isspace(*p); p++) ;
         if ((match = lookup_player(p)) != NOTHING) {
             md->exact_match = match;
@@ -111,9 +109,11 @@ find_registered_obj(dbref player, const char *name)
     const char *p;
     char buf[BUFFER_LEN];
     PropPtr ptr;
+#ifdef HIDDEN_REG
     dbref tmp;
 
     tmp = player;
+#endif
     if (*name != REGISTERED_TOKEN)
         return (NOTHING);
     for (p = name + 1; *p && isspace(*p); p++) ;
@@ -143,8 +143,7 @@ find_registered_obj(dbref player, const char *name)
                 p++;
             if (number(p)) {
                 match = (dbref) atoi(p);
-                if ((match >= 0) && (match < db_top) &&
-                    (Typeof(match) != TYPE_GARBAGE))
+                if ((match >= 0) && (match < db_top) && (Typeof(match) != TYPE_GARBAGE))
                     return (match);
             }
             break;
@@ -287,8 +286,7 @@ match_list(dbref first, struct match_data *md)
             return;
         } else if (!string_compare(RNAME(first), md->match_name)) {
             /* if there are multiple exact matches, randomly choose one */
-            md->exact_match =
-                choose_thing(md->match_descr, md->exact_match, first, md);
+            md->exact_match = choose_thing(md->match_descr, md->exact_match, first, md);
         } else if (string_match(RNAME(first), md->match_name)) {
             md->last_match = first;
             (md->match_count)++;
@@ -361,30 +359,25 @@ match_exits(dbref first, struct match_data *md)
                     exitname++;
                 lev = MLevel(exit);
                 if (tp_compatible_priorities && (lev == 1) &&
-                    (DBFETCH(exit)->location == NOTHING ||
-                     Typeof(DBFETCH(exit)->location) != TYPE_THING ||
-                     controls(OWNER(exit), getloc(md->match_from))))
+                    (DBFETCH(exit)->location == NOTHING || Typeof(DBFETCH(exit)->location) != TYPE_THING || controls(OWNER(exit), getloc(md->match_from))))
                     lev = 2;
                 if (*exitname == '\0' || *exitname == EXIT_DELIMITER) {
                     /* we got a match on this alias */
                     if (lev >= md->match_level) {
-                        if (strlen(md->match_name) - strlen(p) >
-                            md->longest_match) {
+                        if (strlen(md->match_name) - strlen(p) > md->longest_match) {
                             if (lev > md->match_level) {
                                 md->match_level = lev;
                                 md->block_equals = 0;
                             }
                             md->exact_match = exit;
-                            md->longest_match =
-                                strlen(md->match_name) - strlen(p);
+                            md->longest_match = strlen(md->match_name) - strlen(p);
                             if (*p == ' ') {
                                 strcpy(match_args, p + 1);
                                 {
                                     char *pp;
                                     int ip;
 
-                                    for (ip = 0, pp = (char *) md->match_name;
-                                         *pp && (pp != p); pp++)
+                                    for (ip = 0, pp = (char *) md->match_name; *pp && (pp != p); pp++)
                                         match_cmdname[ip++] = *pp;
                                     match_cmdname[ip] = '\0';
                                 }
@@ -401,9 +394,7 @@ match_exits(dbref first, struct match_data *md)
                                 md->match_level = lev;
                                 md->block_equals = 0;
                             } else {
-                                md->exact_match =
-                                    choose_thing(md->match_descr,
-                                                 md->exact_match, exit, md);
+                                md->exact_match = choose_thing(md->match_descr, md->exact_match, exit, md);
                             }
                             if (md->exact_match == exit) {
                                 if (*p == ' ') {
@@ -412,16 +403,13 @@ match_exits(dbref first, struct match_data *md)
                                         char *pp;
                                         int ip;
 
-                                        for (ip = 0, pp =
-                                             (char *) md->match_name;
-                                             *pp && (pp != p); pp++)
+                                        for (ip = 0, pp = (char *) md->match_name; *pp && (pp != p); pp++)
                                             match_cmdname[ip++] = *pp;
                                         match_cmdname[ip] = '\0';
                                     }
                                 } else {
                                     *match_args = '\0';
-                                    strcpy(match_cmdname,
-                                           (char *) md->match_name);
+                                    strcpy(match_cmdname, (char *) md->match_name);
                                 }
                             }
                         }
@@ -515,7 +503,8 @@ match_room_exits(dbref loc, struct match_data *md)
 {
     dbref obj;
 
-    if (loc < 0) return;    
+    if (loc < 0)
+        return;
 
     switch (Typeof(loc)) {
         case TYPE_PLAYER:
@@ -540,7 +529,7 @@ match_room_exits(dbref loc, struct match_data *md)
 void
 match_all_exits(struct match_data *md)
 {
-    dbref loc;
+    dbref loc = NOTHING;
     int limit = 88;
 
     strcpy(match_args, "\0");
@@ -571,8 +560,8 @@ match_all_exits(struct match_data *md)
         loc = DBFETCH(loc)->sp.thing.home;
         if (loc == NOTHING)
             return;
-	if (loc == NIL)
-	    loc = tp_default_parent;
+        if (loc == NIL)
+            loc = tp_default_parent;
         if (md->exact_match != NOTHING)
             md->block_equals = 1;
         match_room_exits(loc, md);
@@ -596,8 +585,7 @@ match_everything(struct match_data *md)
     match_me(md);
     match_here(md);
     match_registered(md);
-    if (Mage(OWNER(md->match_from)) || Mage(md->match_who) ||
-        POWERS(OWNER(md->match_who)) & POW_LONG_FINGERS) {
+    if (Mage(OWNER(md->match_from)) || Mage(md->match_who) || POWERS(OWNER(md->match_who)) & POW_LONG_FINGERS) {
         match_absolute(md);
         match_player(md);
     }
