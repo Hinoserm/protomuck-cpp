@@ -4,9 +4,6 @@
 #include "copyright.h"
 #include "db.h"
 #include "defaults.h"
-#ifdef MCP_SUPPORT
-# include "mcp.h"
-#endif
 #include "newhttp.h"
 
 #ifdef USE_SSL
@@ -134,9 +131,6 @@ struct descriptor_data {
     struct descriptor_data **prev;          /* Previous descriptor information */
 #ifdef USE_SSL
     SSL			    *ssl_session;
-#endif
-#ifdef MCP_SUPPORT
-    McpFrame                 mcpframe;      /* Muck-To-Client protocal information */
 #endif
 #ifdef NEWHTTPD
     class http *http;          /* hinoserm: Class for webserver stuff */
@@ -279,12 +273,6 @@ extern int pdescrcount(void);
 extern int pfirstdescr(void);
 extern int plastdescr(void);
 extern int pdescrcon(int c);
-#ifdef MCP_SUPPORT
-extern McpFrame *descr_mcpframe(int c);
-extern void SendText(McpFrame * mfr, const char *text);
-extern int mcpframe_to_descr(McpFrame * ptr);
-extern int mcpframe_to_user(McpFrame * ptr);
-#endif
 extern int pnextdescr(int c);
 extern int pfirstconn(dbref who);
 extern int pset_user(struct descriptor_data *d, dbref who);

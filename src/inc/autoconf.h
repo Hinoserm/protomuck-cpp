@@ -161,7 +161,8 @@
 #define HAVE_ZLIB /**/
 
 /* Defined to compile for ipv6 */
-/* #undef IPV6 */
+#undef IPV6
+//#define IPV6 1
 
 /* Defined to enable modular support */
 /* #undef MODULAR_SUPPORT */
@@ -218,7 +219,7 @@
 /* #undef TM_IN_SYS_TIME */
 
 /* The value of the uname -a command. */
-#define UNAME_VALUE "Linux potassium.ginkosoft.com 3.11.1-grsec-slacomp #2 SMP Mon Sep 23 19:39:44 CDT 2013 x86_64 x86_64 x86_64 GNU/Linux"
+#define UNAME_VALUE "Linux dextrose 5.2.7-100.fc29.x86_64 #1 SMP Thu Aug 8 05:30:19 UTC 2019 x86_64 x86_64 x86_64 GNU/Linux"
 
 /* Defined to enable SSL support. */
 #define USE_SSL /**/

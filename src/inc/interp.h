@@ -190,7 +190,6 @@ extern void push(struct inst *stack, int *top, const std::string & str);
 # include "p_props.h"
 # include "p_stack.h"
 # include "p_strings.h"
-# include "p_mcp.h"
 # include "p_float.h"
 # include "p_error.h"
 # include "p_file.h"

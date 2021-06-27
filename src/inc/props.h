@@ -105,7 +105,7 @@ typedef struct plist *PropPtr;
 /* property access macros */
 #define Prop_ReadOnly(name) \
     (Prop_Check(name, PROP_RDONLY) || Prop_Check(name, PROP_RDONLY2))
-#define Prop_Private(name) Prop_Check(name, PROP_PRIVATE)
+#define Prop_Private(name) 1 //Prop_Check(name, PROP_PRIVATE)
 #define Prop_SeeOnly(name) Prop_Check(name, PROP_SEEONLY)
 #define Prop_Hidden(name) Prop_Check(name, PROP_HIDDEN)
 

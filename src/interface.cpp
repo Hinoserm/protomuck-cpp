@@ -11,10 +11,6 @@
 #include "tune.h"
 #include "props.h"
 #include "match.h"
-#ifdef MCP_SUPPORT
-# include "mcp.h"
-# include "mcpgui.h"
-#endif
 #include "reg.h"
 #include "mpi.h"
 #include "reg.h"
@@ -622,12 +618,6 @@ main(int argc, char **argv)
         aForceFrameStack[nCurPtr] = NULL;
     }
 
-#ifdef MCP_SUPPORT
-    /* Initialize MCP and any server-side packages. */
-    mcp_initialize();
-    gui_initialize();
-#endif
-
     /* initialize udp sockets */
 #ifdef UDP_SOCKETS
     udp_count = 0;
@@ -866,7 +856,7 @@ notify_descriptor(int descr, const char *msg)
         while ((*ptr2 == '\r') || (*ptr2 == '\n'))
             ptr2++;
         queue_ansi(d, buf);
-        process_output(d);
+        //process_output(d);
     }
 }
 
@@ -1185,11 +1175,8 @@ queue_ansi(struct descriptor_data *d, const char *msg)
         }
     }
 
-#ifdef MCP_SUPPORT
-    mcp_frame_output_inband(&d->mcpframe, buf);
-#else
     queue_string(d, buf);
-#endif
+
     return strlen(buf);
 }
 
@@ -2208,7 +2195,7 @@ shovechars(void)
                     CLEAR(&tmpi);
                 }
             }
-#ifdef IPV6
+#ifdef IPV6_PRIMS
             for (i = 0; i < udp_count; i++) {
                 if (FD_ISSET(udp_sockets[i].socket6, &input_set)) {
                     log_status("UDP6 on %d", udp_sockets[i].socket6);
@@ -2397,12 +2384,12 @@ descr_sendfileblock(struct descriptor_data *d)
     if (!d->dfile)
         return;
 
-    if (d->dfile->size < 0) {
-        fclose(d->dfile->fp);
-        delete d->dfile;
-
-        return;
-    }
+    //if (d->dfile->size < 0) {
+    //    fclose(d->dfile->fp);
+    //    delete d->dfile;
+    //
+    //    return;
+    //}
 
     for (x = 0; x < MAX_COMMAND_LEN; x++) {
         if (d->dfile->sent + x >= d->dfile->size)
@@ -2963,9 +2950,6 @@ shutdownsock(struct descriptor_data *d)
     *d->prev = d->next;
     if (d->next)
         d->next->prev = d->prev;
-#ifdef MCP_SUPPORT
-    mcp_frame_clear(&d->mcpframe);
-#endif
 #ifdef NEWHTTPD
     if (d->http)
         delete d->http;
@@ -2983,36 +2967,6 @@ shutdownsock(struct descriptor_data *d)
 
     ndescriptors--;
 }
-
-#ifdef MCP_SUPPORT
-void
-SendText(McpFrame *mfr, const char *text)
-{
-    queue_string((struct descriptor_data *) mfr->descriptor, text);
-}
-
-void
-FlushText(McpFrame *mfr)
-{
-    struct descriptor_data *d = (struct descriptor_data *) mfr->descriptor;
-
-    if (d && !process_output(d)) {
-        d->booted = 1;
-    }
-}
-
-int
-mcpframe_to_descr(McpFrame *ptr)
-{
-    return ((struct descriptor_data *) ptr->descriptor)->descriptor;
-}
-
-int
-mcpframe_to_user(McpFrame *ptr)
-{
-    return ((struct descriptor_data *) ptr->descriptor)->player;
-}
-#endif
 
 int
 assign_descrnum(int s)
@@ -3088,9 +3042,6 @@ initializesock(int s, struct huinfo *hu, int ctype, int cport, int welcome)
     d->commands = 0;
     d->last_time = d->connected_at;
     d->type = ctype;
-#ifdef MCP_SUPPORT
-    mcp_frame_init(&d->mcpframe, d);
-#endif
     d->cport = cport;
     d->hu = hu;
     d->linelen = 0;
@@ -3536,16 +3487,6 @@ save_command(struct descriptor_data *d, const char *command, int len, int wclen)
         if (!(FLAGS(d->player) & INTERACTIVE))
             return 1;
     }
-#ifdef MCP_SUPPORT
-    if (d->connected && (DBFETCH(d->player)->sp.player.block)) {
-        char cmdbuf[BUFFER_LEN];
-
-        if (!mcp_frame_process_input(&d->mcpframe, command,
-                                     cmdbuf, sizeof(cmdbuf))) {
-            return 1;
-        }
-    }
-#endif
 */
     if (tp_allow_unidle) {      /* check for unidle word */
         if (!string_compare((char *) command, tp_unidle_command)) {
@@ -3587,7 +3528,7 @@ process_input(struct descriptor_data *d)
 
 #ifndef WIN32
 # ifdef USE_SSL
-    if ((got <= 0) && errno != EWOULDBLOCK)
+    if (!got || ((got < 0) && errno != EWOULDBLOCK))
 # else
     if (got <= 0)
 # endif
@@ -4056,12 +3997,13 @@ process_input(struct descriptor_data *d)
         d->raw_input_wclen = 0;
 #endif
     }
-    if (httpfr && httparr && array_count(httparr)) {
+    if (httparr) {
         struct inst temp;
 
         temp.type = PROG_ARRAY;
         temp.data.array = httparr;
-        muf_event_add(httpfr, "HTTP.INPUT_RAW", &temp, 0);
+        if (httpfr && array_count(httparr))
+            muf_event_add(httpfr, "HTTP.INPUT_RAW", &temp, 0);
         CLEAR(&temp);
     }
     return 1;
@@ -4105,13 +4047,6 @@ process_commands(void)
                     || (!d->connected && d->block)) {
                     char *tmp = t->start;
 
-#ifdef MCP_SUPPORT
-                    /* dequote MCP quoting. */
-                    if (!strncmp(tmp, "#%\"", 3)) {
-                        tmp += 3;
-                    }
-#endif
-
                     /* If read_event_notify returns 0, it didn't handle
                      * the input. If tmp is an empty string, then we'll
                      * remove the empty line here. -Akari
@@ -4127,13 +4062,8 @@ process_commands(void)
                         free_text_block(t);
                     }
                 } else {
-#ifdef MCP_SUPPORT
-                    if (strncmp(t->start, "#$#", 3)) {
-                        d->quota--; /* Only count non-MCP messages for quota */
-                    }
-#else
+
                     d->quota--;
-#endif
                     nprocessed++;
                     if (!do_command(d, t)) {
                         if (valid_obj(tp_quit_prog)
@@ -4182,15 +4112,6 @@ is_interface_command(const char *cmd)
 {
     const char *tmp = cmd;
 
-#ifdef MCP_SUPPORT
-    if (!strncmp(tmp, "#$\"", 3)) {
-        /* Dequote MCP quoting */
-        tmp += 3;
-    }
-    if (!strncmp(cmd, "#$#", 3)) { /* MCP Message */
-        return 1;
-    }
-#endif
     if (!string_compare(tmp, BREAK_COMMAND))
         return 1;
     if (!string_compare(tmp, QUIT_COMMAND))
@@ -4221,14 +4142,7 @@ do_command(struct descriptor_data *d, struct text_block *t)
         return 1;               /* hinoserm */
 #endif /* NEWHTTPD */
 
-#ifdef MCP_SUPPORT
-    if (!mcp_frame_process_input(&d->mcpframe, command, cmdbuf, sizeof(cmdbuf))) {
-        d->quota++;
-        return 1;
-    }
-#else
     strcpy(cmdbuf, command);
-#endif
     command = cmdbuf;
 
     if (tp_use_self_on_command && d->connected)
@@ -5377,9 +5291,6 @@ announce_disconnect(struct descriptor_data *d)
         if (can_move(d->descriptor, player, "disconnect", 1)) {
             do_move(d->descriptor, player, "disconnect", 1);
         }
-#ifdef MCP_SUPPORT
-        gui_dlog_closeall_descr(d->descriptor);
-#endif
 
         if (!Hidden(player)) {
             announce_puppets(player, "falls asleep.", "_/pdcon");
@@ -6318,23 +6229,6 @@ dbref_first_descr(dbref c)
     }
 }
 
-#ifdef MCP_SUPPORT
-McpFrame *
-descr_mcpframe(int c)
-{
-    struct descriptor_data *d;
-
-    d = descriptor_list;
-    while (d && d->connected) {
-        if (d->descriptor == c) {
-            return &d->mcpframe;
-        }
-        d = d->next;
-    }
-    return NULL;
-}
-#endif
-
 int
 pdescrflush(int c)
 {
@@ -6479,9 +6373,7 @@ welcome_user(struct descriptor_data *d)
             strcpy(buf, WELC_HTML);
         }
         strcpy(buf, WELC_HTML);
-#ifdef MCP_SUPPORT
-        mcp_negotiation_start(&d->mcpframe, d);
-#endif
+
         if ((f = fopen(buf, "r")) == NULL) {
             queue_unhtml(d, DEFAULT_WELCOME_MESSAGE);
             perror("spit_file: welcome.html");
@@ -6534,9 +6426,7 @@ welcome_user(struct descriptor_data *d)
         } else {
             strcpy(buf, WELC_FILE);
         }
-#ifdef MCP_SUPPORT
-        mcp_negotiation_start(&d->mcpframe, d);
-#endif
+
         if ((f = fopen(buf, "r")) == NULL) {
             queue_unhtml(d, DEFAULT_WELCOME_MESSAGE);
             perror("spit_file: welcome.txt");

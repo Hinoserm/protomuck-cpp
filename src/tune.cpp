@@ -164,9 +164,6 @@ int tp_playermax_limit = PLAYERMAX_LIMIT;
 int tp_process_timer_limit = 4;
 int tp_dump_copies = 10;
 int tp_min_progbreak_lev = 0;
-#ifdef MCP_SUPPORT
-int tp_mcp_muf_mlev = MCP_MUF_MLEV;
-#endif
 int tp_max_wiz_preempt_count = 0;
 int tp_wizhidden_access_bit = 3;
 int tp_userflag_mlev = 0;
@@ -237,9 +234,6 @@ struct tune_val_entry tune_val_list[] = {
     {"MUF", "min_progbreak_lev", &tp_min_progbreak_lev, LARCH, LMAGE},
     {"MUF", "max_wiz_preempt_count", &tp_max_wiz_preempt_count, LARCH, LMAGE},
     {"MUF", "max_per_slice", &tp_max_per_slice, LARCH, LMUF},
-#ifdef MCP_SUPPORT
-    {"MUF", "mcp_muf_mlev", &tp_mcp_muf_mlev, LARCH, LMAGE},
-#endif
 #ifdef SQL_SUPPORT
     {"MUF", "mysql_result_limit", &tp_mysql_result_limit, LBOY, LARCH},
 #endif
@@ -349,9 +343,7 @@ int tp_use_self_on_command = 1;
 int tp_quiet_moves = 0;
 int tp_quiet_connects = 0;
 int tp_proplist_int_counter = 0;
-#ifdef MCP_SUPPORT
-int tp_enable_mcp = 1;
-#endif
+
 #ifdef CONTROLS_SUPPORT
 int tp_wiz_realms = 1;
 #endif
@@ -457,9 +449,6 @@ struct tune_bool_entry tune_bool_list[] = {
     {"Commands", "quiet_moves", &tp_quiet_moves, LARCH, LMUF},
     {"Commands", "quiet_connects", &tp_quiet_connects, LARCH, LMUF},
     {"Props", "proplist_int_counter", &tp_proplist_int_counter, LARCH, LMUF},
-#ifdef MCP_SUPPORT
-    {"System", "enable_mcp", &tp_enable_mcp, WBOY, LMUF},
-#endif
     {"Props", "enable_commandprops", &tp_enable_commandprops, WBOY, LMUF},
     {"MUF", "old_parseprop", &tp_old_parseprop, WBOY, LMUF},
     {"MPI", "mpi_needflag", &tp_mpi_needflag, WBOY, LMUF},

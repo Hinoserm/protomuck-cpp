@@ -42,8 +42,8 @@ arith_type(struct inst *op1, struct inst *op2)
 void
 prim_add(PRIM_PROTOTYPE)
 {
-    double fresult, tf1, tf2, tl;
-    int tmp, result;
+    double fresult = 0.0, tf1, tf2, tl;
+    int tmp, result = 0;
 
     if (!arith_type(&oper[1], &oper[0]))
         abort_interp("Invalid argument type");
@@ -80,8 +80,8 @@ prim_add(PRIM_PROTOTYPE)
 void
 prim_subtract(PRIM_PROTOTYPE)
 {
-    double fresult, tf1, tf2, tl;
-    int tmp, result;
+    double fresult = 0.0, tf1, tf2, tl;
+    int tmp, result = 0;
 
     if (!arith_type(&oper[1], &oper[0]))
         abort_interp("Invalid argument type.");
@@ -118,8 +118,8 @@ prim_subtract(PRIM_PROTOTYPE)
 void
 prim_multiply(PRIM_PROTOTYPE)
 {
-    double fresult, tf1, tf2, tl;
-    int tmp, result;
+    double fresult = 0.0, tf1, tf2, tl;
+    int tmp, result = 0;
 
     if (!arith_type(&oper[1], &oper[0]))
         abort_interp("Invalid argument type.");
@@ -156,8 +156,8 @@ prim_multiply(PRIM_PROTOTYPE)
 void
 prim_divide(PRIM_PROTOTYPE)
 {
-    double fresult, tf1, tf2;
-    int result, tmp;
+    double fresult = 0.0, tf1, tf2;
+    int result = 0, tmp;
 
     if (!arith_type(&oper[1], &oper[0]))
         abort_interp("Invalid argument type");

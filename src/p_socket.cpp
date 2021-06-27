@@ -695,7 +695,7 @@ prim_nbsockopen(PRIM_PROTOTYPE)
 void
 prim_nbsock6open(PRIM_PROTOTYPE)
 {
-#ifndef IPV6
+#ifndef IPV6_PRIMS
     abort_interp("IPv6 not enabled.  Recompile, reformat, reinstall.");
 #else
     struct inst *result = NULL;
@@ -1661,7 +1661,7 @@ prim_udpopen(PRIM_PROTOTYPE)
         if (tp_log_sockets)
             log2filetime("logs/sockets", "UDP4OPEN: entry %d, port %d, descr %d\n", udp_count, udp_sockets[udp_count].portnum, udp_sockets[udp_count].socket);
 
-#ifdef IPV6
+#ifdef IPV6_PRIMS
         /* Open an ipv6 one too! */
         tmp = socket(AF_INET6, SOCK_DGRAM, 0);
         setsockopt(tmp, IPPROTO_IPV6, IPV6_V6ONLY, (char *) &yes, sizeof(yes));
@@ -1763,7 +1763,7 @@ prim_udpsend(PRIM_PROTOTYPE)
 void
 prim_udp6send(PRIM_PROTOTYPE)
 {
-#ifndef IPV6
+#ifndef IPV6_PRIMS
     abort_interp("IPv6 not supported.  Recompile, reformat, reinstall.");
 #else
     struct hostent *myhost;

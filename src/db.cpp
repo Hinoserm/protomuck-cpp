@@ -233,9 +233,6 @@ new_program(dbref player, const char *name)
     DBFETCH(newprog)->sp.program.code = 0;
     DBFETCH(newprog)->sp.program.start = 0;
     DBFETCH(newprog)->sp.program.pubs = 0;
-#ifdef MCP_SUPPORT
-    DBFETCH(newprog)->sp.program.mcpbinds = 0;
-#endif /* MCP_SUPPORT */
     DBFETCH(newprog)->sp.program.fprofile = NULL;
     DBFETCH(newprog)->sp.program.proftime.tv_sec = 0;
     DBFETCH(newprog)->sp.program.proftime.tv_usec = 0;
@@ -1586,9 +1583,6 @@ db_read_object_foxen(FILE * f, struct object *o, dbref objno, int dtype, int rea
             o->sp.program.siz = 0;
             o->sp.program.start = 0;
             o->sp.program.pubs = 0;
-#ifdef MCP_SUPPORT
-            o->sp.program.mcpbinds = 0;
-#endif /* MCP_SUPPORT */
             o->sp.program.proftime.tv_sec = 0;
             o->sp.program.proftime.tv_usec = 0;
             o->sp.program.profstart = 0;

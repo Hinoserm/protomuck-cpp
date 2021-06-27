@@ -241,13 +241,14 @@ muf_backtrace(dbref player, dbref program, int count, struct frame *fr)
         if (ptr) {
             int k;
             char *bufend = buf2;
-            struct inst *fntop = fr->pc;
+            struct inst *fntop = pinst;
             struct inst *varinst;
 
             while (fntop->type != PROG_FUNCTION)
                 --fntop;
 
             bufend += sprintf(buf2, "%.512s" SYSWHITE "(" SYSNORMAL, ptr);
+
             for (k = 0; k < fntop->data.mufproc->args; ++k) {
                 const char *nam = scopedvar_getname(fr, lev, k);
                 char *val;

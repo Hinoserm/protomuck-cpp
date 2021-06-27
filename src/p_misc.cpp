@@ -204,7 +204,7 @@ void
 prim_kill(PRIM_PROTOTYPE)
 {
     /* i -- i */
-    int result;
+    int result = 0;
 
     if (oper[0].type != PROG_INTEGER)
         abort_interp("Non-integer argument (1)");

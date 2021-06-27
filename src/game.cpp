@@ -427,6 +427,10 @@ dump_database(bool dofork)
         if (!(dumper_pid = fork())) {
             dump_database_internal();
             _exit(0);
+        } else if (dumper_pid == -1) {
+            wall_and_flush("!!! Emergency database dump in progress, please wait..."); 
+            dump_database_internal();
+            wall_and_flush("!!! Emergency database dump complete."); 
         }
     } else
 #endif
@@ -473,6 +477,10 @@ fork_and_dump(bool dofork)
         if (!(dumper_pid = fork())) {
             dump_database_internal();
             _exit(0);
+        } else if (dumper_pid == -1) { 
+            wall_and_flush("!!! Emergency database dump in progress, please wait..."); 
+            dump_database_internal();
+            wall_and_flush("!!! Emergency database dump complete.");                    
         }
     } else
 #endif
@@ -1238,25 +1246,6 @@ process_command(int descr, dbref player, char *command, int len, int wclen)
                 case 'm':
                 case 'M':
                     switch (command[2]) {
-#ifdef MCP_SUPPORT
-                        case 'c':
-                        case 'C':
-                            switch (command[4]) {
-                                case 'e':
-                                case 'E':
-                                    Matched("@mcpedit");
-                                    (void) do_mcpedit(descr, player, arg1);
-                                    break;
-                                case 'p':
-                                case 'P':
-                                    Matched("@mcpprogram");
-                                    (void) do_mcpprogram(descr, player, arg1);
-                                    break;
-                                default:
-                                    goto bad;
-                            }
-                            break;
-#endif
                         case 'e':
                         case 'E':
                             Matched("@memory");

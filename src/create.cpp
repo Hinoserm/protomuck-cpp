@@ -395,7 +395,7 @@ do_link(int descr, dbref player, const char *thing_name, const char *dest_name)
 
             DBFETCH(thing)->sp.exit.ndest = ndest;
             if (DBFETCH(thing)->sp.exit.dest)
-                delete[] DBFETCH(thing)->sp.exit.dest;
+                delete DBFETCH(thing)->sp.exit.dest;
 
             DBFETCH(thing)->sp.exit.dest = new dbref[ndest];
 
@@ -695,140 +695,6 @@ do_edit(int descr, dbref player, const char *name)
     DBDIRTY(i);
     DBDIRTY(player);
 }
-
-#ifdef MCP_SUPPORT
-void
-mcpedit_program(int descr, dbref player, dbref prog, const char *name,
-                McpFrame *mfr)
-{
-    char namestr[BUFFER_LEN];
-    char refstr[BUFFER_LEN];
-    struct line *curr,*tmpline;
-    McpMesg msg;
-    McpVer supp;
-
-    supp = mcp_frame_package_supported(mfr, "dns-org-mud-moo-simpleedit");
-    if (supp.verminor == 0 && supp.vermajor == 0) {
-        do_prog(descr, player, name);
-        return;
-    }
-
-    FLAGS(prog) |= INTERNAL;
-    tmpline = DBFETCH(prog)->sp.program.first;
-    DBSTORE(prog, sp.program.first, read_program(prog));
-
-    snprintf(refstr, sizeof(refstr), "%d.prog.", prog);
-    snprintf(namestr, sizeof(namestr), "a program named %s(%d)", NAME(prog),
-             prog);
-    mcp_mesg_init(&msg, "dns-org-mud-moo-simpleedit", "content");
-    mcp_mesg_arg_append(&msg, "reference", refstr);
-    mcp_mesg_arg_append(&msg, "type", "muf-code");
-    mcp_mesg_arg_append(&msg, "name", namestr);
-    for (curr = DBFETCH(prog)->sp.program.first; curr; curr = curr->next)
-        mcp_mesg_arg_append(&msg, "content", DoNull(curr->this_line));
-
-    mcp_frame_output_mesg(mfr, &msg);
-    mcp_mesg_clear(&msg);
-
-    free_prog_text(DBFETCH(prog)->sp.program.first);
-    DBSTORE(prog, sp.program.first, tmpline);
-}
-
-void
-do_mcpedit(int descr, dbref player, const char *name)
-{
-    dbref i;
-    struct match_data md;
-    McpFrame *mfr;
-
-    if (!(mfr = descr_mcpframe(descr))) {
-        do_edit(descr, player, name);
-        return;
-    } else if (Typeof(player) != TYPE_PLAYER) {
-        anotify_nolisten2(player, CFAIL "Only players can edit programs.");
-        return;
-    } else if (!Mucker(player)) {
-        anotify_nolisten2(player, CFAIL NOMBIT_MESG);
-        return;
-    } else if (tp_db_readonly) {
-        anotify_nolisten2(player, CFAIL DBRO_MESG);
-        return;
-    } else if (!*name) {
-        anotify_nolisten2(player, CINFO "No program name given.");
-        return;
-    }
-
-    init_match(descr, player, name, TYPE_PROGRAM, &md);
-    match_possession(&md);
-    match_neighbor(&md);
-    match_registered(&md);
-    match_absolute(&md);
-
-    if ((i = noisy_match_result(&md)) == NOTHING || i == AMBIGUOUS)
-        return;
-
-    mcpedit_program(descr, player, i, name, mfr);
-}
-
-void
-do_mcpprogram(int descr, dbref player, const char *name)
-{
-    dbref i;
-    McpFrame *mfr;
-    struct match_data md;
-
-    if (!(mfr = descr_mcpframe(descr))) {
-        do_prog(descr, player, name);
-        return;
-    } else if (Typeof(player) != TYPE_PLAYER) {
-        anotify_nolisten2(player, CFAIL "Only players can edit programs.");
-        return;
-    } else if (!Mucker(player)) {
-        anotify_nolisten2(player, CFAIL NOMBIT_MESG);
-        return;
-    } else if (!tp_building || tp_db_readonly) {
-        anotify_nolisten2(player, CFAIL NOBUILD_MESG);
-        return;
-    } else if (!*name) {
-        anotify_nolisten2(player, CINFO "No program name given.");
-        return;
-    }
-
-    init_match(descr, player, name, TYPE_PROGRAM, &md);
-    match_possession(&md);
-    match_neighbor(&md);
-    match_registered(&md);
-    match_absolute(&md);
-
-    if ((i = match_result(&md)) == NOTHING) {
-        i = new_program(OWNER(player), name);
-        DBFETCH(player)->sp.player.curr_prog = i;
-
-        anotify_fmt(player, CSUCC "Program %s created with number %d.", name,
-                    i);
-    } else if (i == AMBIGUOUS) {
-        anotify_nolisten2(player, CINFO "I don't know which one you mean!");
-        return;
-    } else {
-        if ((Typeof(i) != TYPE_PROGRAM) || !controls(player, i)) {
-            anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
-            return;
-        } else if (FLAGS(i) & INTERNAL) {
-            anotify_nolisten2(player, CFAIL NOEDIT_MESG);
-            return;
-        }
-
-        DBFETCH(i)->sp.program.first = read_program(i);
-        DBFETCH(player)->sp.player.curr_prog = i;
-        anotify_fmt(player, CINFO "Entering editor for %s.",
-                    unparse_object(player, i));
-        DBDIRTY(i);
-    }
-
-    mcpedit_program(descr, player, i, name, mfr);
-    DBDIRTY(player);
-}
-#endif
 
 /*
  * do_create

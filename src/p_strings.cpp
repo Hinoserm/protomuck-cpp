@@ -3097,7 +3097,7 @@ prim_base64decode(PRIM_PROTOTYPE)
         if (tmp.length() >= BUFFER_LEN)
             abort_interp("Resultant string would overflow buffer.");
 
-        PushString(tmp.c_str());
+        PushString(tmp);
     }
 }
 
@@ -3116,7 +3116,7 @@ prim_str2hex(PRIM_PROTOTYPE)
         std::string in(oper[0].data.string->data, oper[0].data.string->length); 
         std::string out = strToHex(in, 1);
 
-        PushString(out.c_str());
+        PushString(out);
     }
 }
 

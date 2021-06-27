@@ -102,10 +102,6 @@ extern int tp_max_wiz_preempt_count;
 extern int tp_mysql_result_limit;
 extern int tp_max_per_slice;
 
-#ifdef MCP_SUPPORT
-extern int tp_mcp_muf_mlev;
-#endif
-
 #ifdef NEWHTTPD                 /* hinoserm */
 extern int tp_wwwport;          /* hinoserm */
 extern int tp_web_port;         /* hinoserm */
@@ -188,9 +184,6 @@ extern int tp_use_self_on_command;
 extern int tp_quiet_moves;
 extern int tp_quiet_connects;
 extern int tp_proplist_int_counter;
-#ifdef MCP_SUPPORT
-extern int tp_enable_mcp;
-#endif
 #ifdef CONTROLS_SUPPORT
 extern int tp_wiz_realms;
 #endif

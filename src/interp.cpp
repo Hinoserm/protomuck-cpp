@@ -12,9 +12,6 @@
 #include "props.h"
 #include "strings.h"
 #include "interp.h"
-#ifdef MCP_SUPPORT
-# include "mcpgui.h"
-#endif
 #include "mufevent.h"
 
 /* This package performs the interpretation of mud forth programs.
@@ -69,9 +66,6 @@ struct prim_list primlist[] = {
 #endif /* 
         */
     PRIMLIST_ARRAY,
-#ifdef MCP_SUPPORT
-    PRIMLIST_MCP,
-#endif
 #ifdef MUF_SOCKETS
     PRIMLIST_SOCKET,
 #endif /* 
@@ -1029,9 +1023,6 @@ prog_clean(struct frame *fr)
         free_prog_text(fr->brkpt.proglines);
         fr->brkpt.proglines = NULL;
     }
-#ifdef MCP_SUPPORT
-    muf_dlog_purge(fr);
-#endif
     dequeue_timers(fr->pid, NULL);
     muf_event_purge(fr);
     muf_interrupt_clean(fr);

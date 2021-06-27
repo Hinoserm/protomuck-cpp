@@ -2386,16 +2386,15 @@ array_props_wildcard(stk_array *arr, dbref player, dbref thing, const char *dir,
 
     propadr = first_prop(thing, (char *) dir, &pptr, propname);
     while (propadr) {
-        if (1 || equalstr(wldcrd, propname)) {
+        if (equalstr(wldcrd, propname)) {
             sprintf(buf, "%s%c%s", dir, PROPDIR_DELIMITER, propname);
             if (prop_read_perms(player, thing, buf, mlev)) {
                 if (!*ptr || recurse) {
                     struct inst temp2;
-                    PropPtr prptr = NULL; //get_property(thing, buf);
+                    PropPtr prptr = get_property(thing, buf);
 
                     if (prptr) {
                         int goodflag = 1;
-
 #ifdef DISKBASE
                         propfetch(thing, prptr);
 #endif

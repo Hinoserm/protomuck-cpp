@@ -181,9 +181,6 @@ struct prog_addr *alloc_addr(COMPSTATE *, int, struct inst *);
 struct INTERMEDIATE *prealloc_inst(COMPSTATE *cstat);
 struct INTERMEDIATE *new_inst(COMPSTATE *);
 void cleanpubs(struct publics *mypub);
-#ifdef MCP_SUPPORT
-void clean_mcpbinds(struct mcp_binding *mcpbinds);
-#endif /* MCP_SUPPORT */
 void cleanup(COMPSTATE *);
 void add_proc(COMPSTATE *, const char *, struct INTERMEDIATE *, int rettype);
 void add_label(COMPSTATE *, const char *, struct INTERMEDIATE *);
@@ -265,10 +262,6 @@ do_abort_compile(COMPSTATE *cstat, const char *c)
     free_prog(cstat->program);
     cleanpubs(DBFETCH(cstat->program)->sp.program.pubs);
     DBFETCH(cstat->program)->sp.program.pubs = NULL;
-#ifdef MCP_SUPPORT
-    clean_mcpbinds(DBFETCH(cstat->program)->sp.program.mcpbinds);
-    DBFETCH(cstat->program)->sp.program.mcpbinds = NULL;
-#endif /* MCP_SUPPORT */
     DBFETCH(cstat->program)->sp.program.proftime.tv_sec = 0;
     DBFETCH(cstat->program)->sp.program.proftime.tv_usec = 0;
 }
@@ -642,40 +635,6 @@ include_internal_defs(COMPSTATE *cstat)
     insert_def(cstat, "sock6open",
                "nbsock6open \"Operation now in progress\" over strcmp not if pop 1 10 1 for 10 = if \"timed out\" break then dup sockcheck dup 1 = if pop \"noerr\" break then -1 = if \"refused\" break then 1 sleep repeat then");
 
-#ifdef MCP_SUPPORT
-    /* GUI dialog types */
-    insert_def(cstat, "d_simple", "\"simple\"");
-    insert_def(cstat, "d_tabbed", "\"tabbed\"");
-    insert_def(cstat, "d_helper", "\"helper\"");
-
-    /* GUI control types */
-    insert_def(cstat, "c_menu", "\"menu\"");
-    insert_def(cstat, "c_datum", "\"datum\"");
-    insert_def(cstat, "c_label", "\"text\"");
-    insert_def(cstat, "c_image", "\"image\"");
-    insert_def(cstat, "c_hrule", "\"hrule\"");
-    insert_def(cstat, "c_vrule", "\"vrule\"");
-    insert_def(cstat, "c_button", "\"button\"");
-    insert_def(cstat, "c_checkbox", "\"checkbox\"");
-    insert_def(cstat, "c_radiobtn", "\"radio\"");
-    insert_def(cstat, "c_edit", "\"edit\"");
-    insert_def(cstat, "c_multiedit", "\"multiedit\"");
-    insert_def(cstat, "c_combobox", "\"combobox\"");
-    insert_def(cstat, "c_spinner", "\"spinner\"");
-    insert_def(cstat, "c_scale", "\"scale\"");
-    insert_def(cstat, "c_listbox", "\"listbox\"");
-    insert_def(cstat, "c_frame", "\"frame\"");
-    insert_def(cstat, "c_notebook", "\"notebook\"");
-
-    /* Backwards compatibility for old GUI dialog creation prims */
-    insert_def(cstat, "gui_dlog_simple",
-               "d_simple 0 array_make_dict gui_dlog_create");
-    insert_def(cstat, "gui_dlog_tabbed",
-               "d_tabbed swap \"panes\" over array_keys array_make \"names\" 4 rotate array_vals array_make 2 array_make_dict gui_dlog_create");
-    insert_def(cstat, "gui_dlog_helper",
-               "d_helper swap \"panes\" over array_keys array_make \"names\" 4 rotate array_vals array_make 2 array_make_dict gui_dlog_create");
-#endif
-
     /* for SOCK_SETOPT */
     insert_def(cstat, "NOQUEUE", "0");
     insert_def(cstat, "SIMPLEQUEUE", "1");
@@ -853,10 +812,6 @@ uncompile_program(dbref i)
     free_prog(i);
     cleanpubs(DBFETCH(i)->sp.program.pubs);
     DBFETCH(i)->sp.program.pubs = NULL;
-#ifdef MCP_SUPPORT
-    clean_mcpbinds(DBFETCH(i)->sp.program.mcpbinds);
-    DBFETCH(i)->sp.program.mcpbinds = NULL;
-#endif
     DBFETCH(i)->sp.program.proftime.tv_sec = 0;
     DBFETCH(i)->sp.program.proftime.tv_usec = 0;
     DBFETCH(i)->sp.program.code = NULL;
@@ -1628,10 +1583,6 @@ do_compile(int descr, dbref player_in, dbref program_in, int force_err_display)
     free_prog(cstat.program);
     cleanpubs(DBFETCH(cstat.program)->sp.program.pubs);
     DBFETCH(cstat.program)->sp.program.pubs = NULL;
-#ifdef MCP_SUPPORT
-    clean_mcpbinds(DBFETCH(cstat.program)->sp.program.mcpbinds);
-    DBFETCH(cstat.program)->sp.program.mcpbinds = NULL;
-#endif
     DBFETCH(cstat.program)->sp.program.proftime.tv_sec = 0;
     DBFETCH(cstat.program)->sp.program.proftime.tv_usec = 0;
     DBFETCH(cstat.program)->sp.program.profstart = current_systime;
@@ -2925,8 +2876,7 @@ process_special(COMPSTATE *cstat, const char *token)
                             abort_compile(cstat, "Variable limit exceeded.");
                         }
 
-                        nw->in.data.mufproc->vars ++;
-
+                        nw->in.data.mufproc->vars++;
                         nw->in.data.mufproc->args++;
                     }
                 }
@@ -4388,22 +4338,6 @@ cleanpubs(struct publics *mypub)
         mypub = tmppub;
     }
 }
-
-#ifdef MCP_SUPPORT
-void
-clean_mcpbinds(struct mcp_binding *mypub)
-{
-    struct mcp_binding *tmppub;
-
-    while (mypub) {
-        tmppub = mypub->next;
-        free(mypub->pkgname);
-        free(mypub->msgname);
-        free(mypub);
-        mypub = tmppub;
-    }
-}
-#endif
 
 void
 append_intermediate_chain(struct INTERMEDIATE *chain, struct INTERMEDIATE *add)

@@ -196,10 +196,6 @@
 
 #define MUF_EDIT_PRIMS
 
-/* Define this to enable support for MCP (MUD Client Protocol). */
-
-#define MCP_SUPPORT
-
 /* Define this to enable support for pre-Foxen5 (FB5) database
  * formats or if you need to build the "olddecompress" utility. 
  * This adds to ProtoMUCK's memory requirements, and should only
