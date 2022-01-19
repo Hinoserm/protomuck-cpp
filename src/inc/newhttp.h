@@ -22,6 +22,14 @@ extern int  queue_text(struct descriptor_data *d, char *format, ...);
 
 //struct descriptor_data;
 
+struct ws_queue {
+    std::string text;
+    dbref orig;
+    std::string tag;
+
+    struct ws_queue* next;
+};
+
 struct http_method {
     const char *method;
     int         flags;
@@ -58,6 +66,7 @@ class http {
         int dofile(void);
         int dourl(void);
         void processheader(void);
+        void begin_websocket(void);
         void finish(void);
         void handler_get(void);
         void handler_head(void);
@@ -70,6 +79,16 @@ class http {
         char *parsempi(dbref what, const char *yerf, char *buf);
         void listdir(const char *dir, DIR * df);
         int doprop(const char *prop);
+
+        string ws_buffer;
+        size_t ws_buf_plen = 0;
+        bool f_fin = 0;
+        unsigned char f_reserved = 0;
+        unsigned char f_opcode = 0;
+        bool f_masked = false;
+        uint64_t f_len = 0;
+        string f_mkey;
+        string f_payload;
     public:
         /* Constructor/Destructor */
         http(struct descriptor_data *d);
@@ -91,9 +110,19 @@ class http {
         } body;                            /* Body struct.                     */
         struct frame *fr;                  /* HTMuf active program frame.      */
                                            /************************************/
+        bool websocket = false;
+        struct ws_queue* ws_q;        /* Websocket output queue           */
+        struct ws_queue* ws_q_tail;
+
+       
         /* Functions */
         void log(int debuglvl, char *format, ...);
         void process_input(const char *input, const size_t length);
+        void process_ws_input(const char* input, size_t length);
+        void process_ws_frame(const std::string& payload);
+        int ws_process_output(void);
+        void ws_add_to_queue(const std::string& in, dbref orig, std::string tag);
+        void send_ws_frame(const std::string& payload);
         void disconnect(void);
         int processcontent(const char in);
         int sendfile(const char *filename);

@@ -47,7 +47,7 @@ insttotext(struct frame *fr, int lev, struct inst *theinst, char *buffer, int bu
                 break;
             }
 
-            char obuf[strmax+1];
+            char *obuf = new char[strmax+1];
             bool truncated = false;
 
             size_t len = escapestr(obuf, strmax+1, theinst->data.string->data, theinst->data.string->length, &truncated);
@@ -62,6 +62,8 @@ insttotext(struct frame *fr, int lev, struct inst *theinst, char *buffer, int bu
                 strcat(buffer, "\"");
             else
                 strcat(buffer, "\"_");
+            delete[] obuf;
+
             break;
         }
         case PROG_MARK:

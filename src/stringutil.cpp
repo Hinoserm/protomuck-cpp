@@ -1502,11 +1502,17 @@ color_lookup(dbref player, const char *color, const char *defcolor, int intrecur
     return defcolor;
 }
 
+char*
+parse_ansi(dbref player, char* buf, const char* from, const char* defcolor)
+{
+    return parse_ansi(NULL, player, buf, from, defcolor);
+}
+
 /* parse_ansi: Converts Neon ANSI tags into standard ANSI for
  * output. I.e, ^RED^ -> \[[1;30m
  */
 char *
-parse_ansi(dbref player, char *buf, const char *from, const char *defcolor)
+parse_ansi(descriptor_data *d, dbref player, char *buf, const char *from, const char *defcolor)
 {
     char *to, *color, cbuf[BUFFER_LEN + 2];
     char *color_ptr = NULL;
@@ -2509,11 +2515,13 @@ strToHex(const std::string & in, bool uppercase)
 {
     //std::stringstream out;
     size_t len = in.length();
-    char obuf[(len * 2) + 1];
+    char *obuf = new char[(len * 2) + 1];
 
     len = strtohex(obuf, (len * 2) + 1, in.c_str(), len, uppercase);
 
     std::string out(obuf, len);
+
+    delete[] obuf;
 
     //Too slow:
     //out << std::hex << std::setfill('0') << (uppercase ? std::uppercase : std::nouppercase) << obuf;
@@ -2543,10 +2551,12 @@ hexToStr(const std::string & in)
         }
     }
 
-    char obuf[(len / 2) + 1];
+    char *obuf = new char[(len / 2) + 1];
 
     len = hextostr(obuf, (len / 2) + 1, in.c_str(), len);
     std::string out(obuf, len);
+
+    delete[] obuf;
 
     return out;
 
@@ -2687,4 +2697,21 @@ escapestr(char *obuf, const size_t olen, const char *ibuf, const size_t ilen, bo
     obuf[o] = '\0';
     // Return the length of the output data, not counting the null terminator
     return o;
+}
+
+std::string
+ascii_to_utf8(const std::string& in)
+{
+    std::string out;
+    out.reserve(in.length());
+
+    for (unsigned char const& c : in) {
+        if (c >= 0x80) {
+            out.push_back(0xC0 | ((c & 0xC0) >> 6));
+            out.push_back(0x80 | (c & 0x3F));
+        } else
+            out.push_back(c);
+    }
+
+    return out;
 }

@@ -122,12 +122,12 @@
 /* if tm_gmtoff is defined in sys/time.h, define this */
 /* #undef HAVE_SYS_TM_GMTOFF */
 
-#define USE_SSL 1
-#define HAVE_OPENSSL_SSL_H 1
-#define HAVE_MYSQL_H 1
-#define SQL_SUPPORT  1
-#define HAVE_ZLIB 1
-#define HAVE_LIBPCRE 1
-#define PCRE_SUPPORT
+//#define USE_SSL 1
+//#define HAVE_OPENSSL_SSL_H 1
+//#define HAVE_MYSQL_H 1
+//#define SQL_SUPPORT  1
+//#define HAVE_ZLIB 1
+//#define HAVE_LIBPCRE 1
+//#define PCRE_SUPPORT
 
 //#include <vld.h>

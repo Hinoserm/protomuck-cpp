@@ -164,6 +164,10 @@ http::http(struct descriptor_data *d)
     this->body.len = 0;
     this->body.curr = 0;
 
+    this->ws_q = NULL;
+    this->ws_q_tail = NULL;
+    this->websocket = false;
+
     this->d = d;
 
     if (tp_web_max_users && httpucount++ > tp_web_max_users)
@@ -174,6 +178,14 @@ http::~http(void)
 {
     delete[]this->rootdir;
     delete[]this->body.data;
+
+    if (ws_q) {
+        while (ws_q) {
+            struct ws_queue* q = ws_q;
+            ws_q = q->next;
+            delete q;
+        }
+    }
 
     //d->http->fields.clear(); //Not required.
 
@@ -1114,16 +1126,13 @@ int
 void
   http::process_input(const char *input, const size_t length)
 {
-    char
-      buf[BUFFER_LEN];
-    char *
-    p, *
-        q;
-    int
-      i;
+    char buf[BUFFER_LEN];
+    char *p, *q;
+    int  i;
 
     std::string tmp(input, length);
-    this->log(5, "INPUT:   '%s' (%d)\n", strToHex(tmp).c_str(), length);
+    //this->log(5, "INPUT:   '%s' (%d)\n", strToHex(tmp).c_str(), length);
+    this->log(5, "INPUT:   '%s' (%d)\n", tmp.c_str(), length);
 
     if (this->fr && !this->fr->pid) {
         fprintf(stderr, "HTTP_INPUT tried to access bad program frame!\n");
@@ -1229,6 +1238,26 @@ void
         return;
     }
 
+    if (!this->dest.compare("/ws")) {
+        this->log(4, "BEGIN WEBSOCKET", this->dest.c_str());
+        if (!this->fields.count("Upgrade") || this->fields["Upgrade"].compare("WebSocket")) {
+            this->senderror(400, "A malformed request was sent to the server.");
+            return;
+        }
+
+        if (!this->fields.count("Sec-WebSocket-Key")) {
+            this->senderror(400, "Missing Sec-WebSocket-Key.");
+            return;
+        }
+     
+        this->begin_websocket();
+        
+        return;
+    }
+
+    this->log(4, "DEST: %s", this->dest.c_str());
+
+
     this->smethod = this->methodlookup(this->method);
 
     if (!this->smethod || !this->smethod->method) {
@@ -1274,6 +1303,198 @@ void
 
     /* Certain checks fall through to here. */
     this->finish();
+}
+
+/* http_finish():                                       */
+/*   Called to begin a websocket connection.            */
+void http::begin_websocket(void)
+{
+    this->log(9, "HTTP: begin_websocket()\r\n");
+
+    char
+        tbuf[BUFFER_LEN];
+
+    time_t t = time(NULL) + get_tz_offset();
+
+    format_time(tbuf, BUFFER_LEN, "%a, %d %b %Y %T GMT", localtime(&t));
+
+    queue_text(d, "HTTP/1.1 101 Switching Protocols\r\nDate: %s\r\nServer: ProtoMUCK/%s\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n", tbuf, PROTOBASE);
+
+    string return_key = this->fields["Sec-WebSocket-Key"] + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+    char tmphash[20];
+
+    this->log(9, "HTTP: Sec-WebSocket-Key: %s", this->fields["Sec-WebSocket-Key"].c_str());
+
+    SHA1hash((unsigned char *)tmphash, return_key.c_str(), return_key.length());
+    return_key.assign(tmphash, 20);
+    return_key = http_encode64(return_key);
+
+    queue_text(d, "Sec-WebSocket-Accept: %s\r\n", return_key.c_str());
+    this->log(9, "HTTP SEND: Sec-WebSocket-Accept: %s", return_key.c_str());
+
+    queue_text(d, "\r\n");
+
+    this->websocket = true;
+
+
+}
+
+void http::process_ws_input(const char* input, size_t length)
+{
+    this->ws_buffer.append(input, length);
+
+    if (ws_buf_plen == 0 && ws_buffer.length() >= 1) {
+        f_fin = (ws_buffer.at(0) & 0x80) == 0x80;    // Final Packet Flag
+        f_reserved = (ws_buffer.at(0) & 0x70) >> 4;  // Reserved Bits
+        f_opcode = ws_buffer.at(0) & 0x0F;           // Opcode
+
+        ws_buffer.erase(0, 1);
+        ws_buf_plen++;
+    }
+
+    if (ws_buf_plen == 1 && ws_buffer.length() >= 1) {
+        f_masked = (ws_buffer.at(0) & 0x80) == 0x80;
+        f_len = ws_buffer.at(0) & 0x7F;
+
+        ws_buffer.erase(0, 1);
+        ws_buf_plen++;
+    }
+
+    if (ws_buf_plen == 2 && f_len >= 126 && ws_buffer.length() >= (f_len == 126 ? 2 : 8)) {
+        if (f_len == 126) {
+            f_len = (uint64_t)((unsigned char)ws_buffer.at(0) << 8) | (unsigned char)ws_buffer.at(1);
+            ws_buffer.erase(0, 2);
+        }
+        else if (f_len == 127) {
+            f_len = (uint64_t)((unsigned char)ws_buffer.at(0) << 56) | ((unsigned char)ws_buffer.at(1) << 48) | ((unsigned char)ws_buffer.at(2) << 40) | ((unsigned char)ws_buffer.at(3) << 32) | ((unsigned char)ws_buffer.at(4) << 24) | ((unsigned char)ws_buffer.at(5) << 16) | ((unsigned char)ws_buffer.at(6) << 8) | (unsigned char)ws_buffer.at(7);
+            ws_buffer.erase(0, 8);
+        }
+
+        ws_buf_plen++;
+    }
+    else if (ws_buf_plen == 2 && f_len < 126) {
+        ws_buf_plen++;
+    }
+
+    if (ws_buf_plen == 3 && ws_buffer.length() >= 4) {
+        f_mkey = ws_buffer.substr(0, 4);
+        ws_buffer.erase(0, 4);
+        ws_buf_plen++;
+    }
+
+    if (ws_buf_plen == 4 && ws_buffer.length() >= f_len) {
+        f_payload = ws_buffer.substr(0, f_len);
+        ws_buffer.erase(0, f_len);
+
+        process_ws_frame(f_payload);
+        f_len = 0;
+        ws_buf_plen = 0;
+    }
+}
+
+void http::process_ws_frame(const std::string& payload)
+{
+    string tmp;
+
+    tmp.reserve(payload.length());
+    for (size_t i = 0; i < payload.length(); i++)
+        tmp.push_back(payload.at(i) ^ f_mkey.at(i % 4));
+    f_payload = tmp;
+    
+    //this->log(9, "WS_IN: RAW: '%s' (%d)\n", strToHex(raw).c_str(), raw.length());
+
+    this->log(9, "WS_IN: f_fin: %s\n", (f_fin ? "true" : "false"));
+    this->log(9, "WS_IN: f_opcode: %u\n", f_opcode);
+    this->log(9, "WS_IN: f_masked: %s\n", (f_masked ? "true" : "false"));
+    this->log(9, "WS_IN: f_len: %llu\n", (unsigned long long int)f_len);
+    this->log(9, "WS_IN: f_mkey: '%s' (%d)\n", strToHex(f_mkey).c_str(), f_mkey.length());
+
+    this->log(9, "WS_IN: f_payload: '%s' (%d)\n", f_payload.c_str(), f_payload.length());
+
+    if (f_opcode == 1) {
+        try {
+            json j = json::parse(f_payload);
+            string cmd = j["muck"]["command"].get<std::string>();
+
+            save_command(d, cmd.c_str(), cmd.length(), -2);
+        } catch (std::exception & e) {
+            this->log(2, "process_ws_frame(): JSON Exception: %s\n", e.what());
+            save_command(d, f_payload.c_str(), f_payload.length(), -2);
+        }
+
+    }
+        
+    //send_ws_frame(f_payload);
+}
+
+int
+http::ws_process_output(void)
+{
+    std::string payload;
+
+    while (ws_q) {
+        struct ws_queue* qa = ws_q;
+
+        payload += qa->text;
+        ws_q = qa->next;
+
+        delete qa;
+    }
+
+    if (!ws_q)
+        ws_q_tail = NULL;
+
+    json j = {
+        {"muck", { {"text", ascii_to_utf8(payload)} } }
+    };
+
+    d->http->send_ws_frame(j.dump());
+
+    return 0;
+}
+
+void http::ws_add_to_queue(const std::string& in, dbref orig = -1, std::string tag = "SYS")
+{
+    struct ws_queue* q = new struct ws_queue;
+    
+    q->next = NULL;
+    q->text = in;
+    q->orig = -1;
+    q->tag = "SYS";
+
+    if (!ws_q)
+        ws_q = q;
+
+    if (ws_q_tail)
+        ws_q_tail->next = q;
+       
+    ws_q_tail = q;
+}
+
+void http::send_ws_frame(const std::string& payload)
+{
+    std::string out;
+
+    out.reserve(payload.length() + 4);
+    out.push_back((unsigned char)129);
+
+    if (payload.length() < 126) {
+        out.push_back(payload.length());
+    } else if (payload.length() <= 65535) {
+        out.push_back(126);
+        out.push_back((payload.length() >> 8) & 0xFF);
+        out.push_back((payload.length() >> 0) & 0xFF);
+    } else {
+        out.push_back(127);
+        for (char x = 0; x < 8; x++) {
+            out.push_back((payload.length() >> ((7 - x) * 8)) & 0xFF);
+        }
+    }
+
+    out += payload;
+
+    add_to_queue(&d->output, out.c_str(), out.length(), -2);
+    d->output_size += out.length();
 }
 
 /* http_finish():                                       */

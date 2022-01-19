@@ -189,6 +189,11 @@ new_object(dbref player)
 
     if (recyclable != NOTHING) {
         newobj = recyclable;
+        if (TYPEOF(newobj) != TYPE_GARBAGE) {
+            log_status("DB FATAL ERROR! Attempted to reuse non-garbage object (%d)!\n", newobj);
+            abort();
+        }
+ 
         recyclable = DBFETCH(newobj)->next;
         db_free_object(newobj);
     } else {
@@ -942,7 +947,7 @@ getproperties(FILE * f, dbref obj)
             if ((p - buf) >= BUFFER_LEN)
                 buf[BUFFER_LEN - 1] = '\0';
             if (datalen >= BUFFER_LEN)
-                p[BUFFER_LEN - 1] = '\0';
+                buf[BUFFER_LEN - 1] = '\0';
 
             if ((*p == '^') && (number(p + 1))) {
                 add_prop_nofetch(obj, buf, NULL, atol(p + 1));

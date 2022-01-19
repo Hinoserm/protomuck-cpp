@@ -179,11 +179,11 @@ int tp_web_max_files = 4;       /* hinoserm */
 int tp_web_max_filesize = 4096; /* 4mb, in kb -hinoserm */
 int tp_web_max_users = 10;      /* hinoserm */
 #endif /* hinoserm */
-#ifdef SQL_SUPPORT
+//#ifdef SQL_SUPPORT
 int tp_mysql_result_limit = 40;
 int tp_mysql_log_lvl;
 int tp_mysql_thread_count;
-#endif
+//#endif
 struct tune_val_entry {
     const char *group;
     const char *name;

@@ -929,11 +929,13 @@ prim_strcat(PRIM_PROTOTYPE)
         abort_interp("Operation would result in overflow.");
     } else {
         struct shared_string *string;
-        char buf[oper[1].data.string->length + oper[0].data.string->length + 1];
+        char *buf = new char[oper[1].data.string->length + oper[0].data.string->length + 1];
 
         bcopy(oper[1].data.string->data, buf, oper[1].data.string->length);
         bcopy(oper[0].data.string->data, buf + oper[1].data.string->length, oper[0].data.string->length + 1);
         string = alloc_prog_string_exact(buf, oper[1].data.string->length + oper[0].data.string->length, -2);
+
+        delete[] buf;
 
         PushStrRaw(string);
     }    
@@ -1134,8 +1136,6 @@ void
 prim_ansi_notify(PRIM_PROTOTYPE)
 {
     char buf[BUFFER_LEN * 2];
-
-
 
 
     if (oper[0].type != PROG_STRING)

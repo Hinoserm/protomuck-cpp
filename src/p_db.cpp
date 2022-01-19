@@ -2253,16 +2253,16 @@ prim_newpassword(PRIM_PROTOTYPE)
 
     if (oper[0].type != PROG_STRING)
         abort_interp("Password string expected");
-    if (oper[2].type != PROG_OBJECT)
+    if (oper[1].type != PROG_OBJECT)
         abort_interp("Player dbref expected");
 #ifdef MALLOC_PROFILING
     if (!oper[0].data.string)
         abort_interp("NULL passwords cannot be set when MALLOC_PROFILING is turned on"); /* Why? -hinoserm */
 #endif
     ptr2 = oper[0].data.string ? oper[0].data.string->data : pad_char;
-    ref = oper[2].data.objref;
+    ref = oper[1].data.objref;
 
-    if (!valid_player(&oper[2]))
+    if (!valid_player(&oper[1]))
         abort_interp("Player dbref expected");
 
     CHECKREMOTE(ref);

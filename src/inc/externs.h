@@ -403,8 +403,8 @@ extern void do_page(int descr, dbref player, const char *arg1,
                     const char *arg2);
 extern int notify_listeners(int descr, dbref who, dbref xprog, dbref obj,
                             dbref room, const char *msg, int isprivate);
-extern int ansi_notify_listeners(int descr, dbref who, dbref xprog, dbref obj,
-                                 dbref room, const char *msg, int isprivate);
+extern int ansi_notify_listeners(int descr, dbref who, dbref xprog, dbref obj, dbref room, const char *msg, int isprivate);
+extern int ansi_notify_listeners(descriptor_data* d, dbref who, dbref xprog, dbref obj, dbref room, const char* msg, int isprivate);
 extern int notify_html_listeners(int descr, dbref who, dbref xprog, dbref obj,
                                  dbref room, const char *msg, int isprivate);
 extern void notify_except(dbref first, dbref exception, const char *msg,
@@ -429,8 +429,8 @@ extern const char *string_match(const char *src, const char *sub);
 extern char *pronoun_substitute(int descr, dbref player, const char *str);
 extern char *intostr(char *buf, int i);
 extern char *html_escape(const char *str);
-extern char *parse_ansi(dbref player, char *buf, const char *from,
-                        const char *defcolor);
+extern char *parse_ansi(dbref player, char *buf, const char *from, const char *defcolor);
+extern char* parse_ansi(descriptor_data *d, dbref player, char* buf, const char* from, const char* defcolor);
 extern char *unparse_ansi(char *buf, const char *from);
 extern char *tct(const char *in, char out[BUFFER_LEN]);
 extern char *strip_ansi(char *buf, const char *input);

@@ -1,3 +1,7 @@
+***NeonMuck V2 DUMP Format***
+5
+1
+171
 dumpwarn_mesg=[WARN]
 deltawarn_mesg=[WARN]
 dumpdeltas_mesg=[SAVE]
@@ -169,3 +173,99 @@ web_allow_files=yes
 web_allow_dirlist=yes
 web_allow_mpi=yes
 dump_forking=yes
+#4
+colors256
+0
+-1
+-1
+2 0 0 0 0 0
+1610004331 1
+1610006864 1
+2
+1610004331 1
+*Props*
+*End*
+1
+3
+1
+#3
+colors256.muf
+1
+-1
+-1
+1310724 0 0 0 0 0
+1610004324 1
+1610006864 1
+2
+1610004324 1
+*Props*
+_/de:2:A scroll containing a spell called colors256.muf
+*End*
+1
+#2
+Guest
+0
+-1
+1
+3 0 0 0 0 0
+1610001968 1
+1610001968 1
+0
+1610001979 1
+*Props*
+*End*
+0
+-1
+0
+guest
+#1
+One
+0
+3
+-1
+17411 2 0 0 0 0
+1070951807 -1
+1610315579 1
+9
+1610004341 1
+*Props*
+@/Failed/Count:3:2
+@/Failed/Host:2:10.0.2.1
+@/Failed/Time:3:1610001637
+_/de:10:You see Number One.
+*End*
+0
+-1
+0
+potrzebie
+#0
+Room Zero
+-1
+2
+-1
+0 0 0 0 0 0
+1070951807 -1
+1610315580 1
+13
+1070951807 -1
+*Props*
+_/de:10:You are in Room Zero.  It's very dark here.
+_sys/concount:3:1
+_sys/dumpinterval:3:7200
+_sys/lastcleantime:3:1610694459
+_sys/lastcrontime:3:1610694459
+_sys/lastdumptime:3:1610695346
+_sys/maxpennies:3:2000000
+_sys/startuptime:3:1610680944
+~sys/concount:3:1
+~sys/dumpinterval:3:7200
+~sys/lastcleantime:3:1610694459
+~sys/lastcrontime:3:1610694459
+~sys/lastdumptime:3:1610695346
+~sys/maxpennies:3:2000000
+~sys/startuptime:3:1610680944
+*End*
+-1
+4
+1
+***END OF DUMP***

@@ -930,9 +930,9 @@ extern std::recursive_mutex mysql_cpool_mutex;
 /* frame data structure necessary for executing programs */
 struct frame {
     struct frame *next = NULL;
-#ifdef THREADED_SQL_SUPPORT
+//#ifdef THREADED_SQL_SUPPORT
 	std::recursive_mutex mutex;
-#endif
+//#endif
     struct muf_interrupt *interrupts = NULL;   /* linked list of MUF interrupts */ 
     struct muf_ainterrupt *ainttop = NULL;     /* active interrupts, top of list */
     struct muf_ainterrupt *aintbot = NULL;     /* active interrupts, bottom of list */

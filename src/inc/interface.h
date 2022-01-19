@@ -225,6 +225,7 @@ extern int notify_nolisten(dbref player, const char *msg, int isprivate);
 extern int anotify_nolisten2(dbref player, const char *msg);
 extern int notify_html_nolisten(dbref player, const char *msg, int isprivate);
 extern int anotify_nolisten(dbref player, const char *msg, int isprivate);
+extern int anotify_nolisten(descriptor_data* d, dbref player, const char* msg, int isprivate);
 extern int notify_from_echo(dbref from, dbref player, const char *msg, int isprivate);
 extern int notify_html_from_echo(dbref from, dbref player, const char *msg, int isprivate);
 extern int anotify_from_echo(dbref from, dbref player, const char *msg, int isprivate);
@@ -294,6 +295,7 @@ extern void pdescr_welcome_user(int c);
 extern void pdescr_logout(int c);
 extern void pdump_who_users(int c, char *user);
 extern const char* host_as_hex(unsigned addr);
+extern int save_command(struct descriptor_data* d, const char* command, int len, int wclen);
 #ifdef IPV6
 extern struct in6_addr str2ip6(const char *ipstr);
 #endif

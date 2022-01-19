@@ -548,6 +548,9 @@ init_game(const char *infile, const char *outfile)
         log_status_nowall("DIE: database load error.  Damnit.\n");
         return -1;
     }
+#ifndef DISKBASE
+    fclose(input_file);
+#endif
     log_status_nowall("LOAD: %s (done)\n", infile);
     fprintf(stderr, "LOAD: %s (done)\n", infile);
 
@@ -808,9 +811,11 @@ process_command(int descr, dbref player, char *command, int len, int wclen)
     /* check for single-character commands */
     if (*command == SAY_TOKEN || *command == '\'') {
         sprintf(pbuf, "say %s", command + 1);
+        len += 3;
         command = &pbuf[0];
     } else if (*command == POSE_TOKEN || *command == ';') {
         sprintf(pbuf, "pose %s", command + 1);
+        len += 4;   
         command = &pbuf[0];
     } else if ((*command == '|' || (*commandstuff++ == '\\' && *commandstuff == '\\'))
                && can_move(descr, player, "spoof", 0)) {
@@ -864,7 +869,8 @@ process_command(int descr, dbref player, char *command, int len, int wclen)
         isOverride = 1;
     }
 
-    full_command = strcpy(xbuf, command);
+    full_command = strncpy(xbuf, command, len);
+    full_command[len] = '\0';
     for (; *full_command && !isspace(*full_command); full_command++) ;
     if (*full_command)
         full_command++;

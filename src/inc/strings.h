@@ -46,5 +46,6 @@ extern int strtohex(char *dest, int olen, const char *orig, int ilen, bool upper
 extern int hextostr(char *dest, int olen, const char *orig, int ilen);
 extern size_t escapestr(char *obuf, const size_t olen, const char *ibuf, const size_t ilen, bool *truncated = NULL);
 
-std::string strToHex(const std::string &in, bool uppercase = true);       
-std::string hexToStr(const std::string &in);
+extern std::string strToHex(const std::string &in, bool uppercase = true);       
+extern std::string hexToStr(const std::string &in);
+extern std::string ascii_to_utf8(const std::string& in);

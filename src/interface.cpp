@@ -16,6 +16,7 @@
 #include "reg.h"
 #include "externs.h"
 #include "mufevent.h"
+#include "strings.h"
 #include "interp.h"
 #include "newhttp.h"            /* hinoserm */
 #include "netresolve.h"         /* hinoserm */
@@ -391,10 +392,13 @@ main(int argc, char **argv)
     CrT_pthread_init();
 #endif
 
+#if defined(SQL_SUPPORT)
+
     if (mysql_library_init(0, NULL, NULL)) {
         fprintf(stderr, "could not initialize MySQL library\n");
         exit(1);
     }
+#endif
 
     strcpy(restart_message, "\r\nServer restarting, be back in a few!\r\n");
     strcpy(shutdown_message, "\r\nServer shutting down, be back in a few!\r\n");
@@ -743,9 +747,13 @@ main(int argc, char **argv)
             close_sockets(shutdown_message);
         }
 
+#ifdef THREADED_SQL_SUPPORT
+
         extern std::condition_variable mysql_cv;
 
         mysql_cv.notify_all(); /* Wake up the mysql threads so they can gracefully shut down */
+
+#endif
 
         do_dequeue(-1, (dbref) 1, "all");
 
@@ -906,8 +914,11 @@ anotify_descriptor(int descr, const char *msg)
      * DR_COLOR flag set.
      */
     char buf3[BUFFER_LEN + 2];
+    struct descriptor_data* d = NULL;
 
-    parse_ansi(NOTHING, buf3, msg, ANSINORMAL);
+    for (d = descriptor_list; d && (d->descriptor != descr); d = d->next);
+
+    parse_ansi(d, NOTHING, buf3, msg, ANSINORMAL);
     notify_descriptor(descr, buf3);
 
 }
@@ -1438,7 +1449,13 @@ notify_html(dbref player, const char *msg)
 }
 
 int
-anotify_nolisten(dbref player, const char *msg, int isprivate)
+anotify_nolisten(dbref player, const char* msg, int isprivate)
+{
+    return anotify_nolisten(NULL, player, msg, isprivate);
+}
+
+int
+anotify_nolisten(descriptor_data *d, dbref player, const char *msg, int isprivate)
 {
     char buf[BUFFER_LEN + 2];
 
@@ -1446,7 +1463,7 @@ anotify_nolisten(dbref player, const char *msg, int isprivate)
         return 0;
 
     if ((FLAGS(OWNER(player)) & CHOWN_OK) && !(FLAG2(OWNER(player)) & F2HTML)) {
-        parse_ansi(player, buf, msg, ANSINORMAL);
+        parse_ansi(d, player, buf, msg, ANSINORMAL);
     } else {
         unparse_ansi(buf, msg);
     }
@@ -1944,7 +1961,7 @@ shovechars(void)
                 FD_SET(d->fd, &input_set);
 
 #ifndef EXPERIMENTAL_THREADING
-            if (d->output.head) /* Prepare write pool */
+            if (d->output.head || (d->http && d->http->ws_q)) /* Prepare write pool */
                 FD_SET(d->fd, &output_set);
 # ifdef MCCP_ENABLED            /* If MCCP is enabled, and data is waiting to be sent out of the compression buffer */
             else if (d->mccp && COMPRESS_BUF_SIZE - d->mccp->z->avail_out)
@@ -2532,7 +2549,7 @@ wall_logwizards(const char *msg)
     sprintf(buf, "LOG> %s", msg);
 
     while (buf[pos]) {
-        if ((buf[pos] == '\n') || !isprint(buf[pos])) {
+        if ((buf[pos] == '\n') || !isprint((signed int)buf[pos])) {
             buf[pos] = '\0';
             break;
         }
@@ -3075,6 +3092,8 @@ initializesock(int s, struct huinfo *hu, int ctype, int cport, int welcome)
 #ifdef NEWHTTPD
     if (ctype == CT_HTTP)
         d->http = new http(d);
+    else
+        d->http = NULL;
 #endif /* NEWHTTPD */
 
     if (welcome
@@ -3122,7 +3141,7 @@ make_socket(int port)
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = bind_to;
     server.sin_port = (int) htons(port);
-    if (bind(s, (struct sockaddr *) &server, sizeof(server))) {
+    if (::bind(s, (struct sockaddr *) &server, sizeof(server))) {
         perror("binding stream socket");
         closesocket(s);
         exit(4);
@@ -3256,11 +3275,17 @@ queue_write(struct descriptor_data *d, const char *b, int n)
 {
     int space;
 
-    space = tp_max_output - d->output_size - n;
-    if (space < 0)
-        d->output_size -= flush_queue(&d->output, -space);
-    add_to_queue(&d->output, b, n, -2);
-    d->output_size += n;
+    if (d->http && d->http->websocket) {
+        string payload(b, n);
+        
+        d->http->ws_add_to_queue(payload, -1, "SYS");
+    } else {
+        space = tp_max_output - d->output_size - n;
+        if (space < 0)
+            d->output_size -= flush_queue(&d->output, -space);
+        add_to_queue(&d->output, b, n, -2);
+        d->output_size += n;
+    }
     return n;
 }
 
@@ -3347,7 +3372,11 @@ process_output(struct descriptor_data *d)
 #ifdef NEWHTTPD
     if (d->flags & DF_HALFCLOSE) /* hinoserm */
         return 1;               /* hinoserm */
+
+    if (d->http && d->http->websocket)
+        d->http->ws_process_output();
 #endif /* NEWHTTPD */
+
 
     if (d->output.lines == 0) {
         return 1;
@@ -3545,6 +3574,15 @@ process_input(struct descriptor_data *d)
 #endif
         return 0;
     }
+
+    if (d->type == CT_HTTP && d->http && d->http->websocket)
+    {
+        d->http->process_ws_input(buf, got);
+
+        return 1;
+    }
+
+
     d->input_len += got;
     if (!d->raw_input) {
         //MALLOC(d->raw_input, char, MAX_COMMAND_LEN);
@@ -3561,6 +3599,7 @@ process_input(struct descriptor_data *d)
         wcbuflen = d->raw_input_wclen;
 #endif
     }
+
 
     if (d->type == CT_HTTP && d->http->fr) {
         httpfr = d->http->fr;
@@ -4138,7 +4177,7 @@ do_command(struct descriptor_data *d, struct text_block *t)
     char *command = t->start;
 
 #ifdef NEWHTTPD
-    if (d->type == CT_HTTP)     /* hinoserm */
+    if (d->type == CT_HTTP && !d->http->websocket)     /* hinoserm */
         return 1;               /* hinoserm */
 #endif /* NEWHTTPD */
 
@@ -6403,7 +6442,7 @@ welcome_user(struct descriptor_data *d)
 #ifdef USE_SSL
         || d->type == CT_SSL
 #endif /* USE_SSL */
-        ) {
+        || d->type == (CT_HTTP && d->http && d->http->websocket)) {
         fname = reg_site_welcome(d->hu->h->a);
         if (fname && (*fname == '.')) {
             strcpy(buf, WELC_FILE);

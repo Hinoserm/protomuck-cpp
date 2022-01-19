@@ -904,7 +904,7 @@ prim_lsockopen(PRIM_PROTOTYPE)
     /* Make sure is able to reuse the port */
     setsockopt(sockdescr, SOL_SOCKET, SO_REUSEADDR, (char *) &yes, sizeof(int));
     /* Bind to the port */
-    errors = bind(sockdescr, (struct sockaddr *) &my_addr, sizeof(struct sockaddr));
+    errors = ::bind(sockdescr, (struct sockaddr *) &my_addr, sizeof(struct sockaddr));
     if (errors == -1) {
         /* Error binding to port. */
 #if defined(BRAINDEAD_OS) || defined(WIN32)
@@ -1647,7 +1647,7 @@ prim_udpopen(PRIM_PROTOTYPE)
         sa.sin_family = AF_INET;
         sa.sin_port = htons(oper[0].data.number);
         sa.sin_addr.s_addr = bind_to;
-        if (bind(tmp, (struct sockaddr *) &sa, sizeof(sa)) == -1) {
+        if (::bind(tmp, (struct sockaddr *) &sa, sizeof(sa)) == -1) {
             /* The only real possible error here is 'port in use', so return zero if there was an error */
             result = 0;
             PushInt(result);

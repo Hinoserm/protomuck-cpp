@@ -183,228 +183,231 @@
     <ClInclude Include="$(SolutionDir)\src\inc\winconf.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\src\inc\json.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="$(SolutionDir)\src\array.c">
+    <ClCompile Include="..\src\array.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\boolexp.c">
+    <ClCompile Include="..\src\boolexp.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\case.c">
+    <ClCompile Include="..\src\case.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\cgi.c">
+    <ClCompile Include="..\src\cgi.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\compile.c">
+    <ClCompile Include="..\src\compile.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\compress.c">
+    <ClCompile Include="..\src\compress.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\copyright.c">
+    <ClCompile Include="..\src\copyright.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\create.c">
+    <ClCompile Include="..\src\create.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\crt_malloc.c">
+    <ClCompile Include="..\src\crt_malloc.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\db.c">
+    <ClCompile Include="..\src\db.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\debugger.c">
+    <ClCompile Include="..\src\debugger.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\disassem.c">
+    <ClCompile Include="..\src\disassem.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\diskprop.c">
+    <ClCompile Include="..\src\diskprop.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\edit.c">
+    <ClCompile Include="..\src\edit.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\events.c">
+    <ClCompile Include="..\src\events.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\game.c">
+    <ClCompile Include="..\src\game.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\hashtab.c">
+    <ClCompile Include="..\src\hashtab.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\help.c">
+    <ClCompile Include="..\src\help.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\inst.c">
+    <ClCompile Include="..\src\inst.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\interface.c">
+    <ClCompile Include="..\src\interface.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\interp.c">
+    <ClCompile Include="..\src\interp.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\log.c">
+    <ClCompile Include="..\src\log.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\look.c">
+    <ClCompile Include="..\src\look.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\match.c">
+    <ClCompile Include="..\src\match.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\mfuns.c">
+    <ClCompile Include="..\src\mfuns.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\mfuns2.c">
+    <ClCompile Include="..\src\mfuns2.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\mfuns3.c">
+    <ClCompile Include="..\src\mfuns3.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\move.c">
+    <ClCompile Include="..\src\move.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\msgparse.c">
+    <ClCompile Include="..\src\msgparse.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\mufevent.c">
+    <ClCompile Include="..\src\mufevent.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\netresolve.c">
+    <ClCompile Include="..\src\netresolve.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\newhttp.c">
+    <ClCompile Include="..\src\newhttp.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\oldcompress.c">
+    <ClCompile Include="..\src\oldcompress.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\player.c">
+    <ClCompile Include="..\src\player.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\predicates.c">
+    <ClCompile Include="..\src\predicates.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\propdirs.c">
+    <ClCompile Include="..\src\propdirs.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\property.c">
+    <ClCompile Include="..\src\property.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\props.c">
+    <ClCompile Include="..\src\props.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\p_array.c">
+    <ClCompile Include="..\src\p_array.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\p_connects.c">
+    <ClCompile Include="..\src\p_connects.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\p_db.c">
+    <ClCompile Include="..\src\p_db.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\p_error.c">
+    <ClCompile Include="..\src\p_error.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\p_file.c">
+    <ClCompile Include="..\src\p_file.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\p_float.c">
+    <ClCompile Include="..\src\p_float.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\p_html.c">
+    <ClCompile Include="..\src\p_html.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\p_http.c">
+    <ClCompile Include="..\src\p_http.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\p_math.c">
+    <ClCompile Include="..\src\p_math.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\p_misc.c">
+    <ClCompile Include="..\src\p_misc.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\p_muf.c">
+    <ClCompile Include="..\src\p_muf.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\p_mysql.c">
+    <ClCompile Include="..\src\p_mysql.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\p_props.c">
+    <ClCompile Include="..\src\p_props.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\p_regex.c">
+    <ClCompile Include="..\src\p_regex.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\p_socket.c">
+    <ClCompile Include="..\src\p_socket.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\p_stack.c">
+    <ClCompile Include="..\src\p_stack.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\p_strings.c">
+    <ClCompile Include="..\src\p_strings.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\p_system.c">
+    <ClCompile Include="..\src\p_system.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\random.c">
+    <ClCompile Include="..\src\random.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\reg.c">
+    <ClCompile Include="..\src\reg.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\rob.c">
+    <ClCompile Include="..\src\rob.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\sanity.c">
+    <ClCompile Include="..\src\sanity.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\set.c">
+    <ClCompile Include="..\src\set.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\sha1.c">
+    <ClCompile Include="..\src\sha1.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\signal.c">
+    <ClCompile Include="..\src\signal.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\smatch.c">
+    <ClCompile Include="..\src\smatch.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\speech.c">
+    <ClCompile Include="..\src\speech.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\strftime.c">
+    <ClCompile Include="..\src\strftime.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\stringutil.c">
+    <ClCompile Include="..\src\stringutil.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\timequeue.c">
+    <ClCompile Include="..\src\timequeue.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\timestamp.c">
+    <ClCompile Include="..\src\timestamp.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\tune.c">
+    <ClCompile Include="..\src\tune.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\unparse.c">
+    <ClCompile Include="..\src\unparse.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\utils.c">
+    <ClCompile Include="..\src\utils.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\version.c">
+    <ClCompile Include="..\src\version.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)\src\wiz.c">
+    <ClCompile Include="..\src\wiz.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

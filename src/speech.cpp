@@ -304,12 +304,26 @@ notify_listeners(int descr, dbref who, dbref xprog, dbref obj, dbref room, const
     }
 }
 
+int
+ansi_notify_listeners(int descr, dbref who, dbref xprog, dbref obj, dbref room, const char* msg, int isprivate)
+{
+    struct descriptor_data* d = NULL;
+
+    if (descr > -1)
+        d = get_descr(descr, -1);
+
+    return ansi_notify_listeners(d, who, xprog, obj, room, msg, isprivate);
+}
 
 int
-ansi_notify_listeners(int descr, dbref who, dbref xprog, dbref obj, dbref room, const char *msg, int isprivate)
+ansi_notify_listeners(descriptor_data *d, dbref who, dbref xprog, dbref obj, dbref room, const char *msg, int isprivate)
 {
     char buf[BUFFER_LEN], buf2[BUFFER_LEN], *noabuf;
     dbref ref;
+    int descr = -1;
+
+    if (d)
+        descr = d->descriptor;
 
     if (obj == NOTHING)
         return 0;
@@ -384,7 +398,7 @@ ansi_notify_listeners(int descr, dbref who, dbref xprog, dbref obj, dbref room, 
         if (!isprivate && Typeof(obj) == TYPE_THING && FLAGS(obj) & ZOMBIE && LOCATION(obj) == LOCATION(OWNER(obj))
             )
             return 0;
-        return anotify_nolisten(obj, msg, isprivate);
+        return anotify_nolisten(d, obj, msg, isprivate);
     } else {
         return 0;
     }

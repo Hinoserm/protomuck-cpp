@@ -574,7 +574,7 @@
 #undef IPV6
 #undef UTF8_SUPPORT
 #define socklen_t int
-#define snprintf _snprintf
+//#define snprintf _snprintf
 # define  errnosocket WSAGetLastError()
 # ifdef  SPAWN_HOST_RESOLVER
 #  undef SPAWN_HOST_RESOLVER
@@ -780,6 +780,8 @@ extern int errno;
 #include <string>
 #include <map>
 using std::string;
+#include "json.hpp"
+using json = nlohmann::json;
 
 /******************************************************************/
 /* System configuration stuff... Figure out who and what we are.  */

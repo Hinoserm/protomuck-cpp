@@ -1766,7 +1766,7 @@ do_flags(int descr, dbref player, const char *args)
     int lmlev;
     char *orig[2];
 
-    char *buf = new char[256];
+    char *buf = new char[BUFFER_LEN];
     char *lname = new char[32];
 
     /* Sanity */
