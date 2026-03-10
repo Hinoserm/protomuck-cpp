@@ -1240,7 +1240,7 @@ void
 
     if (!this->dest.compare("/ws")) {
         this->log(4, "BEGIN WEBSOCKET", this->dest.c_str());
-        if (!this->fields.count("Upgrade") || this->fields["Upgrade"].compare("WebSocket")) {
+        if (!this->fields.count("Upgrade") || strcasecmp(this->fields["Upgrade"].c_str(), "websocket")) {
             this->senderror(400, "A malformed request was sent to the server.");
             return;
         }
