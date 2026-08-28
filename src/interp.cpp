@@ -2234,6 +2234,22 @@ push(struct inst *stack, int *top, const char *str)
     push(stack, top, PROG_STRING, MIPSCAST alloc_prog_string(str));
 }
 
+/* Move a std::string result onto the stack without copying it. */
+void
+push(struct inst *stack, int *top, std::string &&str)
+{
+    if (str.empty()) {
+        push(stack, top, PROG_STRING, MIPSCAST NULL);
+        return;
+    }
+    /* Mirror alloc_prog_string_exact's clamp precisely. */
+    if (str.size() > (size_t) BUFFER_LEN) {
+        str.resize(BUFFER_LEN - 1);
+        fprintf(stderr, "MUF String would have exceeded BUFFER_LEN\n");
+    }
+    push(stack, top, PROG_STRING, MIPSCAST new shared_string(std::move(str)));
+}
+
 void
 push(struct inst *stack, int *top, const char *str, int len)
 {

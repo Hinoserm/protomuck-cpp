@@ -516,11 +516,6 @@ prim_fmtstring(PRIM_PROTOTYPE)
 void
 prim_split(PRIM_PROTOTYPE)
 {
-    char *temp = NULL;
-    char buf[BUFFER_LEN];
-    char *pname;
-    int result;
-
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string argument. (2)");
     if (!oper[0].data.string)
@@ -528,51 +523,29 @@ prim_split(PRIM_PROTOTYPE)
     if (oper[1].type != PROG_STRING)
         abort_interp("Non-string argument. (1)");
 
-    *buf = '\0';
     if (!oper[1].data.string) {
-        result = 0;
-    } else {
-        strcpy(buf, oper[1].data.string->data.c_str());
-        pname = strstr(buf, oper[0].data.string->data.c_str());
-        if (!pname) {
-            result = -1;
-        } else {
-            temp = pname + oper[0].data.string->length();
-            *pname = '\0';
-            result = 1;
-        }
+        PushNullStr;
+        PushNullStr;
+        return;
     }
 
+    const std::string &src = oper[1].data.string->data;
+    const std::string &sep = oper[0].data.string->data;
+    size_t pos = src.find(sep);
 
-    if (result) {
-        if (result == 1) {
-            if (buf[0] == '\0') {
-                PushNullStr;
-            } else {
-                PushString(buf);
-            }
-            if (temp[0] == '\0') {
-                PushNullStr;
-            } else {
-                PushString(temp);
-            }
-        } else {
-            PushString(buf);
-            PushNullStr;
-        }
+    if (pos == std::string::npos) {
+        oper[1].data.string->links++;
+        PushStrRaw(oper[1].data.string);
+        PushNullStr;
     } else {
-        PushNullStr;
-        PushNullStr;
+        push(arg, top, src.substr(0, pos));
+        push(arg, top, src.substr(pos + sep.size()));
     }
 }
 
 void
 prim_rsplit(PRIM_PROTOTYPE)
 {
-    char *temp = NULL, *hold = NULL;
-    char buf[BUFFER_LEN];
-    int result;
-
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string argument. (2)");
     if (!oper[0].data.string)
@@ -580,52 +553,23 @@ prim_rsplit(PRIM_PROTOTYPE)
     if (oper[1].type != PROG_STRING)
         abort_interp("Non-string argument. (1)");
 
-    *buf = '\0';
     if (!oper[1].data.string) {
-        result = 0;
-    } else {
-        strcpy(buf, oper[1].data.string->data.c_str());
-        if (oper[0].data.string->length() > oper[1].data.string->length()) {
-            result = -1;
-        } else {
-            temp = buf + (oper[1].data.string->length() - oper[0].data.string->length());
-            hold = NULL;
-            while ((temp != (buf - 1)) && (!hold)) {
-                if (*temp == *(oper[0].data.string->data.c_str()))
-                    if (!strncmp(temp, oper[0].data.string->data.c_str(), oper[0].data.string->length()))
-                        hold = temp;
-                temp--;
-            }
-            if (!hold) {
-                result = -1;
-            } else {
-                *hold = '\0';
-                hold += oper[0].data.string->length();
-                result = 1;
-            }
-        }
+        PushNullStr;
+        PushNullStr;
+        return;
     }
 
+    const std::string &src = oper[1].data.string->data;
+    const std::string &sep = oper[0].data.string->data;
+    size_t pos = src.rfind(sep);
 
-    if (result) {
-        if (result == 1) {
-            if (buf[0] == '\0') {
-                PushNullStr;
-            } else {
-                PushString(buf);
-            }
-            if (hold[0] == '\0') {
-                PushNullStr;
-            } else {
-                PushString(hold);
-            }
-        } else {
-            PushString(buf);
-            PushNullStr;
-        }
+    if (pos == std::string::npos) {
+        oper[1].data.string->links++;
+        PushStrRaw(oper[1].data.string);
+        PushNullStr;
     } else {
-        PushNullStr;
-        PushNullStr;
+        push(arg, top, src.substr(0, pos));
+        push(arg, top, src.substr(pos + sep.size()));
     }
 }
 
@@ -736,10 +680,8 @@ prim_dtos(PRIM_PROTOTYPE)
 void
 prim_midstr(PRIM_PROTOTYPE)
 {
-    int start, range, result;
-    char buf[BUFFER_LEN];
+    int start;
 
-    result = 0;
     if (oper[2].type != PROG_STRING)
         abort_interp("Non-string argument. (1)");
     if (oper[1].type != PROG_INTEGER)
@@ -750,28 +692,12 @@ prim_midstr(PRIM_PROTOTYPE)
         abort_interp("Non-integer argument. (3)");
     if (oper[0].data.number < 0)
         abort_interp("Data must be a positive integer. (3)");
-    if (!oper[2].data.string) {
-        result = 1;
-    } else {
-        if (oper[1].data.number > oper[2].data.string->length()) {
-            result = 1;
-        } else {
-            start = oper[1].data.number - 1;
-            if ((oper[0].data.number + start) > oper[2].data.string->length()) {
-                range = oper[2].data.string->length() - start;
-            } else {
-                range = oper[0].data.number;
-            }
-            bcopy(oper[2].data.string->data.c_str() + start, buf, range);
-            buf[range] = '\0';
-        }
-    }
-
-    if (result) {
+    if (!oper[2].data.string || oper[1].data.number > oper[2].data.string->length()) {
         PushNullStr;
-    } else {
-        PushString(buf);
+        return;
     }
+    start = oper[1].data.number - 1;
+    push(arg, top, oper[2].data.string->data.substr((size_t) start, (size_t) oper[0].data.number));
 }
 
 void
@@ -859,37 +785,29 @@ prim_strncmp(PRIM_PROTOTYPE)
 void
 prim_strcut(PRIM_PROTOTYPE)
 {
-    struct inst temp1, temp2;
-    char buf[BUFFER_LEN];
-
-
-    temp1 = oper[0];
-    temp2 = oper[1];
-    if (temp1.type != PROG_INTEGER)
+    if (oper[0].type != PROG_INTEGER)
         abort_interp("Non-integer argument (2)");
-    if (temp1.data.number < 0)
+    if (oper[0].data.number < 0)
         abort_interp("Argument must be a positive integer.");
-    if (temp2.type != PROG_STRING)
+    if (oper[1].type != PROG_STRING)
         abort_interp("Non-string argument (1)");
-    if (!temp2.data.string) {
+
+    if (!oper[1].data.string) {
         PushNullStr;
+        PushNullStr;
+        return;
+    }
+
+    size_t cut = (size_t) oper[0].data.number;
+    struct shared_string *src = oper[1].data.string;
+
+    if ((int) cut > src->length()) {
+        src->links++;
+        PushStrRaw(src);
         PushNullStr;
     } else {
-        if (temp1.data.number > temp2.data.string->length()) {
-            temp2.data.string->links++;
-            PushStrRaw(temp2.data.string);
-            PushNullStr;
-        } else {
-            bcopy(temp2.data.string->data.c_str(), buf, temp1.data.number);
-            buf[temp1.data.number] = '\0';
-            PushString(buf);
-            if (temp2.data.string->length() > temp1.data.number) {
-                bcopy(temp2.data.string->data.c_str() + temp1.data.number, buf, temp2.data.string->length() - temp1.data.number + 1);
-                PushString(buf);
-            } else {
-                PushNullStr;
-            }
-        }
+        push(arg, top, src->data.substr(0, cut));
+        push(arg, top, src->data.substr(cut));
     }
 }
 
@@ -928,17 +846,15 @@ prim_strcat(PRIM_PROTOTYPE)
     } else if (oper[0].data.string->length() + oper[1].data.string->length() > (BUFFER_LEN) - 1) {
         abort_interp("Operation would result in overflow.");
     } else {
-        struct shared_string *string;
-        char *buf = new char[oper[1].data.string->length() + oper[0].data.string->length() + 1];
+        const std::string &a = oper[1].data.string->data;
+        const std::string &b = oper[0].data.string->data;
+        std::string result;
 
-        bcopy(oper[1].data.string->data.c_str(), buf, oper[1].data.string->length());
-        bcopy(oper[0].data.string->data.c_str(), buf + oper[1].data.string->length(), oper[0].data.string->length() + 1);
-        string = alloc_prog_string_exact(buf, oper[1].data.string->length() + oper[0].data.string->length(), -2);
-
-        delete[] buf;
-
-        PushStrRaw(string);
-    }    
+        result.reserve(a.size() + b.size());
+        result.append(a);
+        result.append(b);
+        push(arg, top, std::move(result));
+    }
 }
 
 void
@@ -1531,12 +1447,6 @@ prim_explode(PRIM_PROTOTYPE)
 void
 prim_subst(PRIM_PROTOTYPE)
 {
-    char buf[BUFFER_LEN];
-
-
-
-
-
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string argument (3)");
     if (oper[1].type != PROG_STRING)
@@ -1545,38 +1455,31 @@ prim_subst(PRIM_PROTOTYPE)
         abort_interp("Non-string argument (1)");
     if (!oper[0].data.string)
         abort_interp("Empty string argument (3)");
-    {
-        int i = 0, j = 0, k = 0;
-        const char *match;
-        const char *replacement;
-        char xbuf[BUFFER_LEN];
 
-        buf[0] = '\0';
-        if (oper[2].data.string) {
-            bcopy(oper[2].data.string->data.c_str(), xbuf, oper[2].data.string->length() + 1);
-            match = oper[0].data.string->data.c_str();
-            replacement = DoNullInd(oper[1].data.string);
-            k = *replacement ? oper[1].data.string->length() : 0;
-            while (xbuf[i]) {
-                if (!strncmp(xbuf + i, match, oper[0].data.string->length())) {
-                    if ((j + k + 1) > BUFFER_LEN)
-                        abort_interp("Operation would result in overflow.");
-                    strcat(buf, replacement);
-                    i += oper[0].data.string->length();
-                    j += k;
-                } else {
-                    if ((j + 1) > BUFFER_LEN)
-                        abort_interp("Operation would result in overflow.");
-                    buf[j++] = xbuf[i++];
-                    buf[j] = '\0';
-                }
-            }
-        }
+    if (!oper[2].data.string) {
+        PushNullStr;
+        return;
     }
 
+    const std::string &src = oper[2].data.string->data;
+    const std::string &match = oper[0].data.string->data;
+    const std::string repl = oper[1].data.string ? oper[1].data.string->data : std::string();
+    const size_t mlen = match.size();
+    std::string out;
 
-
-    PushString(buf);
+    out.reserve(src.size());
+    size_t i = 0;
+    while (i < src.size()) {
+        if (src.compare(i, mlen, match) == 0) {
+            out.append(repl);
+            i += mlen;
+        } else {
+            out.push_back(src[i++]);
+        }
+        if (out.size() > (size_t) BUFFER_LEN - 1)
+            abort_interp("Operation would result in overflow.");
+    }
+    push(arg, top, std::move(out));
 }
 
 void
@@ -1678,43 +1581,31 @@ prim_pronoun_sub(PRIM_PROTOTYPE)
 void
 prim_toupper(PRIM_PROTOTYPE)
 {
-    char buf[BUFFER_LEN];
-    int ref;
-
-
-
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string argument.");
-    if (oper[0].data.string) {
-        strcpy(buf, oper[0].data.string->data.c_str());
-    } else {
-        buf[0] = '\0';
+    if (!oper[0].data.string) {
+        PushNullStr;
+        return;
     }
-    for (ref = 0; buf[ref]; ref++)
-        buf[ref] = UPCASE(buf[ref]);
-
-    PushString(buf);
+    std::string out = oper[0].data.string->data;
+    for (char &c : out)
+        c = UPCASE(c);
+    push(arg, top, std::move(out));
 }
 
 void
 prim_tolower(PRIM_PROTOTYPE)
 {
-    char buf[BUFFER_LEN];
-    int ref;
-
-
-
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string argument.");
-    if (oper[0].data.string) {
-        strcpy(buf, oper[0].data.string->data.c_str());
-    } else {
-        buf[0] = '\0';
+    if (!oper[0].data.string) {
+        PushNullStr;
+        return;
     }
-    for (ref = 0; buf[ref]; ref++)
-        buf[ref] = DOWNCASE(buf[ref]);
-
-    PushString(buf);
+    std::string out = oper[0].data.string->data;
+    for (char &c : out)
+        c = DOWNCASE(c);
+    push(arg, top, std::move(out));
 }
 
 void
@@ -1761,9 +1652,7 @@ prim_smatch(PRIM_PROTOTYPE)
     if (oper[0].type != PROG_STRING || oper[1].type != PROG_STRING)
         abort_interp("Non-string argument.");
 
-    strcpy(buf, DoNullInd(oper[0].data.string));
-    strcpy(xbuf, DoNullInd(oper[1].data.string));
-    result = equalstr(buf, xbuf);
+    result = equalstr(DoNullInd(oper[0].data.string), DoNullInd(oper[1].data.string));
 
 
     PushInt(result);
@@ -1773,33 +1662,43 @@ void
 prim_striplead(PRIM_PROTOTYPE)
 {
     /* string -- string' */
-    char buf[BUFFER_LEN];
-    char *pname;
-
-
     if (oper[0].type != PROG_STRING)
         abort_interp("Not a string argument.");
-    strcpy(buf, DoNullInd(oper[0].data.string));
-    for (pname = buf; *pname && isspace(*pname); pname++) ;
-
-    PushString(pname);
+    if (!oper[0].data.string) {
+        PushNullStr;
+        return;
+    }
+    const std::string &src = oper[0].data.string->data;
+    size_t i = 0;
+    while (i < src.size() && isspace((unsigned char) src[i]))
+        i++;
+    if (i == 0) {
+        oper[0].data.string->links++;
+        PushStrRaw(oper[0].data.string);
+    } else {
+        push(arg, top, src.substr(i));
+    }
 }
 
 void
 prim_striptail(PRIM_PROTOTYPE)
 {                               /* string -- string' */
-    char buf[BUFFER_LEN];
-    int result;
-
-
     if (oper[0].type != PROG_STRING)
         abort_interp("Not a string argument.");
-    strcpy(buf, DoNullInd(oper[0].data.string));
-    result = strlen(buf);
-    while ((result-- > 0) && isspace(buf[result]))
-        buf[result] = '\0';
-
-    PushString(buf);
+    if (!oper[0].data.string) {
+        PushNullStr;
+        return;
+    }
+    const std::string &src = oper[0].data.string->data;
+    size_t end = src.size();
+    while (end > 0 && isspace((unsigned char) src[end - 1]))
+        end--;
+    if (end == src.size()) {
+        oper[0].data.string->links++;
+        PushStrRaw(oper[0].data.string);
+    } else {
+        push(arg, top, src.substr(0, end));
+    }
 }
 
 void

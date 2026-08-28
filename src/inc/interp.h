@@ -144,6 +144,7 @@ extern dbref find_uid(dbref player, struct frame *fr, int st, dbref program);
 extern void push(struct inst *stack, int *top, const char *str); /* interp.cpp */
 extern void push(struct inst *stack, int *top, const char *str, int len); /* interp.cpp */
 extern void push(struct inst *stack, int *top, const std::string & str);
+extern void push(struct inst *stack, int *top, std::string && str);
 
 #define PushObject(x)       push(arg, top, PROG_OBJECT, MIPSCAST &x)
 #define PushInt(x)          push(arg, top, PROG_INTEGER, MIPSCAST &x)
