@@ -1428,13 +1428,14 @@ process_command(int descr, dbref player, char *command, int len, int wclen)
 #endif /* PCRE_SUPPORT */
                         case 'l':
                         case 'L':
-                            Matched("@relink");
-                            do_relink(descr, player, arg1, arg2);
-                            break;
-                        case 'o':
-                        case 'O':
-                            Matched("@rollback");
-                            do_rollback(descr, player, arg1, arg2);
+                            /* @relink and @rollback share command[3] */
+                            if (!string_compare(command, "@relink")) {
+                                do_relink(descr, player, arg1, arg2);
+                            } else if (!string_compare(command, "@rollback")) {
+                                do_rollback(descr, player, arg1, arg2);
+                            } else {
+                                goto bad;
+                            }
                             break;
                         case 's':
                         case 'S':

@@ -887,6 +887,8 @@ ObjectStore::writeManifest()
 {
     json m;
 
+    ensureDir(root_);
+
     m["format"] = STORE_FORMAT;
     m["next_dbref"] = (int) MUCK::database().top();
 
@@ -1168,6 +1170,11 @@ ObjectStore::snapshotGlobal(const char *label, bool locked)
 {
     Marker m;
 
+    /* a marker only covers what is on disk: flush dirty state first
+     * so the snapshot sees the world as it stands */
+    if (saveAll(true) < 0)
+        return -1;
+
     /* the marker captures the CURRENT era; writes after the snapshot
      * stamp the next one, so a read at the marker excludes them */
     m.rev = rev_++;
@@ -1187,17 +1194,16 @@ long
 ObjectStore::snapshotObject(dbref i, const char *label, bool locked)
 {
     std::string path = objectPath(i);
+
+    /* flush the object first: the marker must cover its current
+     * state, not whatever the last dump happened to capture */
+    if (!saveObject(i))
+        return -1;
+
     std::ifstream pf(path);
 
-    if (!pf) {
-        /* object never saved yet; write it first so the marker has a
-         * file to live in */
-        if (!saveObject(i))
-            return -1;
-        pf.open(path);
-        if (!pf)
-            return -1;
-    }
+    if (!pf)
+        return -1;
     json j = json::parse(pf, nullptr, false);
 
     if (j.is_discarded())
