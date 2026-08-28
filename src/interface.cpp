@@ -786,7 +786,7 @@ main(int argc, char **argv)
         purge_try_pool();       /* 3rd time is needed to... oh... wait... */
         purge_try_pool();       /* 2nd time is needed to completely purge */
         purge_mfns();
-        db_free();
+        MUCK::database().freeAll();
         cleanup_game();
         tune_freeparms();
         clear_color_hash();
@@ -4885,7 +4885,7 @@ do_armageddon(dbref player, const char *msg)
     purge_try_pool();           /* 3rd time is needed to... oh... wait... */
     purge_try_pool();           /* 2nd time is needed to completely purge */
     purge_mfns();
-    db_free();
+    MUCK::database().freeAll();
     cleanup_game();
     tune_freeparms();
     clear_color_hash();
@@ -5184,7 +5184,7 @@ announce_puppets(dbref player, const char *msg, const char *prop)
     const char *ptr, *msg2;
     char buf[BUFFER_LEN];
 
-    for (what = 0; what < db_top; what++) {
+    for (what = 0; what < MUCK::database().top(); what++) {
         if (Typeof(what) == TYPE_THING && (FLAGS(what) & ZOMBIE)) {
             if (OWNER(what) == player) {
                 where = getloc(what);

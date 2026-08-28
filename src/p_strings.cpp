@@ -1741,7 +1741,7 @@ prim_unparseobj(PRIM_PROTOTYPE)
                 sprintf(buf, "*NIL*");
                 break;
             default:
-                if (result < 0 || result >= db_top)
+                if (result < 0 || result >= MUCK::database().top())
                     sprintf(buf, "*INVALID(#%d)*", result);
                 else
                     sprintf(buf, "%s(#%d%s)", RNAME(result), result, unparse_flags(result, tbuf));
@@ -2995,7 +2995,7 @@ prim_ansi_unparseobj(PRIM_PROTOTYPE)
             strcpy(buf, SYSCYAN "*NIL*");
             break;
         default:
-            if (result < 0 || result >= db_top) {
+            if (result < 0 || result >= MUCK::database().top()) {
                 sprintf(buf, SYSRED "*INVALID(#%d)*", result);
             } else {
                 sprintf(buf, "%s" SYSYELLOW "(#%d%s)", ansiname(result, tbuf), result, unparse_flags(result, tbuf2));
@@ -3013,7 +3013,7 @@ prim_ansi_name(PRIM_PROTOTYPE)
 
     if (oper[0].type != PROG_OBJECT)
         abort_interp("Arguement (1) is not a dbref.");
-    if ((oper[0].data.objref < 0) || (oper[0].data.objref >= db_top))
+    if ((oper[0].data.objref < 0) || (oper[0].data.objref >= MUCK::database().top()))
         abort_interp("Invalid argument type");
     ref = oper[0].data.objref;
     CHECKREMOTE(ref);
@@ -3035,7 +3035,7 @@ prim_unparse_flags(PRIM_PROTOTYPE)
 
     if (oper[0].type != PROG_OBJECT)
         abort_interp("Arguement (1) is not a dbref.");
-    if ((oper[0].data.objref < 0) || (oper[0].data.objref >= db_top))
+    if ((oper[0].data.objref < 0) || (oper[0].data.objref >= MUCK::database().top()))
         abort_interp("Invalid argument type");
     ref = oper[0].data.objref;
     CHECKREMOTE(ref);

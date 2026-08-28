@@ -65,7 +65,7 @@ prim_getpropfval(PRIM_PROTOTYPE)
         abort_interp("Empty string argument (2)");
     if (oper[1].type != PROG_OBJECT)
         abort_interp("Arguement (2) is not a dbref.");
-    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= db_top))
+    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= MUCK::database().top()))
         abort_interp("Non-object argument (1)");
     CHECKREMOTE(oper[1].data.objref);
     {
@@ -107,7 +107,7 @@ prim_getpropval(PRIM_PROTOTYPE)
         abort_interp("Empty string argument (2)");
     if (oper[1].type != PROG_OBJECT)
         abort_interp("Arguement (2) is not a dbref.");
-    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= db_top))
+    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= MUCK::database().top()))
         abort_interp("Non-object argument (1)");
     CHECKREMOTE(oper[1].data.objref);
     {
@@ -150,7 +150,7 @@ prim_getprop(PRIM_PROTOTYPE)
         abort_interp("Non-string argument (2)");
     if (!oper[0].data.string)
         abort_interp("Empty string argument (2)");
-    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= db_top))
+    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= MUCK::database().top()))
         abort_interp("Non-object argument (1)");
     CHECKREMOTE(oper[1].data.objref);
     {
@@ -225,7 +225,7 @@ prim_getpropstr(PRIM_PROTOTYPE)
         abort_interp("Empty string argument (2)");
     if (oper[1].type != PROG_OBJECT)
         abort_interp("Arguement (2) is not a dbref.");
-    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= db_top))
+    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= MUCK::database().top()))
         abort_interp("Non-object argument (1)");
     CHECKREMOTE(oper[1].data.objref);
     {
@@ -340,7 +340,7 @@ prim_envprop(PRIM_PROTOTYPE)
         abort_interp("Empty string argument (2)");
     if (oper[1].type != PROG_OBJECT)
         abort_interp("Arguement (2) is not a dbref.");
-    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= db_top))
+    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= MUCK::database().top()))
         abort_interp("Non-object argument (1)");
     CHECKREMOTE(oper[1].data.objref);
     {
@@ -411,7 +411,7 @@ prim_envpropstr(PRIM_PROTOTYPE)
         abort_interp("Empty string argument (2)");
     if (oper[1].type != PROG_OBJECT)
         abort_interp("Arguement (2) is not a dbref.");
-    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= db_top))
+    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= MUCK::database().top()))
         abort_interp("Non-object argument (1)");
     CHECKREMOTE(oper[1].data.objref);
     {
@@ -621,7 +621,7 @@ prim_nextprop(PRIM_PROTOTYPE)
         abort_interp("String required (2)");
     if (oper[1].type != PROG_OBJECT)
         abort_interp("Dbref required (1)");
-    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= db_top))
+    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= MUCK::database().top()))
         abort_interp("Invalid dbref (1)");
 
     ref = oper[1].data.objref;
@@ -666,7 +666,7 @@ prim_propdirp(PRIM_PROTOTYPE)
 
     if (oper[1].type != PROG_OBJECT)
         abort_interp("Argument must be a dbref (1)");
-    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= db_top))
+    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= MUCK::database().top()))
         abort_interp("Invalid dbref (1)");
     if (oper[0].type != PROG_STRING)
         abort_interp("Argument not a string (2)");
@@ -694,7 +694,7 @@ prim_parsempi(PRIM_PROTOTYPE)
 
     if (oper[3].type != PROG_OBJECT)
         abort_interp("Non-object argument (1)");
-    if ((oper[3].data.objref < 0) || (oper[3].data.objref >= db_top))
+    if ((oper[3].data.objref < 0) || (oper[3].data.objref >= MUCK::database().top()))
         abort_interp("Invalid object (1)");
     if (oper[1].type != PROG_STRING)
         abort_interp("String expected (3)");
@@ -730,7 +730,7 @@ prim_parseprop(PRIM_PROTOTYPE)
 
     if (oper[3].type != PROG_OBJECT)
         abort_interp("Non-object argument. (1)");
-    if ((oper[3].data.objref < 0) || (oper[3].data.objref >= db_top))
+    if ((oper[3].data.objref < 0) || (oper[3].data.objref >= MUCK::database().top()))
         abort_interp("Invalid object. (1)");
     if (oper[1].type != PROG_STRING)
         abort_interp("String expected. (3)");
@@ -790,7 +790,7 @@ prim_propqueue(PRIM_PROTOTYPE)
         abort_interp("Empty string argument (4)");
     if (oper[1].type != PROG_OBJECT)
         abort_interp("Non-object argument. (3)");
-    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= db_top))
+    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= MUCK::database().top()))
         abort_interp("Invalid object. (3)");
     if (oper[2].type != PROG_STRING)
         abort_interp("String expected. (2)");
@@ -823,7 +823,7 @@ prim_envpropqueue(PRIM_PROTOTYPE)
         abort_interp("Empty string argument (4)");
     if (oper[1].type != PROG_OBJECT)
         abort_interp("Non-object argument. (3)");
-    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= db_top))
+    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= MUCK::database().top()))
         abort_interp("Invalid object. (3)");
     if (oper[2].type != PROG_STRING)
         abort_interp("String expected. (2)");
@@ -912,12 +912,12 @@ prim_islockedp(PRIM_PROTOTYPE)
     if (fr->level > 8)
         abort_interp("Interp call loops not allowed");
 
-    if ((oper[2].data.objref < 0) || (oper[2].data.objref >= db_top))
+    if ((oper[2].data.objref < 0) || (oper[2].data.objref >= MUCK::database().top()))
         abort_interp("Invalid argument (1).");
     if (Typeof(oper[2].data.objref) != TYPE_PLAYER && Typeof(oper[2].data.objref) != TYPE_THING)
         abort_interp("Invalid object type (1).");
 
-    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= db_top))
+    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= MUCK::database().top()))
         abort_interp("Invalid argument (2).");
 
     if (oper[0].type != PROG_STRING)
@@ -957,12 +957,12 @@ prim_checklock(PRIM_PROTOTYPE)
     if (fr->level > 8)
         abort_interp("Interp call loops not allowed");
 
-    if ((oper[2].data.objref < 0) || (oper[2].data.objref >= db_top))
+    if ((oper[2].data.objref < 0) || (oper[2].data.objref >= MUCK::database().top()))
         abort_interp("Invalid argument (1).");
     if (Typeof(oper[2].data.objref) != TYPE_PLAYER && Typeof(oper[2].data.objref) != TYPE_THING)
         abort_interp("Invalid object type (1).");
 
-    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= db_top))
+    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= MUCK::database().top()))
         abort_interp("Invalid argument (2).");
 
     if (oper[0].type != PROG_STRING)

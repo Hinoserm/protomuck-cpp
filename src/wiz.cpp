@@ -463,7 +463,7 @@ do_stats(dbref player, const char *name)
     } else
         owner = NOTHING;
 
-    for (i = 0; i < db_top; i++) {
+    for (i = 0; i < MUCK::database().top(); i++) {
 
 #ifdef DISKBASE
         if (((owner == NOTHING) || (OWNER(i) == owner)) && DBFETCH(i)->propsmode != PROPS_UNLOADED)
@@ -666,7 +666,7 @@ do_frob(int descr, dbref player, const char *name, const char *recip)
 
     /* we're ok, do it */
     send_contents(descr, victim, HOME);
-    for (stuff = 0; stuff < db_top; stuff++) {
+    for (stuff = 0; stuff < MUCK::database().top(); stuff++) {
         if (OWNER(stuff) == victim) {
             switch (Typeof(stuff)) {
                 case TYPE_PROGRAM:
@@ -769,7 +769,7 @@ do_purge(int descr, dbref player, const char *arg1, const char *arg2)
         return;
     }
 
-    for (thing = 2; thing < db_top; thing++)
+    for (thing = 2; thing < MUCK::database().top(); thing++)
         if (victim == OWNER(thing)) {
             switch (Typeof(thing)) {
                 case TYPE_GARBAGE:
@@ -1168,7 +1168,7 @@ do_muf_funcprofs(dbref player, char *arg1)
     /* else if (count == 0) {
        count = 10;
        } */
-    for (i = db_top; i-- > 0;) {
+    for (i = MUCK::database().top(); i-- > 0;) {
         if (!count || i == count) {
             if (Typeof(i) == TYPE_PROGRAM && DBFETCH(i)->sp.program.code && DBFETCH(i)->sp.program.fprofile) {
                 fpr = DBFETCH(i)->sp.program.fprofile;
@@ -1212,7 +1212,7 @@ do_muf_topprofs(dbref player, char *arg1)
     }
 
     if (!string_compare(arg1, "reset")) {
-        for (i = db_top; i-- > 0;) {
+        for (i = MUCK::database().top(); i-- > 0;) {
             if (Typeof(i) == TYPE_PROGRAM) {
                 DBFETCH(i)->sp.program.proftime.tv_sec = 0;
                 DBFETCH(i)->sp.program.proftime.tv_usec = 0;
@@ -1230,7 +1230,7 @@ do_muf_topprofs(dbref player, char *arg1)
         count = 10;
     }
 
-    for (i = db_top; i-- > 0;) {
+    for (i = MUCK::database().top(); i-- > 0;) {
         if (Typeof(i) == TYPE_PROGRAM && DBFETCH(i)->sp.program.code) {
             struct profnode *newnode = new profnode;
             struct timeval tmpt = DBFETCH(i)->sp.program.proftime;
@@ -1325,7 +1325,7 @@ do_mpi_topprofs(dbref player, char *arg1)
     }
 
     if (!string_compare(arg1, "reset")) {
-        for (i = db_top; i-- > 0;) {
+        for (i = MUCK::database().top(); i-- > 0;) {
             if (DBFETCH(i)->mpi_prof_use) {
                 DBFETCH(i)->mpi_prof_use = 0;
                 DBFETCH(i)->mpi_proftime.tv_usec = 0;
@@ -1343,7 +1343,7 @@ do_mpi_topprofs(dbref player, char *arg1)
         count = 10;
     }
 
-    for (i = db_top; i-- > 0;) {
+    for (i = MUCK::database().top(); i-- > 0;) {
         if (DBFETCH(i)->mpi_prof_use) {
             struct profnode *newnode = new profnode;
 
@@ -1438,7 +1438,7 @@ do_all_topprofs(dbref player, char *arg1)
     }
 
     if (!string_compare(arg1, "reset")) {
-        for (i = db_top; i-- > 0;) {
+        for (i = MUCK::database().top(); i-- > 0;) {
             if (DBFETCH(i)->mpi_prof_use) {
                 DBFETCH(i)->mpi_prof_use = 0;
                 DBFETCH(i)->mpi_proftime.tv_usec = 0;
@@ -1466,7 +1466,7 @@ do_all_topprofs(dbref player, char *arg1)
         count = 10;
     }
 
-    for (i = db_top; i-- > 0;) {
+    for (i = MUCK::database().top(); i-- > 0;) {
         if (DBFETCH(i)->mpi_prof_use) {
             struct profnode *newnode = new profnode;
 
@@ -1653,7 +1653,7 @@ do_fixw(dbref player, const char *msg)
         anotify_nolisten2(player, CINFO "What's the magic phrase?");
         return;
     }
-    for (i = 0; i < db_top; i++) {
+    for (i = 0; i < MUCK::database().top(); i++) {
         if (FLAGS(i) & W3)
             SetMLevel(i, LWIZ);
         else if ((FLAGS(i) & (W2)) && (FLAGS(i) & (W1)))

@@ -292,11 +292,11 @@ has_property(int descr, dbref player, dbref what, const char *type, const char *
             return 1;
     }
     if (tp_lock_envcheck) {
-        things = getparent(what);
+        things = MUCK::database().parent(what);
         while (things != NOTHING) {
             if (has_property_strict(descr, player, things, type, pclass, value))
                 return 1;
-            things = getparent(things);
+            things = MUCK::database().parent(things);
         }
     }
     return 0;
@@ -640,7 +640,7 @@ regenvprop(dbref *where, const char *propname, int typ)
 
         if (temp && (!typ || PropType(temp) == typ))
             return temp;
-        *where = getparent(*where);
+        *where = MUCK::database().parent(*where);
     }
     return NULL;
 }
@@ -656,7 +656,7 @@ envprop(dbref *where, const char *propname, int typ)
 
         if (temp && (!typ || PropType(temp) == typ))
             return temp;
-        *where = getparent(*where);
+        *where = MUCK::database().parent(*where);
     }
     return NULL;
 }
@@ -676,7 +676,7 @@ envprop_cmds(dbref *where, const char *propname, int typ)
             if (temp)
                 return temp;
         }
-        *where = getparent(*where);
+        *where = MUCK::database().parent(*where);
     }
     return NULL;
 }
@@ -1007,7 +1007,7 @@ untouchprops_incremental(int limit)
 {
     PropPtr p;
 
-    while (untouch_lastdone < db_top) {
+    while (untouch_lastdone < MUCK::database().top()) {
         /* clear the touch flags */
         p = DBFETCH(untouch_lastdone)->properties;
         if (p) {

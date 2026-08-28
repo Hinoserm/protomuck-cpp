@@ -86,7 +86,7 @@ safegetprop_limited(dbref player, dbref what, dbref whom, dbref perms, const cha
             if (!ptr || *ptr)
                 return ptr;
         }
-        what = getparent(what);
+        what = MUCK::database().parent(what);
     }
 
     return "";
@@ -153,7 +153,7 @@ safegetprop(dbref player, dbref what, dbref perms, const char *inbuf)
         if (!ptr || *ptr)
             return ptr;
 
-        what = getparent(what);
+        what = MUCK::database().parent(what);
     }
 
     return "";
@@ -386,7 +386,7 @@ mesg_dbref_raw(int descr, dbref player, dbref what, dbref perms, const char *buf
         }
     }
 
-    if (obj < 0 || obj >= db_top || Typeof(obj) == TYPE_GARBAGE)
+    if (obj < 0 || obj >= MUCK::database().top() || Typeof(obj) == TYPE_GARBAGE)
         obj = UNKNOWN;
 
     return obj;
@@ -451,7 +451,7 @@ mesg_dbref_local(int descr, dbref player, dbref what, dbref perms, char *buf)
 const char *
 ref2str(dbref obj, char *buf)
 {
-    if (obj < -3 || obj >= db_top) {
+    if (obj < -3 || obj >= MUCK::database().top()) {
         sprintf(buf, "Bad");
         return buf;
     }

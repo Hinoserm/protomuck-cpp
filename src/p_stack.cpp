@@ -379,7 +379,7 @@ sort4(const void *op1, const void *op2)
     if ((o1->data.objref < 0) || (o2->data.objref < 0))
         return 0;
 
-    if ((o1->data.objref >= db_top) || (o2->data.objref >= db_top))
+    if ((o1->data.objref >= MUCK::database().top()) || (o2->data.objref >= MUCK::database().top()))
         return 0;
 
     return strcasecmp(NAME(o1->data.objref), NAME(o2->data.objref));
@@ -397,7 +397,7 @@ sort5(const void *op1, const void *op2)
     if ((o1->data.objref < 0) || (o2->data.objref < 0))
         return 0;
 
-    if ((o1->data.objref >= db_top) || (o2->data.objref >= db_top))
+    if ((o1->data.objref >= MUCK::database().top()) || (o2->data.objref >= MUCK::database().top()))
         return 0;
 
     return -strcasecmp(NAME(o1->data.objref), NAME(o2->data.objref));
@@ -474,7 +474,7 @@ prim_rotate(PRIM_PROTOTYPE)
 void
 prim_dbtop(PRIM_PROTOTYPE)
 {
-    dbref ref = (dbref) db_top;
+    dbref ref = (dbref) MUCK::database().top();
 
     CHECKOFLOW(1);
     PushObject(ref);
@@ -732,7 +732,7 @@ prim_checkargs(PRIM_PROTOTYPE)
                     if (arg[stackpos].type != PROG_OBJECT)
                         ABORT_CHECKARGS("Expected a dbref");
                     ref = arg[stackpos].data.objref;
-                    if ((ref >= db_top) || (ref < HOME))
+                    if ((ref >= MUCK::database().top()) || (ref < HOME))
                         ABORT_CHECKARGS("Invalid dbref");
                     switch (buf[currpos]) {
                         case 'D':

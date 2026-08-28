@@ -1,28 +1,33 @@
 #ifndef MUCK_DATABASE_H
 #define MUCK_DATABASE_H
 
-/* The modernized face of the object database.
+/* The object database: owns the object array, its growth, object
+ * lifecycle, and whole-database serialization.
  *
- * This is currently a facade: storage still lives in the legacy globals
- * (db, db_top, recyclable) defined in Database.cpp, because the DBFETCH
- * family of macros in db.h indexes the db array directly from every
- * corner of the codebase. Callers should migrate to this interface; once
- * nothing touches the globals directly, storage moves inside the class.
+ * The hot accessors (object, top, valid) are inline: the DBFETCH macro
+ * family in db.h routes through them from the interpreter's innermost
+ * loops, and they must compile down to the same array indexing the old
+ * bare globals produced.
+ *
+ * Storage note: the members are named db and db_top so the method bodies
+ * in Database.cpp, which carry decades of history, read unchanged.
  */
 
 #include <cstdio>
-#include "db.h"
 
 namespace MUCK {
 
 class Database {
   public:
-    /* Object accounting */
-    dbref top() const;
-    struct object *object(dbref ref);
-    bool valid(dbref ref) const;
+    /* --- hot path: keep inline, zero-cost --- */
+    dbref top() const { return db_top; }
+    struct object *object(dbref ref) { return &db[ref]; }
+    const struct object *object(dbref ref) const { return &db[ref]; }
+    bool valid(dbref ref) const {
+        return ref >= 0 && ref < db_top;
+    }
 
-    /* Object lifecycle */
+    /* --- object lifecycle --- */
     dbref newObject(dbref player);
     dbref newProgram(dbref player, const char *name);
     void clearObject(dbref player, dbref ref);
@@ -30,14 +35,31 @@ class Database {
     void freeAll();
     dbref parent(dbref obj);
 
-    /* Whole-database serialization */
+    /* --- recycle list (garbage chain reused by newObject) --- */
+    dbref recycleHead() const { return recyclable; }
+    void setRecycleHead(dbref ref) { recyclable = ref; }
+
+    /* --- whole-database serialization --- */
     dbref load(FILE *f);
-    void save(FILE *f);
+    dbref save(FILE *f);
     int saveThreaded();
+
+    /* internal: reached from legacy helpers inside Database.cpp */
+    void grow(dbref newtop);
+    struct object *rawArray() { return db; }
+
+  private:
+    struct object *db = 0;
+    dbref db_top = 0;
+    dbref recyclable = -3;      /* NOTHING; db.h not yet parsed here */
+    dbref db_size = 0;          /* allocation high-water for DB_DOUBLING */
+
+    friend Database &database();
 };
 
-/* The single global database instance. */
-Database &database();
+extern Database g_database;
+
+inline Database &database() { return g_database; }
 
 } /* namespace MUCK */
 

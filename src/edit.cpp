@@ -462,7 +462,7 @@ val_and_head(dbref player, int arg[], int argc)
         return;
     }
     program = arg[0];
-    if ((program < 0) || (program >= db_top)
+    if ((program < 0) || (program >= MUCK::database().top())
         || (Typeof(program) != TYPE_PROGRAM)) {
         anotify_nolisten(player, CINFO "That isn't a program.", 1);
         return;

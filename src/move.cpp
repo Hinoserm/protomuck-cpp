@@ -584,7 +584,7 @@ do_leave(int descr, dbref player)
     }
 
     dest = DBFETCH(loc)->location;
-    if (dest < 0 || dest >= db_top)
+    if (dest < 0 || dest >= MUCK::database().top())
         return;
 
     if (Typeof(dest) != TYPE_ROOM && Typeof(dest) != TYPE_THING) {
@@ -884,7 +884,6 @@ do_recycle(int descr, dbref player, const char *name)
 void
 recycle(int descr, dbref player, dbref thing)
 {
-    extern dbref recyclable;
     static int depth = 0;
     dbref first;
     dbref rest;
@@ -929,7 +928,7 @@ recycle(int descr, dbref player, dbref thing)
             break;
     }
 
-    for (rest = 0; rest < db_top; rest++) {
+    for (rest = 0; rest < MUCK::database().top(); rest++) {
         switch (Typeof(rest)) {
             case TYPE_ROOM:
                 if (DBFETCH(rest)->sp.room.dropto == thing) {
@@ -1023,7 +1022,7 @@ recycle(int descr, dbref player, dbref thing)
             DBSTORE(rest, next, DBFETCH(thing)->next);
     }
 
-    looplimit = db_top;
+    looplimit = MUCK::database().top();
     while ((looplimit-- > 0)
            && ((first = DBFETCH(thing)->contents) != NOTHING)) {
         if (Typeof(first) == TYPE_PLAYER) {
@@ -1045,15 +1044,15 @@ recycle(int descr, dbref player, dbref thing)
 
     depth--;
 
-    db_free_object(thing);
-    db_clear_object(player, thing);
+    MUCK::database().freeObject(thing);
+    MUCK::database().clearObject(player, thing);
 
     NAME(thing) = "<garbage>";
     SETDESC(thing, "<recyclable>");
     FLAGS(thing) = TYPE_GARBAGE;
     OWNER(thing) = NOTHING;
 
-    DBFETCH(thing)->next = recyclable;
-    recyclable = thing;
+    DBFETCH(thing)->next = MUCK::database().recycleHead();
+    MUCK::database().setRecycleHead(thing);
     DBDIRTY(thing);
 }

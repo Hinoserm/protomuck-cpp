@@ -309,7 +309,7 @@ dispose_all_oldprops(void)
     dbref i;
     time_t now = current_systime;
 
-    for (i = 0; i < db_top; i++) {
+    for (i = 0; i < MUCK::database().top(); i++) {
         if ((now - DBFETCH(i)->propstime) >= tp_clean_interval)
             disposeprops_notime(i);
     }
@@ -321,11 +321,11 @@ housecleanprops(void)
     int limit, max;
     dbref i, j;
 
-    if ((proploaded_Q.count < 10) || (proploaded_Q.count < (tp_max_loaded_objs * db_top / 100)))
+    if ((proploaded_Q.count < 10) || (proploaded_Q.count < (tp_max_loaded_objs * MUCK::database().top() / 100)))
         return;
 
     limit = 40;
-    max = db_top;
+    max = MUCK::database().top();
     i = first_ringqueue_obj(&proploaded_Q);
     while (limit > 0 && max-- > 0 && i != NOTHING) {
         j = next_ringqueue_obj(&proploaded_Q, i);

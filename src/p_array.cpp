@@ -1843,7 +1843,7 @@ prim_array_interpret(PRIM_PROTOTYPE)
                     text = buf;
                     break;
                 }
-                if (in->data.number >= db_top) {
+                if (in->data.number >= MUCK::database().top()) {
                     sprintf(buf, "*INVALID(#%d)*", in->data.number);
                     text = buf;
                     break;
@@ -2451,7 +2451,7 @@ prim_properties_array(PRIM_PROTOTYPE)
         abort_interp("Non-string argument (2)");
     if (!oper[0].data.string)
         abort_interp("Empty string argument (2)");
-    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= db_top))
+    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= MUCK::database().top()))
         abort_interp("Non-object argument (1)");
     CHECKREMOTE(oper[1].data.objref);
 

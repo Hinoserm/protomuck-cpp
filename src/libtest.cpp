@@ -217,7 +217,7 @@ __prim_funcprof_array(PRIM_PROTOTYPE)
     if (oper1->type == PROG_OBJECT) {
         nw = new_array_dictionary();
 
-        for (i = db_top; i-- > 0;) {
+        for (i = MUCK::database().top(); i-- > 0;) {
             if (i == oper1->data.objref && Typeof(i) == TYPE_PROGRAM && DBFETCH(i)->sp.program.code && DBFETCH(i)->sp.program.fprofile) {
                 struct funcprof *fpe = DBFETCH(i)->sp.program.fprofile;
 

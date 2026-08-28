@@ -143,19 +143,19 @@ find_registered_obj(dbref player, const char *name)
                 p++;
             if (number(p)) {
                 match = (dbref) atoi(p);
-                if ((match >= 0) && (match < db_top) && (Typeof(match) != TYPE_GARBAGE))
+                if ((match >= 0) && (match < MUCK::database().top()) && (Typeof(match) != TYPE_GARBAGE))
                     return (match);
             }
             break;
         case PROP_REFTYP:
             match = PropDataRef(ptr);
-            if (((match >= 0) && (match < db_top)
+            if (((match >= 0) && (match < MUCK::database().top())
                  && (Typeof(match) != TYPE_GARBAGE)) || (match == -4))
                 return (match);
             break;
         case PROP_INTTYP:
             match = (dbref) PropDataVal(ptr);
-            if ((match > 0) && (match < db_top)
+            if ((match > 0) && (match < MUCK::database().top())
                 && (Typeof(match) != TYPE_GARBAGE))
                 return (match);
             break;
@@ -186,7 +186,7 @@ absolute_name(struct match_data *md)
 
     if (*(md->match_name) == NUMBER_TOKEN) {
         match = parse_dbref((md->match_name) + 1);
-        if (match < 0 || match >= db_top) {
+        if (match < 0 || match >= MUCK::database().top()) {
             return NOTHING;
         } else {
             return match;

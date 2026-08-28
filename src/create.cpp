@@ -150,7 +150,7 @@ do_open(int descr, dbref player, const char *direction, const char *linkto)
         char buf[BUFFER_LEN];
 
         /* create the exit */
-        exit = new_object(player);
+        exit = MUCK::database().newObject(player);
 
         /* initialize everything */
         NAME(exit) = alloc_string(direction);
@@ -513,7 +513,7 @@ do_dig(int descr, dbref player, const char *name, const char *pname)
         anotify_fmt(player, CFAIL "You don't have enough %s to dig a room.", tp_pennies);
         return;
     }
-    room = new_object(player);
+    room = MUCK::database().newObject(player);
 
     /* Initialize everything */
     newparent = DBFETCH(DBFETCH(player)->location)->location;
@@ -617,7 +617,7 @@ do_prog(int descr, dbref player, const char *name)
     match_absolute(&md);
 
     if ((i = match_result(&md)) == NOTHING) {
-        i = new_program(OWNER(player), name);
+        i = MUCK::database().newProgram(OWNER(player), name);
         FLAGS(i) |= INTERNAL;
         DBFETCH(player)->sp.player.curr_prog = i;
 
@@ -750,7 +750,7 @@ do_create(dbref player, char *name, char *acost)
         return;
     } else {
         /* create the object */
-        thing = new_object(player);
+        thing = MUCK::database().newObject(player);
 
         /* initialize everything */
         NAME(thing) = alloc_string(name);
@@ -945,7 +945,7 @@ do_action(int descr, dbref player, const char *action_name, const char *source_n
         return;
     }
 
-    action = new_object(player);
+    action = MUCK::database().newObject(player);
 
     NAME(action) = alloc_string(action_name);
     DBFETCH(action)->location = NOTHING;

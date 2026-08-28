@@ -693,7 +693,7 @@ prim_truename(PRIM_PROTOTYPE)
     char buf[BUFFER_LEN];
     dbref ref;
 
-    if ((oper[0].data.objref < 0) || (oper[0].data.objref >= db_top))
+    if ((oper[0].data.objref < 0) || (oper[0].data.objref >= MUCK::database().top()))
         abort_interp("Invalid argument type");
     ref = oper[0].data.objref;
     CHECKREMOTE(ref);
@@ -736,7 +736,7 @@ prim_name(PRIM_PROTOTYPE)
 
     if (oper[0].type != PROG_OBJECT)
         abort_interp("Arguement (1) is not a dbref.");
-    if ((oper[0].data.objref < 0) || (oper[0].data.objref >= db_top))
+    if ((oper[0].data.objref < 0) || (oper[0].data.objref >= MUCK::database().top()))
         abort_interp("Invalid argument type");
     ref = oper[0].data.objref;
     CHECKREMOTE(ref);
@@ -873,7 +873,7 @@ prim_rmatch(PRIM_PROTOTYPE)
     if (oper[0].type != PROG_STRING)
         abort_interp("Invalid argument (2)");
     if (oper[1].type != PROG_OBJECT
-        || oper[1].data.objref < 0 || oper[1].data.objref >= db_top || Typeof(oper[1].data.objref) == TYPE_PROGRAM || Typeof(oper[1].data.objref) == TYPE_EXIT)
+        || oper[1].data.objref < 0 || oper[1].data.objref >= MUCK::database().top() || Typeof(oper[1].data.objref) == TYPE_PROGRAM || Typeof(oper[1].data.objref) == TYPE_EXIT)
         abort_interp("Invalid argument (1)");
     CHECKREMOTE(oper[1].data.objref);
     {
@@ -918,7 +918,7 @@ prim_copyobj(PRIM_PROTOTYPE)
     {
         dbref newobj;
 
-        newobj = new_object(ProgUID);
+        newobj = MUCK::database().newObject(ProgUID);
         *DBFETCH(newobj) = *DBFETCH(ref);
         copyobj(PSafe, ref, newobj);
 
@@ -1088,7 +1088,7 @@ prim_flagp(PRIM_PROTOTYPE)
         abort_interp("Invalid argument type (2)");
     if (!(oper[0].data.string))
         abort_interp("Empty string argument (2)");
-    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= db_top))
+    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= MUCK::database().top()))
         abort_interp("Invalid object");
     ref = oper[1].data.objref;
     CHECKREMOTE(ref);
@@ -1391,7 +1391,7 @@ prog_can_link_to(int mlev, dbref who, object_flag_type what_type, dbref where)
 {
     if (where == HOME || where == NIL)
         return 1;
-    if (where < 0 || where >= db_top)
+    if (where < 0 || where >= MUCK::database().top())
         return 0;
     switch (what_type) {
         case TYPE_EXIT:
@@ -1562,7 +1562,7 @@ prim_newobject(PRIM_PROTOTYPE)
         if (!ok_name(b))
             abort_interp("Invalid name (2)");
 
-        ref = new_object(ProgUID);
+        ref = MUCK::database().newObject(ProgUID);
 
         /* initialize everything */
         NAME(ref) = alloc_string(b);
@@ -1610,7 +1610,7 @@ prim_newroom(PRIM_PROTOTYPE)
         if (!ok_name(b))
             abort_interp("Invalid name (2)");
 
-        ref = new_object(ProgUID);
+        ref = MUCK::database().newObject(ProgUID);
 
         /* Initialize everything */
         FLAGS(ref) = TYPE_ROOM | (FLAGS(PSafe) & JUMP_OK);
@@ -1651,7 +1651,7 @@ prim_newexit(PRIM_PROTOTYPE)
         if (!ok_name(b))
             abort_interp("Invalid name (2)");
 
-        ref = new_object(ProgUID);
+        ref = MUCK::database().newObject(ProgUID);
 
         /* initialize everything */
         NAME(ref) = alloc_string(oper[0].data.string->data);
@@ -1740,7 +1740,7 @@ prim_getlockstr(PRIM_PROTOTYPE)
 {
     dbref ref;
 
-    if ((oper[0].data.objref < 0) || (oper[0].data.objref >= db_top))
+    if ((oper[0].data.objref < 0) || (oper[0].data.objref >= MUCK::database().top()))
         abort_interp("Invalid dbref argument.");
     ref = oper[0].data.objref;
     CHECKREMOTE(ref);
@@ -1813,7 +1813,7 @@ prim_pmatch(PRIM_PROTOTYPE)
         (void) buff++;
         if (number(buff)) {
             ref = atoi(buff);
-            if (ref <= 0 || ref >= db_top) {
+            if (ref <= 0 || ref >= MUCK::database().top()) {
                 ref = NOTHING;
             } else {
                 if (Typeof(ref) != TYPE_PLAYER) {
@@ -1862,7 +1862,7 @@ prim_nextentrance(PRIM_PROTOTYPE)
     if (linkref == HOME)
         linkref = DBFETCH(PSafe)->sp.player.home;
     (void) ref++;
-    for (; ref < db_top; ref++) {
+    for (; ref < MUCK::database().top(); ref++) {
         oper[0].data.objref = ref;
         if (valid_object(&oper[0])) {
             switch (Typeof(ref)) {
@@ -1951,7 +1951,7 @@ prim_copyplayer(PRIM_PROTOTYPE)
         abort_interp("The MUCK is read only.");
 
     /* else he doesn't already exist, create him */
-    newplayer = new_object(ProgUID);
+    newplayer = MUCK::database().newObject(ProgUID);
     newp = DBFETCH(newplayer);
 
     /* initialize everything */
@@ -2033,7 +2033,7 @@ prim_toadplayer(PRIM_PROTOTYPE)
 
     /* we're ok, do it */
     send_contents(fr->descr, victim, HOME);
-    for (stuff = 0; stuff < db_top; stuff++) {
+    for (stuff = 0; stuff < MUCK::database().top(); stuff++) {
         if (OWNER(stuff) == victim) {
             switch (Typeof(stuff)) {
                 case TYPE_PROGRAM:
@@ -2095,7 +2095,7 @@ prim_objmem(PRIM_PROTOTYPE)
     if (oper[0].type != PROG_OBJECT)
         abort_interp("Argument must be a dbref.");
     ref = oper[0].data.objref;
-    if (ref >= db_top || ref <= NOTHING)
+    if (ref >= MUCK::database().top() || ref <= NOTHING)
         abort_interp("Dbref is not an object nor garbage.");
 
     i = size_object(ref, 0);
@@ -2286,11 +2286,11 @@ prim_findnext(PRIM_PROTOTYPE)
         abort_interp("Expected string argument. (3)");
     if (oper[2].type != PROG_OBJECT)
         abort_interp("Expected dbref argument. (2)");
-    if (oper[2].data.objref < NOTHING || oper[2].data.objref >= db_top)
+    if (oper[2].data.objref < NOTHING || oper[2].data.objref >= MUCK::database().top())
         abort_interp("Bad object. (2)");
     if (oper[3].type != PROG_OBJECT)
         abort_interp("Expected dbref argument. (1)");
-    if (oper[3].data.objref < NOTHING || oper[3].data.objref >= db_top)
+    if (oper[3].data.objref < NOTHING || oper[3].data.objref >= MUCK::database().top())
         abort_interp("Bad object. (1)");
     if (oper[2].data.objref != NOTHING && Typeof(oper[2].data.objref) == TYPE_GARBAGE)
         abort_interp("Owner dbref is garbage. (2)");
@@ -2316,7 +2316,7 @@ prim_findnext(PRIM_PROTOTYPE)
 
     ref = NOTHING;
     init_checkflags(PSafe, DoNullInd(oper[0].data.string), &check);
-    for (i = item; i < db_top; i++) {
+    for (i = item; i < MUCK::database().top(); i++) {
         if ((who == NOTHING || OWNER(i) == who) && checkflags(i, check) && NAME(i) && (!*name || equalstr(buf, (char *) NAME(i)))) {
             ref = i;
             break;
@@ -2341,7 +2341,7 @@ prim_newprogram(PRIM_PROTOTYPE)
     if (!ok_name(oper[0].data.string->data))
         abort_interp("Invalid name (2)");
 
-    ref = new_program(PSafe, oper[0].data.string->data);
+    ref = MUCK::database().newProgram(PSafe, oper[0].data.string->data);
 
     PushObject(ref);
 }
@@ -2401,7 +2401,7 @@ prim_contents_array(PRIM_PROTOTYPE)
         abort_interp("Dbref cannot be a program nor exit (1)");
     nw = new_array_packed(0, 0);
     ref = DBFETCH(ref)->contents;
-    while ((ref > 0) && (ref < db_top)) {
+    while ((ref > 0) && (ref < MUCK::database().top())) {
         temp1.type = PROG_INTEGER;
         temp1.data.number = count++;
         temp2.type = PROG_OBJECT;
@@ -2430,7 +2430,7 @@ prim_exits_array(PRIM_PROTOTYPE)
         abort_interp("Dbref cannot be a program nor exit (1)");
     nw = new_array_packed(0, 0);
     ref = DBFETCH(ref)->exits;
-    while ((ref > 0) && (ref < db_top)) {
+    while ((ref > 0) && (ref < MUCK::database().top())) {
         temp1.type = PROG_INTEGER;
         temp1.data.number = count++;
         temp2.type = PROG_OBJECT;
@@ -2451,7 +2451,7 @@ array_getlinks(dbref obj)
     int count = 0;
 
     nw = new_array_packed(0, 0);
-    if ((obj >= NOTHING) && (obj < db_top)) {
+    if ((obj >= NOTHING) && (obj < MUCK::database().top())) {
         switch (Typeof(obj)) {
             case TYPE_ROOM:{
                 temp1.type = PROG_INTEGER;
@@ -2523,7 +2523,7 @@ prim_getobjinfo(PRIM_PROTOTYPE)
 
     if (oper[0].type != PROG_OBJECT)
         abort_interp("Invalid object dbref (1)");
-    if ((oper[0].data.objref < 0) || (oper[0].data.objref >= db_top))
+    if ((oper[0].data.objref < 0) || (oper[0].data.objref >= MUCK::database().top()))
         abort_interp("Invalid object dbref (1)");
     ref = oper[0].data.objref;
 
@@ -2734,7 +2734,7 @@ prim_find_array(PRIM_PROTOTYPE)
         abort_interp("Expected string argument. (2)");
     if (oper[2].type != PROG_OBJECT)
         abort_interp("Expected dbref argument. (1)");
-    if (oper[2].data.objref < NOTHING || oper[2].data.objref >= db_top)
+    if (oper[2].data.objref < NOTHING || oper[2].data.objref >= MUCK::database().top())
         abort_interp("Bad object. (1)");
 
     who = oper[2].data.objref;
@@ -2744,9 +2744,9 @@ prim_find_array(PRIM_PROTOTYPE)
 
     if (oper[0].data.string)
         init_checkflags(PSafe, DoNullInd(oper[0].data.string), &check);
-    nw = new_array_packed(0, (db_top + 1) / 10);
+    nw = new_array_packed(0, (MUCK::database().top() + 1) / 10);
 
-    for (ref = (dbref) 0; ref < db_top; ref++) {
+    for (ref = (dbref) 0; ref < MUCK::database().top(); ref++) {
         if (((who == NOTHING) ? 1 : (OWNER(ref) == who)) && (!oper[0].data.string || checkflags(ref, check)) && NAME(ref) && (!*name || equalstr(buf, (char *) NAME(ref)))) {
             array_appendref(&nw, ref);
         }
@@ -2767,7 +2767,7 @@ prim_entrances_array(PRIM_PROTOTYPE)
     ref = oper[0].data.objref;
     nw = new_array_packed(0, 0);
 
-    for (i = 0; i < db_top; i++) {
+    for (i = 0; i < MUCK::database().top(); i++) {
         switch (Typeof(i)) {
             case TYPE_EXIT:
                 for (j = DBFETCH(i)->sp.exit.ndest; j--;) {

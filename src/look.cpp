@@ -85,7 +85,7 @@ exec_or_notify_2(int descr, dbref player, dbref thing, const char *message, cons
             if (*p)
                 p++;
         }
-        if (i < 0 || i >= db_top || (Typeof(i) != TYPE_PROGRAM)) {
+        if (i < 0 || i >= MUCK::database().top() || (Typeof(i) != TYPE_PROGRAM)) {
             if (*p)
                 notify(player, p);
             else
@@ -1770,7 +1770,7 @@ do_find(dbref player, const char *name, const char *flags)
         anotify_fmt(player, CFAIL "You don't have enough %s.", tp_pennies);
     } else {
         output_type = init_checkflags(player, flags, &check);
-        for (i = 0; i < db_top; i++) {
+        for (i = 0; i < MUCK::database().top(); i++) {
             if ((Wiz(OWNER(player)) || (POWERS(player) & POW_SEARCH)
                  || OWNER(i) == OWNER(player)) && checkflags(i, check)
                 && NAME(i) && (!*name || equalstr(buf, (char *) NAME(i)))) {
@@ -1814,7 +1814,7 @@ do_owned(dbref player, const char *name, const char *flags)
 
     output_type = init_checkflags(player, flags, &check);
 
-    for (i = 0; i < db_top; i++) {
+    for (i = 0; i < MUCK::database().top(); i++) {
         if ((OWNER(i) == OWNER(victim)) && checkflags(i, check)) {
             display_objinfo(player, i, output_type);
             total++;
@@ -1903,7 +1903,7 @@ do_entrances(int descr, dbref player, const char *name, const char *flags)
 
     output_type = init_checkflags(player, flags, &check);
 
-    for (i = 0; i < db_top; i++) {
+    for (i = 0; i < MUCK::database().top(); i++) {
         if (checkflags(i, check)) {
             switch (Typeof(i)) {
                 case TYPE_EXIT:
@@ -2169,7 +2169,7 @@ do_sweep(int descr, dbref player, const char *name)
         exit_match_exists(player, loc, "whisper");
         exit_match_exists(player, loc, "pose");
         exit_match_exists(player, loc, "say");
-        loc = getparent(loc);
+        loc = MUCK::database().parent(loc);
     }
     anotify_nolisten(player, CINFO "**End of list**", 1);
 }

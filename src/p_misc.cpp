@@ -231,7 +231,7 @@ prim_timestamps(PRIM_PROTOTYPE)
     if (oper[0].type != PROG_OBJECT)
         abort_interp("Non-object argument (1)");
     ref = oper[0].data.objref;
-    if (ref >= db_top || ref <= NOTHING)
+    if (ref >= MUCK::database().top() || ref <= NOTHING)
         abort_interp("Dbref is not an object nor garbage.");
     CHECKREMOTE(ref);
     CHECKOFLOW(4);
@@ -255,7 +255,7 @@ prim_refstamps(PRIM_PROTOTYPE)
     if (oper[0].type != PROG_OBJECT)
         abort_interp("Non-object argument (1)");
     ref = oper[0].data.objref;
-    if (ref >= db_top || ref <= NOTHING)
+    if (ref >= MUCK::database().top() || ref <= NOTHING)
         abort_interp("Dbref is not an object nor garbage.");
     CHECKREMOTE(ref);
     CHECKOFLOW(3);
@@ -276,7 +276,7 @@ prim_touch(PRIM_PROTOTYPE)
     if (oper[0].type != PROG_OBJECT)
         abort_interp("Non-object argument (1)");
     ref = oper[0].data.objref;
-    if (ref >= db_top || ref <= NOTHING)
+    if (ref >= MUCK::database().top() || ref <= NOTHING)
         abort_interp("Dbref is not an object nor garbage.");
     CHECKREMOTE(ref);
     ts_useobject(program, ref);
@@ -291,7 +291,7 @@ prim_use(PRIM_PROTOTYPE)
     if (oper[0].type != PROG_OBJECT)
         abort_interp("Non-object argument (1)");
     ref = oper[0].data.objref;
-    if (ref >= db_top || ref <= NOTHING)
+    if (ref >= MUCK::database().top() || ref <= NOTHING)
         abort_interp("Dbref is not an object nor garbage.");
     CHECKREMOTE(ref);
     ts_lastuseobject(program, ref);
@@ -424,7 +424,7 @@ prim_stats(PRIM_PROTOTYPE)
 
         /* tmp, ref */
         rooms = exits = things = players = programs = garbage = 0;
-        for (i = 0; i < db_top; i++) {
+        for (i = 0; i < MUCK::database().top(); i++) {
             if (ref == NOTHING || OWNER(i) == ref) {
                 switch (Typeof(i)) {
                     case TYPE_ROOM:
@@ -1167,7 +1167,7 @@ prim_funcprof_array(PRIM_PROTOTYPE)
     if (oper[0].type == PROG_OBJECT) {
         nw = new_array_dictionary();
 
-        for (i = db_top; i-- > 0;) {
+        for (i = MUCK::database().top(); i-- > 0;) {
             if (i == oper[0].data.objref && Typeof(i) == TYPE_PROGRAM && DBFETCH(i)->sp.program.code && DBFETCH(i)->sp.program.fprofile) {
                 struct funcprof *fpe = DBFETCH(i)->sp.program.fprofile;
 

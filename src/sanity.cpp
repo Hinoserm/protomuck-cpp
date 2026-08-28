@@ -62,7 +62,7 @@ sane_dump_object(dbref player, const char *arg)
         result = sscanf(arg, "%i", &d);
     }
 
-    if (!result || d < 0 || d >= db_top) {
+    if (!result || d < 0 || d >= MUCK::database().top()) {
         SanPrint(player, "Invalid Object.");
         return;
     }
@@ -114,7 +114,7 @@ sane_dump_object(dbref player, const char *arg)
             break;
     }
     SanPrint(player, "Referring Objects:");
-    for (i = 0; i < db_top; i++) {
+    for (i = 0; i < MUCK::database().top(); i++) {
         if (CONTENTS(i) == d) {
             SanPrint(player, "  By contents field: %s", unparse(i));
         }
@@ -150,7 +150,7 @@ valid_ref(dbref obj)
     if (obj < 0) {
         return 0;
     }
-    if (obj >= db_top) {
+    if (obj >= MUCK::database().top()) {
         return 0;
     }
     return 1;
@@ -208,7 +208,6 @@ check_next_chain(dbref player, dbref obj)
 }
 
 
-extern dbref recyclable;
 
 static void
 find_orphan_objects(dbref player)
@@ -217,16 +216,16 @@ find_orphan_objects(dbref player)
 
     SanPrint(player, "Searching for orphan objects...");
 
-    for (i = 0; i < db_top; i++) {
+    for (i = 0; i < MUCK::database().top(); i++) {
         FLAGS(i) &= ~SANEBIT;
     }
 
-    if (recyclable != NOTHING) {
-        FLAGS(recyclable) |= SANEBIT;
+    if (MUCK::database().recycleHead() != NOTHING) {
+        FLAGS(MUCK::database().recycleHead()) |= SANEBIT;
     }
     FLAGS(GLOBAL_ENVIRONMENT) |= SANEBIT;
 
-    for (i = 0; i < db_top; i++) {
+    for (i = 0; i < MUCK::database().top(); i++) {
         if (EXITS(i) != NOTHING) {
             if (FLAGS(EXITS(i)) & SANEBIT) {
                 violate(player, EXITS(i), "is referred to by more than one object's Next, Contents, or Exits field");
@@ -250,13 +249,13 @@ find_orphan_objects(dbref player)
         }
     }
 
-    for (i = 0; i < db_top; i++) {
+    for (i = 0; i < MUCK::database().top(); i++) {
         if (!(FLAGS(i) & SANEBIT)) {
             violate(player, i, "appears to be an orphan object, that is not referred to by any other object");
         }
     }
 
-    for (i = 0; i < db_top; i++) {
+    for (i = 0; i < MUCK::database().top(); i++) {
         FLAGS(i) &= ~SANEBIT;
     }
 }
@@ -344,7 +343,7 @@ check_contents_list(dbref player, dbref obj)
     int limit;
 
     if (TYPEOF(obj) != TYPE_PROGRAM && TYPEOF(obj) != TYPE_EXIT && TYPEOF(obj) != TYPE_GARBAGE) {
-        for (i = CONTENTS(obj), limit = db_top; valid_obj(i) && --limit && LOCATION(i) == obj && TYPEOF(i) != TYPE_EXIT; i = NEXTOBJ(i)) ;
+        for (i = CONTENTS(obj), limit = MUCK::database().top(); valid_obj(i) && --limit && LOCATION(i) == obj && TYPEOF(i) != TYPE_EXIT; i = NEXTOBJ(i)) ;
         if (i != NOTHING) {
             if (!limit) {
                 check_next_chain(player, CONTENTS(obj));
@@ -383,7 +382,7 @@ check_exits_list(dbref player, dbref obj)
     int limit;
 
     if (TYPEOF(obj) != TYPE_PROGRAM && TYPEOF(obj) != TYPE_EXIT && TYPEOF(obj) != TYPE_GARBAGE) {
-        for (i = EXITS(obj), limit = db_top; valid_obj(i) && --limit && LOCATION(i) == obj && TYPEOF(i) == TYPE_EXIT; i = NEXTOBJ(i)) ;
+        for (i = EXITS(obj), limit = MUCK::database().top(); valid_obj(i) && --limit && LOCATION(i) == obj && TYPEOF(i) == TYPE_EXIT; i = NEXTOBJ(i)) ;
         if (i != NOTHING) {
             if (!limit) {
                 check_next_chain(player, CONTENTS(obj));
@@ -490,10 +489,10 @@ sanity(dbref player)
 
     sanity_violated = 0;
 
-    for (i = 0; i < db_top; i++) {
+    for (i = 0; i < MUCK::database().top(); i++) {
         if (!(i % increp)) {
             j = i + increp - 1;
-            j = (j >= db_top) ? (db_top - 1) : j;
+            j = (j >= MUCK::database().top()) ? (MUCK::database().top() - 1) : j;
             SanPrint(player, "Checking objects %d to %d...", i, j);
             if (player >= 0) {
                 flush_user_output(player);
@@ -549,7 +548,7 @@ cut_bad_recyclable(void)
 {
     dbref loop, prev;
 
-    loop = recyclable;
+    loop = MUCK::database().recycleHead();
     prev = NOTHING;
     while (loop != NOTHING) {
         if (!valid_ref(loop) || TYPEOF(loop) != TYPE_GARBAGE || FLAGS(loop) & SANEBIT) {
@@ -558,7 +557,7 @@ cut_bad_recyclable(void)
                 DBFETCH(prev)->next = NOTHING;
                 DBDIRTY(prev);
             } else {
-                recyclable = NOTHING;
+                MUCK::database().setRecycleHead(NOTHING);
             }
             return;
         }
@@ -646,7 +645,7 @@ hacksaw_bad_chains(void)
     dbref loop;
 
     cut_bad_recyclable();
-    for (loop = 0; loop < db_top; loop++) {
+    for (loop = 0; loop < MUCK::database().top(); loop++) {
         if (TYPEOF(loop) != TYPE_ROOM && TYPEOF(loop) != TYPE_THING && TYPEOF(loop) != TYPE_PLAYER) {
             cut_all_chains(loop);
         } else {
@@ -677,7 +676,7 @@ create_lostandfound(dbref *player, dbref *room)
     char player_name[18] = "lost+found";
     int temp = 0;
 
-    *room = new_object(*player);
+    *room = MUCK::database().newObject(*player);
     NAME(*room) = alloc_string("lost+found");
     LOCATION(*room) = GLOBAL_ENVIRONMENT;
     DBFETCH(*room)->exits = NOTHING;
@@ -694,7 +693,7 @@ create_lostandfound(dbref *player, dbref *room)
             );
         *player = MAN;
     } else {
-        *player = new_object(1);
+        *player = MUCK::database().newObject(1);
         NAME(*player) = alloc_string(player_name);
         LOCATION(*player) = *room;
         FLAGS(*player) = TYPE_PLAYER | PCREATE_FLAGS | SANEBIT;
@@ -802,7 +801,7 @@ find_misplaced_objects(void)
 {
     dbref loop, player = NOTHING, room;
 
-    for (loop = 0; loop < db_top; loop++) {
+    for (loop = 0; loop < MUCK::database().top(); loop++) {
         if (TYPEOF(loop) != TYPE_ROOM &&
             TYPEOF(loop) != TYPE_THING && TYPEOF(loop) != TYPE_PLAYER && TYPEOF(loop) != TYPE_EXIT && TYPEOF(loop) != TYPE_PROGRAM && TYPEOF(loop) != TYPE_GARBAGE) {
             SanFixedRef(loop, "Object #%d is of unknown type");
@@ -922,7 +921,7 @@ adopt_orphans(void)
 {
     dbref loop;
 
-    for (loop = 0; loop < db_top; loop++) {
+    for (loop = 0; loop < MUCK::database().top(); loop++) {
         if (!(FLAGS(loop) & SANEBIT)) {
             DBDIRTY(loop);
             switch (TYPEOF(loop)) {
@@ -940,8 +939,8 @@ adopt_orphans(void)
                     SanFixed2(loop, LOCATION(loop), "Orphaned exit %s added to exits of %s");
                     break;
                 case TYPE_GARBAGE:
-                    DBFETCH(loop)->next = recyclable;
-                    recyclable = loop;
+                    DBFETCH(loop)->next = MUCK::database().recycleHead();
+                    MUCK::database().setRecycleHead(loop);
                     SanFixedRef(loop, "Litter object %d moved to recycle bin");
                     break;
                 default:
@@ -979,7 +978,7 @@ sanfix(dbref player)
 
     sanity_violated = 0;
 
-    for (loop = 0; loop < db_top; loop++) {
+    for (loop = 0; loop < MUCK::database().top(); loop++) {
         FLAGS(loop) &= ~SANEBIT;
     }
     FLAGS(GLOBAL_ENVIRONMENT) |= SANEBIT;
@@ -994,7 +993,7 @@ sanfix(dbref player)
     adopt_orphans();
     clean_global_environment();
 
-    for (loop = 0; loop < db_top; loop++) {
+    for (loop = 0; loop < MUCK::database().top(); loop++) {
         FLAGS(loop) &= ~SANEBIT;
     }
 
@@ -1325,7 +1324,7 @@ extract(void)
         f = stdout;
     }
 
-    for (i = 0; i < db_top; i++) {
+    for (i = 0; i < MUCK::database().top(); i++) {
         if ((OWNER(i) == d) && (TYPEOF(i) != TYPE_GARBAGE)) {
             extract_object(f, i);
         }                       /* extract only objects owned by this player */
@@ -1457,7 +1456,7 @@ san_main(void)
     printf("\nEntering the Interactive Sanity DB editor.\n");
     printf("Good luck!\n\n");
 
-    printf("Number of objects in DB is: %d\n", db_top - 1);
+    printf("Number of objects in DB is: %d\n", MUCK::database().top() - 1);
     printf("Global Environment is: %s\n", unparse(GLOBAL_ENVIRONMENT));
     printf("The Man is: %s\n", unparse(MAN));
     printf("\n");

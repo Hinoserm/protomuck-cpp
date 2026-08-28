@@ -320,7 +320,7 @@ newcontrols(dbref who, dbref what, bool true_c)
     dbref index;
 
     /* No one controls invalid objects */
-    /* if (what < 0 || what >= db_top)  -- not good enough */
+    /* if (what < 0 || what >= MUCK::database().top())  -- not good enough */
     if (!OkObj(what) || !OkObj(who))
         return 0;
 

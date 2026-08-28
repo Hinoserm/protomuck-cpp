@@ -326,7 +326,7 @@ unparse_object(dbref player, dbref loc)
         case NIL:
             return "*NIL*";
         default:
-            if (loc < 0 || loc >= db_top)
+            if (loc < 0 || loc >= MUCK::database().top())
 #ifdef SANITY
             {
                 sprintf(upb, "*INVALID*(#%d)", loc);
@@ -401,7 +401,7 @@ ansi_unparse_object(dbref player, dbref loc)
         case NIL:
             return SYSCYAN "*NIL*";
         default:
-            if (loc < 0 || loc >= db_top) {
+            if (loc < 0 || loc >= MUCK::database().top()) {
                 sprintf(upb, SYSRED "*INVALID(#%d)*", loc);
                 return upb;
             }

@@ -108,7 +108,7 @@ typedef char bool;      /* for eventual C++ convert */
 #endif
 
 #define TIME_INFINITE ((sizeof(time_t) == 4)? 0xefffffff : 0xefffffffffffffff)
-#define valid_obj(a) (a > -1 && a < db_top)
+#define valid_obj(a) (MUCK::database().valid(a))
 #define DB_READLOCK(x)
 #define DB_WRITELOCK(x)
 #define DB_RELEASE(x)
@@ -120,17 +120,17 @@ typedef char bool;      /* for eventual C++ convert */
 #  ifdef DBDEBUG
 /* dbcheck for database debugging, found in db.c. */
 extern short dbcheck(const char *file, int line, dbref item);
-#    define DBFETCH(x)  (db + (x) + dbcheck(__FILE__, __LINE__, x))
+#    define DBFETCH(x)  (MUCK::database().object(x) + dbcheck(__FILE__, __LINE__, x))
 #  else
-#    define DBFETCH(x)  (db + (x))
+#    define DBFETCH(x)  (MUCK::database().object(x))
 #  endif
 #  ifdef DEBUGDBDIRTY
-#    define DBDIRTY(x)  {if (!(db[x].flags & OBJECT_CHANGED))  \
+#    define DBDIRTY(x)  {if (!(MUCK::database().object(x)->flags & OBJECT_CHANGED))  \
 			   log2file("dirty.out", "#%d: %s %d\n", (int)x, \
 			   __FILE__, __LINE__); \
-		       db[x].flags |= OBJECT_CHANGED;}
+		       MUCK::database().object(x)->flags |= OBJECT_CHANGED;}
 #  else
-#    define DBDIRTY(x)  {db[x].flags |= OBJECT_CHANGED;}
+#    define DBDIRTY(x)  {MUCK::database().object(x)->flags |= OBJECT_CHANGED;}
 #  endif
 #endif
 
@@ -495,7 +495,7 @@ extern int RawMWLevel(dbref thing, const char *file, int line);
 #define Protect(x)  (FLAG2(x) & F2PROTECT)
 #define Hidden(x)   (FLAG2(x) & F2HIDDEN)
 
-#define OkObj(x)  ( ((x) >= 0) && ((x) < db_top) )
+#define OkObj(x)  (MUCK::database().valid(x))
 #define OkRoom(x) ( OkObj(x) && (Typeof(x)==TYPE_ROOM) )
 #define EnvRoom   ( OkRoom(GLOBAL_ENVIRONMENT) ? GLOBAL_ENVIRONMENT : 0 )
 #define RootRoom  ( (const) (OkRoom(tp_player_start) ? tp_player_start : EnvRoom) )
@@ -1118,8 +1118,7 @@ typedef hash_entry *hash_tab;
 #define COMP_HASH_SIZE     (256)    /* Table for compiler keywords */
 #define DEFHASHSIZE        (256)    /* Table for compiler $defines */
 
-extern struct object *db;
-extern dbref db_top;
+#include "Database.h"
 
 #ifndef MALLOC_PROFILING
 extern char *alloc_string(const char *);
@@ -1129,7 +1128,6 @@ extern struct line * read_program(dbref);
 extern struct line * get_new_line(void);
 extern int fetch_propvals(dbref obj, const char *dir);
 
-extern dbref getparent(dbref obj);
 
 extern void free_prog_text(struct line * l);
 
@@ -1144,26 +1142,19 @@ extern void log_program_text(struct line * first, dbref player, dbref i);
 extern struct shared_string *alloc_prog_string_exact(const char *, int length, int wclength);
 #endif
 
-extern dbref new_object(dbref player);	/* return a new object */
-extern dbref new_program(dbref player, const char *name); /* return a new MUF program type. */
 extern dbref getref(FILE *);	/* Read a database reference from a file. */
 extern void putref(FILE *, dbref);	/* Write one ref to the file */
 extern struct boolexp *getboolexp(FILE *);	/* get a boolexp */
 extern void putboolexp(FILE *, struct boolexp *);	/* put a boolexp */
 extern int db_write_object(FILE * f, struct object *o);	/* write one object to file */
-extern dbref db_write(FILE * f);/* write db to file, return # of objects */
-extern dbref db_read(FILE * f);	/* read db from file, return # of objects */
 
  /* Warning: destroys existing db contents! */
-extern void db_free(void);
 extern dbref parse_dbref(const char *);	/* parse a dbref */
 extern int ifloat(const char *s);
 extern int number(const char *s);
 extern void putproperties(FILE *f, int obj);
 extern void getproperties(FILE *f, int obj);
 extern void free_line(struct line *l);
-extern void db_free_object(dbref i);
-extern void db_clear_object(dbref player, dbref i);
 extern int WLevel(dbref player);
 extern int db_load_format;
 extern bool db_hash_passwords;
@@ -1186,13 +1177,12 @@ extern int db_hash_compare(const char *hash, const char *password);
 extern int db_hash_oldconvert(char *out, const char *hash);
 
 
-extern int db_write_threaded(void);
 
 /*
   Usage guidelines:
 
   To obtain an object pointer use DBFETCH(i).  Pointers returned by DBFETCH
-  may become invalid after a call to new_object().
+  may become invalid after a call to MUCK::Database::newObject().
 
   To update an object, use DBSTORE(i, f, v), where i is the object number,
   f is the field (after ->), and v is the new value.

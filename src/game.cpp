@@ -271,7 +271,7 @@ dump_database_internal(void)
     if ((f = fopen(tmpfile, "w")) != NULL) {
         char fromfile[512], destfile[512];
 
-        db_write(f);
+        MUCK::database().save(f);
         fclose(f);
         if (tp_dump_copies > 0) {
             copies = (tp_dump_copies < 25) ? tp_dump_copies : 25;
@@ -363,7 +363,7 @@ panic(const char *message)
     } else {
         log_status("DUMP: %s\n", panicfile);
         fprintf(stderr, "DUMP: %s\n", panicfile);
-        db_write(f);
+        MUCK::database().save(f);
         fclose(f);
         log_status("DUMP: %s (done)\n", panicfile);
         fprintf(stderr, "DUMP: %s (done)\n", panicfile);
@@ -420,7 +420,7 @@ dump_database(bool dofork)
     /* Alynna - saving the PID of the dumper so I can get around an SSL issue */
 #ifdef THREADED_DB_DUMP
     if (dofork) {
-        db_write_threaded();
+        MUCK::database().saveThreaded();
     } else
 #else /* !THREADED_DB_DUMP */
 #ifndef WIN_VC
@@ -470,7 +470,7 @@ fork_and_dump(bool dofork)
     /* Alynna - saving the PID of the dumper so I can get around an SSL issue */
 #ifdef THREADED_DB_DUMP
     if (dofork) {
-        db_write_threaded();
+        MUCK::database().saveThreaded();
     } else
 #else /* !THREADED_DB_DUMP */
 #ifndef WIN_VC
@@ -531,7 +531,7 @@ init_game(const char *infile, const char *outfile)
         return -1;
     }
 
-    db_free();
+    MUCK::database().freeAll();
     log_status_nowall("init_game/db_free\n");
     init_primitives();
     log_status_nowall("init_game/init_primitives: MUF initialized\n"); /* init muf compiler */
@@ -545,7 +545,7 @@ init_game(const char *infile, const char *outfile)
     /* ok, read the db in */
     log_status_nowall("LOAD: %s\n", infile);
     fprintf(stderr, "LOAD: %s\n", infile);
-    if (db_read(input_file) < 0) {
+    if (MUCK::database().load(input_file) < 0) {
         log_status_nowall("DIE: database load error.  Damnit.\n");
         return -1;
     }
@@ -780,7 +780,7 @@ process_command(int descr, dbref player, char *command, int len, int wclen)
     }
 
     /* robustify player */
-    if (player < 0 || player >= db_top || (Typeof(player) != TYPE_PLAYER && Typeof(player) != TYPE_THING)) {
+    if (player < 0 || player >= MUCK::database().top() || (Typeof(player) != TYPE_PLAYER && Typeof(player) != TYPE_THING)) {
         log_status("process_command: bad player %d\n", player);
         return;
     }
@@ -1945,7 +1945,7 @@ prop_command(int descr, dbref player, const char *command, const char *arg, cons
         }
         return 1;
     } else {
-        if (progRef < 0 || progRef >= db_top) {
+        if (progRef < 0 || progRef >= MUCK::database().top()) {
             if (player < 1)
                 notify_descriptor(descr, "Invalid program call from a command prop.");
             else

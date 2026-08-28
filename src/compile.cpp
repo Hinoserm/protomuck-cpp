@@ -830,7 +830,7 @@ do_uncompile(dbref player)
         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
         return;
     }
-    for (i = 0; i < db_top; i++) {
+    for (i = 0; i < MUCK::database().top(); i++) {
         if (Typeof(i) == TYPE_PROGRAM) {
             uncompile_program(i);
         }
@@ -850,7 +850,7 @@ do_proginfo(dbref player, const char *arg)
         anotify_nolisten(player, SYSYELLOW "Usage: @proginfo #prognum", 1);
         if (Mage(OWNER(player))) {
             anotify_nolisten(player, SYSAQUA "Inst Object ProgSz Insts " SYSBROWN "Name", 1);
-            for (i = 0; i < db_top; i++) {
+            for (i = 0; i < MUCK::database().top(); i++) {
                 if (Typeof(i) == TYPE_PROGRAM && DBFETCH(i)->sp.program.siz) {
                     tcnt += ccnt = DBFETCH(i)->sp.program.instances;
                     tsize += csize = size_object(i, 0);
@@ -886,7 +886,7 @@ free_unused_programs()
     dbref i;
     time_t now = current_systime;
 
-    for (i = 0; i < db_top; i++) {
+    for (i = 0; i < MUCK::database().top(); i++) {
         if ((Typeof(i) == TYPE_PROGRAM) && !(FLAGS(i) & (ABODE | INTERNAL)) && (now - DBFETCH(i)->ts.lastused > tp_clean_interval)
             && (DBFETCH(i)->sp.program.instances == 0)) {
             uncompile_program(i);

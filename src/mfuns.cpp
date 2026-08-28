@@ -447,7 +447,7 @@ mfn_select(MFUNARGS)
     bestname[0] = '\0';
     bestval = 0;
     baselen = strlen(origprop);
-    for (; obj != NOTHING; obj = getparent(obj)) {
+    for (; obj != NOTHING; obj = MUCK::database().parent(obj)) {
         pname = next_prop_name(obj, propname, origprop);
         while (pname && string_prefix(pname, origprop)) {
             ptr = pname + baselen;
@@ -986,7 +986,7 @@ mfn_isdbref(MFUNARGS)
     if (!number(ptr))
         return "0";
     obj = (dbref) atoi(ptr);
-    if (obj < 0 || obj >= db_top)
+    if (obj < 0 || obj >= MUCK::database().top())
         return "0";
     if (Typeof(obj) == TYPE_GARBAGE)
         return "0";

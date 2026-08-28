@@ -12,9 +12,6 @@
 #include "MacroTable.h"
 #include "strutils.h"
 
-struct object *db = 0;
-dbref db_top = 0;
-dbref recyclable = NOTHING;
 int db_load_format = 0;
 bool db_hash_passwords = 0;
 int db_hash_ver = 0;
@@ -54,7 +51,7 @@ dbcheck(const char *file, int line, dbref item)
 #endif /* DBDEBUG */
 
 dbref
-getparent(dbref obj)
+MUCK::Database::parent(dbref obj)
 {
     int limit = 88;
 
@@ -99,8 +96,8 @@ free_prog_text(struct line *l)
 
 #ifdef DB_DOUBLING
 
-static void
-db_grow(dbref newtop)
+void
+MUCK::Database::grow(dbref newtop)
 {
     struct object *newdb;
 
@@ -134,8 +131,8 @@ db_grow(dbref newtop)
 
 #else /* DB_DOUBLING */
 
-static void
-db_grow(dbref newtop)
+void
+MUCK::Database::grow(dbref newtop)
 {
     struct object *newdb;
 
@@ -164,7 +161,7 @@ db_grow(dbref newtop)
 #endif /* DB_DOUBLING */
 
 void
-db_clear_object(dbref player, dbref i)
+MUCK::Database::clearObject(dbref player, dbref i)
 {
     struct object *o = DBFETCH(i);
 
@@ -183,7 +180,7 @@ db_clear_object(dbref player, dbref i)
 }
 
 dbref
-new_object(dbref player)
+MUCK::Database::newObject(dbref player)
 {
     dbref newobj;
 
@@ -195,27 +192,27 @@ new_object(dbref player)
         }
  
         recyclable = DBFETCH(newobj)->next;
-        db_free_object(newobj);
+        freeObject(newobj);
     } else {
         newobj = db_top;
-        db_grow(db_top + 1);
+        grow(db_top + 1);
     }
 
     /* clear it out */
-    db_clear_object(player, newobj);
+    clearObject(player, newobj);
     DBDIRTY(newobj);
     return newobj;
 }
 
 
 dbref
-new_program(dbref player, const char *name)
+MUCK::Database::newProgram(dbref player, const char *name)
 {
     unsigned char mlvl;
     dbref newprog;
     char buf[BUFFER_LEN];
 
-    newprog = new_object(player);
+    newprog = newObject(player);
     player = OWNER(player);
 
     NAME(newprog) = alloc_string(name);
@@ -363,7 +360,7 @@ db_write_header(FILE * f)
 {
     putstring(f, "***NeonMuck V2 DUMP Format***");
 
-    putref(f, db_top);
+    putref(f, MUCK::database().top());
     putref(f, DB_PARMSINFO + (db_hash_passwords ? DB_NEWPASSES : 0)
            + (db_hash_passwords ? ((HVER_CURRENT << HVER_SHIFT) & HVER_MASK) : 0)
         );
@@ -491,7 +488,7 @@ db_wthread(void *ptr)
 }
 
 int
-db_write_threaded(void)
+MUCK::Database::saveThreaded()
 {
     struct object *db_c = new object[db_top];
     dbref db_ctop = db_top;
@@ -572,7 +569,7 @@ db_write_list(FILE * f)
 {
     dbref i;
 
-    for (i = db_top; i-- > 0;) {
+    for (i = MUCK::database().top(); i-- > 0;) {
         if (fprintf(f, "#%d\n", i) < 0) {
             fprintf(stderr, "PANIC: Error writing changed objects.\n");
             abort();
@@ -585,7 +582,7 @@ db_write_list(FILE * f)
 
 
 dbref
-db_write(FILE * f)
+MUCK::Database::save(FILE * f)
 {
     db_write_header(f);
     db_write_list(f);
@@ -880,7 +877,7 @@ getproperties(FILE * f, dbref obj)
 }
 
 void
-db_free_object(dbref i)
+MUCK::Database::freeObject(dbref i)
 {
     struct object *o;
 
@@ -913,13 +910,13 @@ db_free_object(dbref i)
 }
 
 void
-db_free(void)
+MUCK::Database::freeAll()
 {
     dbref i;
 
     if (db) {
         for (i = 0; i < db_top; i++)
-            db_free_object(i);
+            freeObject(i);
         free((void *) db);      //TODO: Update this later for C++. -hinoserm
         db = 0;
         db_top = 0;
@@ -1245,9 +1242,9 @@ db_read_object_foxen(FILE * f, struct object *o, dbref objno, int dtype, int rea
     int j = 0;
 
     if (read_before) {
-        db_free_object(objno);
+        MUCK::database().freeObject(objno);
     }
-    db_clear_object(-1, objno);
+    MUCK::database().clearObject(-1, objno);
 
     FLAGS(objno) = 0;
     FLAG2(objno) = 0;
@@ -1539,7 +1536,7 @@ autostart_progs(void)
         return;
     }
 
-    for (i = 0; i < db_top; i++) {
+    for (i = 0; i < MUCK::database().top(); i++) {
         if (Typeof(i) == TYPE_PROGRAM) {
             if ((FLAGS(i) & ABODE) && TMage(OWNER(i))) {
                 /* pre-compile AUTOSTART programs. */
@@ -1556,7 +1553,7 @@ autostart_progs(void)
 }
 
 dbref
-db_read(FILE * f)
+MUCK::Database::load(FILE * f)
 {
     dbref i, thisref;
     struct object *o;
@@ -1587,7 +1584,7 @@ db_read(FILE * f)
         } else if (!strcmp(special, "**Foxen4 TinyMUCK DUMP Format***")) {
             db_load_format = 6;
             i = getref(f);
-            db_grow(i);
+            grow(i);
         } else
 #endif /* ARCHAIC_DATABASES */
         if (!strcmp(special, "**Foxen5 TinyMUCK DUMP Format***") ||
@@ -1614,7 +1611,7 @@ db_read(FILE * f)
                 db_hash_passwords = 1;
             db_hash_ver = db_hash_passwords ? ((dbflags & HVER_MASK) >> HVER_SHIFT) : HVER_NONE;
 
-            db_grow(i);
+            grow(i);
 #ifdef ARCHAIC_DATABASES
         } else if (!strcmp(special, "***Foxen Deltas Dump Extention***")) {
             db_load_format = 4;
@@ -1657,7 +1654,7 @@ db_read(FILE * f)
 #endif
 
                 /* make space */
-                db_grow(thisref + 1);
+                grow(thisref + 1);
 
                 /* read it in */
                 o = DBFETCH(thisref);
@@ -2019,40 +2016,12 @@ db_hash_oldconvert(char *out, const char *hash)
 }
 
 /* ---------------------------------------------------------------------
- * MUCK::Database facade. Storage and the legacy C API above are still
- * authoritative; these methods are the migration target for callers.
+ * The single global database instance. Constant-initialized: the inline
+ * accessors compile to direct member loads with no init guard.
  * --------------------------------------------------------------------- */
-
-#include "Database.h"
 
 namespace MUCK {
 
-dbref Database::top() const { return db_top; }
-struct object *Database::object(dbref ref) { return &db[ref]; }
-bool Database::valid(dbref ref) const { return OkObj(ref); }
-
-dbref Database::newObject(dbref player) { return new_object(player); }
-dbref Database::newProgram(dbref player, const char *name) { return new_program(player, name); }
-void Database::clearObject(dbref player, dbref ref) { db_clear_object(player, ref); }
-void Database::freeObject(dbref ref) { db_free_object(ref); }
-void Database::freeAll() { db_free(); }
-dbref Database::parent(dbref obj) { return getparent(obj); }
-
-dbref Database::load(FILE *f) { return db_read(f); }
-void Database::save(FILE *f) { db_write(f); }
-int Database::saveThreaded()
-{
-#ifdef THREADED_DB_DUMP
-    return db_write_threaded();
-#else
-    return -1;
-#endif
-}
-
-Database &database()
-{
-    static Database instance;
-    return instance;
-}
+Database g_database;
 
 } /* namespace MUCK */

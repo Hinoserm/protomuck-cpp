@@ -43,7 +43,7 @@ int has_refs(dbref program, timequeue ptr);
 static int
 valid_objref(dbref obj)
 {
-    return (!((obj >= db_top)
+    return (!((obj >= MUCK::database().top())
               || (obj >= 0 && Typeof(obj) == TYPE_GARBAGE)
               || (obj < 0)));
 }
@@ -1375,7 +1375,7 @@ propqueue(int descr, dbref player, dbref where, dbref trigger, dbref what, dbref
                     the_prog = NOTHING;
             }
             if (the_prog != AMBIGUOUS) {
-                if (the_prog < 0 || the_prog >= db_top) {
+                if (the_prog < 0 || the_prog >= MUCK::database().top()) {
                     the_prog = NOTHING;
                 } else if (Typeof(the_prog) != TYPE_PROGRAM) {
                     the_prog = NOTHING;
@@ -1448,7 +1448,7 @@ envpropqueue(int descr, dbref player, dbref where, dbref trigger, dbref what, db
 {
     while (what != NOTHING) {
         propqueue(descr, player, where, trigger, what, xclude, propname, toparg, mlev, mt);
-        what = getparent(what);
+        what = MUCK::database().parent(what);
     }
 }
 
@@ -1513,7 +1513,7 @@ listenqueue(int descr, dbref player, dbref where, dbref trigger, dbref what, dbr
                     the_prog = NOTHING;
             }
             if (the_prog != AMBIGUOUS) {
-                if (the_prog < 0 || the_prog >= db_top) {
+                if (the_prog < 0 || the_prog >= MUCK::database().top()) {
                     the_prog = NOTHING;
                 } else if (Typeof(the_prog) != TYPE_PROGRAM) {
                     the_prog = NOTHING;

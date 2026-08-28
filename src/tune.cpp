@@ -1120,7 +1120,7 @@ tune_setparm(const dbref player, const char *parmname, const char *val)
                     return 2;
                 obj = (dbref) atoi(parmval + 1);
             }
-            if (obj < -1 || obj >= db_top)
+            if (obj < -1 || obj >= MUCK::database().top())
                 return 2;
             if (obj != -1 && tref->typ != NOTYPE && Typeof(obj) != tref->typ)
                 return 3;

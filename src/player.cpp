@@ -266,7 +266,7 @@ connect_player(const char *name, const char *password)
 
     if (*name == NUMBER_TOKEN && number(name + 1) && atoi(name + 1)) {
         player = (dbref) atoi(name + 1);
-        if ((player < 0) || (player >= db_top)
+        if ((player < 0) || (player >= MUCK::database().top())
             || (Typeof(player) != TYPE_PLAYER))
             player = NOTHING;
     } else {
@@ -296,7 +296,7 @@ create_player(dbref creator, const char *name, const char *password)
     clear_alias(0, name);
 
     /* else he doesn't already exist, create him */
-    player = new_object(creator);
+    player = MUCK::database().newObject(creator);
     newp = DBFETCH(player);
 
     /* initialize everything */
@@ -410,7 +410,7 @@ delete_player(dbref who)
 
         wall_wizards(MARK "WARNING: Playername hashtable is inconsistent.  Rebuilding it.");
         clear_players();
-        for (i = db_top; i-- > 0;) {
+        for (i = MUCK::database().top(); i-- > 0;) {
             if (Typeof(i) == TYPE_PLAYER) {
                 add_player(i);
             }

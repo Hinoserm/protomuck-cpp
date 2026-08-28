@@ -19,7 +19,7 @@
    inline for maximum efficiency.
    Oh yeah, because it is an interpreted language, please do type
    checking during this time.  While you're at it, any objects you
-   are referencing should be checked against db_top.
+   are referencing should be checked against MUCK::database().top().
    */
 
 /* in cases of boolean expressions, we do return a value, the stuff
@@ -1784,7 +1784,7 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
             case IN_RET:
                 muf_funcprof_exit(fr);
                 if (stop > 1 && program != sys[stop - 1].progref) {
-                    if (sys[stop - 1].progref >= db_top || sys[stop - 1].progref < 0 || (Typeof(sys[stop - 1].progref) != TYPE_PROGRAM))
+                    if (sys[stop - 1].progref >= MUCK::database().top() || sys[stop - 1].progref < 0 || (Typeof(sys[stop - 1].progref) != TYPE_PROGRAM))
                         abort_loop_hard("Internal error.  Invalid address.", NULL, NULL);
                     calc_profile_timing(program, fr);
                     gettimeofday(&fr->proftime, NULL);
@@ -2243,13 +2243,13 @@ push(struct inst *stack, int *top, const char *str, int len)
 int
 valid_player(struct inst *oper)
 {
-    return (!(oper->type != PROG_OBJECT || oper->data.objref >= db_top || oper->data.objref < 0 || (Typeof(oper->data.objref) != TYPE_PLAYER)));
+    return (!(oper->type != PROG_OBJECT || oper->data.objref >= MUCK::database().top() || oper->data.objref < 0 || (Typeof(oper->data.objref) != TYPE_PLAYER)));
 }
 
 int
 valid_object(struct inst *oper)
 {
-    return (!(oper->type != PROG_OBJECT || oper->data.objref >= db_top || (oper->data.objref < 0)
+    return (!(oper->type != PROG_OBJECT || oper->data.objref >= MUCK::database().top() || (oper->data.objref < 0)
               || Typeof(oper->data.objref) == TYPE_GARBAGE));
 }
 
@@ -2323,7 +2323,7 @@ find_mlev(dbref prog, struct frame *fr, int st)
                     mlev = MLevel(prog);
                 } else {
                     if ((FLAGS(prog) & QUELL)
-                        && (((fr->player > 0) && (fr->player < db_top))
+                        && (((fr->player > 0) && (fr->player < MUCK::database().top()))
                             && (TMage(OWNER(prog))))) {
                         mlev = QLevel(OWNER(fr->player));
                     } else {
@@ -2350,7 +2350,7 @@ find_mlev(dbref prog, struct frame *fr, int st)
                 } else {
                     /* QUELL, give it the permissions of the caller */
                     if ((FLAGS(prog) & QUELL)
-                        && (((fr->player > 0) && (fr->player < db_top))
+                        && (((fr->player > 0) && (fr->player < MUCK::database().top()))
                             && (TMage(OWNER(prog))))) {
                         mlev = MLevel(OWNER(fr->player));
                     } else {

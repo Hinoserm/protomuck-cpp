@@ -36,7 +36,7 @@
 #endif
 #define AVL_KEY(x) (&(x->key))
 #define AVL_COMPARE(x,y) array_tree_compare(x,y,0,0,0)
-#define valid_obj(a) (a > -1 && a < db_top)
+#define valid_obj(a) (a > -1 && a < MUCK::database().top())
 
 
 static int array_tree_compare(array_iter *a, array_iter *b, int case_sens, int objname, bool natural);
