@@ -15,9 +15,11 @@
 
 #include <cstdio>
 #include <vector>
+#include <memory>
 #include <unordered_map>
 
 #include "Uuid.h"
+#include "DbObject.h"
 
 namespace MUCK {
 
@@ -59,6 +61,20 @@ class Database {
      * no match, AMBIGUOUS if more than one object matches. */
     dbref resolveUuidPrefix(const char *prefix) const;
 
+    /* --- the modernized object model (step 2, migration target) --- */
+    /* The DbObject shell for a dbref, created on first use with its
+     * type module attached from the legacy type bits. Null for invalid
+     * refs. Pointers are stable for the life of the process. */
+    DbObject *get(dbref ref);
+    DbObject *get(const Uuid &u) { return get(refOf(u)); }
+
+    /* Typed creation, the eventual single gatekeeper for object
+     * creation. Currently minimal: mints the object with its type
+     * module and name; richer per-type setup still lives in the legacy
+     * create paths and migrates here in later step 2 sections. */
+    template <class T>
+    T *Create(const char *name, dbref owner);
+
     /* internal: reached from legacy helpers inside Database.cpp */
     void grow(dbref newtop);
     void growTo(dbref newtop) { grow(newtop); }
@@ -72,6 +88,9 @@ class Database {
 
     std::vector<Uuid> uuids;                    /* by dbref */
     std::unordered_map<Uuid, dbref> byUuid;
+    std::vector<std::unique_ptr<DbObject> > shells;   /* by dbref */
+
+    void attachTypeModule(DbObject *obj);
 
     friend Database &database();
 };

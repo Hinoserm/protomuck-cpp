@@ -371,3 +371,50 @@ ProgramStore additions  (ProgramStore.h)
     it inside the program's file.  muf/<ref>.m is read as a fallback
     for flat-era installs and refreshed on write for compatibility,
     and goes away entirely in a later step.
+
+
+DbObject and modules  (DbObject.h, Modules.h, DbObject.cpp)  [step 2]
+
+    The modernized object model, currently implemented as VIEWS over
+    the legacy struct object so both worlds stay coherent while call
+    sites migrate.  Code written against this API will not change when
+    storage flips inside.
+
+    DbObject core:
+        obj->uuid(), obj->ref()             identity
+        obj->name(), obj->setName(s)
+        obj->location()                     DbObject pointers, not refs
+        obj->owner(), obj->setOwner(o)
+        obj->isDeleted()
+        obj->typeName()                     "room", "player", ...
+
+    Module access:
+        obj->As<Player>()                   null if not that type
+        obj->Get<Properties>()              any attached module
+        obj->attach(make_unique<T>())       feature modules
+
+    Lookup and creation:
+        database().get(ref)                 shell for a dbref (lazy,
+                                            stable pointer, null if
+                                            invalid)
+        database().get(uuid)
+        database().Create<Thing>(name, owner)
+                                            typed creation; minimal for
+                                            now, the legacy create
+                                            paths still do per-type
+                                            setup and migrate here in
+                                            later sections
+
+    Type modules: Room (dropTo), Thing (home, value), Player (home,
+    pennies, checkPassword, setPassword), Exit (destinations),
+    MufProgram (source).  Room, Thing, Player derive from Container
+    (contents(), exits(), returned as vectors of DbObject pointers).
+    Calling exits() on an Exit is a compile error by construction.
+
+    Feature modules: Properties (getString, getInt, getFloat, getRef,
+    setString, setInt, remove, exists), auto-attached to every object.
+
+    Migration pattern for step 2 sections: pick a legacy cluster (a
+    struct field family or free-function group), give the module the
+    method, repoint the call sites, delete the legacy declarations.
+    Loop until the sp union and the raw chains have no readers.

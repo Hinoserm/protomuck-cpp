@@ -10,6 +10,7 @@
 #include "interface.h"
 #include "externs.h"
 #include "MacroTable.h"
+#include "Modules.h"
 #include "ProgramStore.h"
 #include "strutils.h"
 
@@ -756,5 +757,72 @@ Database::resolveUuidPrefix(const char *prefix) const
     }
     return found;
 }
+
+/* --- the modernized object model (step 2) ------------------------- */
+
+void
+Database::attachTypeModule(DbObject *obj)
+{
+    switch (FLAGS(obj->ref()) & TYPE_MASK) {
+        case TYPE_ROOM:
+            obj->setTypeModule(std::make_unique<MUCK::Room>());
+            break;
+        case TYPE_THING:
+            obj->setTypeModule(std::make_unique<MUCK::Thing>());
+            break;
+        case TYPE_PLAYER:
+            obj->setTypeModule(std::make_unique<MUCK::Player>());
+            break;
+        case TYPE_EXIT:
+            obj->setTypeModule(std::make_unique<MUCK::Exit>());
+            break;
+        case TYPE_PROGRAM:
+            obj->setTypeModule(std::make_unique<MUCK::MufProgram>());
+            break;
+        default:               /* garbage: no type module */
+            break;
+    }
+    /* PROPERTIES is a global feature module: every object has it */
+    obj->attach(std::make_unique<MUCK::Properties>());
+}
+
+DbObject *
+Database::get(dbref ref)
+{
+    if (!valid(ref))
+        return nullptr;
+    if ((dbref) shells.size() <= ref)
+        shells.resize(ref + 1);
+    if (!shells[ref]) {
+        shells[ref].reset(new DbObject(ref));
+        attachTypeModule(shells[ref].get());
+    }
+    return shells[ref].get();
+}
+
+static int moduleTypeBits(Room *) { return TYPE_ROOM; }
+static int moduleTypeBits(Thing *) { return TYPE_THING; }
+static int moduleTypeBits(Player *) { return TYPE_PLAYER; }
+static int moduleTypeBits(Exit *) { return TYPE_EXIT; }
+static int moduleTypeBits(MufProgram *) { return TYPE_PROGRAM; }
+
+template <class T>
+T *
+Database::Create(const char *name, dbref owner)
+{
+    dbref r = newObject(owner);
+
+    FLAGS(r) = moduleTypeBits((T *) nullptr);
+    NAME(r) = alloc_string(name);
+    OWNER(r) = owner;
+    DBDIRTY(r);
+    return get(r)->template As<T>();
+}
+
+template Room *Database::Create<Room>(const char *, dbref);
+template Thing *Database::Create<Thing>(const char *, dbref);
+template Player *Database::Create<Player>(const char *, dbref);
+template Exit *Database::Create<Exit>(const char *, dbref);
+template MufProgram *Database::Create<MufProgram>(const char *, dbref);
 
 } /* namespace MUCK */
