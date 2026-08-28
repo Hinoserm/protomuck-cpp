@@ -22,7 +22,7 @@ check_password(dbref player, const char *check_pw)
     if (player == NOTHING)
         return 0;
 
-    password = DBFETCH(player)->sp.player.password;
+    password = MUCK::playerPasswordSlot(player);
 
     /* We now do this smartly based on the DB_NEWPASSES */
     /*  database flag. -Hinoserm                        */
@@ -62,10 +62,10 @@ set_password(dbref player, const char *password)
         return 0;
 
     if (!password || !*password) {
-        delete[]DBFETCH(player)->sp.player.password;
+        delete[] MUCK::playerPasswordSlot(player);
 
         if (!MUCK::PasswordHash::enabled) {
-            DBFETCH(player)->sp.player.password = NULL;
+            MUCK::playerPasswordSlot(player) = NULL;
             return 1;
         }
 
@@ -73,14 +73,15 @@ set_password(dbref player, const char *password)
 
         if (!res)
             return 0;
-        DBSTORE(player, sp.player.password, alloc_string(hashbuf));
+        MUCK::playerPasswordSlot(player) = alloc_string(hashbuf);
+        DBDIRTY(player);
         return 1;
     }
 
     if (!ok_password(password))
         return 0;
 
-    delete[]DBFETCH(player)->sp.player.password;
+    delete[] MUCK::playerPasswordSlot(player);
 
     if (MUCK::PasswordHash::enabled) {
         char hashbuf[BUFFER_LEN];
@@ -89,11 +90,13 @@ set_password(dbref player, const char *password)
 
         if (!res)
             return 0;
-        DBSTORE(player, sp.player.password, alloc_string(hashbuf));
+        MUCK::playerPasswordSlot(player) = alloc_string(hashbuf);
+        DBDIRTY(player);
         return 1;
     }
 
-    DBSTORE(player, sp.player.password, alloc_string(password));
+    MUCK::playerPasswordSlot(player) = alloc_string(password);
+    DBDIRTY(player);
     return 1;
 }
 
@@ -328,8 +331,7 @@ create_player(dbref creator, const char *name, const char *password)
     }
 
     OWNER(player) = player;
-    newp->sp.player.pennies = tp_start_pennies;    /* raw: mid-construction */
-    newp->sp.player.password = NULL; /* this has to stay here. -hinoserm */
+    MUCK::playerSetPennies(player, tp_start_pennies);
 
     /* set password */
     set_password(player, password);

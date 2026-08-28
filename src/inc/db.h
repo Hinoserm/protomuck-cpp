@@ -999,29 +999,8 @@ struct publics {
 
 /* union of type-specific fields */
 
-union specific {      /* I've been railroaded! */
-    struct {			/* ROOM-specific fields */
-	dbref   dropto;
-    }       room;
-    struct {			/* THING-specific fields */
-	dbref   home;
-	int     value;
-    }       thing;
-    struct {			/* EXIT-specific fields */
-	int     ndest;
-	dbref  *dest;
-    }       exit;
-    struct {			/* PLAYER-specific fields */
-	dbref   home;
-	int     pennies;
-	const char *password;
-	/* Session state (descriptors, editor, ignore cache) lives on the
-	 * PLAYER module now; see PlayerSession in Modules.h. */
-    }       player;
-    /* PROGRAM-specific fields (compiled code, editor text, publics,
-     * profiling) live in ProgramRuntime on the MUF_PROGRAM module now;
-     * see Modules.h. */
-};
+/* The old union specific is gone: type-specific data is owned by the
+ * type modules (Modules.h). */
 
 /* timestamps record */
 
@@ -1057,7 +1036,9 @@ struct object {
     object_flag_type flags, flag2, flag3, flag4;
     object_power_type powers, power2;
     struct timestamps ts;
-    union specific sp;
+    /* type-specific data lives on the type modules now: Room dropto,
+     * Thing home/value, Exit destinations, Player home/pennies/
+     * password, MufProgram runtime and source. See Modules.h. */
     unsigned int     mpi_prof_use;
     struct timeval   mpi_proftime;
 };

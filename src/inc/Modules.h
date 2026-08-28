@@ -36,6 +36,14 @@ class Room : public Container {
     const char *moduleName() const override { return staticName(); }
     DbObject *dropTo() const;
     void setDropTo(DbObject *where);
+
+    /* Raw ref access: dropto may hold the HOME sentinel, which the
+     * pointer API cannot express. */
+    dbref dropToRef() const { return dropTo_; }
+    void setDropToRef(dbref d);
+
+  private:
+    dbref dropTo_ = -3;         /* NOTHING */
 };
 
 class Thing : public Container {
@@ -46,6 +54,13 @@ class Thing : public Container {
     void setHome(DbObject *where);
     int value() const;
     void setValue(int v);
+
+    dbref homeRef() const { return home_; }
+    void setHomeRef(dbref d);
+
+  private:
+    dbref home_ = -3;           /* NOTHING */
+    int value_ = 0;
 };
 
 /* Per-player transient state: everything about the LIVE presence of a
@@ -65,18 +80,29 @@ class Player : public Container {
   public:
     static const char *staticName() { return "player"; }
     const char *moduleName() const override { return staticName(); }
+    ~Player() override { delete[] password_; }
     DbObject *home() const;
     void setHome(DbObject *where);
     int pennies() const;
     void setPennies(int v);
 
+    dbref homeRef() const { return home_; }
+    void setHomeRef(dbref d);
+
     /* Password interface; hashing handled by PasswordHash. */
     bool checkPassword(const char *plaintext) const;
     bool setPassword(const char *plaintext);
 
+    /* Raw stored hash slot for the legacy password plumbing in
+     * player.cpp; owned here, alloc_string allocated. */
+    const char *&passwordSlot() { return password_; }
+
     PlayerSession &session() { return session_; }
 
   private:
+    dbref home_ = -3;           /* NOTHING */
+    int pennies_ = 0;
+    const char *password_ = nullptr;
     PlayerSession session_;
 };
 
@@ -94,9 +120,12 @@ class Exit : public Module {
     int destCount() const;
     dbref destRef(int i) const;
 
-    /* Transitional raw setter: replaces the whole destination array,
-     * sentinels preserved, dirty flag set. n of 0 clears. */
+    /* Raw setter: replaces the whole destination list, sentinels
+     * preserved, dirty flag set. n of 0 clears. */
     void setDestRefs(const dbref *refs, int n);
+
+  private:
+    std::vector<dbref> dests_;  /* may hold HOME and NIL sentinels */
 };
 
 /* Containment helpers over the owning vectors on DbObject. Blanket
@@ -123,10 +152,22 @@ dbref exitDestRef(dbref ref, int i);
 dbref playerHomeRef(dbref ref);
 int playerPennies(dbref ref);
 void playerAddPennies(dbref ref, int delta);
+void playerSetHomeRef(dbref ref, dbref where);
+void playerSetPennies(dbref ref, int v);
+dbref roomDropToRef(dbref ref);
+void roomSetDropToRef(dbref ref, dbref where);
+dbref thingHomeRef(dbref ref);
+void thingSetHomeRef(dbref ref, dbref where);
+int thingValue(dbref ref);
+void thingSetValue(dbref ref, int v);
 
 /* Session of a player ref; a shared inert dummy for non-players so
  * blanket conversions stay safe. Do not hold across type changes. */
 PlayerSession &playerSession(dbref ref);
+
+/* Raw password-hash slot of a player ref; a shared inert dummy slot
+ * for non-players. Owned by the Player module. */
+const char *&playerPasswordSlot(dbref ref);
 
 /* Per-program transient interpreter and editor state: compiled code,
  * running-instance bookkeeping, the editor's working text, profiling.

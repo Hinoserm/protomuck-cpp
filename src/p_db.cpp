@@ -1659,8 +1659,6 @@ prim_newexit(PRIM_PROTOTYPE)
         ref = newx->object()->ref();
         DBFETCH(ref)->location = oper[1].data.objref;  /* chain wiring flips later */
         FLAGS(ref) = TYPE_EXIT;
-        DBFETCH(ref)->sp.exit.ndest = 0;   /* raw: mid-construction */
-        DBFETCH(ref)->sp.exit.dest = NULL; /* raw: mid-construction */
 
         /* link it in */
         MUCK::attachExit(oper[1].data.objref, ref);
@@ -1970,9 +1968,8 @@ prim_copyplayer(PRIM_PROTOTYPE)
 #endif
 
     OWNER(newplayer) = newplayer;
-    newp->sp.player.home = MUCK::playerHomeRef(ref);       /* raw: mid-construction */
-    newp->sp.player.pennies = MUCK::playerPennies(ref);    /* raw: mid-construction */
-    newp->sp.player.password = NULL;
+    MUCK::playerSetHomeRef(newplayer, MUCK::playerHomeRef(ref));
+    MUCK::playerSetPennies(newplayer, MUCK::playerPennies(ref));
 
     /* Yet again, set_password */
     set_password(newplayer, password);
@@ -2050,8 +2047,8 @@ prim_toadplayer(PRIM_PROTOTYPE)
         }
     }
 
-    delete[]DBFETCH(victim)->sp.player.password;
-    DBFETCH(victim)->sp.player.password = NULL;
+    delete[] MUCK::playerPasswordSlot(victim);
+    MUCK::playerPasswordSlot(victim) = NULL;
 
     dequeue_prog(victim, 0);    /* dequeue progs that player's running */
 

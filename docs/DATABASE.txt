@@ -194,8 +194,11 @@ amended.
    follow: all field access goes through accessor methods, and
    identity is always resident even when payload is not.
 
-   Contents and exits are std::vector<DbObject *>.  The old intrusive
-   location/contents/exits/next dbref chains are abolished.
+   Contents and exits are std::vector<DbObject *> owned by every
+   DbObject (a default empty pair of lists on all types).  The old
+   intrusive location/contents/exits/next dbref chains are abolished;
+   a per-object position hint keeps classic head/next walks at chain
+   cost.
 
 
 6. ON-DISK FORMAT
@@ -603,24 +606,42 @@ STEP 2 BURNDOWN STATE  (updated as the loop advances)
                            store. Runtime state is memory-only and
                            never serialized.
 
-    The sp union now carries only: room.dropto, thing.home/value,
-    exit.ndest/dest, player.home/pennies/password. Those die with the
-    storage flip.
+    The sp union is DELETED. Type-specific data is owned by the type
+    modules: Room dropto (raw ref access preserves a HOME dropto),
+    Thing home/value, Player home/pennies/password, Exit destinations
+    (a dbref vector that may hold the HOME and NIL sentinels), and
+    the MufProgram runtime plus externally stored source. Blanket-safe
+    ref-level helpers (roomDropToRef, thingHomeRef, playerPennies,
+    playerPasswordSlot, exitDestRef, and their setters) serve the
+    serializers and repair tools.
 
-    Step 2 passes still open:
-        - Wizard-level checks (RawMWLevel, WLevel) into a permissions
-          home.
-        - After the step 5 passes: chains to vectors, storage flip,
-          struct and garbage-type death, DBFETCH deleted.
+    CHAINS ARE DEAD. Containment is two owning vectors on every
+    DbObject (contentsVec, exitsVec), empty for most types; the front
+    of a vector is the old chain head and arrivals prepend, so the
+    MUF-visible CONTENTS/NEXT/EXITS order is unchanged. The CONTENTS,
+    EXITS, and NEXTOBJ macros remain as rvalue read facades over the
+    vectors, DOLIST walks via nextSiblingRef with a per-object
+    position hint that keeps sequential walks at the old O(1) per
+    step, and mutation goes through attachContent, detachContent,
+    attachExit, detachExit.
+
+    STRUCT DEATH. What is left of struct object (name, location,
+    owner, properties, flags, powers, timestamps) is the core record
+    embedded inside DbObject; the DBFETCH macro survives purely as
+    the accessor for that core record. The garbage TYPE is abolished:
+    nothing can create or store a garbage object; the TYPE_GARBAGE
+    bits value remains only as the in-memory sentinel that marks a
+    dead shell (isDeleted).
 
     Create<T> absorption is DONE: create_player, @create, @dig, @open,
-    @action, @program, and the MUF creation prims all construct through
-    Database::Create<T>, and typeInit() is the one sanctioned place
-    that touches a raw union mid-construction.
+    @action, @program, and the MUF creation prims all construct
+    through Database::Create<T>; module constructors own their own
+    defaults, and no code anywhere initializes raw type payload.
 
-    After the last cluster: containment chains become the Container
-    vectors for real, storage flips inside DbObject, the legacy struct
-    and the garbage type die, and DBFETCH is deleted.
+    Wizard-level checks are DONE: DbObject::muckerLevel and wizLevel,
+    with the legacy names as shims for the MLevel macro family.
+
+    Step 2 is COMPLETE.
 
     Site conversion idioms (use these, keep them consistent):
 

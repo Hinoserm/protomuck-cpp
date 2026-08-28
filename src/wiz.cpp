@@ -695,10 +695,10 @@ do_frob(int descr, dbref player, const char *name, const char *recip)
                 t->setHome(MUCK::database().get(tp_player_start));
         }
     }
-    if (DBFETCH(victim)->sp.player.password) {
-        delete DBFETCH(victim)->sp.player.password;
+    if (MUCK::playerPasswordSlot(victim)) {
+        delete[] MUCK::playerPasswordSlot(victim);
 
-        DBFETCH(victim)->sp.player.password = 0;
+        MUCK::playerPasswordSlot(victim) = NULL;
     }
     dequeue_prog(victim, 0);    /* dequeue progs that player's running */
 

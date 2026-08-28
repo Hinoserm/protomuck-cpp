@@ -199,12 +199,10 @@ enter_room(int descr, dbref player, dbref loc, dbref exit)
             }
         }
 
-        /* if old location has STICKY dropto, send stuff through it */
-        MUCK::Room *oldroom = (old != NOTHING)
-            ? MUCK::database().get(old)->As<MUCK::Room>() : nullptr;
-
-        if (oldroom && oldroom->dropTo() && (FLAGS(old) & STICKY)
-            && (dropto = oldroom->dropTo()->ref()) != NOTHING) {
+        /* if old location has STICKY dropto, send stuff through it;
+         * the raw ref read keeps a HOME dropto working */
+        if (old != NOTHING && (FLAGS(old) & STICKY)
+            && (dropto = MUCK::roomDropToRef(old)) != NOTHING) {
             maybe_dropto(descr, old, dropto);
         }
 
@@ -767,11 +765,12 @@ do_drop(int descr, dbref player, const char *name, const char *obj)
             if (Typeof(cont) == TYPE_ROOM && (FLAGS(thing) & STICKY) && Typeof(thing) == TYPE_THING) {
                 send_home(descr, thing, 0);
             } else {
-                MUCK::Room *cr = MUCK::database().get(cont)->As<MUCK::Room>();
-                bool immediate_dropto = (cr && cr->dropTo()
+                dbref cdrop = MUCK::roomDropToRef(cont);
+                bool immediate_dropto = (Typeof(cont) == TYPE_ROOM
+                                         && cdrop != NOTHING
                                          && !(FLAGS(cont) & STICKY));
 
-                moveto(thing, immediate_dropto ? cr->dropTo()->ref() : cont);
+                moveto(thing, immediate_dropto ? cdrop : cont);
             }
             if (Typeof(cont) == TYPE_THING) {
                 anotify_nolisten2(player, CSUCC "Put away.");

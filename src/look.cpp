@@ -690,8 +690,8 @@ size_object(dbref i, int load)
 
     if (Typeof(i) == TYPE_EXIT) {
         byts += sizeof(dbref) * MUCK::exitDestCount(i);
-    } else if (Typeof(i) == TYPE_PLAYER && DBFETCH(i)->sp.player.password) {
-        byts += strlen(DBFETCH(i)->sp.player.password) + 1;
+    } else if (Typeof(i) == TYPE_PLAYER && MUCK::playerPasswordSlot(i)) {
+        byts += strlen(MUCK::playerPasswordSlot(i)) + 1;
     } else if (Typeof(i) == TYPE_PROGRAM) {
         byts += size_prog(i);
     }

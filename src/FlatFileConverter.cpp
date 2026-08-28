@@ -425,7 +425,7 @@ db_read_object_new(FILE * f, struct object *o, dbref objno)
             o->sp.player.home = getref(f);
             o->exits = getref(f);
             o->sp.player.pennies = getref(f);
-            o->sp.player.password = getstring(f);
+            MUCK::playerPasswordSlot(objno) = getstring(f);
             break;
     }
 }
@@ -588,36 +588,40 @@ db_read_object_foxen(FILE * f, struct object *o, dbref objno, int dtype, int rea
         case TYPE_THING:
             if (verboseload)
                 fprintf(stderr, "[type: THING] ");
-            o->sp.thing.home = prop_flag ? getref(f) : j;
+            MUCK::thingSetHomeRef(objno, prop_flag ? getref(f) : j);
             rawExits[objno] = getref(f);
             OWNER(objno) = getref(f);
-            o->sp.thing.value = getref(f);
+            MUCK::thingSetValue(objno, getref(f));
             break;
         case TYPE_ROOM:
             if (verboseload)
                 fprintf(stderr, "[type: ROOM] ");
-            o->sp.room.dropto = prop_flag ? getref(f) : j;
+            MUCK::roomSetDropToRef(objno, prop_flag ? getref(f) : j);
             rawExits[objno] = getref(f);
             OWNER(objno) = getref(f);
             break;
-        case TYPE_EXIT:
+        case TYPE_EXIT: {
             if (verboseload)
                 fprintf(stderr, "[type: EXIT] ");
-            o->sp.exit.ndest = prop_flag ? getref(f) : j;
-            if (o->sp.exit.ndest) /* only allocate space for linked exits */
-                o->sp.exit.dest = new dbref[o->sp.exit.ndest];
 
-            for (j = 0; j < o->sp.exit.ndest; j++) {
-                (o->sp.exit.dest)[j] = getref(f);
-            }
+            int nd = prop_flag ? getref(f) : j;
+            std::vector<dbref> dl;
+
+            for (j = 0; j < nd; j++)
+                dl.push_back(getref(f));
+            if (MUCK::Exit *x =
+                MUCK::database().get(objno)->As<MUCK::Exit>())
+                x->setDestRefs(dl.empty() ? NULL : dl.data(),
+                               (int) dl.size());
             OWNER(objno) = getref(f);
             break;
+        }
         case TYPE_PLAYER:
             if (verboseload)
                 fprintf(stderr, "[type: PLAYER] ");
-            o->sp.player.home = prop_flag ? getref(f) : j;
+            MUCK::playerSetHomeRef(objno, prop_flag ? getref(f) : j);
             rawExits[objno] = getref(f);
-            o->sp.player.pennies = getref(f);
+            MUCK::playerSetPennies(objno, getref(f));
             if (MUCK::PasswordHash::enabled) {
                 if (db_hash_convert) {
                     // Update legacy untagged raw plaintext to new tagged hex encoded best algorithm
@@ -633,7 +637,7 @@ db_read_object_foxen(FILE * f, struct object *o, dbref objno, int dtype, int rea
                         // Convert legacy untagged raw plaintext password to new tagged hex encoded best algorithm
                         MUCK::PasswordHash::hash(HTYPE_CURRENT, hashbuf, p, NULL);
                     }
-                    o->sp.player.password = alloc_string(hashbuf);
+                    MUCK::playerPasswordSlot(objno) = alloc_string(hashbuf);
                 } else {
                     if (MUCK::PasswordHash::version == HVER_NONE) {
                         // Update legacy untagged base64 encoded md5 to new tagged hex encoded unsalted MD5 algorithm
@@ -643,7 +647,7 @@ db_read_object_foxen(FILE * f, struct object *o, dbref objno, int dtype, int rea
                         const char *p = getstring_noalloc(f);
 
                         MUCK::PasswordHash::oldConvert(hashbuf, p);
-                        o->sp.player.password = alloc_string(hashbuf);
+                        MUCK::playerPasswordSlot(objno) = alloc_string(hashbuf);
                     } else {
                         // Handle new tagged methods
                         const char *p = getstring_noalloc(f);
@@ -655,10 +659,10 @@ db_read_object_foxen(FILE * f, struct object *o, dbref objno, int dtype, int rea
                             hashbuf[0] = '\0';
                             MUCK::PasswordHash::split(p, NULL, hashbuf, NULL);
                             MUCK::PasswordHash::hash(HTYPE_CURRENT, hashbuf, hashbuf, NULL);
-                            o->sp.player.password = alloc_string(hashbuf);
+                            MUCK::playerPasswordSlot(objno) = alloc_string(hashbuf);
                         } else {
                             // Preserve new tagged methods
-                            o->sp.player.password = alloc_string(p);
+                            MUCK::playerPasswordSlot(objno) = alloc_string(p);
                         }
                     }
                 }
@@ -677,10 +681,10 @@ db_read_object_foxen(FILE * f, struct object *o, dbref objno, int dtype, int rea
                         // Convert legacy untagged raw plaintext password to new tagged hex encoded best algorithm
                         MUCK::PasswordHash::hash(HTYPE_CURRENT, hashbuf, p, NULL);
                     }
-                    o->sp.player.password = alloc_string(hashbuf);
+                    MUCK::playerPasswordSlot(objno) = alloc_string(hashbuf);
                 } else {
                     // Preserve legacy untagged raw plaintext
-                    o->sp.player.password = getstring(f);
+                    MUCK::playerPasswordSlot(objno) = getstring(f);
                 }
             }
             break;

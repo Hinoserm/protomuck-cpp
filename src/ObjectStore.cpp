@@ -539,28 +539,29 @@ objectToJson(dbref i)
     /* --- $type: the type module's fields --- */
     switch (o->flags & TYPE_MASK) {
         case TYPE_ROOM:
-            e["$type/dropto"] = entry("r", refToJson(o->sp.room.dropto));
+            e["$type/dropto"] = entry("r", refToJson(MUCK::roomDropToRef(i)));
             e["$type/contents"] = entry("l", listToJson(i, MUCK::contentsOf(i)));
             e["$type/exits"] = entry("l", listToJson(i, MUCK::exitsOf(i)));
             break;
         case TYPE_THING:
-            e["$type/home"] = entry("r", refToJson(o->sp.thing.home));
-            e["$type/value"] = entry("i", o->sp.thing.value);
+            e["$type/home"] = entry("r", refToJson(MUCK::thingHomeRef(i)));
+            e["$type/value"] = entry("i", MUCK::thingValue(i));
             e["$type/contents"] = entry("l", listToJson(i, MUCK::contentsOf(i)));
             e["$type/exits"] = entry("l", listToJson(i, MUCK::exitsOf(i)));
             break;
         case TYPE_PLAYER:
-            e["$type/home"] = entry("r", refToJson(o->sp.player.home));
-            e["$type/pennies"] = entry("i", o->sp.player.pennies);
-            e["$type/password"] = entry("s", jstr(o->sp.player.password));
+            e["$type/home"] = entry("r", refToJson(MUCK::playerHomeRef(i)));
+            e["$type/pennies"] = entry("i", MUCK::playerPennies(i));
+            e["$type/password"] = entry("s", jstr(MUCK::playerPasswordSlot(i)));
             e["$type/contents"] = entry("l", listToJson(i, MUCK::contentsOf(i)));
             e["$type/exits"] = entry("l", listToJson(i, MUCK::exitsOf(i)));
             break;
         case TYPE_EXIT: {
             json dests = json::array();
+            int nd = MUCK::exitDestCount(i);
 
-            for (int k = 0; k < o->sp.exit.ndest; k++)
-                dests.push_back(refToJson((o->sp.exit.dest)[k]));
+            for (int k = 0; k < nd; k++)
+                dests.push_back(refToJson(MUCK::exitDestRef(i, k)));
             e["$type/dests"] = entry("l", dests);
             break;
         }
@@ -709,11 +710,12 @@ objectFromJsonPhase1(const json &j, std::vector<PendingLinks> &later)
     const json &td = j["type_data"];
     switch (o->flags & TYPE_MASK) {
         case TYPE_THING:
-            o->sp.thing.value = td.value("value", 0);
+            MUCK::thingSetValue(i, td.value("value", 0));
             break;
         case TYPE_PLAYER:
-            o->sp.player.pennies = td.value("pennies", 0);
-            o->sp.player.password = alloc_string(junstr(td.value("password", "")).c_str());
+            MUCK::playerSetPennies(i, td.value("pennies", 0));
+            MUCK::playerPasswordSlot(i) =
+                alloc_string(junstr(td.value("password", "")).c_str());
             break;
         case TYPE_PROGRAM:
             if (td.contains("source")) {
@@ -839,17 +841,17 @@ objectFromJsonPhase2(const PendingLinks &pl)
 
     switch (o->flags & TYPE_MASK) {
         case TYPE_ROOM:
-            o->sp.room.dropto = refFromJson(pl.td["dropto"]);
+            MUCK::roomSetDropToRef(pl.ref, refFromJson(pl.td["dropto"]));
             listFromJson(MUCK::contentsOf(pl.ref), pl.td["contents"]);
             listFromJson(MUCK::exitsOf(pl.ref), pl.td["exits"]);
             break;
         case TYPE_THING:
-            o->sp.thing.home = refFromJson(pl.td["home"]);
+            MUCK::thingSetHomeRef(pl.ref, refFromJson(pl.td["home"]));
             listFromJson(MUCK::contentsOf(pl.ref), pl.td["contents"]);
             listFromJson(MUCK::exitsOf(pl.ref), pl.td["exits"]);
             break;
         case TYPE_PLAYER:
-            o->sp.player.home = refFromJson(pl.td["home"]);
+            MUCK::playerSetHomeRef(pl.ref, refFromJson(pl.td["home"]));
             listFromJson(MUCK::contentsOf(pl.ref), pl.td["contents"]);
             listFromJson(MUCK::exitsOf(pl.ref), pl.td["exits"]);
             /* the player name lookup table is runtime state the flat
@@ -859,14 +861,13 @@ objectFromJsonPhase2(const PendingLinks &pl)
             break;
         case TYPE_EXIT: {
             const json &dests = pl.td["dests"];
-            o->sp.exit.ndest = (int) dests.size();
-            if (o->sp.exit.ndest > 0) {
-                o->sp.exit.dest = new dbref[o->sp.exit.ndest];
-                for (int k = 0; k < o->sp.exit.ndest; k++)
-                    o->sp.exit.dest[k] = refFromJson(dests[k]);
-            } else {
-                o->sp.exit.dest = NULL;
-            }
+            std::vector<dbref> dl;
+
+            for (const auto &dv : dests)
+                dl.push_back(refFromJson(dv));
+            if (MUCK::Exit *x = MUCK::database().get(pl.ref)->As<MUCK::Exit>())
+                x->setDestRefs(dl.empty() ? NULL : dl.data(),
+                               (int) dl.size());
             break;
         }
         default:
@@ -1577,6 +1578,12 @@ ObjectStore::loadAll()
     for (dbref i = 0; i < top; i++)
         if ((DBFETCH(i)->flags & TYPE_MASK) == TYPE_GARBAGE)
             MUCK::database().noteHole(i);
+
+    /* a fresh load is clean by definition: the module setters used
+     * during wiring raise dirty flags that would otherwise force a
+     * full rewrite (and revision churn) on the next dump */
+    for (dbref i = 0; i < top; i++)
+        DBFETCH(i)->flags &= ~OBJECT_CHANGED;
 
     return (dbref) top;
 }

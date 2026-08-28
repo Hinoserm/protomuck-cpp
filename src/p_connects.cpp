@@ -13,6 +13,7 @@
 #include "strutils.h"
 #include "interp.h"
 #include "netresolve.h"
+#include "Modules.h"
 
 int
 check_descr_flag(char *dflag)
@@ -512,7 +513,7 @@ prim_descr_setuser(PRIM_PROTOTYPE)
         abort_interp("That is not a valid descriptor.");
     ptr = oper[0].data.string ? oper[0].data.string->data : pad_char;
     if (ref != NOTHING) {
-        const char *passwd = DBFETCH(ref)->sp.player.password;
+        const char *passwd = MUCK::playerPasswordSlot(ref);
 
         if (passwd) {
             if (!check_password(ref, ptr)) {

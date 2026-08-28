@@ -347,61 +347,84 @@ Container::exits() const
 DbObject *
 Room::dropTo() const
 {
-    return database().get(DBFETCH(object()->ref())->sp.room.dropto);
+    return database().get(dropTo_);
 }
 
 void
 Room::setDropTo(DbObject *where)
 {
-    DBSTORE(object()->ref(), sp.room.dropto, where ? where->ref() : NOTHING);
+    setDropToRef(where ? where->ref() : NOTHING);
+}
+
+void
+Room::setDropToRef(dbref d)
+{
+    dropTo_ = d;
+    DBDIRTY(object()->ref());
 }
 
 DbObject *
 Thing::home() const
 {
-    return database().get(DBFETCH(object()->ref())->sp.thing.home);
+    return database().get(home_);
 }
 
 void
 Thing::setHome(DbObject *where)
 {
-    DBSTORE(object()->ref(), sp.thing.home, where ? where->ref() : NOTHING);
+    setHomeRef(where ? where->ref() : NOTHING);
+}
+
+void
+Thing::setHomeRef(dbref d)
+{
+    home_ = d;
+    DBDIRTY(object()->ref());
 }
 
 int
 Thing::value() const
 {
-    return DBFETCH(object()->ref())->sp.thing.value;
+    return value_;
 }
 
 void
 Thing::setValue(int v)
 {
-    DBSTORE(object()->ref(), sp.thing.value, v);
+    value_ = v;
+    DBDIRTY(object()->ref());
 }
 
 DbObject *
 Player::home() const
 {
-    return database().get(DBFETCH(object()->ref())->sp.player.home);
+    return database().get(home_);
 }
 
 void
 Player::setHome(DbObject *where)
 {
-    DBSTORE(object()->ref(), sp.player.home, where ? where->ref() : NOTHING);
+    setHomeRef(where ? where->ref() : NOTHING);
+}
+
+void
+Player::setHomeRef(dbref d)
+{
+    home_ = d;
+    DBDIRTY(object()->ref());
 }
 
 int
 Player::pennies() const
 {
-    return DBFETCH(object()->ref())->sp.player.pennies;
+    return pennies_;
 }
 
 void
 Player::setPennies(int v)
 {
-    DBSTORE(object()->ref(), sp.player.pennies, v);
+    pennies_ = v;
+    DBDIRTY(object()->ref());
 }
 
 bool
@@ -419,17 +442,15 @@ Player::setPassword(const char *plaintext)
 int
 Exit::destCount() const
 {
-    return DBFETCH(object()->ref())->sp.exit.ndest;
+    return (int) dests_.size();
 }
 
 dbref
 Exit::destRef(int i) const
 {
-    struct object *o = DBFETCH(object()->ref());
-
-    if (i < 0 || i >= o->sp.exit.ndest || !o->sp.exit.dest)
+    if (i < 0 || (size_t) i >= dests_.size())
         return NOTHING;
-    return o->sp.exit.dest[i];
+    return dests_[i];
 }
 
 int
@@ -492,6 +513,97 @@ playerSession(dbref ref)
     return p->session();
 }
 
+void
+playerSetHomeRef(dbref ref, dbref where)
+{
+    DbObject *o = database().get(ref);
+    Player *p = o ? o->As<Player>() : nullptr;
+
+    if (p)
+        p->setHomeRef(where);
+}
+
+void
+playerSetPennies(dbref ref, int v)
+{
+    DbObject *o = database().get(ref);
+    Player *p = o ? o->As<Player>() : nullptr;
+
+    if (p)
+        p->setPennies(v);
+}
+
+dbref
+roomDropToRef(dbref ref)
+{
+    DbObject *o = database().get(ref);
+    Room *r = o ? o->As<Room>() : nullptr;
+
+    return r ? r->dropToRef() : NOTHING;
+}
+
+void
+roomSetDropToRef(dbref ref, dbref where)
+{
+    DbObject *o = database().get(ref);
+    Room *r = o ? o->As<Room>() : nullptr;
+
+    if (r)
+        r->setDropToRef(where);
+}
+
+dbref
+thingHomeRef(dbref ref)
+{
+    DbObject *o = database().get(ref);
+    Thing *t = o ? o->As<Thing>() : nullptr;
+
+    return t ? t->homeRef() : NOTHING;
+}
+
+void
+thingSetHomeRef(dbref ref, dbref where)
+{
+    DbObject *o = database().get(ref);
+    Thing *t = o ? o->As<Thing>() : nullptr;
+
+    if (t)
+        t->setHomeRef(where);
+}
+
+int
+thingValue(dbref ref)
+{
+    DbObject *o = database().get(ref);
+    Thing *t = o ? o->As<Thing>() : nullptr;
+
+    return t ? t->value() : 0;
+}
+
+void
+thingSetValue(dbref ref, int v)
+{
+    DbObject *o = database().get(ref);
+    Thing *t = o ? o->As<Thing>() : nullptr;
+
+    if (t)
+        t->setValue(v);
+}
+
+const char *&
+playerPasswordSlot(dbref ref)
+{
+    static const char *dummy;
+    DbObject *o = database().get(ref);
+    Player *p = o ? o->As<Player>() : nullptr;
+
+    if (!p) {
+        dummy = nullptr;
+        return dummy;
+    }
+    return p->passwordSlot();
+}
+
 ProgramRuntime &
 programRuntime(dbref ref)
 {
@@ -509,13 +621,7 @@ programRuntime(dbref ref)
 void
 Exit::setDestRefs(const dbref *refs, int n)
 {
-    struct object *o = DBFETCH(object()->ref());
-
-    delete[] o->sp.exit.dest;
-    o->sp.exit.ndest = n;
-    o->sp.exit.dest = n > 0 ? new dbref[n] : NULL;
-    for (int i = 0; i < n; i++)
-        o->sp.exit.dest[i] = refs[i];
+    dests_.assign(refs, refs + (n > 0 ? n : 0));
     DBDIRTY(object()->ref());
 }
 
@@ -523,24 +629,19 @@ std::vector<DbObject *>
 Exit::destinations() const
 {
     std::vector<DbObject *> out;
-    struct object *o = DBFETCH(object()->ref());
 
-    for (int i = 0; i < o->sp.exit.ndest; i++)
-        if (DbObject *d = database().get(o->sp.exit.dest[i]))
-            out.push_back(d);
+    for (dbref d : dests_)
+        if (DbObject *o = database().get(d))
+            out.push_back(o);
     return out;
 }
 
 void
 Exit::setDestinations(const std::vector<DbObject *> &dests)
 {
-    struct object *o = DBFETCH(object()->ref());
-
-    delete[] o->sp.exit.dest;
-    o->sp.exit.ndest = (int) dests.size();
-    o->sp.exit.dest = dests.empty() ? NULL : new dbref[dests.size()];
-    for (size_t i = 0; i < dests.size(); i++)
-        o->sp.exit.dest[i] = dests[i]->ref();
+    dests_.clear();
+    for (DbObject *o : dests)
+        dests_.push_back(o->ref());
     DBDIRTY(object()->ref());
 }
 

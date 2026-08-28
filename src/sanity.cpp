@@ -87,26 +87,26 @@ sane_dump_object(dbref player, const char *arg)
 
     switch (TYPEOF(d)) {
         case TYPE_THING:
-            SanPrint(player, "  Home:           %s", unparse(DBFETCH(d)->sp.thing.home));
-            SanPrint(player, "  Value:          %d", DBFETCH(d)->sp.thing.value);
+            SanPrint(player, "  Home:           %s", unparse(MUCK::thingHomeRef(d)));
+            SanPrint(player, "  Value:          %d", MUCK::thingValue(d));
             break;
 
         case TYPE_ROOM:
-            SanPrint(player, "  Drop-to:        %s", unparse(DBFETCH(d)->sp.room.dropto));
+            SanPrint(player, "  Drop-to:        %s", unparse(MUCK::roomDropToRef(d)));
             break;
 
         case TYPE_PLAYER:
-            SanPrint(player, "  Home:           %s", unparse(DBFETCH(d)->sp.player.home));
-            SanPrint(player, "  Pennies:        %d", DBFETCH(d)->sp.player.pennies);
+            SanPrint(player, "  Home:           %s", unparse(MUCK::playerHomeRef(d)));
+            SanPrint(player, "  Pennies:        %d", MUCK::playerPennies(d));
             if (player < 0) {
-                SanPrint(player, "  Password:       %s", DBFETCH(d)->sp.player.password);
+                SanPrint(player, "  Password:       %s", MUCK::playerPasswordSlot(d));
             }
             break;
 
         case TYPE_EXIT:
             SanPrint(player, "  Links:");
-            for (i = 0; i < DBFETCH(d)->sp.exit.ndest; i++)
-                SanPrint(player, "    %s", unparse(DBFETCH(d)->sp.exit.dest[i]));
+            for (i = 0; i < MUCK::exitDestCount(d); i++)
+                SanPrint(player, "    %s", unparse(MUCK::exitDestRef(d, i)));
             break;
 
         case TYPE_PROGRAM:
@@ -269,7 +269,7 @@ check_room(dbref player, dbref obj)
 {
     dbref i;
 
-    i = DBFETCH(obj)->sp.room.dropto;
+    i = MUCK::roomDropToRef(obj);
 
     if (!valid_ref(i) && i != HOME && i != NIL) {
         violate(player, obj, "has its dropto set to an invalid object");
@@ -284,7 +284,7 @@ check_thing(dbref player, dbref obj)
 {
     dbref i;
 
-    i = DBFETCH(obj)->sp.thing.home;
+    i = MUCK::thingHomeRef(obj);
 
     if (!valid_obj(i) && i != NIL) {
         violate(player, obj, "has its home set to an invalid object");
@@ -300,8 +300,8 @@ check_exit(dbref player, dbref obj)
 {
     int i;
 
-    for (i = 0; i < DBFETCH(obj)->sp.exit.ndest; i++) {
-        if (!valid_ref((DBFETCH(obj)->sp.exit.dest)[i]) && (DBFETCH(obj)->sp.exit.dest)[i] != HOME) {
+    for (i = 0; i < MUCK::exitDestCount(obj); i++) {
+        if (!valid_ref(MUCK::exitDestRef(obj, i)) && MUCK::exitDestRef(obj, i) != HOME) {
             violate(player, obj, "has an invalid object as one of its link destinations");
         }
     }
@@ -313,7 +313,7 @@ check_player(dbref player, dbref obj)
 {
     dbref i;
 
-    i = DBFETCH(obj)->sp.player.home;
+    i = MUCK::playerHomeRef(obj);
 
     if (!valid_obj(i) && i != NIL) {
         violate(player, obj, "has its home set to an invalid object");
@@ -655,7 +655,7 @@ create_lostandfound(dbref *player, dbref *room)
     *room = MUCK::database().newObject(*player);
     NAME(*room) = alloc_string("lost+found");
     LOCATION(*room) = GLOBAL_ENVIRONMENT;
-    DBFETCH(*room)->sp.room.dropto = NOTHING;
+    MUCK::roomSetDropToRef(*room, NOTHING);
     FLAGS(*room) = TYPE_ROOM | SANEBIT;
     MUCK::attachContent(GLOBAL_ENVIRONMENT, *room);
     SanFixed(*room, "Using %s to resolve unknown location");
@@ -673,15 +673,14 @@ create_lostandfound(dbref *player, dbref *room)
         LOCATION(*player) = *room;
         FLAGS(*player) = TYPE_PLAYER | PCREATE_FLAGS | SANEBIT;
         OWNER(*player) = *player;
-        DBFETCH(*player)->sp.player.home = *room;
-        DBFETCH(*player)->sp.player.pennies = tp_start_pennies;
-        DBFETCH(*player)->sp.player.password = NULL;
+        MUCK::playerSetHomeRef(*player, *room);
+        MUCK::playerSetPennies(*player, tp_start_pennies);
         set_password(*player, rand_password());
         MUCK::playerSession(*player) = MUCK::PlayerSession();
 
         MUCK::attachContent(*room, *player);
         add_player(*player);
-        log2file("logs/sanfixed", "Using %s (with password %s) to resolve " "unknown owner", unparse(*player), DBFETCH(*player)->sp.player.password);
+        log2file("logs/sanfixed", "Using %s (with password %s) to resolve " "unknown owner", unparse(*player), MUCK::playerPasswordSlot(*player));
     }
     OWNER(*room) = *player;
     DBDIRTY(*room);
@@ -694,16 +693,14 @@ fix_room(dbref obj)
 {
     dbref i;
 
-    i = DBFETCH(obj)->sp.room.dropto;
+    i = MUCK::roomDropToRef(obj);
 
     if (!valid_ref(i) && i != HOME) {
         SanFixed(obj, "Removing invalid drop-to from %s");
-        DBFETCH(obj)->sp.room.dropto = NOTHING;
-        DBDIRTY(obj);
+        MUCK::roomSetDropToRef(obj, NOTHING);
     } else if (i >= 0 && TYPEOF(i) != TYPE_THING && TYPEOF(i) != TYPE_ROOM) {
         SanFixed2(obj, i, "Removing drop-to on %s to %s");
-        DBFETCH(obj)->sp.room.dropto = NOTHING;
-        DBDIRTY(obj);
+        MUCK::roomSetDropToRef(obj, NOTHING);
     }
 }
 
@@ -712,12 +709,11 @@ fix_thing(dbref obj)
 {
     dbref i;
 
-    i = DBFETCH(obj)->sp.thing.home;
+    i = MUCK::thingHomeRef(obj);
 
     if (!valid_obj(i) || (TYPEOF(i) != TYPE_ROOM && TYPEOF(i) != TYPE_THING && TYPEOF(i) != TYPE_PLAYER)) {
         SanFixed2(obj, OWNER(obj), "Setting the home on %s to %s, it's owner");
-        DBFETCH(obj)->sp.thing.home = OWNER(obj);
-        DBDIRTY(obj);
+        MUCK::thingSetHomeRef(obj, OWNER(obj));
     }
 }
 
@@ -725,19 +721,24 @@ void
 fix_exit(dbref obj)
 {
     int i, j;
+    int ndest = MUCK::exitDestCount(obj);
+    dbref *survivors;
 
-    for (i = 0; i < DBFETCH(obj)->sp.exit.ndest;) {
-        if (!valid_obj((DBFETCH(obj)->sp.exit.dest)[i]) && ((DBFETCH(obj)->sp.exit.dest)[i] != HOME) && (DBFETCH(obj)->sp.exit.dest)[i] != NIL) {
+    survivors = new dbref[ndest > 0 ? ndest : 1];
+    j = 0;
+    for (i = 0; i < ndest; i++) {
+        dbref dest = MUCK::exitDestRef(obj, i);
+
+        if (!valid_obj(dest) && (dest != HOME) && dest != NIL) {
             SanFixed(obj, "Removing invalid destination from %s");
-            DBFETCH(obj)->sp.exit.ndest--;
-            DBDIRTY(obj);
-            for (j = i; j < DBFETCH(obj)->sp.exit.ndest; j++) {
-                (DBFETCH(obj)->sp.exit.dest)[i] = (DBFETCH(obj)->sp.exit.dest)[i + 1];
-            }
         } else {
-            i++;
+            survivors[j++] = dest;
         }
     }
+    if (j != ndest) {
+        MUCK::database().get(obj)->As<MUCK::Exit>()->setDestRefs(j > 0 ? survivors : NULL, j);
+    }
+    delete[] survivors;
 }
 
 void
@@ -745,12 +746,11 @@ fix_player(dbref obj)
 {
     dbref i;
 
-    i = DBFETCH(obj)->sp.player.home;
+    i = MUCK::playerHomeRef(obj);
 
     if (!valid_obj(i) || TYPEOF(i) != TYPE_ROOM) {
         SanFixed2(obj, tp_player_start, "Setting the home on %s to %s");
-        DBFETCH(obj)->sp.player.home = tp_player_start;
-        DBDIRTY(obj);
+        MUCK::playerSetHomeRef(obj, tp_player_start);
     }
 }
 
@@ -981,7 +981,6 @@ sanechange(dbref player, const char *command)
     char field[50];
     char which[1000];
     char value[1000];
-    int *ip;
     int results;
 
     if (force_level) {
@@ -1054,11 +1053,13 @@ sanechange(dbref player, const char *command)
     } else if (!string_compare(field, "home")) {
         switch (TYPEOF(d)) {
             case TYPE_PLAYER:
-                ip = &(DBFETCH(d)->sp.player.home);
+                strcpy(buf2, unparse(MUCK::playerHomeRef(d)));
+                MUCK::playerSetHomeRef(d, v);
                 break;
 
             case TYPE_THING:
-                ip = &(DBFETCH(d)->sp.thing.home);
+                strcpy(buf2, unparse(MUCK::thingHomeRef(d)));
+                MUCK::thingSetHomeRef(d, v);
                 break;
 
             default:
@@ -1066,9 +1067,6 @@ sanechange(dbref player, const char *command)
                 return;
         }
 
-        strcpy(buf2, unparse(*ip));
-        *ip = v;
-        DBDIRTY(d);
         printf("Setting home to: %s\n", unparse(v));
 
     } else {
@@ -1216,23 +1214,23 @@ extract_object(FILE * f, dbref d)
 
     switch (TYPEOF(d)) {
         case TYPE_THING:
-            fprintf(f, "  Home:           %s\n", unparse(DBFETCH(d)->sp.thing.home));
-            fprintf(f, "  Value:          %d\n", DBFETCH(d)->sp.thing.value);
+            fprintf(f, "  Home:           %s\n", unparse(MUCK::thingHomeRef(d)));
+            fprintf(f, "  Value:          %d\n", MUCK::thingValue(d));
             break;
 
         case TYPE_ROOM:
-            fprintf(f, "  Drop-to:        %s\n", unparse(DBFETCH(d)->sp.room.dropto));
+            fprintf(f, "  Drop-to:        %s\n", unparse(MUCK::roomDropToRef(d)));
             break;
 
         case TYPE_PLAYER:
-            fprintf(f, "  Home:           %s\n", unparse(DBFETCH(d)->sp.player.home));
-            fprintf(f, "  Pennies:        %d\n", DBFETCH(d)->sp.player.pennies);
+            fprintf(f, "  Home:           %s\n", unparse(MUCK::playerHomeRef(d)));
+            fprintf(f, "  Pennies:        %d\n", MUCK::playerPennies(d));
             break;
 
         case TYPE_EXIT:
             fprintf(f, "  Links:         ");
-            for (i = 0; i < DBFETCH(d)->sp.exit.ndest; i++)
-                fprintf(f, " %s;", unparse(DBFETCH(d)->sp.exit.dest[i]));
+            for (i = 0; i < MUCK::exitDestCount(d); i++)
+                fprintf(f, " %s;", unparse(MUCK::exitDestRef(d, i)));
             fprintf(f, "\n");
             break;
 

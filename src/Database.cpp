@@ -202,13 +202,8 @@ Database::freeObject(dbref i)
         delete_proplist(o->properties);
     }
 
-    if (Typeof(i) == TYPE_EXIT && o->sp.exit.dest) {
-        delete[]o->sp.exit.dest;
-    } else if (Typeof(i) == TYPE_PLAYER) {
-        if (o->sp.player.password) {
-            delete[]o->sp.player.password;
-        }
-    }
+    /* exit destinations and the player password hash are owned by
+     * their modules now and freed with the module objects */
 #ifndef SANITY
     if (Typeof(i) == TYPE_PROGRAM) {
         uncompile_program(i);
@@ -326,11 +321,11 @@ Database::parent(dbref obj)
     do {
         if (Typeof(obj) == TYPE_THING && (FLAGS(obj) & VEHICLE)
             && limit-- > 0) {
-            obj = DBFETCH(obj)->sp.thing.home;
+            obj = thingHomeRef(obj);
             if (obj == NIL)
                 obj = GLOBAL_ENVIRONMENT;
             if (obj != NOTHING && Typeof(obj) == TYPE_PLAYER)
-                obj = DBFETCH(obj)->sp.player.home;
+                obj = playerHomeRef(obj);
         } else {
             obj = getloc(obj);
         }
@@ -350,39 +345,14 @@ static int moduleTypeBits(Player *) { return TYPE_PLAYER; }
 static int moduleTypeBits(Exit *) { return TYPE_EXIT; }
 static int moduleTypeBits(MufProgram *) { return TYPE_PROGRAM; }
 
-/* The one sanctioned home for raw type-payload initialization: the
- * creation gatekeeper. Every field that is a sentinel rather than a
- * zero gets it here, so no construction sequence outside this file
- * ever touches the union again. */
+/* Type payload initialization happens in the type modules' own
+ * constructors now (NOTHING homes, zero pennies, empty destinations,
+ * null password). Nothing is left to do here; the function remains as
+ * the documented hook for any future construction-time setup. */
 static void
 typeInit(dbref r)
 {
-    struct object *o = DBFETCH(r);
-
-    switch (FLAGS(r) & TYPE_MASK) {
-        case TYPE_ROOM:
-            o->sp.room.dropto = NOTHING;
-            break;
-        case TYPE_THING:
-            o->sp.thing.home = NOTHING;
-            o->sp.thing.value = 0;
-            break;
-        case TYPE_PLAYER:
-            o->sp.player.home = NOTHING;
-            o->sp.player.pennies = 0;
-            o->sp.player.password = NULL;
-            break;
-        case TYPE_EXIT:
-            o->sp.exit.ndest = 0;
-            o->sp.exit.dest = NULL;
-            break;
-        case TYPE_PROGRAM:
-            /* Interpreter state lives in ProgramRuntime on the module;
-             * it default-initializes when the module attaches. */
-            break;
-        default:
-            break;
-    }
+    (void) r;
 }
 
 template <class T>
