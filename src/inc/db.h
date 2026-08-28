@@ -150,9 +150,19 @@ extern short dbcheck(const char *file, int line, dbref item);
 #define POWER2DB(x) (DBFETCH(x)->power2)
 #define TYPEOF(i)   (DBFETCH((i))->flags & TYPE_MASK)
 #define LOCATION(x) (DBFETCH((x))->location)
-#define CONTENTS(x) (DBFETCH((x))->contents)
-#define EXITS(x)    (DBFETCH((x))->exits)
-#define NEXTOBJ(x)  (DBFETCH((x))->next)
+
+/* Containment lives in owning vectors on MUCK::DbObject now. These
+ * read facades keep the classic walk idiom compiling: CONTENTS and
+ * EXITS yield the list head, NEXTOBJ the following sibling. They are
+ * rvalues; writers go through MUCK::attachContent and friends. */
+namespace MUCK {
+    dbref firstContentRef(dbref loc);
+    dbref firstExitRef(dbref loc);
+    dbref nextSiblingRef(dbref obj);
+}
+#define CONTENTS(x) (MUCK::firstContentRef(x))
+#define EXITS(x)    (MUCK::firstExitRef(x))
+#define NEXTOBJ(x)  (MUCK::nextSiblingRef(x))
 
 /* defines for possible data access mods. */
 #define GETMESG(x,y)   (get_property_class(x, y))
@@ -1031,9 +1041,8 @@ struct object {
     const char *name;
     dbref   location;		/* pointer to container */
     dbref   owner;
-    dbref   contents;
-    dbref   exits;
-    dbref   next;		/* pointer to next in contents/exits chain */
+    /* contents/exits/next chains are gone: containment is the owning
+     * vectors on MUCK::DbObject (contentsVec/exitsVec). */
     struct plist *properties;
 
 #ifdef DISKBASE
@@ -1116,10 +1125,12 @@ extern int db_load_format;
 extern char lflag_name[32][32];
 extern int lflag_mlev[32];
 
+/* Read-only walk over a containment list, starting from CONTENTS(x)
+ * or EXITS(x). Do NOT remove members inside the loop; snapshot the
+ * vector instead (see send_contents). The old PUSH macro is gone:
+ * arrivals go through MUCK::attachContent / MUCK::attachExit. */
 #define DOLIST(var, first) \
-  for((var) = (first); (var) != NOTHING; (var) = DBFETCH(var)->next)
-#define PUSH(thing, locative) \
-    {DBSTORE((thing), next, (locative)); (locative) = (thing);}
+  for((var) = (first); (var) != NOTHING; (var) = MUCK::nextSiblingRef(var))
 #define getloc(thing) (DBFETCH(thing)->location)
 
 

@@ -99,6 +99,22 @@ class Exit : public Module {
     void setDestRefs(const dbref *refs, int n);
 };
 
+/* Containment helpers over the owning vectors on DbObject. Blanket
+ * safe: a bad ref yields a shared empty list and no-op mutations.
+ * attachContent/attachExit prepend (legacy PUSH order); the next
+ * sibling of an object is the element after it in its location's
+ * exits list for exits, contents list for everything else. */
+std::vector<DbObject *> &contentsOf(dbref ref);
+std::vector<DbObject *> &exitsOf(dbref ref);
+dbref firstContentRef(dbref loc);
+dbref firstExitRef(dbref loc);
+dbref nextSiblingRef(dbref obj);
+bool listContains(const std::vector<DbObject *> &v, dbref obj);
+void attachContent(dbref loc, dbref obj);
+void detachContent(dbref loc, dbref obj);
+void attachExit(dbref loc, dbref ex);
+void detachExit(dbref loc, dbref ex);
+
 /* Blanket-safe free helpers for mechanical call-site conversion:
  * tolerate refs that are not exits (count 0, ref NOTHING), so guarded
  * legacy expressions convert one for one. */

@@ -25,6 +25,7 @@
 #include "externs.h"
 #include "strutils.h"
 #include "ObjectStore.h"
+#include "Modules.h"
 #include "ProgramStore.h"
 #include "PasswordHash.h"
 #include "ModuleRegistry.h"
@@ -346,48 +347,45 @@ static std::unordered_set<int> chainClaimed;
 static bool bulkSaveActive = false;
 
 static json
-chainToJson(dbref container, dbref first)
+listToJson(dbref container, const std::vector<MUCK::DbObject *> &list)
 {
     json arr = json::array();
-    dbref guard = MUCK::database().top();
 
-    for (dbref i = first; i != NOTHING && guard-- > 0; i = DBFETCH(i)->next) {
+    for (MUCK::DbObject *o : list) {
+        dbref i = o->ref();
+
         if (!MUCK::database().valid(i) || i == container
             || DBFETCH(i)->location != container) {
-            fprintf(stderr, "STORE: dropping corrupt chain member #%d from #%d\n",
+            fprintf(stderr, "STORE: dropping corrupt list member #%d from #%d\n",
                     i, container);
-            break;
+            continue;
         }
         if (!chainClaimed.insert((int) i).second) {
-            fprintf(stderr, "STORE: #%d already serialized in another chain; dropping from #%d\n",
+            fprintf(stderr, "STORE: #%d already serialized in another list; dropping from #%d\n",
                     i, container);
-            break;
+            continue;
         }
         arr.push_back(refToJson(i));
     }
     return arr;
 }
 
-/* Rebuild a next-chain from a list; returns the chain head and sets
- * each member's location-ish linkage through the next pointers. */
-static dbref
-chainFromJson(const json &arr)
+/* Fill a containment vector from a stored list, order preserved. */
+static void
+listFromJson(std::vector<MUCK::DbObject *> &out, const json &arr)
 {
-    dbref head = NOTHING, tail = NOTHING;
-
+    out.clear();
     for (const auto &v : arr) {
         dbref i = refFromJson(v);
 
         if (i == NOTHING || !MUCK::database().valid(i))
             continue;
-        if (head == NOTHING)
-            head = i;
-        else
-            DBFETCH(tail)->next = i;
-        tail = i;
-        DBFETCH(i)->next = NOTHING;
+
+        MUCK::DbObject *o = MUCK::database().get(i);
+
+        if (o)
+            out.push_back(o);
     }
-    return head;
 }
 
 /* ------------------------------------------------------------------ */
@@ -542,21 +540,21 @@ objectToJson(dbref i)
     switch (o->flags & TYPE_MASK) {
         case TYPE_ROOM:
             e["$type/dropto"] = entry("r", refToJson(o->sp.room.dropto));
-            e["$type/contents"] = entry("l", chainToJson(i, o->contents));
-            e["$type/exits"] = entry("l", chainToJson(i, o->exits));
+            e["$type/contents"] = entry("l", listToJson(i, MUCK::contentsOf(i)));
+            e["$type/exits"] = entry("l", listToJson(i, MUCK::exitsOf(i)));
             break;
         case TYPE_THING:
             e["$type/home"] = entry("r", refToJson(o->sp.thing.home));
             e["$type/value"] = entry("i", o->sp.thing.value);
-            e["$type/contents"] = entry("l", chainToJson(i, o->contents));
-            e["$type/exits"] = entry("l", chainToJson(i, o->exits));
+            e["$type/contents"] = entry("l", listToJson(i, MUCK::contentsOf(i)));
+            e["$type/exits"] = entry("l", listToJson(i, MUCK::exitsOf(i)));
             break;
         case TYPE_PLAYER:
             e["$type/home"] = entry("r", refToJson(o->sp.player.home));
             e["$type/pennies"] = entry("i", o->sp.player.pennies);
             e["$type/password"] = entry("s", jstr(o->sp.player.password));
-            e["$type/contents"] = entry("l", chainToJson(i, o->contents));
-            e["$type/exits"] = entry("l", chainToJson(i, o->exits));
+            e["$type/contents"] = entry("l", listToJson(i, MUCK::contentsOf(i)));
+            e["$type/exits"] = entry("l", listToJson(i, MUCK::exitsOf(i)));
             break;
         case TYPE_EXIT: {
             json dests = json::array();
@@ -704,9 +702,8 @@ objectFromJsonPhase1(const json &j, std::vector<PendingLinks> &later)
      * whose phase two ran first. */
     o->location = NOTHING;
     o->owner = NOTHING;
-    o->contents = NOTHING;
-    o->exits = NOTHING;
-    o->next = NOTHING;
+    MUCK::contentsOf(i).clear();
+    MUCK::exitsOf(i).clear();
 
     /* type scalars now, refs later */
     const json &td = j["type_data"];
@@ -843,18 +840,18 @@ objectFromJsonPhase2(const PendingLinks &pl)
     switch (o->flags & TYPE_MASK) {
         case TYPE_ROOM:
             o->sp.room.dropto = refFromJson(pl.td["dropto"]);
-            o->contents = chainFromJson(pl.td["contents"]);
-            o->exits = chainFromJson(pl.td["exits"]);
+            listFromJson(MUCK::contentsOf(pl.ref), pl.td["contents"]);
+            listFromJson(MUCK::exitsOf(pl.ref), pl.td["exits"]);
             break;
         case TYPE_THING:
             o->sp.thing.home = refFromJson(pl.td["home"]);
-            o->contents = chainFromJson(pl.td["contents"]);
-            o->exits = chainFromJson(pl.td["exits"]);
+            listFromJson(MUCK::contentsOf(pl.ref), pl.td["contents"]);
+            listFromJson(MUCK::exitsOf(pl.ref), pl.td["exits"]);
             break;
         case TYPE_PLAYER:
             o->sp.player.home = refFromJson(pl.td["home"]);
-            o->contents = chainFromJson(pl.td["contents"]);
-            o->exits = chainFromJson(pl.td["exits"]);
+            listFromJson(MUCK::contentsOf(pl.ref), pl.td["contents"]);
+            listFromJson(MUCK::exitsOf(pl.ref), pl.td["exits"]);
             /* the player name lookup table is runtime state the flat
              * importer built as it read; without it every login fails
              * before the password is even checked */

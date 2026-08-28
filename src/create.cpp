@@ -161,7 +161,7 @@ do_open(int descr, dbref player, const char *direction, const char *linkto)
         DBFETCH(exit)->location = loc;         /* chain wiring flips later */
 
         /* link it in */
-        PUSH(exit, DBFETCH(loc)->exits);
+        MUCK::attachExit(loc, exit);
         DBDIRTY(loc);
 
         /* and we're done */
@@ -526,7 +526,7 @@ do_dig(int descr, dbref player, const char *name, const char *pname)
     MUCK::database().get(room)->setName(name);
     DBFETCH(room)->location = newparent;       /* chain wiring flips later */
     FLAGS(room) |= (FLAGS(player) & JUMP_OK);
-    PUSH(room, DBFETCH(newparent)->contents);
+    MUCK::attachContent(newparent, room);
     DBDIRTY(room);
     DBDIRTY(newparent);
 
@@ -768,7 +768,7 @@ do_create(dbref player, char *name, char *acost)
         }
 
         /* link it in */
-        PUSH(thing, DBFETCH(player)->contents);
+        MUCK::attachContent(player, thing);
         DBDIRTY(player);
 
         /* and we're done */
@@ -849,7 +849,7 @@ set_source(dbref player, dbref action, dbref source)
         case TYPE_ROOM:
         case TYPE_THING:
         case TYPE_PLAYER:
-            PUSH(action, DBFETCH(source)->exits);
+            MUCK::attachExit(source, action);
             break;
         default:
             anotify_nolisten2(player, CFAIL "Weird object type.");
@@ -870,16 +870,18 @@ unset_source(dbref player, dbref loc, dbref action)
 
     if ((oldsrc = DBFETCH(action)->location) == NOTHING) {
         /* old-style, sourceless exit */
-        if (!member(action, DBFETCH(loc)->exits)) {
+        if (!member(action, EXITS(loc))) {
             return 0;
         }
-        DBSTORE(DBFETCH(player)->location, exits, remove_first(DBFETCH(DBFETCH(player)->location)->exits, action));
+        MUCK::detachExit(getloc(player), action);
+        DBDIRTY(getloc(player));
     } else {
         switch (Typeof(oldsrc)) {
             case TYPE_PLAYER:
             case TYPE_ROOM:
             case TYPE_THING:
-                DBSTORE(oldsrc, exits, remove_first(DBFETCH(oldsrc)->exits, action));
+                MUCK::detachExit(oldsrc, action);
+                DBDIRTY(oldsrc);
                 break;
             default:
                 log_status("PANIC: source of action #%d was type: %d.\n", action, Typeof(oldsrc));

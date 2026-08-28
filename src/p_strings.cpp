@@ -8,6 +8,7 @@
 #include "tune.h"
 #include "inst.h"
 #include "externs.h"
+#include "Modules.h"
 #include "match.h"
 #include "interface.h"
 #include "params.h"
@@ -1205,7 +1206,7 @@ prim_notify_exclude(PRIM_PROTOTYPE)
             abort_interp("Invalid location argument (1)");
         }
         CHECKREMOTE(where);
-        what = DBFETCH(where)->contents;
+        what = CONTENTS(where);
         CLEAR(oper1);
         if (*buf) {
             while (what != NOTHING) {
@@ -1219,7 +1220,7 @@ prim_notify_exclude(PRIM_PROTOTYPE)
                 }
                 if (!tmp)
                     notify_listeners(fr->descr, PSafe, program, what, where, buf, 0);
-                what = DBFETCH(what)->next;
+                what = NEXTOBJ(what);
             }
         }
 
@@ -1275,7 +1276,7 @@ prim_ansi_notify_exclude(PRIM_PROTOTYPE)
         if (Typeof(where) != TYPE_ROOM && Typeof(where) != TYPE_THING && Typeof(where) != TYPE_PLAYER)
             abort_interp("Invalid location argument (1)");
         CHECKREMOTE(where);
-        what = DBFETCH(where)->contents;
+        what = CONTENTS(where);
         CLEAR(oper1);
         if (*buf) {
             while (what != NOTHING) {
@@ -1289,7 +1290,7 @@ prim_ansi_notify_exclude(PRIM_PROTOTYPE)
                 }
                 if (!tmp)
                     ansi_notify_listeners(fr->descr, PSafe, program, what, where, buf, 0);
-                what = DBFETCH(what)->next;
+                what = NEXTOBJ(what);
             }
         }
 
@@ -1354,7 +1355,7 @@ prim_notify_html_exclude(PRIM_PROTOTYPE)
             abort_interp("Invalid location argument (1)");
         }
         CHECKREMOTE(where);
-        what = DBFETCH(where)->contents;
+        what = CONTENTS(where);
         CLEAR(oper1);
         if (*buf) {
             while (what != NOTHING) {
@@ -1368,7 +1369,7 @@ prim_notify_html_exclude(PRIM_PROTOTYPE)
                 }
                 if (!tmp)
                     notify_html_listeners(fr->descr, PSafe, program, what, where, buf, 0);
-                what = DBFETCH(what)->next;
+                what = NEXTOBJ(what);
             }
         }
 
@@ -1432,7 +1433,7 @@ prim_notify_html_exclude_nocr(PRIM_PROTOTYPE)
             abort_interp("Invalid location argument (1)");
         }
         CHECKREMOTE(where);
-        what = DBFETCH(where)->contents;
+        what = CONTENTS(where);
         CLEAR(oper1);
         if (*buf) {
             while (what != NOTHING) {
@@ -1446,7 +1447,7 @@ prim_notify_html_exclude_nocr(PRIM_PROTOTYPE)
                 }
                 if (!tmp)
                     notify_html_listeners(fr->descr, PSafe, program, what, where, buf, 0);
-                what = DBFETCH(what)->next;
+                what = NEXTOBJ(what);
             }
         }
 

@@ -7,6 +7,7 @@
 #include "mpi.h"
 #include "props.h"
 #include "externs.h"
+#include "Modules.h"
 #include "interface.h"
 #include "nan.h"
 
@@ -287,7 +288,7 @@ has_property(int descr, dbref player, dbref what, const char *type, const char *
 
     if (has_property_strict(descr, player, what, type, pclass, value))
         return 1;
-    for (things = DBFETCH(what)->contents; things != NOTHING; things = DBFETCH(things)->next) {
+    for (things = CONTENTS(what); things != NOTHING; things = NEXTOBJ(things)) {
         if (has_property(descr, player, things, type, pclass, value))
             return 1;
     }

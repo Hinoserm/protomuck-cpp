@@ -1,3 +1,6 @@
+#include <algorithm>
+#include <vector>
+
 #include "copyright.h"
 #include "config.h"
 
@@ -24,7 +27,8 @@ moveto(dbref what, dbref where)
 
     /* remove what from old loc */
     if ((loc = DBFETCH(what)->location) != NOTHING) {
-        DBSTORE(loc, contents, remove_first(DBFETCH(loc)->contents, what));
+        MUCK::detachContent(loc, what);
+        DBDIRTY(loc);
     }
     /* test for special cases */
     switch (where) {
@@ -70,51 +74,50 @@ moveto(dbref what, dbref where)
     }
 
     /* now put what in where */
-    PUSH(what, DBFETCH(where)->contents);
+    MUCK::attachContent(where, what);
     DBDIRTY(where);
     DBSTORE(what, location, where);
 }
 
-dbref reverse(dbref);
 void
 send_contents(int descr, dbref loc, dbref dest)
 {
-    dbref first;
-    dbref rest;
+    /* snapshot: moveto mutates the list we are draining */
+    std::vector<MUCK::DbObject *> snapshot = MUCK::contentsOf(loc);
 
-    first = DBFETCH(loc)->contents;
-    DBSTORE(loc, contents, NOTHING);
+    MUCK::contentsOf(loc).clear();
 
-    /* blast locations of everything in list */
-    DOLIST(rest, first) {
-        DBSTORE(rest, location, NOTHING);
-    }
+    /* blast locations of everything in the old list */
+    for (MUCK::DbObject *o : snapshot)
+        DBSTORE(o->ref(), location, NOTHING);
 
-    while (first != NOTHING) {
-        rest = DBFETCH(first)->next;
+    for (MUCK::DbObject *o : snapshot) {
+        dbref first = o->ref();
+
         if ((Typeof(first) != TYPE_THING)
             && (Typeof(first) != TYPE_PROGRAM)) {
             moveto(first, loc);
         } else {
             moveto(first, FLAGS(first) & STICKY ? HOME : dest);
         }
-        first = rest;
     }
 
-    DBSTORE(loc, contents, reverse(DBFETCH(loc)->contents));
+    /* arrivals prepended in walk order; the reverse restores the
+     * original relative order for whatever stayed here, exactly as
+     * the old chain reverse did */
+    std::reverse(MUCK::contentsOf(loc).begin(), MUCK::contentsOf(loc).end());
+    DBDIRTY(loc);
 }
 
 void
 maybe_dropto(int descr, dbref loc, dbref dropto)
 {
-    dbref thing;
-
     if (loc == dropto)
         return;                 /* bizarre special case */
 
     /* check for players */
-    DOLIST(thing, DBFETCH(loc)->contents) {
-        if (Typeof(thing) == TYPE_PLAYER)
+    for (MUCK::DbObject *o : MUCK::contentsOf(loc)) {
+        if (Typeof(o->ref()) == TYPE_PLAYER)
             return;
     }
 
@@ -191,7 +194,7 @@ enter_room(int descr, dbref player, dbref loc, dbref exit)
                 && !tp_quiet_moves) {
 #if !defined(QUIET_MOVES)
                 sprintf(buf, CMOVE "%s has left.", PNAME(player));
-                anotify_except(DBFETCH(old)->contents, player, buf, player);
+                anotify_except(CONTENTS(old), player, buf, player);
 #endif
             }
         }
@@ -211,7 +214,7 @@ enter_room(int descr, dbref player, dbref loc, dbref exit)
             && !tp_quiet_moves) {
 #if !defined(QUIET_MOVES)
             sprintf(buf, CMOVE "%s has arrived.", PNAME(player));
-            anotify_except(DBFETCH(loc)->contents, player, buf, player);
+            anotify_except(CONTENTS(loc), player, buf, player);
 #endif
         }
     }
@@ -544,7 +547,7 @@ do_move(int descr, dbref player, const char *direction, int lev)
             if ((loc = DBFETCH(player)->location) != NOTHING) {
                 /* tell everybody else */
                 sprintf(buf, CMOVE "%s goes home.", PNAME(player));
-                anotify_except(DBFETCH(loc)->contents, player, buf, player);
+                anotify_except(CONTENTS(loc), player, buf, player);
             }
             /* give the player the messages */
             anotify_nolisten2(player, SYSRED "There's no place like home...");
@@ -791,7 +794,7 @@ do_drop(int descr, dbref player, const char *name, const char *obj)
                 parse_omessage(descr, player, loc, thing, GETODROP(thing), PNAME(player), "(@Odrop)");
             } else {
                 sprintf(buf, SYSBLUE "%s drops %s.", PNAME(player), PNAME(thing));
-                anotify_except(DBFETCH(loc)->contents, player, buf, player);
+                anotify_except(CONTENTS(loc), player, buf, player);
             }
 
             if (GETODROP(loc)) {
@@ -859,7 +862,7 @@ do_recycle(int descr, dbref player, const char *name)
                                 SYSBLUE
                                 "%.512s's owner commands it to kill itself.  It blinks a few times in shock, and says, \"But.. but.. WHY?\"  It suddenly clutches it's heart, grimacing with pain..  Staggers a few steps before falling to it's knees, then plops down on it's face.  *thud*  It kicks it's legs a few times, with weakening force, as it suffers a seizure.  It's color slowly starts changing to purple, before it explodes with a fatal *POOF*!",
                                 PNAME(thing));
-                        anotify_except(DBFETCH(getloc(thing))->contents, thing, buf, player);
+                        anotify_except(CONTENTS(getloc(thing)), thing, buf, player);
                         anotify_nolisten2(OWNER(player), buf);
                         anotify_nolisten2(OWNER(player), CINFO "Now don't you feel guilty?");
                     }
@@ -913,21 +916,29 @@ recycle(int descr, dbref player, dbref thing)
             if (!Mage(OWNER(thing)))
                 MUCK::playerAddPennies(OWNER(thing), tp_room_cost);
             DBDIRTY(OWNER(thing));
-            for (first = DBFETCH(thing)->exits; first != NOTHING; first = rest) {
-                rest = DBFETCH(first)->next;
-                if (DBFETCH(first)->location == NOTHING || DBFETCH(first)->location == thing)
-                    recycle(descr, player, first);
+            {
+                std::vector<MUCK::DbObject *> snap = MUCK::exitsOf(thing);
+
+                for (MUCK::DbObject *eo : snap) {
+                    first = eo->ref();
+                    if (DBFETCH(first)->location == NOTHING || DBFETCH(first)->location == thing)
+                        recycle(descr, player, first);
+                }
             }
-            anotify_except(DBFETCH(thing)->contents, NOTHING, CNOTE "You feel a wrenching sensation...", player);
+            anotify_except(CONTENTS(thing), NOTHING, CNOTE "You feel a wrenching sensation...", player);
             break;
         case TYPE_THING:
             if (!Mage(OWNER(thing)))
                 MUCK::playerAddPennies(OWNER(thing), MUCK::database().get(thing)->As<MUCK::Thing>()->value());
             DBDIRTY(OWNER(thing));
-            for (first = DBFETCH(thing)->exits; first != NOTHING; first = rest) {
-                rest = DBFETCH(first)->next;
-                if (DBFETCH(first)->location == NOTHING || DBFETCH(first)->location == thing)
-                    recycle(descr, player, first);
+            {
+                std::vector<MUCK::DbObject *> snap = MUCK::exitsOf(thing);
+
+                for (MUCK::DbObject *eo : snap) {
+                    first = eo->ref();
+                    if (DBFETCH(first)->location == NOTHING || DBFETCH(first)->location == thing)
+                        recycle(descr, player, first);
+                }
             }
             break;
         case TYPE_EXIT:
@@ -953,10 +964,6 @@ recycle(int descr, dbref player, dbref thing)
                 if (rr && rr->dropTo() && rr->dropTo()->ref() == thing)
                     rr->setDropTo(nullptr);
             }
-                if (DBFETCH(rest)->exits == thing) {
-                    DBFETCH(rest)->exits = DBFETCH(thing)->next;
-                    DBDIRTY(rest);
-                }
                 if (OWNER(rest) == thing) {
                     OWNER(rest) = MAN;
                     DBDIRTY(rest);
@@ -969,10 +976,6 @@ recycle(int descr, dbref player, dbref thing)
                             ->setHome(MUCK::database().get(tp_player_start));
                     MUCK::database().get(rest)->As<MUCK::Thing>()->setHome(
                         MUCK::database().get(MUCK::playerHomeRef(OWNER(rest))));
-                    DBDIRTY(rest);
-                }
-                if (DBFETCH(rest)->exits == thing) {
-                    DBFETCH(rest)->exits = DBFETCH(thing)->next;
                     DBDIRTY(rest);
                 }
                 if (OWNER(rest) == thing) {
@@ -1020,10 +1023,6 @@ recycle(int descr, dbref player, dbref thing)
                     MUCK::database().get(rest)->As<MUCK::Player>()
                         ->setHome(MUCK::database().get(tp_player_start));
                 }
-                if (DBFETCH(rest)->exits == thing) {
-                    DBFETCH(rest)->exits = DBFETCH(thing)->next;
-                    DBDIRTY(rest);
-                }
                 if (MUCK::playerSession(rest).currProg == thing)
                     MUCK::playerSession(rest).currProg = 0;
                 break;
@@ -1038,15 +1037,19 @@ recycle(int descr, dbref player, dbref thing)
          *if (DBFETCH(rest)->location == thing)
          *    DBSTORE(rest, location, NOTHING);
          */
-        if (DBFETCH(rest)->contents == thing)
-            DBSTORE(rest, contents, DBFETCH(thing)->next);
-        if (DBFETCH(rest)->next == thing)
-            DBSTORE(rest, next, DBFETCH(thing)->next);
+        if (MUCK::listContains(MUCK::contentsOf(rest), thing)) {
+            MUCK::detachContent(rest, thing);
+            DBDIRTY(rest);
+        }
+        if (MUCK::listContains(MUCK::exitsOf(rest), thing)) {
+            MUCK::detachExit(rest, thing);
+            DBDIRTY(rest);
+        }
     }
 
     looplimit = MUCK::database().top();
     while ((looplimit-- > 0)
-           && ((first = DBFETCH(thing)->contents) != NOTHING)) {
+           && ((first = CONTENTS(thing)) != NOTHING)) {
         if (Typeof(first) == TYPE_PLAYER) {
             enter_room(descr, first, HOME, DBFETCH(thing)->location);
             /* If the room is set to drag players back, there'll be no

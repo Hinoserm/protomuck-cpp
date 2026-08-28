@@ -328,7 +328,6 @@ create_player(dbref creator, const char *name, const char *password)
     }
 
     OWNER(player) = player;
-    newp->exits = NOTHING;
     newp->sp.player.pennies = tp_start_pennies;    /* raw: mid-construction */
     newp->sp.player.password = NULL; /* this has to stay here. -hinoserm */
 
@@ -336,13 +335,13 @@ create_player(dbref creator, const char *name, const char *password)
     set_password(player, password);
 
     /* link him to tp_player_start */
-    PUSH(player, DBFETCH(tp_player_start)->contents);
+    MUCK::attachContent(tp_player_start, player);
     add_player(player);
     DBDIRTY(player);
     DBDIRTY(tp_player_start);
 
     sprintf(buf, CNOTE "%s is born!", NAME(player));
-    anotify_except(DBFETCH(tp_player_start)->contents, NOTHING, buf, player);
+    anotify_except(CONTENTS(tp_player_start), NOTHING, buf, player);
 
     return player;
 }

@@ -134,10 +134,9 @@ Database::clearObject(dbref player, dbref i)
     NAME(i) = 0;
     ts_newobject(player, o);
     o->location = NOTHING;
-    o->contents = NOTHING;
-    o->exits = NOTHING;
-    o->next = NOTHING;
     o->properties = 0;
+    contentsOf(i).clear();
+    exitsOf(i).clear();
 
     /* flags and type-specific fields are the caller's to initialize */
 }
@@ -183,7 +182,7 @@ Database::newProgram(dbref player, const char *name)
         mlvl = 3;
     SetMLevel(newprog, mlvl);
 
-    PUSH(newprog, DBFETCH(player)->contents);
+    attachContent(player, newprog);
     DBDIRTY(newprog);
     DBDIRTY(player);
 

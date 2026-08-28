@@ -540,12 +540,12 @@ cut_all_chains(dbref obj)
 {
     if (CONTENTS(obj) != NOTHING) {
         SanFixed(obj, "Cleared contents of %s");
-        CONTENTS(obj) = NOTHING;
+        MUCK::contentsOf(obj).clear();
         DBDIRTY(obj);
     }
     if (EXITS(obj) != NOTHING) {
         SanFixed(obj, "Cleared exits of %s");
-        EXITS(obj) = NOTHING;
+        MUCK::exitsOf(obj).clear();
         DBDIRTY(obj);
     }
 }
@@ -560,72 +560,58 @@ cut_bad_recyclable(void)
 void
 cut_bad_contents(dbref obj)
 {
-    dbref loop, prev;
+    std::vector<MUCK::DbObject *> &v = MUCK::contentsOf(obj);
 
-    loop = CONTENTS(obj);
-    prev = NOTHING;
-    while (loop != NOTHING) {
+    for (size_t i = 0; i < v.size(); i++) {
+        dbref loop = v[i]->ref();
+
         if (!valid_obj(loop) || FLAGS(loop) & SANEBIT || TYPEOF(loop) == TYPE_EXIT || LOCATION(loop) != obj || loop == obj) {
             if (!valid_obj(loop)) {
-                SanFixed(obj, "Contents chain for %s cut at invalid dbref");
+                SanFixed(obj, "Contents list for %s cut at invalid dbref");
             } else if (TYPEOF(loop) == TYPE_EXIT) {
-                SanFixed2(obj, loop, "Contents chain for %s cut at exit %s");
+                SanFixed2(obj, loop, "Contents list for %s cut at exit %s");
             } else if (loop == obj) {
-                SanFixed(obj, "Contents chain for %s cut at self-reference");
+                SanFixed(obj, "Contents list for %s cut at self-reference");
             } else if (LOCATION(loop) != obj) {
-                SanFixed2(obj, loop, "Contents chain for %s cut at misplaced object %s");
+                SanFixed2(obj, loop, "Contents list for %s cut at misplaced object %s");
             } else if (FLAGS(loop) & SANEBIT) {
-                SanFixed2(obj, loop, "Contents chain for %s cut at already chained object %s");
+                SanFixed2(obj, loop, "Contents list for %s cut at already listed object %s");
             } else {
-                SanFixed2(obj, loop, "Contents chain for %s cut at %s");
+                SanFixed2(obj, loop, "Contents list for %s cut at %s");
             }
-            if (prev != NOTHING) {
-                DBFETCH(prev)->next = NOTHING;
-                DBDIRTY(prev);
-            } else {
-                CONTENTS(obj) = NOTHING;
-                DBDIRTY(obj);
-            }
+            v.erase(v.begin() + i, v.end());
+            DBDIRTY(obj);
             return;
         }
         FLAGS(loop) |= SANEBIT;
-        prev = loop;
-        loop = DBFETCH(loop)->next;
     }
 }
 
 void
 cut_bad_exits(dbref obj)
 {
-    dbref loop, prev;
+    std::vector<MUCK::DbObject *> &v = MUCK::exitsOf(obj);
 
-    loop = EXITS(obj);
-    prev = NOTHING;
-    while (loop != NOTHING) {
+    for (size_t i = 0; i < v.size(); i++) {
+        dbref loop = v[i]->ref();
+
         if (!valid_obj(loop) || FLAGS(loop) & SANEBIT || TYPEOF(loop) != TYPE_EXIT || LOCATION(loop) != obj) {
             if (!valid_obj(loop)) {
-                SanFixed(obj, "Exits chain for %s cut at invalid dbref");
+                SanFixed(obj, "Exits list for %s cut at invalid dbref");
             } else if (TYPEOF(loop) != TYPE_EXIT) {
-                SanFixed2(obj, loop, "Exits chain for %s cut at non-exit %s");
+                SanFixed2(obj, loop, "Exits list for %s cut at non-exit %s");
             } else if (LOCATION(loop) != obj) {
-                SanFixed2(obj, loop, "Exits chain for %s cut at misplaced exit %s");
+                SanFixed2(obj, loop, "Exits list for %s cut at misplaced exit %s");
             } else if (FLAGS(loop) & SANEBIT) {
-                SanFixed2(obj, loop, "Exits chain for %s cut at already chained exit %s");
+                SanFixed2(obj, loop, "Exits list for %s cut at already listed exit %s");
             } else {
-                SanFixed2(obj, loop, "Exits chain for %s cut at %s");
+                SanFixed2(obj, loop, "Exits list for %s cut at %s");
             }
-            if (prev != NOTHING) {
-                DBFETCH(prev)->next = NOTHING;
-                DBDIRTY(prev);
-            } else {
-                EXITS(obj) = NOTHING;
-                DBDIRTY(obj);
-            }
+            v.erase(v.begin() + i, v.end());
+            DBDIRTY(obj);
             return;
         }
         FLAGS(loop) |= SANEBIT;
-        prev = loop;
-        loop = DBFETCH(loop)->next;
     }
 }
 
@@ -669,10 +655,9 @@ create_lostandfound(dbref *player, dbref *room)
     *room = MUCK::database().newObject(*player);
     NAME(*room) = alloc_string("lost+found");
     LOCATION(*room) = GLOBAL_ENVIRONMENT;
-    DBFETCH(*room)->exits = NOTHING;
     DBFETCH(*room)->sp.room.dropto = NOTHING;
     FLAGS(*room) = TYPE_ROOM | SANEBIT;
-    PUSH(*room, DBFETCH(GLOBAL_ENVIRONMENT)->contents);
+    MUCK::attachContent(GLOBAL_ENVIRONMENT, *room);
     SanFixed(*room, "Using %s to resolve unknown location");
 
     while (lookup_player(player_name) != NOTHING && strlen(player_name) < PLAYER_NAME_LIMIT) {
@@ -689,13 +674,12 @@ create_lostandfound(dbref *player, dbref *room)
         FLAGS(*player) = TYPE_PLAYER | PCREATE_FLAGS | SANEBIT;
         OWNER(*player) = *player;
         DBFETCH(*player)->sp.player.home = *room;
-        EXITS(*player) = NOTHING;
         DBFETCH(*player)->sp.player.pennies = tp_start_pennies;
         DBFETCH(*player)->sp.player.password = NULL;
         set_password(*player, rand_password());
         MUCK::playerSession(*player) = MUCK::PlayerSession();
 
-        PUSH(*player, DBFETCH(*room)->contents);
+        MUCK::attachContent(*room, *player);
         add_player(*player);
         log2file("logs/sanfixed", "Using %s (with password %s) to resolve " "unknown owner", unparse(*player), DBFETCH(*player)->sp.player.password);
     }
@@ -835,20 +819,8 @@ find_misplaced_objects(void)
                                                                                                        == TYPE_PLAYER))) {
                 if (TYPEOF(loop) == TYPE_PLAYER) {
                     if (valid_obj(LOCATION(loop)) && TYPEOF(LOCATION(loop)) == TYPE_PLAYER) {
-                        dbref loop1;
-
-                        loop1 = LOCATION(loop);
-                        if (CONTENTS(loop1) == loop) {
-                            CONTENTS(loop1) = DBFETCH(loop)->next;
-                            DBDIRTY(loop1);
-                        } else
-                            for (loop1 = CONTENTS(loop1); loop1 != NOTHING; loop1 = DBFETCH(loop1)->next) {
-                                if (DBFETCH(loop1)->next == loop) {
-                                    DBFETCH(loop1)->next = DBFETCH(loop)->next;
-                                    DBDIRTY(loop1);
-                                    break;
-                                }
-                            }
+                        MUCK::detachContent(LOCATION(loop), loop);
+                        DBDIRTY(LOCATION(loop));
                     }
                     LOCATION(loop) = tp_player_start;
                 } else {
@@ -860,9 +832,9 @@ find_misplaced_objects(void)
                 DBDIRTY(loop);
                 DBDIRTY(LOCATION(loop));
                 if (TYPEOF(loop) == TYPE_EXIT) {
-                    PUSH(loop, EXITS(LOCATION(loop)));
+                    MUCK::attachExit(LOCATION(loop), loop);
                 } else {
-                    PUSH(loop, CONTENTS(LOCATION(loop)));
+                    MUCK::attachContent(LOCATION(loop), loop);
                 }
                 FLAGS(loop) |= SANEBIT;
                 SanFixed2(loop, LOCATION(loop), "Set location of %s to %s");
@@ -915,13 +887,11 @@ adopt_orphans(void)
                 case TYPE_THING:
                 case TYPE_PLAYER:
                 case TYPE_PROGRAM:
-                    DBFETCH(loop)->next = DBFETCH(LOCATION(loop))->contents;
-                    DBFETCH(LOCATION(loop))->contents = loop;
+                    MUCK::attachContent(LOCATION(loop), loop);
                     SanFixed2(loop, LOCATION(loop), "Orphaned object %s added to contents of %s");
                     break;
                 case TYPE_EXIT:
-                    DBFETCH(loop)->next = DBFETCH(LOCATION(loop))->exits;
-                    DBFETCH(LOCATION(loop))->exits = loop;
+                    MUCK::attachExit(LOCATION(loop), loop);
                     SanFixed2(loop, LOCATION(loop), "Orphaned exit %s added to exits of %s");
                     break;
                 case TYPE_GARBAGE:
@@ -939,11 +909,9 @@ adopt_orphans(void)
 void
 clean_global_environment(void)
 {
-    if (DBFETCH(GLOBAL_ENVIRONMENT)->next != NOTHING) {
-        SanFixed(GLOBAL_ENVIRONMENT, "Removed the global environment %s from a chain");
-        DBFETCH(GLOBAL_ENVIRONMENT)->next = NOTHING;
-        DBDIRTY(GLOBAL_ENVIRONMENT);
-    }
+    /* with owned lists, #0 can only be in a list if its location
+     * points there, which the clause below clears; misplaced list
+     * members were already cut by the hacksaw pass */
     if (LOCATION(GLOBAL_ENVIRONMENT) != NOTHING) {
         SanFixed2(GLOBAL_ENVIRONMENT, LOCATION(GLOBAL_ENVIRONMENT), "Removed the global environment %s from %s");
         LOCATION(GLOBAL_ENVIRONMENT) = NOTHING;
@@ -1047,22 +1015,29 @@ sanechange(dbref player, const char *command)
     }
 
     if (!string_compare(field, "next")) {
-        strcpy(buf2, unparse(NEXTOBJ(d)));
-        NEXTOBJ(d) = v;
-        DBDIRTY(d);
-        SanPrint(player, MARK "Setting #%d's next field to %s", d, unparse(v));
+        SanPrint(player, MARK "The next field is gone; containment is owned lists now.");
 
     } else if (!string_compare(field, "exits")) {
         strcpy(buf2, unparse(EXITS(d)));
-        EXITS(d) = v;
+        if (v == NOTHING) {
+            MUCK::exitsOf(d).clear();
+            SanPrint(player, MARK "Cleared #%d's Exits list", d);
+        } else {
+            MUCK::attachExit(d, v);
+            SanPrint(player, MARK "Attached %s to #%d's Exits list", unparse(v), d);
+        }
         DBDIRTY(d);
-        SanPrint(player, MARK "Setting #%d's Exits list start to %s", d, unparse(v));
 
     } else if (!string_compare(field, "contents")) {
         strcpy(buf2, unparse(CONTENTS(d)));
-        CONTENTS(d) = v;
+        if (v == NOTHING) {
+            MUCK::contentsOf(d).clear();
+            SanPrint(player, MARK "Cleared #%d's Contents list", d);
+        } else {
+            MUCK::attachContent(d, v);
+            SanPrint(player, MARK "Attached %s to #%d's Contents list", unparse(v), d);
+        }
         DBDIRTY(d);
-        SanPrint(player, MARK "Setting #%d's Contents list start to %s", d, unparse(v));
 
     } else if (!string_compare(field, "location")) {
         strcpy(buf2, unparse(LOCATION(d)));

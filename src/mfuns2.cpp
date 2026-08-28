@@ -260,7 +260,7 @@ mfn_contents(MFUNARGS)
     strcpy(buf, "");
     outlen = 0;
     ownroom = controls(perms, obj);
-    obj = DBFETCH(obj)->contents;
+    obj = CONTENTS(obj);
     while (obj != NOTHING && list_limit) {
         if ((typchk == NOTYPE || Typeof(obj) == typchk) &&
             (ownroom || controls(perms, obj) ||
@@ -276,7 +276,7 @@ mfn_contents(MFUNARGS)
             outlen += nextlen;
             list_limit--;
         }
-        obj = DBFETCH(obj)->next;
+        obj = NEXTOBJ(obj);
     }
     return buf;
 }
@@ -300,7 +300,7 @@ mfn_exits(MFUNARGS)
         case TYPE_ROOM:
         case TYPE_THING:
         case TYPE_PLAYER:
-            obj = DBFETCH(obj)->exits;
+            obj = EXITS(obj);
             break;
         default:
             obj = NOTHING;
@@ -318,7 +318,7 @@ mfn_exits(MFUNARGS)
         strcat((buf + outlen), buf2);
         outlen += nextlen;
         list_limit--;
-        obj = DBFETCH(obj)->next;
+        obj = NEXTOBJ(obj);
     }
     return buf;
 }

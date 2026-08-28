@@ -5216,7 +5216,7 @@ announce_puppets(dbref player, const char *msg, const char *prop)
                         && *ptr)
                         msg2 = ptr;
                     sprintf(buf, CMOVE "%.512s %.3000s", PNAME(what), msg2);
-                    anotify_except(DBFETCH(where)->contents, what, buf, what);
+                    anotify_except(CONTENTS(where), what, buf, what);
                 }
             }
         }
@@ -5288,7 +5288,7 @@ announce_connect(int descr, dbref player)
                 sprintf(buf, CMOVE "%s has connected.", PNAME(player));
             else
                 sprintf(buf, CMOVE "%s has reconnected.", PNAME(player));
-            anotify_except(DBFETCH(loc)->contents, player, buf, player);
+            anotify_except(CONTENTS(loc), player, buf, player);
         }
 
         if (online(player) == 1 && (!Hidden(player))) {
@@ -5321,7 +5321,7 @@ announce_disconnect(struct descriptor_data *d)
                 sprintf(buf, CMOVE "%s has disconnected.", PNAME(player));
             else
                 sprintf(buf, CMOVE "%s has dropped a connection.", PNAME(player));
-            anotify_except(DBFETCH(loc)->contents, player, buf, player);
+            anotify_except(CONTENTS(loc), player, buf, player);
         }
     }
 
@@ -5382,7 +5382,7 @@ announce_idle(struct descriptor_data *d)
 
     if ((!Dark(player)) && (!Dark(loc)) && (tp_enable_idle_msgs)) {
         sprintf(buf, CMOVE "%s has become terminally idle.", PNAME(player));
-        anotify_except(DBFETCH(loc)->contents, player, buf, player);
+        anotify_except(CONTENTS(loc), player, buf, player);
     }
 
     /* queue up all _idle programs referred to by properties */
@@ -5416,7 +5416,7 @@ announce_unidle(struct descriptor_data *d)
 
     if ((!Dark(player)) && (!Dark(loc)) && (tp_enable_idle_msgs)) {
         sprintf(buf, CMOVE "%s has unidled.", PNAME(player));
-        anotify_except(DBFETCH(loc)->contents, player, buf, player);
+        anotify_except(CONTENTS(loc), player, buf, player);
     }
 
     if (OkObj(d->player) ? (Typeof(d->player) & TYPE_PLAYER) : 0) {
@@ -6101,7 +6101,7 @@ silent_connect(int descr, dbref player)
                 sprintf(buf, CMOVE "%s has connected.", PNAME(player));
             else
                 sprintf(buf, CMOVE "%s has reconnected.", PNAME(player));
-            anotify_except(DBFETCH(loc)->contents, player, buf, player);
+            anotify_except(CONTENTS(loc), player, buf, player);
         }
     }
     return;
@@ -6124,7 +6124,7 @@ silent_disconnect(struct descriptor_data *d)
                 sprintf(buf, CMOVE "%s has disconnected.", PNAME(player));
             else
                 sprintf(buf, CMOVE "%s has dropped a connection.", PNAME(player));
-            anotify_except(DBFETCH(loc)->contents, player, buf, player);
+            anotify_except(CONTENTS(loc), player, buf, player);
         }
     }
 

@@ -1428,9 +1428,9 @@ do_set(int descr, dbref player, const char *name, const char *flag)
         f = ZOMBIE;
     } else if (string_prefix("VEHICLE", p) || string_prefix("VIEWABLE", p)) {
         if (*flag == NOT_TOKEN && Typeof(thing) == TYPE_THING) {
-            dbref obj = DBFETCH(thing)->contents;
+            dbref obj = CONTENTS(thing);
 
-            for (; obj != NOTHING; obj = DBFETCH(obj)->next) {
+            for (; obj != NOTHING; obj = NEXTOBJ(obj)) {
                 if (Typeof(obj) == TYPE_PLAYER) {
                     anotify_nolisten2(player, CINFO "That vehicle still has players in it!");
                     return;

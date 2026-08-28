@@ -11,6 +11,7 @@
 #include "props.h"
 #include "match.h"
 #include "externs.h"
+#include "Modules.h"
 #include "params.h"
 #include "tune.h"
 #include "interface.h"
@@ -139,7 +140,7 @@ eval_boolexp_rec2(int descr, dbref player, struct boolexp * b, dbref thing, int 
                     return (rv != NULL);
                 }
                 return (b->thing == player || b->thing == OWNER(player)
-                        || member(b->thing, DBFETCH(player)->contents)
+                        || member(b->thing, CONTENTS(player))
                         || b->thing == DBFETCH(player)->location);
 #else /* !SANITY */
                 return 0;

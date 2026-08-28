@@ -4,54 +4,19 @@
 #include "db.h"
 #include "tune.h"
 
-/* remove the first occurence of what in list headed by first */
-dbref
-remove_first(dbref first, dbref what)
-{
-    dbref prev;
-
-    /* special case if it's the first one */
-    if (first == what) {
-        return DBFETCH(first)->next;
-    } else {
-        /* have to find it */
-        DOLIST(prev, first) {
-            if (DBFETCH(prev)->next == what) {
-                DBSTORE(prev, next, DBFETCH(what)->next);
-                return first;
-            }
-        }
-        return first;
-    }
-}
-
+/* Deep membership: is thing in the list starting at head, or inside
+ * anything in it? Callers pass CONTENTS(loc)-style heads. */
 int
 member(dbref thing, dbref list)
 {
     DOLIST(list, list) {
         if (list == thing)
             return 1;
-        if ((DBFETCH(list)->contents)
-            && (member(thing, DBFETCH(list)->contents))) {
+        if ((CONTENTS(list) != NOTHING)
+            && (member(thing, CONTENTS(list)))) {
             return 1;
         }
     }
 
     return 0;
-}
-
-dbref
-reverse(dbref list)
-{
-    dbref newlist;
-    dbref rest;
-
-    newlist = NOTHING;
-    while (list != NOTHING) {
-        rest = DBFETCH(list)->next;
-        PUSH(list, newlist);
-        DBDIRTY(newlist);
-        list = rest;
-    }
-    return newlist;
 }

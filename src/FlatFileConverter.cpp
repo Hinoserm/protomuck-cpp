@@ -1,3 +1,10 @@
+/* Standard headers FIRST: db.h defines function-like macros (getloc
+ * among them) that clobber identically named members inside libstdc++
+ * headers included after it. */
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+
 #include "copyright.h"
 #include "config.h"
 
@@ -11,6 +18,15 @@
 #include "ProgramStore.h"
 #include "strutils.h"
 #include "FlatFileConverter.h"
+#include "Modules.h"
+
+/* Flat chain refs captured during the read; materializeLists() turns
+ * them into the owning containment vectors after the whole database
+ * is in, applying the same corruption rules the old save-side chain
+ * sanitizer used. Import-only state. */
+static std::unordered_map<int, dbref> rawContents;
+static std::unordered_map<int, dbref> rawExits;
+static std::unordered_map<int, dbref> rawNext;
 
 /* Reading helpers that remain in Database.cpp (shared with the macro
  * file loader) */
@@ -207,9 +223,9 @@ db_read_object_old(FILE * f, struct object *o, dbref objno)
     NAME(objno) = getstring(f);
     LOADDESC(objno, getstring_oldcomp_noalloc(f));
     o->location = getref(f);
-    o->contents = getref(f);
+    rawContents[objno] = getref(f);
     exits = getref(f);
-    o->next = getref(f);
+    rawNext[objno] = getref(f);
     LOADLOCK(objno, getboolexp(f));
     LOADFAIL(objno, getstring_oldcomp_noalloc(f));
     LOADSUCC(objno, getstring_oldcomp_noalloc(f));
@@ -272,13 +288,12 @@ db_read_object_old(FILE * f, struct object *o, dbref objno)
     switch (FLAGS(objno) & TYPE_MASK) {
         case TYPE_THING:
             o->sp.thing.home = exits;
-            o->exits = NOTHING;
             o->sp.thing.value = pennies;
             break;
         case TYPE_ROOM:
             o->sp.room.dropto = o->location;
             o->location = NOTHING;
-            o->exits = exits;
+            rawExits[objno] = exits;
             break;
         case TYPE_EXIT:
             if (o->location == NOTHING) {
@@ -294,14 +309,11 @@ db_read_object_old(FILE * f, struct object *o, dbref objno)
             break;
         case TYPE_PLAYER:
             o->sp.player.home = exits;
-            o->exits = NOTHING;
             o->sp.player.pennies = pennies;
             o->sp.player.password = password;
             break;
         case TYPE_GARBAGE:
             OWNER(objno) = NOTHING;
-            o->next = recyclable;
-            recyclable = objno;
 
             delete[]NAME(objno);
             NAME(objno) = "<garbage>";
@@ -327,8 +339,8 @@ db_read_object_new(FILE * f, struct object *o, dbref objno)
     NAME(objno) = getstring(f);
     LOADDESC(objno, getstring_noalloc(f));
     o->location = getref(f);
-    o->contents = getref(f);
-    o->next = getref(f);
+    rawContents[objno] = getref(f);
+    rawNext[objno] = getref(f);
     LOADLOCK(objno, getboolexp(f));
     LOADFAIL(objno, getstring_oldcomp_noalloc(f));
     LOADSUCC(objno, getstring_oldcomp_noalloc(f));
@@ -452,8 +464,8 @@ db_read_object_foxen(FILE * f, struct object *o, dbref objno, int dtype, int rea
 #endif /* ARCHAIC_DATABASES */
 
     o->location = getref(f);
-    o->contents = getref(f);
-    o->next = getref(f);
+    rawContents[objno] = getref(f);
+    rawNext[objno] = getref(f);
 
 #ifdef ARCHAIC_DATABASES
     if (dtype < 6)
@@ -577,7 +589,7 @@ db_read_object_foxen(FILE * f, struct object *o, dbref objno, int dtype, int rea
             if (verboseload)
                 fprintf(stderr, "[type: THING] ");
             o->sp.thing.home = prop_flag ? getref(f) : j;
-            o->exits = getref(f);
+            rawExits[objno] = getref(f);
             OWNER(objno) = getref(f);
             o->sp.thing.value = getref(f);
             break;
@@ -585,7 +597,7 @@ db_read_object_foxen(FILE * f, struct object *o, dbref objno, int dtype, int rea
             if (verboseload)
                 fprintf(stderr, "[type: ROOM] ");
             o->sp.room.dropto = prop_flag ? getref(f) : j;
-            o->exits = getref(f);
+            rawExits[objno] = getref(f);
             OWNER(objno) = getref(f);
             break;
         case TYPE_EXIT:
@@ -604,7 +616,7 @@ db_read_object_foxen(FILE * f, struct object *o, dbref objno, int dtype, int rea
             if (verboseload)
                 fprintf(stderr, "[type: PLAYER] ");
             o->sp.player.home = prop_flag ? getref(f) : j;
-            o->exits = getref(f);
+            rawExits[objno] = getref(f);
             o->sp.player.pennies = getref(f);
             if (MUCK::PasswordHash::enabled) {
                 if (db_hash_convert) {
@@ -692,6 +704,55 @@ db_read_object_foxen(FILE * f, struct object *o, dbref objno, int dtype, int rea
     }
     if (verboseload)
         fprintf(stderr, "OK\n");
+}
+
+/* Turn the captured flat chains into the owning containment vectors.
+ * Same corruption rules as the old save-side chain sanitizer: a
+ * member must be valid, must not be its own container, must think it
+ * is located in the container, and may appear in only one list; the
+ * rest of a chain is dropped at the first bad member, matching how
+ * the chain could not be followed further anyway. */
+static void
+materializeLists(void)
+{
+    std::unordered_set<int> claimed;
+    long dropped = 0;
+
+    for (dbref i = 0; i < MUCK::database().top(); i++) {
+        if (Typeof(i) == TYPE_GARBAGE)
+            continue;
+
+        for (int pass = 0; pass < 2; pass++) {
+            bool exitsList = (pass == 1);
+            auto headIt = exitsList ? rawExits.find((int) i)
+                                    : rawContents.find((int) i);
+            dbref head = (headIt == (exitsList ? rawExits.end()
+                                               : rawContents.end()))
+                ? NOTHING : headIt->second;
+            std::vector<MUCK::DbObject *> &out =
+                exitsList ? MUCK::exitsOf(i) : MUCK::contentsOf(i);
+            long guard = MUCK::database().top();
+
+            for (dbref m = head; m != NOTHING && guard-- > 0;) {
+                if (!MUCK::database().valid(m) || m == i
+                    || DBFETCH(m)->location != i
+                    || !claimed.insert((int) m).second) {
+                    dropped++;
+                    break;
+                }
+                out.push_back(MUCK::database().get(m));
+
+                auto nx = rawNext.find((int) m);
+
+                m = (nx == rawNext.end()) ? NOTHING : nx->second;
+            }
+        }
+    }
+    if (dropped)
+        log_status("IMPORT: dropped %ld corrupt chain members\n", dropped);
+    rawContents.clear();
+    rawExits.clear();
+    rawNext.clear();
 }
 
 /* First-time import of program text from the flat era's muf/<ref>.m
@@ -904,6 +965,7 @@ MUCK::FlatFileConverter::import(FILE * f)
                                         MUCK::PasswordHash::version = HVER_CURRENT;
                                     else
                                         MUCK::PasswordHash::version = HVER_NONE;
+                                    materializeLists();
                                     importProgramSources();
                                     autostart_progs();
                                     return MUCK::database().top();

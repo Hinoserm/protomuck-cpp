@@ -318,7 +318,7 @@ match_possession(struct match_data *md)
 {
     if (!OkObj(md->match_from))
         return;                 /* Don't match for invalid objects! */
-    match_list(DBFETCH(md->match_from)->contents, md);
+    match_list(CONTENTS(md->match_from), md);
 }
 
 void
@@ -327,7 +327,7 @@ match_neighbor(struct match_data *md)
     dbref loc;
 
     if ((loc = DBFETCH(md->match_from)->location) != NOTHING) {
-        match_list(DBFETCH(loc)->contents, md);
+        match_list(CONTENTS(loc), md);
     }
 }
 
@@ -457,11 +457,11 @@ match_invobj_actions(struct match_data *md)
 
     if (md->match_from == NOTHING) /* Don't match #-1's contents. */
         return;
-    if (DBFETCH(md->match_from)->contents == NOTHING)
+    if (CONTENTS(md->match_from) == NOTHING)
         return;
-    DOLIST(thing, DBFETCH(md->match_from)->contents) {
-        if (Typeof(thing) == TYPE_THING && DBFETCH(thing)->exits != NOTHING) {
-            match_exits(DBFETCH(thing)->exits, md);
+    DOLIST(thing, CONTENTS(md->match_from)) {
+        if (Typeof(thing) == TYPE_THING && EXITS(thing) != NOTHING) {
+            match_exits(EXITS(thing), md);
         }
     }
 }
@@ -479,11 +479,11 @@ match_roomobj_actions(struct match_data *md)
         return;
     if ((loc = DBFETCH(md->match_from)->location) == NOTHING)
         return;
-    if (DBFETCH(loc)->contents == NOTHING)
+    if (CONTENTS(loc) == NOTHING)
         return;
-    DOLIST(thing, DBFETCH(loc)->contents) {
-        if (Typeof(thing) == TYPE_THING && DBFETCH(thing)->exits != NOTHING) {
-            match_exits(DBFETCH(thing)->exits, md);
+    DOLIST(thing, CONTENTS(loc)) {
+        if (Typeof(thing) == TYPE_THING && EXITS(thing) != NOTHING) {
+            match_exits(EXITS(thing), md);
         }
     }
 }
@@ -501,7 +501,7 @@ match_player_actions(struct match_data *md)
         case TYPE_PLAYER:
         case TYPE_ROOM:
         case TYPE_THING:
-            obj = DBFETCH(md->match_from)->exits;
+            obj = EXITS(md->match_from);
             break;
         default:
             obj = NOTHING;
@@ -529,7 +529,7 @@ match_room_exits(dbref loc, struct match_data *md)
         case TYPE_PLAYER:
         case TYPE_ROOM:
         case TYPE_THING:
-            obj = DBFETCH(loc)->exits;
+            obj = EXITS(loc);
             break;
         default:
             obj = NOTHING;
@@ -664,8 +664,8 @@ match_rmatch(dbref arg1, struct match_data *md)
         case TYPE_PLAYER:
         case TYPE_ROOM:
         case TYPE_THING:
-            match_list(DBFETCH(arg1)->contents, md);
-            match_exits(DBFETCH(arg1)->exits, md);
+            match_list(CONTENTS(arg1), md);
+            match_exits(EXITS(arg1), md);
             break;
     }
 }

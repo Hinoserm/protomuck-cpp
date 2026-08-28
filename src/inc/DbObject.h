@@ -86,6 +86,19 @@ class DbObject {
     /* Wizard level: muckerLevel at LMAGE or above, else 0. */
     int wizLevel() const;
 
+    /* --- containment (owning storage; every object has the lists,
+     * most stay empty). Order is MUF-visible: front of the vector is
+     * the head of the old chain, arrivals prepend. --- */
+    std::vector<DbObject *> &contentsVec() { return contents_; }
+    std::vector<DbObject *> &exitsVec() { return exits_; }
+
+    /* Cached index of this object inside its container's list: a walk
+     * accelerator only. nextSiblingRef validates it before trusting
+     * it, so stale hints cost one rescan, never a wrong answer. Keeps
+     * classic head/next walks (the MUF CONTENTS...NEXT idiom) at the
+     * old chain cost of O(1) per step. */
+    size_t listHint = 0;
+
     /* --- module access --- */
     /* As<T> is the idiomatic type test at boundaries:
      *     if (Player *p = obj->As<Player>()) { ... }
@@ -152,6 +165,8 @@ class DbObject {
 
     dbref ref_;
     Uuid uuid_;
+    std::vector<DbObject *> contents_;
+    std::vector<DbObject *> exits_;
     bool deleted_ = false;
     int moduleTypeBits_ = -1;   /* type bits modules were built for */
     Module *typeModule_ = nullptr;

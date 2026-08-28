@@ -183,12 +183,12 @@ look_contents(dbref player, dbref loc, const char *contents_name)
 
     /* check to see if there is anything there */
     if (((Typeof(loc) != TYPE_ROOM) || !Dark(loc)))
-        DOLIST(thing, DBFETCH(loc)->contents) {
+        DOLIST(thing, CONTENTS(loc)) {
         if (can_see(player, thing, can_see_loc)) {
             /* something exists!  show him everything */
             saw_something = 1;
             anotify_nolisten(player, contents_name, 1);
-            DOLIST(thing, DBFETCH(loc)->contents) {
+            DOLIST(thing, CONTENTS(loc)) {
                 if (can_see(player, thing, can_see_loc))
                     anotify_nolisten(player, ansi_unparse_object(player, thing), 1);
             }
@@ -918,21 +918,21 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
     anotify_nolisten(player, SYSYELLOW "[ Use 'examine <object>=/' to list root properties. ]", 1);
 
     /* show him the contents */
-    if (DBFETCH(thing)->contents != NOTHING) {
+    if (CONTENTS(thing) != NOTHING) {
         if (Typeof(thing) == TYPE_PLAYER)
             anotify_nolisten(player, SYSBLUE "Carrying:", 1);
         else
             anotify_nolisten(player, SYSBLUE "Contents:", 1);
-        DOLIST(content, DBFETCH(thing)->contents) {
+        DOLIST(content, CONTENTS(thing)) {
             anotify_nolisten(player, ansi_unparse_object(OWNER(player), content), 1);
         }
     }
     switch (Typeof(thing)) {
         case TYPE_ROOM:
             /* tell him about exits */
-            if (DBFETCH(thing)->exits != NOTHING) {
+            if (EXITS(thing) != NOTHING) {
                 anotify_nolisten(player, SYSBLUE "Exits:", 1);
-                DOLIST(exit, DBFETCH(thing)->exits) {
+                DOLIST(exit, EXITS(thing)) {
                     strcpy(buf, ansi_unparse_object(OWNER(player), exit));
                     anotify_fmt(player, "%s " SYSCYAN "to %s", buf, ansi_unparse_object(OWNER(player), MUCK::exitDestCount(exit) > 0 ? MUCK::exitDestRef(exit, 0) : NOTHING)
                         );
@@ -962,9 +962,9 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
                 anotify_nolisten(player, buf, 1);
             }
             /* print thing's actions, if any */
-            if (DBFETCH(thing)->exits != NOTHING) {
+            if (EXITS(thing) != NOTHING) {
                 anotify_nolisten(player, SYSBLUE "Actions/exits:", 1);
-                DOLIST(exit, DBFETCH(thing)->exits) {
+                DOLIST(exit, EXITS(thing)) {
                     strcpy(buf, ansi_unparse_object(OWNER(player), exit));
                     anotify_fmt(player, "%s " SYSCYAN "to %s", buf, ansi_unparse_object(OWNER(player), MUCK::exitDestCount(exit) > 0 ? MUCK::exitDestRef(exit, 0) : NOTHING)
                         );
@@ -986,9 +986,9 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
                 anotify_nolisten(player, buf, 1);
             }
             /* print player's actions, if any */
-            if (DBFETCH(thing)->exits != NOTHING) {
+            if (EXITS(thing) != NOTHING) {
                 anotify_nolisten(player, SYSBLUE "Actions/exits:", 1);
-                DOLIST(exit, DBFETCH(thing)->exits) {
+                DOLIST(exit, EXITS(thing)) {
                     strcpy(buf, ansi_unparse_object(OWNER(player), exit));
                     anotify_fmt(player, "%s " SYSCYAN "to %s", buf, ansi_unparse_object(player, MUCK::exitDestCount(exit) > 0 ? MUCK::exitDestRef(exit, 0) : NOTHING)
                         );
@@ -1060,7 +1060,7 @@ do_inventory(dbref player)
 {
     dbref thing;
 
-    if ((thing = DBFETCH(player)->contents) == NOTHING && !count_details(player, player, "_obj")) {
+    if ((thing = CONTENTS(player)) == NOTHING && !count_details(player, player, "_obj")) {
         anotify_nolisten(player, SYSBLUE "You aren't carrying anything.", 1);
     } else {
         anotify_nolisten(player, SYSBLUE "You are carrying:", 1);
@@ -2030,7 +2030,7 @@ do_contents(int descr, dbref player, const char *name, const char *flags)
     }
 
     output_type = init_checkflags(player, flags, &check);
-    DOLIST(i, DBFETCH(thing)->contents) {
+    DOLIST(i, CONTENTS(thing)) {
         if (checkflags(i, check)) {
             display_objinfo(player, i, output_type);
             total++;
@@ -2046,7 +2046,7 @@ do_contents(int descr, dbref player, const char *name, const char *flags)
         case TYPE_ROOM:
         case TYPE_THING:
         case TYPE_PLAYER:
-            i = DBFETCH(thing)->exits;
+            i = EXITS(thing);
             break;
     }
     DOLIST(i, i) {
@@ -2092,13 +2092,13 @@ exit_match_exists(dbref player, dbref obj, const char *name)
     dbref exit;
     char buf[BUFFER_LEN];
 
-    exit = DBFETCH(obj)->exits;
+    exit = EXITS(obj);
     while (exit != NOTHING) {
         if (exit_matches_name(exit, name)) {
             sprintf(buf, "  %ss are trapped on %.2048s", name, ansi_unparse_object(player, obj));
             anotify_nolisten(player, buf, 1);
         }
-        exit = DBFETCH(exit)->next;
+        exit = NEXTOBJ(exit);
     }
 }
 
@@ -2145,8 +2145,8 @@ do_sweep(int descr, dbref player, const char *name)
     sprintf(buf, CINFO "Listeners in %s:", ansi_unparse_object(player, thing));
     anotify_nolisten(player, buf, 1);
 
-    ref = DBFETCH(thing)->contents;
-    for (; ref != NOTHING; ref = DBFETCH(ref)->next) {
+    ref = CONTENTS(thing);
+    for (; ref != NOTHING; ref = NEXTOBJ(ref)) {
         switch (Typeof(ref)) {
             case TYPE_PLAYER:
                 if ( /* !Dark(thing) || */ online(ref)) {

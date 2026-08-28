@@ -470,7 +470,6 @@ extern char *string_dup(const char *s);
 
 /* From utils.c */
 extern int member(dbref thing, dbref list);
-extern dbref remove_first(dbref first, dbref what);
 
 /* From wiz.c */
 extern void do_wizchat(dbref player, const char *arg);

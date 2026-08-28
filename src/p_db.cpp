@@ -22,9 +22,8 @@ copyobj(dbref player, dbref old, dbref nw)
 
     NAME(nw) = alloc_string(NAME(old));
     newp->properties = copy_prop(old);
-    newp->exits = NOTHING;
-    newp->contents = NOTHING;
-    newp->next = NOTHING;
+    MUCK::exitsOf(nw).clear();
+    MUCK::contentsOf(nw).clear();
     newp->location = NOTHING;
     moveto(nw, player);
 
@@ -639,9 +638,9 @@ prim_contents(PRIM_PROTOTYPE)
     if (!valid_object(&oper[0]))
         abort_interp("Invalid argument type");
     CHECKREMOTE(oper[0].data.objref);
-    ref = DBFETCH(oper[0].data.objref)->contents;
+    ref = CONTENTS(oper[0].data.objref);
     while (mlev < LM2 && ref != NOTHING && (FLAGS(ref) & DARK) && !controls(ProgUID, ref))
-        ref = DBFETCH(ref)->next;
+        ref = NEXTOBJ(ref);
     if (Typeof(oper[0].data.objref) != TYPE_PLAYER && Typeof(oper[0].data.objref) != TYPE_PROGRAM)
         ts_lastuseobject(program, oper[0].data.objref);
 
@@ -664,7 +663,7 @@ prim_exits(PRIM_PROTOTYPE)
         case TYPE_THING:
             ts_lastuseobject(program, ref);
         case TYPE_PLAYER:
-            ref = DBFETCH(ref)->exits;
+            ref = EXITS(ref);
             break;
         default:
             abort_interp("Invalid object");
@@ -682,9 +681,9 @@ prim_next(PRIM_PROTOTYPE)
     if (!valid_object(&oper[0]))
         abort_interp("Invalid object");
     CHECKREMOTE(oper[0].data.objref);
-    ref = DBFETCH(oper[0].data.objref)->next;
+    ref = NEXTOBJ(oper[0].data.objref);
     while (mlev < LM2 && ref != NOTHING && Typeof(ref) != TYPE_EXIT && ((FLAGS(ref) & DARK) || Typeof(ref) == TYPE_ROOM) && !controls(ProgUID, ref))
-        ref = DBFETCH(ref)->next;
+        ref = NEXTOBJ(ref);
 
     PushObject(ref);
 }
@@ -991,9 +990,9 @@ prim_set(PRIM_PROTOTYPE)
         abort_interp(tp_noperm_mesg);
 #endif
     if (result && Typeof(ref) == TYPE_THING) {
-        dbref obj = DBFETCH(ref)->contents;
+        for (MUCK::DbObject *o : MUCK::contentsOf(ref)) {
+            dbref obj = o->ref();
 
-        for (; obj != NOTHING; obj = DBFETCH(obj)->next) {
             if (Typeof(obj) == TYPE_PLAYER) {
                 abort_interp(tp_noperm_mesg);
             }
@@ -1584,7 +1583,7 @@ prim_newobject(PRIM_PROTOTYPE)
     }
 
     /* link it in */
-    PUSH(ref, DBFETCH(oper[1].data.objref)->contents);
+    MUCK::attachContent(oper[1].data.objref, ref);
     DBDIRTY(oper[1].data.objref);
 
     PushObject(ref);
@@ -1617,9 +1616,9 @@ prim_newroom(PRIM_PROTOTYPE)
             ->object()->ref();
         FLAGS(ref) |= (FLAGS(PSafe) & JUMP_OK);
         DBFETCH(ref)->location = oper[1].data.objref;  /* chain wiring flips later */
-        DBFETCH(ref)->exits = NOTHING;
+        MUCK::exitsOf(ref).clear();
         MUCK::database().get(ref)->As<MUCK::Room>()->setDropTo(nullptr);
-        PUSH(ref, DBFETCH(oper[1].data.objref)->contents);
+        MUCK::attachContent(oper[1].data.objref, ref);
         DBDIRTY(ref);
         DBDIRTY(oper[1].data.objref);
 
@@ -1664,7 +1663,7 @@ prim_newexit(PRIM_PROTOTYPE)
         DBFETCH(ref)->sp.exit.dest = NULL; /* raw: mid-construction */
 
         /* link it in */
-        PUSH(ref, DBFETCH(oper[1].data.objref)->exits);
+        MUCK::attachExit(oper[1].data.objref, ref);
         DBDIRTY(oper[1].data.objref);
 
         /* If autolinking, link it to NIL */
@@ -1960,7 +1959,7 @@ prim_copyplayer(PRIM_PROTOTYPE)
     FLAG2(newplayer) = FLAG2(ref);
 
     newp->properties = copy_prop(ref);
-    newp->exits = NOTHING;
+    MUCK::exitsOf(newplayer).clear();
 #ifdef DISKBASE
     newp->propsfpos = 0;
     newp->propsmode = PROPS_UNLOADED;
@@ -1979,7 +1978,7 @@ prim_copyplayer(PRIM_PROTOTYPE)
     set_password(newplayer, password);
 
     /* link him to player_start */
-    PUSH(newplayer, DBFETCH(MUCK::playerHomeRef(ref))->contents);
+    MUCK::attachContent(MUCK::playerHomeRef(ref), newplayer);
     add_player(newplayer);
     newp->location = MUCK::playerHomeRef(ref);
     DBDIRTY(newplayer);
@@ -2396,7 +2395,7 @@ prim_contents_array(PRIM_PROTOTYPE)
     if ((Typeof(ref) == TYPE_PROGRAM) || (Typeof(ref) == TYPE_EXIT))
         abort_interp("Dbref cannot be a program nor exit (1)");
     nw = new_array_packed(0, 0);
-    ref = DBFETCH(ref)->contents;
+    ref = CONTENTS(ref);
     while ((ref > 0) && (ref < MUCK::database().top())) {
         temp1.type = PROG_INTEGER;
         temp1.data.number = count++;
@@ -2405,7 +2404,7 @@ prim_contents_array(PRIM_PROTOTYPE)
         array_setitem(&nw, &temp1, &temp2);
         CLEAR(&temp1);
         CLEAR(&temp2);
-        ref = DBFETCH(ref)->next;
+        ref = NEXTOBJ(ref);
     }
     PushArrayRaw(nw);
 }
@@ -2425,7 +2424,7 @@ prim_exits_array(PRIM_PROTOTYPE)
     if ((Typeof(ref) == TYPE_PROGRAM) || (Typeof(ref) == TYPE_EXIT))
         abort_interp("Dbref cannot be a program nor exit (1)");
     nw = new_array_packed(0, 0);
-    ref = DBFETCH(ref)->exits;
+    ref = EXITS(ref);
     while ((ref > 0) && (ref < MUCK::database().top())) {
         temp1.type = PROG_INTEGER;
         temp1.data.number = count++;
@@ -2434,7 +2433,7 @@ prim_exits_array(PRIM_PROTOTYPE)
         array_setitem(&nw, &temp1, &temp2);
         CLEAR(&temp1);
         CLEAR(&temp2);
-        ref = DBFETCH(ref)->next;
+        ref = NEXTOBJ(ref);
     }
     PushArrayRaw(nw);
 }
@@ -2534,21 +2533,21 @@ prim_getobjinfo(PRIM_PROTOTYPE)
     temp1.type = PROG_STRING;
     temp1.data.string = alloc_prog_string("NEXT");
     temp2.type = PROG_OBJECT;
-    temp2.data.objref = DBFETCH(ref)->next;
+    temp2.data.objref = NEXTOBJ(ref);
     array_setitem(&nw, &temp1, &temp2);
     CLEAR(&temp1);
     CLEAR(&temp2);
     temp1.type = PROG_STRING;
     temp1.data.string = alloc_prog_string("EXITS");
     temp2.type = PROG_OBJECT;
-    temp2.data.objref = DBFETCH(ref)->exits;
+    temp2.data.objref = EXITS(ref);
     array_setitem(&nw, &temp1, &temp2);
     CLEAR(&temp1);
     CLEAR(&temp2);
     temp1.type = PROG_STRING;
     temp1.data.string = alloc_prog_string("CONTENTS");
     temp2.type = PROG_OBJECT;
-    temp2.data.objref = DBFETCH(ref)->contents;
+    temp2.data.objref = CONTENTS(ref);
     array_setitem(&nw, &temp1, &temp2);
     CLEAR(&temp1);
     CLEAR(&temp2);

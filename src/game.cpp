@@ -1947,11 +1947,11 @@ prop_command(int descr, dbref player, const char *command, const char *arg, cons
                     dbref plyr;
 
                     sprintf(bbuf, ">> %.4000s", pronoun_substitute(descr, player, cbuf));
-                    plyr = DBFETCH(where)->contents;
+                    plyr = CONTENTS(where);
                     while (plyr != NOTHING) {
                         if (Typeof(plyr) == TYPE_PLAYER && plyr != player)
                             notify_nolisten(plyr, bbuf, 0);
-                        plyr = DBFETCH(plyr)->next;
+                        plyr = NEXTOBJ(plyr);
                     }
                 }
             }

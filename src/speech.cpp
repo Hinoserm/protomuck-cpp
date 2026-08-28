@@ -9,6 +9,7 @@
 #include "tune.h"
 #include "props.h"
 #include "externs.h"
+#include "Modules.h"
 
 /* Commands which involve speaking */
 
@@ -28,7 +29,7 @@ do_say(int descr, dbref player, const char *message)
     anotify(player, buf);
 
     sprintf(buf, "^SAY/POSE^%s says, ^SAY/QUOTES^\"^SAY/TEXT^%s^SAY/QUOTES^\"", PNAME(player), buf2);
-    anotify_except(DBFETCH(loc)->contents, player, buf, player);
+    anotify_except(CONTENTS(loc), player, buf, player);
 }
 
 void
@@ -100,7 +101,7 @@ do_pose(int descr, dbref player, const char *message)
     tct(message, buf2);
     /* notify everybody */
     sprintf(buf, "^SAY/POSE^%s %s", PNAME(player), buf2);
-    anotify_except(DBFETCH(loc)->contents, NOTHING, buf, player);
+    anotify_except(CONTENTS(loc), NOTHING, buf, player);
 }
 
 void
@@ -277,13 +278,13 @@ notify_listeners(int descr, dbref who, dbref xprog, dbref obj, dbref room, const
                 if (!prefix || !*prefix)
                     prefix = "Outside>";
                 sprintf(buf, "%s %.*s", prefix, (int) (BUFFER_LEN - 2 - strlen(prefix)), msg);
-                ref = DBFETCH(obj)->contents;
+                ref = CONTENTS(obj);
                 while (ref != NOTHING) {
 #ifdef IGNORE_SUPPORT
                     if (!ignorance(who, ref))
 #endif /* IGNORE_SUPPORT */
                         notify_nolisten(ref, buf, isprivate);
-                    ref = DBFETCH(ref)->next;
+                    ref = NEXTOBJ(ref);
                 }
             }
         }
@@ -378,13 +379,13 @@ ansi_notify_listeners(descriptor_data *d, dbref who, dbref xprog, dbref obj, dbr
                 if (!prefix || !*prefix)
                     prefix = "Outside>";
                 sprintf(buf, "%s %.*s", prefix, (int) (BUFFER_LEN - 2 - strlen(prefix)), msg);
-                ref = DBFETCH(obj)->contents;
+                ref = CONTENTS(obj);
                 while (ref != NOTHING) {
 #ifdef IGNORE_SUPPORT
                     if (!ignorance(who, ref))
 #endif /* IGNORE_SUPPORT */
                         anotify_nolisten(ref, msg, isprivate);
-                    ref = DBFETCH(ref)->next;
+                    ref = NEXTOBJ(ref);
                 }
             }
         }
@@ -464,13 +465,13 @@ notify_html_listeners(int descr, dbref who, dbref xprog, dbref obj, dbref room, 
                 if (!prefix || !*prefix)
                     prefix = "Outside>";
                 sprintf(buf, "%s %.*s", prefix, (int) (BUFFER_LEN - 2 - strlen(prefix)), msg);
-                ref = DBFETCH(obj)->contents;
+                ref = CONTENTS(obj);
                 while (ref != NOTHING) {
 #ifdef IGNORE_SUPPORT
                     if (!ignorance(who, ref))
 #endif /* IGNORE_SUPPORT */
                         notify_html_nolisten(ref, buf, isprivate);
-                    ref = DBFETCH(ref)->next;
+                    ref = NEXTOBJ(ref);
                 }
             }
         }
@@ -573,7 +574,7 @@ parse_omessage(int descr, dbref player, dbref dest, dbref exit, const char *msg,
     if (!*ptr)
         return;
     prefix_message(buf, ptr, prefix, BUFFER_LEN, 1);
-    notify_except(DBFETCH(dest)->contents, player, buf, player);
+    notify_except(CONTENTS(dest), player, buf, player);
 }
 
 

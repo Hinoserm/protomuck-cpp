@@ -1861,11 +1861,11 @@ mfn_otell(MFUNARGS)
         } else {
             sprintf(buf, "%.16s%s%.4078s", NAME(player), ((*argv[0] == '\'' || isspace(*argv[0])) ? "" : " "), ptr);
         }
-        thing = DBFETCH(obj)->contents;
+        thing = CONTENTS(obj);
         while (thing != NOTHING) {
             if (thing != eobj)
                 notify_from_echo(player, thing, buf, 0);
-            thing = DBFETCH(thing)->next;
+            thing = NEXTOBJ(thing);
         }
     }
     return argv[0];
@@ -1905,11 +1905,11 @@ mfn_oansi(MFUNARGS)
         } else {
             sprintf(buf, "%.16s%s%.4078s", NAME(player), ((*argv[0] == '\'' || isspace(*argv[0])) ? "" : " "), ptr);
         }
-        thing = DBFETCH(obj)->contents;
+        thing = CONTENTS(obj);
         while (thing != NOTHING) {
             if (thing != eobj)
                 anotify_from_echo(player, thing, buf, 0);
-            thing = DBFETCH(thing)->next;
+            thing = NEXTOBJ(thing);
         }
     }
     return argv[0];
@@ -1949,14 +1949,14 @@ mfn_ohtml(MFUNARGS)
         } else {
             sprintf(buf, "%.16s%s%.4078s", NAME(player), ((*argv[0] == '\'' || isspace(*argv[0])) ? "" : " "), ptr);
         }
-        thing = DBFETCH(obj)->contents;
+        thing = CONTENTS(obj);
         while (thing != NOTHING) {
             if (thing != eobj) {
                 notify_html_from_echo(player, thing, buf, 0);
                 if (NHtml(OWNER(thing)))
                     notify_html_from_echo(player, thing, "<BR>", 0);
             }
-            thing = DBFETCH(thing)->next;
+            thing = NEXTOBJ(thing);
         }
     }
     return argv[0];

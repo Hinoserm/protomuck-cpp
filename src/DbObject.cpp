@@ -31,9 +31,6 @@ DbObject::DbObject(dbref ref) : ref_(ref)
     legacy_.flags = TYPE_GARBAGE;
     legacy_.location = NOTHING;
     legacy_.owner = NOTHING;
-    legacy_.contents = NOTHING;
-    legacy_.exits = NOTHING;
-    legacy_.next = NOTHING;
     legacy_.properties = NULL;
 }
 
@@ -176,31 +173,171 @@ DbObject::attach(std::unique_ptr<Module> m)
 }
 
 /* --------------------------------------------------------------- */
-/* Container                                                       */
+/* Containment                                                     */
 /* --------------------------------------------------------------- */
 
-static std::vector<DbObject *>
-chainVector(dbref first)
+/* Shared inert list for invalid refs so blanket conversions stay
+ * safe; it is cleared on every access in case someone mutated it. */
+static std::vector<DbObject *> &
+emptyList()
 {
-    std::vector<DbObject *> out;
-    dbref guard = database().top();
+    static std::vector<DbObject *> dummy;
 
-    for (dbref i = first; i != NOTHING && guard-- > 0; i = DBFETCH(i)->next)
-        if (DbObject *o = database().get(i))
-            out.push_back(o);
-    return out;
+    dummy.clear();
+    return dummy;
+}
+
+std::vector<DbObject *> &
+contentsOf(dbref ref)
+{
+    DbObject *o = database().get(ref);
+
+    return o ? o->contentsVec() : emptyList();
+}
+
+std::vector<DbObject *> &
+exitsOf(dbref ref)
+{
+    DbObject *o = database().get(ref);
+
+    return o ? o->exitsVec() : emptyList();
+}
+
+dbref
+firstContentRef(dbref loc)
+{
+    std::vector<DbObject *> &v = contentsOf(loc);
+
+    if (v.empty())
+        return NOTHING;
+    v.front()->listHint = 0;
+    return v.front()->ref();
+}
+
+dbref
+firstExitRef(dbref loc)
+{
+    std::vector<DbObject *> &v = exitsOf(loc);
+
+    if (v.empty())
+        return NOTHING;
+    v.front()->listHint = 0;
+    return v.front()->ref();
+}
+
+dbref
+nextSiblingRef(dbref obj)
+{
+    DbObject *o = database().get(obj);
+
+    if (!o)
+        return NOTHING;
+
+    dbref loc = DBFETCH(obj)->location;
+
+    if (loc == NOTHING)
+        return NOTHING;
+
+    std::vector<DbObject *> &v =
+        (Typeof(obj) == TYPE_EXIT) ? exitsOf(loc) : contentsOf(loc);
+
+    /* trust the hint when it still points at us; a mutation since the
+     * last step just means one rescan */
+    size_t idx = v.size();
+
+    if (o->listHint < v.size() && v[o->listHint] == o) {
+        idx = o->listHint;
+    } else {
+        for (size_t i = 0; i < v.size(); i++)
+            if (v[i] == o) {
+                o->listHint = i;
+                idx = i;
+                break;
+            }
+    }
+    if (idx + 1 >= v.size())
+        return NOTHING;
+    v[idx + 1]->listHint = idx + 1;
+    return v[idx + 1]->ref();
+}
+
+bool
+listContains(const std::vector<DbObject *> &v, dbref obj)
+{
+    for (DbObject *o : v)
+        if (o->ref() == obj)
+            return true;
+    return false;
+}
+
+void
+attachContent(dbref loc, dbref obj)
+{
+    DbObject *l = database().get(loc);
+    DbObject *o = database().get(obj);
+
+    if (!l || !o)
+        return;
+    if (!listContains(l->contentsVec(), obj))
+        l->contentsVec().insert(l->contentsVec().begin(), o);
+}
+
+void
+detachContent(dbref loc, dbref obj)
+{
+    DbObject *l = database().get(loc);
+
+    if (!l)
+        return;
+
+    std::vector<DbObject *> &v = l->contentsVec();
+
+    for (size_t i = 0; i < v.size(); i++)
+        if (v[i]->ref() == obj) {
+            v.erase(v.begin() + i);
+            return;
+        }
+}
+
+void
+attachExit(dbref loc, dbref ex)
+{
+    DbObject *l = database().get(loc);
+    DbObject *o = database().get(ex);
+
+    if (!l || !o)
+        return;
+    if (!listContains(l->exitsVec(), ex))
+        l->exitsVec().insert(l->exitsVec().begin(), o);
+}
+
+void
+detachExit(dbref loc, dbref ex)
+{
+    DbObject *l = database().get(loc);
+
+    if (!l)
+        return;
+
+    std::vector<DbObject *> &v = l->exitsVec();
+
+    for (size_t i = 0; i < v.size(); i++)
+        if (v[i]->ref() == ex) {
+            v.erase(v.begin() + i);
+            return;
+        }
 }
 
 std::vector<DbObject *>
 Container::contents() const
 {
-    return chainVector(DBFETCH(object()->ref())->contents);
+    return object()->contentsVec();
 }
 
 std::vector<DbObject *>
 Container::exits() const
 {
-    return chainVector(DBFETCH(object()->ref())->exits);
+    return object()->exitsVec();
 }
 
 /* --------------------------------------------------------------- */
