@@ -10,6 +10,7 @@
 #include "externs.h"
 #include "Modules.h"
 #include "ObjectAccess.h"
+#include "Journal.h"
 #include "ObjectStore.h"
 #include "ModuleRegistry.h"
 #include "reg.h"
@@ -477,9 +478,10 @@ do_stats(dbref player, const char *name)
             changed++;
 #endif
 
-        /* count objects marked as changed. */
+        /* Unsaved means the object has something in its top journal
+         * layer: the layer IS the unsaved set (docs/DATABASE.txt 7). */
         if (((owner == NOTHING) || (MUCK::getOwner(i) == owner))
-            && (FLAGS(i) & OBJECT_CHANGED))
+            && MUCK::hasUnsavedChanges(i))
             altered++;
 
         /* if unused for 90 days, inc oldobj count */

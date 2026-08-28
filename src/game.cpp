@@ -401,26 +401,10 @@ dump_database(bool dofork)
     if (tp_dbdump_warning)
         wall_and_flush(tp_dumping_mesg);
 
-    /* Alynna - saving the PID of the dumper so I can get around an SSL issue */
-#ifdef THREADED_DB_DUMP
-    if (dofork) {
-        dump_database_internal();
-    } else
-#else /* !THREADED_DB_DUMP */
-#ifndef WIN_VC
-    if (dofork && tp_dump_forking) {
-        if (!(dumper_pid = fork())) {
-            dump_database_internal();
-            _exit(0);
-        } else if (dumper_pid == -1) {
-            wall_and_flush("!!! Emergency database dump in progress, please wait..."); 
-            dump_database_internal();
-            wall_and_flush("!!! Emergency database dump complete."); 
-        }
-    } else
-#endif
-#endif /* THREADED_DB_DUMP */
-        dump_database_internal();
+    /* The dump thread writes behind the game now, so there is nothing
+     * to fork for: forking a process that owns a worker thread would
+     * freeze that thread's locks in the child. docs/DATABASE.txt 7.1. */
+    dump_database_internal();
 
     log_status("DUMP: %s.#%d# (done)\n", dumpfile, epoch);
 }
@@ -451,26 +435,8 @@ fork_and_dump(bool dofork)
     if (tp_dbdump_warning)
         wall_and_flush(tp_dumping_mesg);
 
-    /* Alynna - saving the PID of the dumper so I can get around an SSL issue */
-#ifdef THREADED_DB_DUMP
-    if (dofork) {
-        dump_database_internal();
-    } else
-#else /* !THREADED_DB_DUMP */
-#ifndef WIN_VC
-    if (dofork && tp_dump_forking) {
-        if (!(dumper_pid = fork())) {
-            dump_database_internal();
-            _exit(0);
-        } else if (dumper_pid == -1) { 
-            wall_and_flush("!!! Emergency database dump in progress, please wait..."); 
-            dump_database_internal();
-            wall_and_flush("!!! Emergency database dump complete.");                    
-        }
-    } else
-#endif
-#endif /* THREADED_DB_DUMP */
-        dump_database_internal();
+    /* No fork: see dump_database. */
+    dump_database_internal();
 
     time(&current_systime);
     host_check_cache();

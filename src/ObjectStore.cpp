@@ -2267,32 +2267,69 @@ ObjectStore::gcStore()
                 std::string full = l2 + "/" + fn;
 
                 if (fn.size() > 5 && fn.compare(fn.size() - 5, 5, ".hist") == 0) {
-                    /* prune history no retained marker can see */
+                    /* COMPACTION (docs/DATABASE.txt 7.1): merge every
+                     * layer no retained marker still needs into the
+                     * base, and keep the rest. Purely file work; no
+                     * live object is touched, so this can run in the
+                     * background or offline through -storegc. */
                     std::ifstream f(full);
-                    std::string kept, line;
+                    std::string line, kept;
                     std::vector<Marker> own;
                     std::string objfile = full.substr(0, full.size() - 5) + ".json";
                     std::ifstream of(objfile);
                     json oj = of ? json::parse(of, nullptr, false) : json();
 
-                    if (oj.is_object())
-                        own = markersFromJson(oj.value("markers", json::array()));
-                    while (std::getline(f, line)) {
-                        json h = json::parse(line, nullptr, false);
+                    if (!oj.is_object() || !oj.contains("entries")) {
+                        f.close();
+                        continue;   /* no base to merge into */
+                    }
+                    own = markersFromJson(oj.value("markers", json::array()));
 
-                        if (h.is_discarded())
+                    /* the oldest revision anything can still ask for */
+                    long oldest = -1;
+
+                    for (const auto &m : markers_)
+                        if (oldest < 0 || m.rev < oldest)
+                            oldest = m.rev;
+                    for (const auto &m : own)
+                        if (oldest < 0 || m.rev < oldest)
+                            oldest = m.rev;
+
+                    bool merged = false;
+
+                    while (std::getline(f, line)) {
+                        json layer = json::parse(line, nullptr, false);
+
+                        if (layer.is_discarded() || !layer.contains("entries"))
                             continue;
-                        if (markerInWindow(h.value("from", 0L), h.value("to", 0L),
-                                           markers_, own)) {
+
+                        long era = layer.value("era", 0L);
+
+                        /* A layer is still needed while a retained
+                         * marker sits at or before its era: rolling
+                         * back to that marker has to see the state
+                         * without it. */
+                        if (oldest >= 0 && era >= oldest) {
                             kept += line + "\n";
-                        } else {
-                            removed++;
+                            continue;
                         }
+                        for (auto lit = layer["entries"].begin();
+                             lit != layer["entries"].end(); ++lit) {
+                            if (lit.value().is_null())
+                                oj["entries"].erase(lit.key());
+                            else
+                                oj["entries"][lit.key()] = lit.value();
+                        }
+                        oj["rev"] = era;
+                        merged = true;
+                        removed++;
                     }
                     f.close();
+                    if (merged)
+                        atomicWrite(objfile, oj.dump(1));
                     if (kept.empty())
                         unlink(full.c_str());
-                    else
+                    else if (merged)
                         atomicWrite(full, kept);
                 }
             }
@@ -2302,7 +2339,7 @@ ObjectStore::gcStore()
     }
     closedir(d0);
 
-    log_status("STOREGC: removed %ld dead history entries\n", removed);
+    log_status("STOREGC: compacted %ld layers into their bases\n", removed);
     return removed;
 }
 
