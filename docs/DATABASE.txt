@@ -524,3 +524,38 @@ VERSIONING, IMPLEMENTED  (@snapshot, @rollback, -storegc)
     and ops export). UUIDs: examine shows an object's uuid, and any
     run of six or more hex digits resolves as a git-style unique
     prefix anywhere object names are matched.
+
+
+STEP 2 BURNDOWN STATE  (updated as the loop advances)
+
+    Retired from game logic (module API everywhere outside the
+    serializers, the module views, object construction, and sanity):
+
+        sp.room     DONE   (MUCK::Room: dropTo, setDropTo)
+        sp.thing    DONE   (MUCK::Thing: home, value)
+
+    Remaining clusters, by site count at last measure:
+
+        sp.exit     158    destinations array; link machinery
+        sp.player   251    home, pennies, password, editor state,
+                           descriptor list (descrs move to the PLAYER
+                           module's transient Session in the step 5
+                           sessions pass)
+        sp.program  275    interpreter internals (code, pubs,
+                           profiling); source already modularized
+
+    After the last cluster: containment chains become the Container
+    vectors for real, storage flips inside DbObject, the legacy struct
+    and the garbage type die, and DBFETCH is deleted.
+
+    Site conversion idioms (use these, keep them consistent):
+
+        read:   MUCK::Room *r = MUCK::database().get(ref)->As<MUCK::Room>();
+                ... r->dropTo() ? r->dropTo()->ref() : NOTHING ...
+        write:  r->setDropTo(MUCK::database().get(dest));
+        expression contexts use an immediately invoked lambda; see
+        p_db.cpp for examples.
+
+    Raw union access in an object-construction sequence is permitted
+    until Create<T> absorbs the legacy create paths; tag such lines
+    with a mid-construction comment.
