@@ -533,16 +533,31 @@ STEP 2 BURNDOWN STATE  (updated as the loop advances)
 
         sp.room     DONE   (MUCK::Room: dropTo, setDropTo)
         sp.thing    DONE   (MUCK::Thing: home, value)
+        sp.exit     DONE   (MUCK::Exit: destCount, destRef,
+                            setDestRefs, destinations)
+        sp.player   DATA FIELDS DONE (home, pennies via MUCK::Player;
+                            password already through PasswordHash).
+                            Remaining fields are session and editor
+                            state: descrs, descr_count, last_descr,
+                            curr_prog, insert_mode, block, ignore.
+                            These belong to the step 5 SESSIONS pass,
+                            which the migration plan gates on
+                            case-by-case discussion.
 
-    Remaining clusters, by site count at last measure:
+    Remaining:
 
-        sp.exit     158    destinations array; link machinery
-        sp.player   251    home, pennies, password, editor state,
-                           descriptor list (descrs move to the PLAYER
-                           module's transient Session in the step 5
-                           sessions pass)
-        sp.program  275    interpreter internals (code, pubs,
-                           profiling); source already modularized
+        sp.program  275    interpreter internals (code, pubs, curr_line,
+                           instances, profiling); source is already
+                           modularized. This is the step 5 MUF
+                           integration, also discussion-gated.
+
+    Step 2 passes still open (no discussion needed):
+        - Create<T> absorbs the legacy construction sequences,
+          retiring the mid-construction raw tags.
+        - Wizard-level checks (RawMWLevel, WLevel) into a permissions
+          home.
+        - After the step 5 passes: chains to vectors, storage flip,
+          struct and garbage-type death, DBFETCH deleted.
 
     After the last cluster: containment chains become the Container
     vectors for real, storage flips inside DbObject, the legacy struct
