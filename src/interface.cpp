@@ -1828,18 +1828,53 @@ shovechars(void)
     ssl_ctx = SSL_CTX_new(TLS_server_method());
     ssl_ctx_client = SSL_CTX_new(TLS_client_method());
 
-    /* Server: refuse everything below TLS 1.2. SSLv2, SSLv3, TLS 1.0 and
-       TLS 1.1 are all long dead and modern clients will not offer them. */
-    SSL_CTX_set_min_proto_version(ssl_ctx, TLS1_2_VERSION);
+    /* Accept and offer everything the linked OpenSSL still implements.
+       Players connect with whatever MUD client they have, some of them
+       very old, and MUF sockets reach equally old peers; we refuse a
+       protocol or algorithm only when the library itself has dropped it.
+       Passing 0 as the version bound means "the library minimum", and
+       security level 0 re-enables the legacy algorithms that OpenSSL 3
+       and distribution crypto-policies otherwise filter out (SHA-1
+       signatures, small keys, older ciphersuites).
 
-    /* Client: stay permissive on the floor so MUF can still reach old
-       peers, but never speak SSLv3 or older. */
-    SSL_CTX_set_min_proto_version(ssl_ctx_client, TLS1_VERSION);
+       Note this is a deliberate compatibility choice, not an oversight:
+       a MUCK that cannot be connected to is worse than one reachable
+       over a dated cipher. Modern clients still negotiate TLS 1.3. */
+    /* Passing 0 defers to the distribution crypto-policy (Fedora and
+       friends pin TLS 1.2+ system-wide), which is exactly what we do not
+       want; ask explicitly for the oldest protocol this library still
+       compiles in, falling back version by version until one sticks. */
+    {
+        static const int floors[] = {
+#ifdef SSL3_VERSION
+            SSL3_VERSION,
+#endif
+            TLS1_VERSION, TLS1_1_VERSION, TLS1_2_VERSION
+        };
+        for (size_t fi = 0; fi < sizeof(floors) / sizeof(floors[0]); fi++)
+            if (SSL_CTX_set_min_proto_version(ssl_ctx, floors[fi]))
+                break;
+        for (size_t fi = 0; fi < sizeof(floors) / sizeof(floors[0]); fi++)
+            if (SSL_CTX_set_min_proto_version(ssl_ctx_client, floors[fi]))
+                break;
+    }
+    SSL_CTX_set_max_proto_version(ssl_ctx, 0);
+    SSL_CTX_set_max_proto_version(ssl_ctx_client, 0);
 
-    /* Let the library pick curves and ephemeral DH; required for the
-       modern ECDHE suites to be offered at all. */
-    SSL_CTX_set_options(ssl_ctx, SSL_OP_NO_COMPRESSION | SSL_OP_CIPHER_SERVER_PREFERENCE);
-    SSL_CTX_set_options(ssl_ctx_client, SSL_OP_NO_COMPRESSION);
+    SSL_CTX_set_security_level(ssl_ctx, 0);
+    SSL_CTX_set_security_level(ssl_ctx_client, 0);
+
+    /* TLS-level compression (zlib) is negotiated only if the client asks
+       for it and only on TLS 1.2 and below; 1.3 removed it from the
+       protocol. OpenSSL has disabled it by default since 1.1.0, so clear
+       that option to let willing clients have it. */
+    SSL_CTX_clear_options(ssl_ctx, SSL_OP_NO_COMPRESSION);
+    SSL_CTX_clear_options(ssl_ctx_client, SSL_OP_NO_COMPRESSION);
+
+    if (!SSL_CTX_set_cipher_list(ssl_ctx, "ALL:COMPLEMENTOFDEFAULT:@SECLEVEL=0"))
+        log_status("SSLX: Could not widen the server cipher list.\n");
+    if (!SSL_CTX_set_cipher_list(ssl_ctx_client, "ALL:COMPLEMENTOFDEFAULT:@SECLEVEL=0"))
+        log_status("SSLX: Could not widen the client cipher list.\n");
 
     /* Load the system trust store on the client context so that
        certificate verification is possible when it is switched on. */

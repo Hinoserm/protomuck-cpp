@@ -120,9 +120,13 @@ Phase 1, make outbound TLS work. Small, low risk, no MUF-visible
 signature changes.
   * interface.cpp:1828-1829: TLS_client_method and TLS_server_method;
     drop the 1.0-era init calls, which are no-ops under OpenSSL 1.1+.
-  * Set a TLS 1.2 minimum on the server context. Leave the client
-    permissive so MUF can still reach legacy peers, or make the floor
-    an @tune.
+  * Policy per the project owner: never refuse a protocol or
+    algorithm unless the linked library itself has dropped it. Both
+    contexts run at security level 0 with the widest cipher list, the
+    floor is probed down to the oldest protocol the library still
+    compiles (explicitly, because distribution crypto-policies pin
+    TLS 1.2+ when the application defers), and TLS compression is
+    re-enabled for clients that request it on TLS 1.2 and below.
   * p_socket.cpp:817: call SSL_set_tlsext_host_name with the stored
     hostname before SSL_connect. This alone fixes most reports.
   * Implement SSL_SOCKOPEN as a real define built from NBSOCKOPEN,
