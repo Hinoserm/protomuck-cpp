@@ -582,6 +582,21 @@ ObjectStore::writeManifest()
     m["global_modules"] = { "properties" };
     m["hash_passwords"] = (bool) MUCK::PasswordHash::enabled;
     m["hash_version"] = MUCK::PasswordHash::version;
+
+    /* tombstones: prune per @tune retention, then persist */
+    if (tp_tombstone_retention >= 0)
+        MUCK::database().pruneTombstones(
+            (long) current_systime - (long) tp_tombstone_retention * 86400L);
+    json ts = json::array();
+    for (const auto &t : MUCK::database().tombstones()) {
+        json e;
+        e["u"] = t.uuid.toString();
+        e["r"] = (int) t.ref;
+        e["t"] = t.deletedAt;
+        e["b"] = t.deletedBy.toString();
+        ts.push_back(e);
+    }
+    m["tombstones"] = ts;
     return atomicWrite(root_ + "/manifest.json", m.dump(1));
 }
 
@@ -660,6 +675,21 @@ ObjectStore::loadAll()
     MUCK::PasswordHash::enabled = manifest.value("hash_passwords", false);
     MUCK::PasswordHash::version = manifest.value("hash_version", 0);
 
+    if (manifest.contains("tombstones")) {
+        std::vector<Database::Tombstone> list;
+
+        for (const auto &e : manifest["tombstones"]) {
+            Database::Tombstone t;
+
+            t.uuid = Uuid::parse(e.value("u", "").c_str());
+            t.ref = (dbref) e.value("r", -1);
+            t.deletedAt = e.value("t", 0L);
+            t.deletedBy = Uuid::parse(e.value("b", "").c_str());
+            list.push_back(t);
+        }
+        MUCK::database().setTombstones(std::move(list));
+    }
+
     MUCK::database().ensureTop(top);
 
     /* ensureTop pre-initialized every slot as a garbage shell */
@@ -709,17 +739,11 @@ ObjectStore::loadAll()
     for (const auto &pl : later)
         objectFromJsonPhase2(pl);
 
-    /* rebuild the recycle chain from the garbage holes so the legacy
-     * allocator still works until step 2 removes it */
-    MUCK::database().setRecycleHead(NOTHING);
-    for (dbref i = top - 1; i >= 0; i--) {
-        struct object *o = DBFETCH(i);
-        if ((o->flags & TYPE_MASK) == TYPE_GARBAGE) {
-            o->name = alloc_string("<garbage>");
-            o->next = MUCK::database().recycleHead();
-            MUCK::database().setRecycleHead(i);
-        }
-    }
+    /* holes (deleted objects) stay dead shells; mark them so modern
+     * code sees isDeleted() */
+    for (dbref i = 0; i < top; i++)
+        if ((DBFETCH(i)->flags & TYPE_MASK) == TYPE_GARBAGE)
+            MUCK::database().noteHole(i);
 
     return (dbref) top;
 }

@@ -888,8 +888,7 @@ MUCK::FlatFileConverter::import(FILE * f)
                                     }
                                     for (i = 0; i < MUCK::database().top(); i++) {
                                         if (Typeof(i) == TYPE_GARBAGE) {
-                                            DBFETCH(i)->next = MUCK::database().recycleHead();
-                                            MUCK::database().setRecycleHead(i);
+                                            MUCK::database().noteHole(i);
                                         }
                                     }
                                     if (MUCK::PasswordHash::enabled)

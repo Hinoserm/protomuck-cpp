@@ -466,3 +466,27 @@ ENGINE INTERNALS  (Database.h, Database.cpp)  [step 2 cleanup pass]
                        owns EVERYTHING that understands the old flat
                        format, including its reading helpers. One way,
                        import only.
+
+
+DELETION AND TOMBSTONES  (implemented)
+
+    dbref recycling is ABOLISHED. newObject always takes the next
+    monotonic ref; the recycle chain and the TYPE_GARBAGE reuse path
+    no longer exist anywhere in the tree.
+
+    Database::deleteObject(victim, deleter) is the single deletion
+    gatekeeper, called from recycle_object after the object is emptied:
+
+        - removes the object's store file (while the uuid resolves)
+        - records a tombstone: uuid, dbref, deletion time, deleter uuid
+        - retires the uuid from the index
+        - marks the shell deleted (isDeleted())
+        - raises the OBJECT_DELETED mufevent carrying the dbref
+
+    The slot itself remains a dead shell forever: legacy code sees
+    TYPE_GARBAGE (and skips it, as it always has); nothing can ever
+    occupy that dbref again.
+
+    Tombstones persist in the manifest and age out per the
+    tombstone_retention @tune parameter (days; -1 keeps forever, 0
+    keeps none, default 90). Pruning happens at manifest write.

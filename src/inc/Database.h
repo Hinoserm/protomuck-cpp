@@ -79,6 +79,27 @@ class Database {
     void freeAll();
     dbref parent(dbref obj);
 
+    /* --- deletion (the modern gatekeeper) --- */
+    /* Records a tombstone, removes the object's store file, retires
+     * its uuid from the index, marks the shell deleted, and raises the
+     * OBJECT_DELETED mufevent. dbrefs are NEVER reused; the slot stays
+     * a dead shell so stale holders resolve to something inspectable
+     * instead of someone else's object. Callers (recycle_object) have
+     * already emptied and unlinked the object. */
+    void deleteObject(dbref victim, dbref deleter);
+
+    struct Tombstone {
+        Uuid uuid;
+        dbref ref;
+        long deletedAt;
+        Uuid deletedBy;
+    };
+    const std::vector<Tombstone> &tombstones() const { return tombstones_; }
+    void setTombstones(std::vector<Tombstone> list);
+    /* Drop entries older than the cutoff (epoch seconds); retention
+     * policy lives in the tp_tombstone_retention tune parameter. */
+    void pruneTombstones(long cutoff);
+
     /* ============================================================ */
     /* LEGACY BRIDGE. Everything below exists only while the old    */
     /* struct object payload and its call sites survive; it shrinks */
@@ -94,9 +115,10 @@ class Database {
      * shells; used by the loaders. Serializes on indexMutex_. */
     void ensureTop(dbref newTop);
 
-    /* Legacy recycle chain (dies when dbrefs go fully monotonic). */
-    dbref recycleHead() const { return recyclable_; }
-    void setRecycleHead(dbref ref) { recyclable_ = ref; }
+    /* Mark a loader-created hole (a dbref with no stored object) as a
+     * dead shell: legacy code sees TYPE_GARBAGE, modern code sees
+     * isDeleted(). */
+    void noteHole(dbref ref);
 
   private:
     friend class DbObject;      /* striped object locks */
@@ -122,8 +144,8 @@ class Database {
     DbObject **chunks_[TOP_CHUNKS] = {};
     std::atomic<dbref> top_{0};
     dbref allocated_ = 0;       /* shells exist for [0, allocated_) */
-    dbref recyclable_ = -3;     /* NOTHING; db.h not parsed yet here */
 
+    std::vector<Tombstone> tombstones_;
     std::unordered_map<Uuid, DbObject *> byUuid_;
     mutable std::shared_mutex indexMutex_;
     mutable std::shared_mutex objectLocks_[LOCK_STRIPES];

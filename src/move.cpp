@@ -1044,15 +1044,17 @@ recycle(int descr, dbref player, dbref thing)
 
     depth--;
 
+    /* the modern deletion gatekeeper: tombstone, store file removal,
+     * uuid retirement, OBJECT_DELETED event. Must run while the uuid
+     * still resolves, so before the object is emptied. */
+    MUCK::database().deleteObject(thing, player);
+
     MUCK::database().freeObject(thing);
     MUCK::database().clearObject(player, thing);
 
+    /* the slot stays a dead shell forever; dbrefs are never reused */
     NAME(thing) = "<garbage>";
     SETDESC(thing, "<recyclable>");
     FLAGS(thing) = TYPE_GARBAGE;
     OWNER(thing) = NOTHING;
-
-    DBFETCH(thing)->next = MUCK::database().recycleHead();
-    MUCK::database().setRecycleHead(thing);
-    DBDIRTY(thing);
 }

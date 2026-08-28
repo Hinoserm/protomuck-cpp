@@ -220,9 +220,6 @@ find_orphan_objects(dbref player)
         FLAGS(i) &= ~SANEBIT;
     }
 
-    if (MUCK::database().recycleHead() != NOTHING) {
-        FLAGS(MUCK::database().recycleHead()) |= SANEBIT;
-    }
     FLAGS(GLOBAL_ENVIRONMENT) |= SANEBIT;
 
     for (i = 0; i < MUCK::database().top(); i++) {
@@ -546,25 +543,8 @@ cut_all_chains(dbref obj)
 void
 cut_bad_recyclable(void)
 {
-    dbref loop, prev;
-
-    loop = MUCK::database().recycleHead();
-    prev = NOTHING;
-    while (loop != NOTHING) {
-        if (!valid_ref(loop) || TYPEOF(loop) != TYPE_GARBAGE || FLAGS(loop) & SANEBIT) {
-            SanFixed(loop, "Recyclable object %s is not TYPE_GARBAGE");
-            if (prev != NOTHING) {
-                DBFETCH(prev)->next = NOTHING;
-                DBDIRTY(prev);
-            } else {
-                MUCK::database().setRecycleHead(NOTHING);
-            }
-            return;
-        }
-        FLAGS(loop) |= SANEBIT;
-        prev = loop;
-        loop = DBFETCH(loop)->next;
-    }
+    /* the recycle chain is gone: dbrefs are monotonic and deleted
+     * slots are dead shells, so there is nothing to walk or fix */
 }
 
 void
@@ -939,9 +919,8 @@ adopt_orphans(void)
                     SanFixed2(loop, LOCATION(loop), "Orphaned exit %s added to exits of %s");
                     break;
                 case TYPE_GARBAGE:
-                    DBFETCH(loop)->next = MUCK::database().recycleHead();
-                    MUCK::database().setRecycleHead(loop);
-                    SanFixedRef(loop, "Litter object %d moved to recycle bin");
+                    /* dead shell; nothing to chain anymore */
+                    SanFixedRef(loop, "Litter object %d is a dead shell");
                     break;
                 default:
                     sanity_violated = 1;

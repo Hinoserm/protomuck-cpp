@@ -163,6 +163,7 @@ int tp_listen_mlev = LISTEN_MLEV;
 int tp_playermax_limit = PLAYERMAX_LIMIT;
 int tp_process_timer_limit = 4;
 int tp_dump_copies = 10;
+int tp_tombstone_retention = 90;   /* days; -1 forever, 0 none */
 int tp_min_progbreak_lev = 0;
 int tp_max_wiz_preempt_count = 0;
 int tp_wizhidden_access_bit = 3;
@@ -231,6 +232,7 @@ struct tune_val_entry tune_val_list[] = {
     {"Maxplayers", "playermax_limit", &tp_playermax_limit, WBOY, LMUF},
     {"MUF", "process_timer_limit", &tp_process_timer_limit, LARCH, LMUF},
     {"Database", "dump_copies", &tp_dump_copies, WBOY, LMUF},
+    {"Database", "tombstone_retention", &tp_tombstone_retention, WBOY, LMUF},
     {"MUF", "min_progbreak_lev", &tp_min_progbreak_lev, LARCH, LMAGE},
     {"MUF", "max_wiz_preempt_count", &tp_max_wiz_preempt_count, LARCH, LMAGE},
     {"MUF", "max_per_slice", &tp_max_per_slice, LARCH, LMUF},

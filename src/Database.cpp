@@ -1,6 +1,8 @@
 #include "copyright.h"
 #include "config.h"
 
+#include <algorithm>
+
 #include "db.h"
 #include "props.h"
 #include "params.h"
@@ -10,6 +12,7 @@
 #include "MacroTable.h"
 #include "Modules.h"
 #include "ProgramStore.h"
+#include "ObjectStore.h"
 #include "strutils.h"
 
 #ifndef MALLOC_PROFILING
@@ -142,25 +145,13 @@ Database::clearObject(dbref player, dbref i)
 dbref
 Database::newObject(dbref player)
 {
-    dbref newobj;
+    /* dbrefs are monotonic and NEVER reused: the recycling that let a
+     * stale #500 silently retarget to a stranger's new object is gone
+     * for good. Deleted slots stay dead shells forever. */
+    dbref newobj = top();
 
-    if (recyclable_ != NOTHING) {
-        newobj = recyclable_;
-        if (TYPEOF(newobj) != TYPE_GARBAGE) {
-            log_status("DB FATAL ERROR! Attempted to reuse non-garbage object (%d)!\n", newobj);
-            abort();
-        }
-        recyclable_ = DBFETCH(newobj)->next;
-        freeObject(newobj);
-    } else {
-        newobj = top();
-        ensureTop(newobj + 1);
-    }
-
+    ensureTop(newobj + 1);
     clearObject(player, newobj);
-
-    /* fresh identity, even on a recycled slot: a reused dbref is a NEW
-     * object and must never inherit the old uuid */
     assignUuid(newobj, Uuid::generate());
     DBDIRTY(newobj);
     return newobj;
@@ -259,13 +250,85 @@ Database::freeAll()
             chunks_[c] = nullptr;
         }
         byUuid_.clear();
+        tombstones_.clear();
         allocated_ = 0;
         top_.store(0, std::memory_order_release);
-        recyclable_ = NOTHING;
     }
 
     clear_players();
     clear_primitives();
+}
+
+void
+Database::noteHole(dbref ref)
+{
+    DbObject *o = get(ref);
+
+    if (!o)
+        return;
+    o->deleted_ = true;
+    if (!NAME(ref))
+        NAME(ref) = (char *) "<garbage>";
+}
+
+void
+Database::deleteObject(dbref victim, dbref deleter)
+{
+    DbObject *o = get(victim);
+
+    if (!o)
+        return;
+
+    /* the store file must go while the uuid still resolves */
+    if (store().active())
+        store().removeObject(victim);
+
+    Tombstone t;
+    t.uuid = o->uuid();
+    t.ref = victim;
+    t.deletedAt = (long) current_systime;
+    t.deletedBy = uuidOf(deleter);
+
+    {
+        std::unique_lock<std::shared_mutex> hold(indexMutex_);
+
+        tombstones_.push_back(t);
+        if (!o->uuid_.isNil())
+            byUuid_.erase(o->uuid_);
+    }
+    o->deleted_ = true;
+
+    /* programs holding this object learn it is gone */
+    struct inst temp;
+
+    temp.type = PROG_OBJECT;
+    temp.data.objref = victim;
+    broadcast_muf_event((char *) "OBJECT_DELETED", &temp, 1, 0);
+}
+
+void
+Database::setTombstones(std::vector<Tombstone> list)
+{
+    std::unique_lock<std::shared_mutex> hold(indexMutex_);
+
+    tombstones_ = std::move(list);
+}
+
+void
+Database::pruneTombstones(long cutoff)
+{
+    std::unique_lock<std::shared_mutex> hold(indexMutex_);
+    size_t n = tombstones_.size();
+
+    tombstones_.erase(
+        std::remove_if(tombstones_.begin(), tombstones_.end(),
+                       [cutoff](const Tombstone &t) {
+                           return t.deletedAt < cutoff;
+                       }),
+        tombstones_.end());
+    if (tombstones_.size() != n)
+        log_status("TOMBSTONE: pruned %d aged entries\n",
+                   (int) (n - tombstones_.size()));
 }
 
 dbref
