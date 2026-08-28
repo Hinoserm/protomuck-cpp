@@ -42,13 +42,13 @@ class PropNode {
 
     /* --- value accessors (residency-aware) --- */
     const char *strValue();     /* null when not a string */
-    int intValue();
+    int64_t intValue();         /* prop ints are 64-bit */
     double fltValue();
     int refValue();             /* dbref */
     struct boolexp *lokValue();
 
     void setStr(const char *s); /* copies; sets type */
-    void setInt(int v);
+    void setInt(int64_t v);
     void setFlt(double v);
     void setRef(int r);
     void setLok(struct boolexp *l); /* takes ownership */
@@ -73,7 +73,7 @@ class PropNode {
     std::string name_;          /* original spelling, case preserved */
     std::string sval_;
     union {
-        int ival_;
+        int64_t ival_;
         double fval_;
         int ref_;
         struct boolexp *lok_;

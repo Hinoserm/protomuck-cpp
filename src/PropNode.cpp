@@ -53,7 +53,7 @@ PropNode::strValue()
     return sval_.c_str();
 }
 
-int
+int64_t
 PropNode::intValue()
 {
     ensureResident();
@@ -101,7 +101,7 @@ PropNode::setStr(const char *s)
 }
 
 void
-PropNode::setInt(int v)
+PropNode::setInt(int64_t v)
 {
     clearValue();
     ival_ = v;

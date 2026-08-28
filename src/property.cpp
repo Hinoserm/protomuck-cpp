@@ -148,7 +148,7 @@ set_property(dbref object, const char *pname, PData * dat)
 
 /* adds a new property to an object */
 void
-add_prop_nofetch(dbref player, const char *pname, const char *type, int value)
+add_prop_nofetch(dbref player, const char *pname, const char *type, int64_t value)
 {
     PData pdat;
 
@@ -167,7 +167,7 @@ add_prop_nofetch(dbref player, const char *pname, const char *type, int value)
 
 /* adds a new property to an object */
 void
-add_property(dbref player, const char *type, const char *pclass, int value)
+add_property(dbref player, const char *type, const char *pclass, int64_t value)
 {
     add_prop_nofetch(player, type, pclass, value);
     DBDIRTY(player);
@@ -344,7 +344,7 @@ get_property(dbref player, const char *type)
 /* checks if object has property, returning 1 if it or any of it's contents has
    the property stated                                                      */
 int
-has_property(int descr, dbref player, dbref what, const char *type, const char *pclass, int value)
+has_property(int descr, dbref player, dbref what, const char *type, const char *pclass, int64_t value)
 {
     dbref things;
 
@@ -368,7 +368,7 @@ has_property(int descr, dbref player, dbref what, const char *type, const char *
 
 /* checks if object has property, returns 1 if it has the property */
 int
-has_property_strict(int descr, dbref player, dbref what, const char *type, const char *pclass, int value)
+has_property_strict(int descr, dbref player, dbref what, const char *type, const char *pclass, int64_t value)
 {
     PropPtr p;
     const char *str;
@@ -409,7 +409,7 @@ get_property_class(dbref player, const char *type)
 }
 
 /* return value of property */
-int
+int64_t
 get_property_value(dbref player, const char *type)
 {
     PropPtr p;
@@ -781,7 +781,7 @@ displayprop(dbref player, dbref obj, const char *name, char *buf)
             sprintf(buf, SYSBROWN "ref " SYSGREEN "%s" SYSRED ":%s", mybuf, ansi_unparse_object(player, PropDataRef(p)));
             break;
         case PROP_INTTYP:
-            sprintf(buf, SYSFOREST "int " SYSGREEN "%s" SYSRED ":" SYSYELLOW "%d", mybuf, PropDataVal(p));
+            sprintf(buf, SYSFOREST "int " SYSGREEN "%s" SYSRED ":" SYSYELLOW "%lld", mybuf, (long long) PropDataVal(p));
             break;
         case PROP_FLTTYP:
             sprintf(buf, SYSNAVY "flt " SYSGREEN "%s" SYSRED ":" SYSBROWN "%.15g", mybuf, PropDataFVal(p));
@@ -890,7 +890,7 @@ db_get_single_prop(FILE * f, dbref obj, int pos)
                 fprintf(stderr, "PANIC: INT prop had non-int value in db.\n");
                 abort();
             }
-            pdat.data.val = atoi(value);
+            pdat.data.val = strtoll(value, NULL, 10);
             break;
         case PROP_FLTTYP:
             if (!number(value) && !ifloat(value)) {
@@ -953,7 +953,7 @@ db_putprop(FILE * f, const char *dir, PropPtr p)
 {
     char buf[BUFFER_LEN * 2];
     char fbuf[BUFFER_LEN];
-    char num[16];
+    char num[24];               /* fits a 64-bit int and sign */
     char *ptr;
     const char *ptr2;
     char ubuf[BUFFER_LEN];
@@ -978,7 +978,9 @@ db_putprop(FILE * f, const char *dir, PropPtr p)
         case PROP_INTTYP:
             if (!PropDataVal(p))
                 return;
-            ptr2 = intostr(num, PropDataVal(p));
+            snprintf(num, sizeof(num), "%lld",
+                     (long long) PropDataVal(p));
+            ptr2 = num;
             break;
         case PROP_FLTTYP:
             if (!PropDataFVal(p))

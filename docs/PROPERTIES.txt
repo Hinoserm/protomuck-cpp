@@ -104,7 +104,10 @@ there. Format rules per docs/CODING_RULES.txt: 7-bit ASCII.
      - original-case name (std::string)
      - flags word (legacy encoding: type + permission bits)
      - value: std::string for STRTYP, a scalar union for
-       INTTYP/FLTTYP/REFTYP, struct boolexp * for LOKTYP
+       INTTYP/FLTTYP/REFTYP, struct boolexp * for LOKTYP; integer
+       properties are 64-bit throughout (storage, the PData
+       descriptor, the C API, the store format, and the flat
+       importer), ready for the 64-bit MUF integer work
      - children: a nested tree (empty for plain properties)
      - parent pointer (for cheap path reconstruction)
      - residency state (section 4)

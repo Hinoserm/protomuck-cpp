@@ -339,7 +339,7 @@ propsFromJson(dbref obj, const json &arr)
                 pdat.data.lok = parse_boolexp(-1, (dbref) 1, sval.c_str(), 32767);
                 break;
             case PROP_INTTYP:
-                pdat.data.val = v.get<int>();
+                pdat.data.val = v.get<int64_t>();
                 break;
             case PROP_FLTTYP:
                 pdat.data.fval = v.get<double>();

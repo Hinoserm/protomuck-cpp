@@ -259,7 +259,7 @@ prim_getpropstr(PRIM_PROTOTYPE)
                     temp = PropDataUNCStr(ptr);
                     break;
                 case PROP_INTTYP:
-                    sprintf(buf, "%d", PropDataVal(ptr));
+                    sprintf(buf, "%lld", (long long) PropDataVal(ptr));
                     temp = buf;
                     break;
                 case PROP_FLTTYP:

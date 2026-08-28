@@ -3,10 +3,12 @@
 
 /* Property struct */
 
+#include <stdint.h>
+
 union pdata_u {
     const char *str;
     struct boolexp *lok;
-    int val;
+    int64_t val;                /* prop ints are 64-bit */
     double fval;
     dbref ref;
     long pos;
@@ -138,21 +140,21 @@ extern void set_property_nofetch(dbref object, const char *pname, PData *dat, bo
 extern void set_property(dbref object, const char *pname, PData *dat);
 
 extern void add_prop_nofetch(dbref player, const char *type, const char *pclass,
-                             int value);
+                             int64_t value);
 extern void add_property(dbref player, const char *type, const char *pclass,
-                         int value);
+                         int64_t value);
 extern void remove_property_list(dbref player, int all);
 extern void remove_property_nofetch(dbref player, const char *type);
 extern void remove_property(dbref player, const char *type);
 extern int has_property(int descr, dbref player, dbref what, const char *type,
-                        const char *pclass, int value);
+                        const char *pclass, int64_t value);
 extern int has_property_strict(int descr, dbref player, dbref what,
-                               const char *type, const char *pclass, int value);
+                               const char *type, const char *pclass, int64_t value);
 extern PropPtr get_property(dbref player, const char *type);
 
 extern const char *get_property_class(dbref player, const char *type);
 extern double get_property_fvalue(dbref player, const char *type);
-extern int get_property_value(dbref player, const char *type);
+extern int64_t get_property_value(dbref player, const char *type);
 extern dbref get_property_dbref(dbref player, const char *pclass);
 extern struct boolexp *get_property_lock(dbref player, const char *type);
 extern int genderof(int descr, dbref player);

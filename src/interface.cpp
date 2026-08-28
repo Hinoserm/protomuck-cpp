@@ -6785,7 +6785,7 @@ mssp_send(struct descriptor_data *d)
                     strcpy(mssp_val, PropDataUNCStr(prptr));
                     break;
                 case PROP_INTTYP:
-                    sprintf(mssp_val, "%d", PropDataVal(prptr));
+                    sprintf(mssp_val, "%lld", (long long) PropDataVal(prptr));
                     break;
                 case PROP_FLTTYP:
                     sprintf(mssp_val, "%#.15g", PropDataFVal(prptr));
