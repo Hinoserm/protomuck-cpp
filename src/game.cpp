@@ -333,9 +333,12 @@ panic(const char *message)
 
     /* Dump panic state into the object store: a full write of every
      * object, not just dirty ones, since we no longer trust flags.
-     * This deliberately bypasses the dump thread and its queue rather
-     * than draining them: a crashing world cannot wait on a thread
-     * that may itself be the casualty. docs/DATABASE.txt 7.1. */
+     * This deliberately bypasses the dump thread's queue rather than
+     * draining it: a crashing world cannot wait on a thread that may
+     * itself be the casualty. We do ask that thread to stop first, so
+     * it is not still writing the same files underneath us, but we do
+     * not join it. docs/DATABASE.txt 7.1. */
+    MUCK::store().requestDumpStop();
     log_status("DUMP: %s (panic)\n", MUCK::store().root().c_str());
     fprintf(stderr, "DUMP: %s (panic)\n", MUCK::store().root().c_str());
     if (MUCK::store().saveAll(false) < 0) {

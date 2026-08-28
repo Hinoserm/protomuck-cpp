@@ -159,6 +159,11 @@ class ObjectStore {
     /* Stop the dump thread after draining. */
     void stopDumpThread();
 
+    /* Ask the dump thread to stop without waiting for it. For panic:
+     * the world is coming down and cannot block on a worker that may
+     * be the thing that died. */
+    void requestDumpStop();
+
     /* True while the dump thread has work outstanding. */
     bool persistPending();
 

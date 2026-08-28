@@ -13,6 +13,7 @@
 #include <set>
 #include <unordered_map>
 #include <unordered_set>
+#include <atomic>
 #include <vector>
 #include <nlohmann/json.hpp>
 
@@ -1040,7 +1041,15 @@ syncDirOf(const std::string &path)
 static bool
 atomicWrite(const std::string &path, const std::string &content)
 {
-    std::string tmp = path + ".tmp";
+    /* The temp name is unique per writer and per call. The game thread
+     * and the dump thread can both have a legitimate reason to write
+     * the same file, and sharing one ".tmp" path lets their writes
+     * interleave into a corrupt file that then gets renamed into
+     * place. A filesystem race is invisible to a thread sanitizer, so
+     * this is structural rather than something testing would catch. */
+    static std::atomic<unsigned long> seq(0);
+    std::string tmp = path + ".tmp." + std::to_string((unsigned long) getpid())
+        + "." + std::to_string(seq.fetch_add(1));
     std::ofstream f(tmp, std::ios::trunc);
 
     if (!f)
@@ -1320,9 +1329,9 @@ ObjectStore::snapshotGlobal(const char *label, bool locked)
 {
     Marker m;
 
-    /* a marker only covers what is on disk, so fire first: the
-     * journal seals what changed and persists it */
-    enqueue(fire());
+    /* A marker only covers what is on disk, so seal first: the layers
+     * keep the era they were written in. */
+    CaptureSet set = fire();
 
     /* the marker captures the CURRENT era; writes after the snapshot
      * stamp the next one, so a read at the marker excludes them */
@@ -1331,8 +1340,14 @@ ObjectStore::snapshotGlobal(const char *label, bool locked)
     m.label = label ? label : "";
     m.locked = locked;
     markers_.push_back(m);
-    if (!writeManifest())
-        return -1;
+
+    /* Re-capture the manifest now that the marker is in it, and let
+     * the dump thread write it. The game thread must not write
+     * manifest.json itself while the dump thread might be writing the
+     * same file. */
+    set.manifest = buildManifest();
+    set.hasMarker = true;
+    enqueue(std::move(set));
     log_status("SNAPSHOT: global rev %ld (%s)%s\n", m.rev,
                m.label.empty() ? "unlabeled" : m.label.c_str(),
                locked ? " LOCKED" : "");
@@ -2073,11 +2088,18 @@ ObjectStore::persist(const CaptureSet &set)
         syncFile(hist);
     }
 
-    /* the manifest commits the set; it was serialized at fire time so
-     * this thread never reads live state */
-    if (!set.manifest.empty())
-        return atomicWrite(root_ + "/manifest.json", set.manifest);
-    return writeManifest();
+    /* The manifest commits the set. It was serialized on the game
+     * thread, because building it reads live state (tune parms, the
+     * tombstone table, the object count) and this thread may not. A
+     * set with no manifest is a programming error, not a fallback:
+     * falling back to writeManifest() here would read live state from
+     * the wrong thread. */
+    if (set.manifest.empty()) {
+        log_status("DUMP: capture set for rev %ld carried no manifest\n",
+                   set.rev);
+        return false;
+    }
+    return atomicWrite(root_ + "/manifest.json", set.manifest);
 }
 
 /* ------------------------------------------------------------------ */
@@ -2123,14 +2145,30 @@ ObjectStore::dumpThreadMain()
             persisting_ = true;
         }
 
-        bool ok = persist(set);
+        /* The layers were discarded from their objects at fire time,
+         * so this set is the only copy of those changes: dropping it
+         * on a failed write loses them with nothing left to re-dirty
+         * from. Retry a few times before giving up, and say so loudly
+         * if we do. */
+        bool ok = false;
+
+        for (int attempt = 0; attempt < 3 && !ok; attempt++) {
+            if (attempt)
+                log_status("DUMP: retrying rev %ld (attempt %d)\n",
+                           set.rev, attempt + 1);
+            ok = persist(set);
+        }
 
         {
             std::unique_lock<std::mutex> hold(queueMutex_);
 
             persisting_ = false;
-            if (!ok)
-                log_status("DUMP: persist failed for rev %ld\n", set.rev);
+            if (!ok) {
+                log_status("DUMP: PERSIST FAILED for rev %ld after 3 "
+                           "attempts; those changes are lost\n", set.rev);
+                fprintf(stderr, "DUMP: PERSIST FAILED for rev %ld; "
+                        "changes lost\n", set.rev);
+            }
             idleCv_.notify_all();
         }
     }
@@ -2165,6 +2203,20 @@ ObjectStore::persistPending()
     std::unique_lock<std::mutex> hold(queueMutex_);
 
     return !queue_.empty() || persisting_;
+}
+
+void
+ObjectStore::requestDumpStop()
+{
+    if (!dumpThreadRunning_)
+        return;
+    {
+        std::unique_lock<std::mutex> hold(queueMutex_);
+
+        dumpThreadStop_ = true;
+        queue_.clear();
+    }
+    queueCv_.notify_all();
 }
 
 void
