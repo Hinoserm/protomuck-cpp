@@ -5,8 +5,9 @@ project(protomuck
     DESCRIPTION "ProtoMUCK server, C++ line"
     LANGUAGES CXX)
 
-# Traditional version string, written into generated version.h.
-set(PROTOBASE "2.1a0.6.24")
+# Version base; the build number is appended by GenerateVersion.cmake, which
+# auto-increments the buildnum file at the source root on every build.
+set(PROTO_VERSION_BASE "2.1a0.6")
 
 # NOTE: build configuration is currently BAKED in src/inc/autoconf.h, carried
 # over from the last proven autoconf run: SSL, MySQL, PCRE, and zlib enabled;
@@ -44,7 +45,7 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND}
         -DSRC=${CMAKE_SOURCE_DIR}/cmake/version.h.in
         -DDST=${GEN_INC}/version.h
-        -DPROTOBASE=${PROTOBASE}
+        -DBASE=${PROTO_VERSION_BASE}
         -DWORKDIR=${CMAKE_SOURCE_DIR}
         -P ${CMAKE_SOURCE_DIR}/cmake/GenerateVersion.cmake
     COMMENT "Generating version.h")

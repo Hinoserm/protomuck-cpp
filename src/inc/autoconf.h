@@ -222,7 +222,6 @@
 /* #undef TM_IN_SYS_TIME */
 
 /* The value of the uname -a command. */
-#define UNAME_VALUE "Linux dextrose-new 6.18.16-200.fc43.x86_64 #1 SMP PREEMPT_DYNAMIC Wed Mar  4 19:13:32 UTC 2026 x86_64 GNU/Linux"
 
 /* Defined to enable SSL support. */
 #define USE_SSL /**/

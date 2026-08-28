@@ -5,7 +5,13 @@
 #define NEONVER "Neon2.17"
 #define VERSION "Muck2.2fb6.91"
 
+#define PROTO_BUILD_NUMBER @PROTO_BUILD_NUMBER@
 #define PROTO_GIT_REVISION "@PROTO_GIT_REVISION@"
 #define PROTO_BUILD_DATE "@PROTO_BUILD_DATE@"
+#define PROTO_CREATION "@PROTO_CREATION@"
+
+#ifndef UNAME_VALUE
+# define UNAME_VALUE "@UNAME_VALUE@"
+#endif
 
 extern const char *infotext[];
