@@ -14,6 +14,10 @@
  */
 
 #include <cstdio>
+#include <vector>
+#include <unordered_map>
+
+#include "Uuid.h"
 
 namespace MUCK {
 
@@ -39,13 +43,25 @@ class Database {
     dbref recycleHead() const { return recyclable; }
     void setRecycleHead(dbref ref) { recyclable = ref; }
 
-    /* --- whole-database serialization --- */
-    dbref load(FILE *f);
-    dbref save(FILE *f);
-    int saveThreaded();
+    /* Whole-database serialization lives in ObjectStore (the JSON
+     * store, the only write path) and FlatFileConverter (one-way
+     * import of the legacy flat format). */
+
+    /* --- identity (see docs/DATABASE.txt section 1) --- */
+    /* Every live object carries a UUIDv7 minted at creation or import
+     * and never changed. uuidOf returns the nil uuid for out-of-range
+     * refs; refOf returns NOTHING for unknown uuids. */
+    const Uuid &uuidOf(dbref ref) const;
+    dbref refOf(const Uuid &u) const;
+    void assignUuid(dbref ref, const Uuid &u);
+
+    /* Resolve a short-form hex prefix (git style). Returns NOTHING if
+     * no match, AMBIGUOUS if more than one object matches. */
+    dbref resolveUuidPrefix(const char *prefix) const;
 
     /* internal: reached from legacy helpers inside Database.cpp */
     void grow(dbref newtop);
+    void growTo(dbref newtop) { grow(newtop); }
     struct object *rawArray() { return db; }
 
   private:
@@ -53,6 +69,9 @@ class Database {
     dbref db_top = 0;
     dbref recyclable = -3;      /* NOTHING; db.h not yet parsed here */
     dbref db_size = 0;          /* allocation high-water for DB_DOUBLING */
+
+    std::vector<Uuid> uuids;                    /* by dbref */
+    std::unordered_map<Uuid, dbref> byUuid;
 
     friend Database &database();
 };

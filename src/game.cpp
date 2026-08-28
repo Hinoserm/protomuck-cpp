@@ -12,6 +12,8 @@
 #include "msgparse.h"
 #include "externs.h"
 #include "MacroTable.h"
+#include "ObjectStore.h"
+#include "FlatFileConverter.h"
 #include "strutils.h"
 #include "netresolve.h"
 
@@ -260,50 +262,16 @@ dump_database_internal(void)
 
     FILE *f;
 
-    int copies;
-
     char buf[BUFFER_LEN];
 
     tune_save_parmsfile();
 
-    sprintf(tmpfile, "%s.#%d#", dumpfile, epoch);
-
-    if ((f = fopen(tmpfile, "w")) != NULL) {
-        char fromfile[512], destfile[512];
-
-        MUCK::database().save(f);
-        fclose(f);
-        if (tp_dump_copies > 0) {
-            copies = (tp_dump_copies < 25) ? tp_dump_copies : 25;
-            for (; copies > 1; copies--) {
-                sprintf(fromfile, "backup/%s.#%d#", dumpfile, copies - 1);
-                sprintf(destfile, "backup/%s.#%d#", dumpfile, copies);
-#ifdef WIN_VC
-                unlink(destfile);
-#endif
-                rename(fromfile, destfile);
-            }
-            sprintf(destfile, "backup/%s.#1#", dumpfile);
-#ifdef WIN_VC
-            unlink(destfile);   /* proto.new.#1# */
-#endif
-            rename(dumpfile, destfile); /* proto.new -> proto.new.1 */
-
-        }
-#ifdef WIN_VC
-        /* Windows rename() differs from Unix rename(). Won't overwrite. */
-        if (unlink(dumpfile))
-            perror(dumpfile);
-#endif
-        if (rename(tmpfile, dumpfile) < 0) {
-            perror(tmpfile);
-            sprintf(buf, SYSRED "[WARNING] Error renaming the DB from %s to %s.  The DB got saved to %s.", tmpfile, dumpfile, tmpfile);
-            ansi_wall_wizards(buf);
-        }
-
-    } else {
-        perror(tmpfile);
-        sprintf(buf, SYSRED "[DANGER] Error opening the db file %s for writing!  The DB did not save! :(", tmpfile);
+    /* The object store writes each object to its own file with an
+     * atomic rename, so there is no monolithic tmpfile dance and no
+     * rotating backup copies: unchanged objects are untouched on disk
+     * and history belongs to the versioning layer (step 3). */
+    if (MUCK::store().saveAll(true) < 0) {
+        sprintf(buf, SYSRED "[DANGER] Error writing the object store at %s!  The DB did not save! :(", MUCK::store().root().c_str());
         ansi_wall_wizards(buf);
     }
 
@@ -347,10 +315,12 @@ panic(const char *message)
     /* shut down interface */
     emergency_shutdown();
 
-    /* dump panic file */
-    sprintf(panicfile, "%s.PANIC", dumpfile);
-    if ((f = fopen(panicfile, "w")) == NULL) {
-        perror("CANNOT OPEN PANIC FILE, YOU LOSE");
+    /* dump panic state into the object store: a full write of every
+     * object, not just dirty ones, since we no longer trust flags */
+    log_status("DUMP: %s (panic)\n", MUCK::store().root().c_str());
+    fprintf(stderr, "DUMP: %s (panic)\n", MUCK::store().root().c_str());
+    if (MUCK::store().saveAll(false) < 0) {
+        perror("CANNOT WRITE PANIC STORE, YOU LOSE");
 
 #if defined(NOCOREDUMP)
         _exit(135);
@@ -361,13 +331,8 @@ panic(const char *message)
         abort();
 #endif /* NOCOREDUMP */
     } else {
-        log_status("DUMP: %s\n", panicfile);
-        fprintf(stderr, "DUMP: %s\n", panicfile);
-        MUCK::database().save(f);
-        fclose(f);
-        log_status("DUMP: %s (done)\n", panicfile);
-        fprintf(stderr, "DUMP: %s (done)\n", panicfile);
-        (void) unlink(DELTAFILE_NAME);
+        log_status("DUMP: %s (panic done)\n", MUCK::store().root().c_str());
+        fprintf(stderr, "DUMP: %s (panic done)\n", MUCK::store().root().c_str());
     }
 
     /* Write out the macros */
@@ -420,7 +385,7 @@ dump_database(bool dofork)
     /* Alynna - saving the PID of the dumper so I can get around an SSL issue */
 #ifdef THREADED_DB_DUMP
     if (dofork) {
-        MUCK::database().saveThreaded();
+        dump_database_internal();
     } else
 #else /* !THREADED_DB_DUMP */
 #ifndef WIN_VC
@@ -470,7 +435,7 @@ fork_and_dump(bool dofork)
     /* Alynna - saving the PID of the dumper so I can get around an SSL issue */
 #ifdef THREADED_DB_DUMP
     if (dofork) {
-        MUCK::database().saveThreaded();
+        dump_database_internal();
     } else
 #else /* !THREADED_DB_DUMP */
 #ifndef WIN_VC
@@ -526,7 +491,12 @@ init_game(const char *infile, const char *outfile)
     }
     log_status_nowall("init_game: macro file loaded\n");
     in_filename = (char *) string_dup(infile);
-    if ((input_file = fopen(infile, "r")) == NULL) {
+
+    /* New-format store? The outfile names the store root from here on;
+     * a flat infile is a one-way import that the first dump converts. */
+    bool from_store = MUCK::ObjectStore::isStore(infile);
+
+    if (!from_store && (input_file = fopen(infile, "r")) == NULL) {
         log_status_nowall("DIE: input file not readable\n");
         return -1;
     }
@@ -545,13 +515,27 @@ init_game(const char *infile, const char *outfile)
     /* ok, read the db in */
     log_status_nowall("LOAD: %s\n", infile);
     fprintf(stderr, "LOAD: %s\n", infile);
-    if (MUCK::database().load(input_file) < 0) {
-        log_status_nowall("DIE: database load error.  Damnit.\n");
-        return -1;
-    }
+    if (from_store) {
+        extern void autostart_progs(void);
+
+        MUCK::store().setRoot(infile);
+        if (MUCK::store().loadAll() < 0) {
+            log_status_nowall("DIE: object store load error.\n");
+            return -1;
+        }
+        autostart_progs();
+    } else {
+        if (MUCK::flatConverter().import(input_file) < 0) {
+            log_status_nowall("DIE: database load error.  Damnit.\n");
+            return -1;
+        }
 #ifndef DISKBASE
-    fclose(input_file);
+        fclose(input_file);
 #endif
+        log_status_nowall("LOAD: flat import complete; dumps now write "
+                          "the object store at %s\n", outfile);
+    }
+    MUCK::store().setRoot(outfile);
     log_status_nowall("LOAD: %s (done)\n", infile);
     fprintf(stderr, "LOAD: %s (done)\n", infile);
 
