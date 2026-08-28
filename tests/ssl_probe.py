@@ -50,6 +50,9 @@ prog = r''': main
     me @ "GOT:" acc @ 15 strcut pop strcat notify
   then
   sk @ 2 sockshutdown pop
+  "example.com" 443 ssl_sockopen
+  "ONESHOT:" swap strcat me @ swap notify
+  dup socket? if 2 sockshutdown pop else pop then
   me @ "STAGE:done" notify
 ;'''
 sendl('@prog sslt.muf'); sendl('i')
@@ -63,5 +66,5 @@ for _ in range(40):
 out = buf.decode('latin-1', 'replace')
 for line in out.split('\n'):
     l = line.strip()
-    if l.startswith(('STAGE:', 'SECURE:', 'GOT:')) or 'Error' in l:
+    if l.startswith(('STAGE:', 'SECURE:', 'GOT:', 'ONESHOT:')) or 'Error' in l:
         print(l)

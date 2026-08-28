@@ -867,6 +867,14 @@ prim_socksecure(PRIM_PROTOTYPE)
             if (ssl_error <= 0) {
                 ssl_error = SSL_get_error(oper[0].data.sock->ssl_session, ssl_error);
                 result = ssl_error;
+                /* On a fatal handshake failure, drop the dead session so
+                   the channel is genuinely unsecured, as the manual has
+                   always promised. WANT_READ/WANT_WRITE (2 and 3) mean
+                   the caller should retry SOCKSECURE. */
+                if (ssl_error != SSL_ERROR_WANT_READ && ssl_error != SSL_ERROR_WANT_WRITE) {
+                    SSL_free(oper[0].data.sock->ssl_session);
+                    oper[0].data.sock->ssl_session = NULL;
+                }
             } else
                 result = 0;
         }
@@ -1510,8 +1518,18 @@ prim_socket_setuser(PRIM_PROTOTYPE)
 #ifdef IPV6
     }
 #endif
-    /* d is now in the descriptor list and properly initialized. 
-     * Now connect it to a player. */
+    /* d is now in the descriptor list and properly initialized. */
+#if defined(SSL_SOCKETS) && defined(USE_SSL)
+    if (theSock->ssl_session) {
+        /* The CT_SSL type alone is not enough; descriptor I/O keys off
+           d->ssl_session, so move the session or the login goes out in
+           cleartext. */
+        d->ssl_session = theSock->ssl_session;
+        theSock->ssl_session = NULL;
+        d->flags |= DF_SSL;
+    }
+#endif
+    /* Now connect it to a player. */
     result = plogin_user(d, ref);
     if (tp_log_connects && result)
         log2filetime(CONNECT_LOG,
@@ -1549,6 +1567,17 @@ prim_socktodescr(PRIM_PROTOTYPE)
 #endif
         d = initializesock(theSock->socknum, host_getinfo(htonl(theSock->host), theSock->port, htons(atoi(theSock->username))), CT_INBOUND, theSock->port, 0);
 
+
+#if defined(SSL_SOCKETS) && defined(USE_SSL)
+    /* Carry the TLS session across the handoff. Leaving it behind, as
+       this code used to, meant descriptor I/O went out in cleartext on
+       a connection the peer still considered encrypted. */
+    if (theSock->ssl_session) {
+        d->ssl_session = theSock->ssl_session;
+        theSock->ssl_session = NULL;
+        d->flags |= DF_SSL;
+    }
+#endif
 
     /* now the descriptor is queued with the rest of the MUCK's d's */
     if (tp_log_sockets)

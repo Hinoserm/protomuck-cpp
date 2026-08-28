@@ -625,7 +625,8 @@ include_internal_defs(COMPSTATE *cstat)
 
 #ifdef SSL_SOCKETS
     insert_def(cstat, "SSL_SOCKETS", "1");
-    insert_def(cstat, "SSL_SOCKOPEN", "SSL_NBSOCKOPEN");
+    insert_def(cstat, "SSL_SOCKOPEN",
+               "nbsockopen \"Operation now in progress\" over strcmp not if pop 1 10 1 for 10 = if \"timed out\" break then dup sockcheck dup 1 = if pop \"noerr\" break then -1 = if \"refused\" break then 1 sleep repeat then dup \"noerr\" strcmp not if pop 1 31 1 for 31 = if -1 break then dup socksecure dup 2 = over 3 = or if pop 1 sleep continue then break repeat dup not if pop \"noerr\" else intostr \"SSLerr: \" swap strcat then then");
 #else
     insert_def(cstat, "SSL_SOCKETS", "0");
 #endif
@@ -724,7 +725,8 @@ include_internal_defs(COMPSTATE *cstat)
 */
 #ifdef SSL_SOCKETS
     insert_def(cstat, "SSL_SOCKETS", "1");
-    insert_def(cstat, "SSL_SOCKOPEN", "SSL_NBSOCKOPEN");
+    insert_def(cstat, "SSL_SOCKOPEN",
+               "nbsockopen \"Operation now in progress\" over strcmp not if pop 1 10 1 for 10 = if \"timed out\" break then dup sockcheck dup 1 = if pop \"noerr\" break then -1 = if \"refused\" break then 1 sleep repeat then dup \"noerr\" strcmp not if pop 1 31 1 for 31 = if -1 break then dup socksecure dup 2 = over 3 = or if pop 1 sleep continue then break repeat dup not if pop \"noerr\" else intostr \"SSLerr: \" swap strcat then then");
 #endif
 
     for (i = 0; i < BASE_MAX; i++) {

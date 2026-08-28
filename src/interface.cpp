@@ -1672,9 +1672,24 @@ sockwrite(struct descriptor_data *d, const char *str, int len)
     } else
 #endif /* MCCP_ENABLED */
 #ifdef USE_SSL
-    if (d->ssl_session)
-        return SSL_write(d->ssl_session, str, len);
-    else
+    if (d->ssl_session) {
+        int wrote = SSL_write(d->ssl_session, str, len);
+
+        if (wrote <= 0) {
+            /* Classify through SSL_get_error; errno is meaningless for
+               TLS results. Map would-block to EWOULDBLOCK so the errno
+               logic in process_output keeps working, and everything
+               else to a hard error. */
+            int sslerr = SSL_get_error(d->ssl_session, wrote);
+
+            if (sslerr == SSL_ERROR_WANT_READ || sslerr == SSL_ERROR_WANT_WRITE)
+                errnosocket = EWOULDBLOCK;
+            else
+                errnosocket = EPIPE;
+            return -1;
+        }
+        return wrote;
+    } else
 #endif
         return writesocket(d->fd, str, len);
 }
@@ -2200,8 +2215,23 @@ shovechars(void)
                     newd->ssl_session = SSL_new(ssl_ctx);
                     SSL_set_fd(newd->ssl_session, newd->fd);
                     cnt = SSL_accept(newd->ssl_session);
-                    newd->type = CT_SSL;
-                    newd->flags += DF_SSL;
+                    if (cnt <= 0) {
+                        int sslerr = SSL_get_error(newd->ssl_session, cnt);
+
+                        /* WANT_READ/WANT_WRITE just means the handshake
+                           needs more packets; SSL_read finishes it later.
+                           Anything else is a client that cannot or will
+                           not speak TLS: drop it now instead of leaving a
+                           half-open descriptor. */
+                        if (sslerr != SSL_ERROR_WANT_READ && sslerr != SSL_ERROR_WANT_WRITE) {
+                            shutdownsock(newd);
+                            newd = NULL;
+                        }
+                    }
+                    if (newd) {
+                        newd->type = CT_SSL;
+                        newd->flags += DF_SSL;
+                    }
                 }
             }
 #ifdef IPV6
@@ -2222,9 +2252,19 @@ shovechars(void)
                     newd->ssl_session = SSL_new(ssl_ctx);
                     SSL_set_fd(newd->ssl_session, newd->fd);
                     cnt = SSL_accept(newd->ssl_session);
-                    newd->type = CT_SSL;
-                    newd->flags += DF_SSL;
-                    newd->flags += DF_IPV6;
+                    if (cnt <= 0) {
+                        int sslerr = SSL_get_error(newd->ssl_session, cnt);
+
+                        if (sslerr != SSL_ERROR_WANT_READ && sslerr != SSL_ERROR_WANT_WRITE) {
+                            shutdownsock(newd);
+                            newd = NULL;
+                        }
+                    }
+                    if (newd) {
+                        newd->type = CT_SSL;
+                        newd->flags += DF_SSL;
+                        newd->flags += DF_IPV6;
+                    }
                 }
             }
 #endif
@@ -3628,24 +3668,26 @@ process_input(struct descriptor_data *d)
     if (d->type == CT_INBOUND)
         return -1;
 #ifdef USE_SSL
-    if (d->ssl_session)
+    if (d->ssl_session) {
         got = SSL_read(d->ssl_session, buf, sizeof buf);
-    else
+        if (got <= 0) {
+            /* SSL results are classified by SSL_get_error, not errno.
+               Would-block (including a handshake still in flight and
+               TLS 1.3 post-handshake messages) is not a disconnect. */
+            int sslerr = SSL_get_error(d->ssl_session, got);
+
+            if (sslerr == SSL_ERROR_WANT_READ || sslerr == SSL_ERROR_WANT_WRITE)
+                return 1;
+            return 0;
+        }
+    } else
 #endif
         got = readsocket(d->fd, buf, sizeof buf);
 
 #ifndef WIN32
-# ifdef USE_SSL
     if (!got || ((got < 0) && errno != EWOULDBLOCK))
-# else
-    if (got <= 0)
-# endif
 #else
-# ifdef USE_SSL
     if ((got <= 0) && WSAGetLastError() != EWOULDBLOCK)
-# else
-    if (got <= 0)
-# endif
 #endif
     {
 #ifdef DEBUGPROCESS

@@ -4975,7 +4975,11 @@ sockets are closed.
 
 NOTE: Socket prims are a compile time option and may not be present.
 SOCKOPEN is included strictly for backwards compatibility, though now
-returns a non-blocking socket as well.
+returns a non-blocking socket as well. SSL_SOCKOPEN works like
+SOCKOPEN but negotiates TLS before returning: it opens the
+connection, waits for it, then drives SOCKSECURE until the handshake
+finishes, returning the socket and "noerr" on success or an error
+string on failure.
 
 If IPv6 is enabled, UDPOPEN opens a listener on both ipv4 and ipv6.
 
@@ -10571,10 +10575,10 @@ RAWMODE, socksend can still trigger SOCKET.SSLERR events. nbsockrecv will not.
 
 The SOCKET.SSLERR event returns a dictionary style array with these keys:
 
-"ssl_error"  = The error code returned by the socksend or nbsockrecv operation
-               that triggered the event. You can find a list here:
-               http://www.openssl.org/docs/ssl/SSL_get_error.html
-               (You will never get SSL_ERROR_NONE or SSL_ERROR_WANT_*.)
+"ssl_error"  = The error NAME string from the operation that triggered
+               the event: "SSL_ERROR_ZERO_RETURN", "SSL_ERROR_SYSCALL",
+               "SSL_ERROR_SSL", or "UNKNOWN (n)". You will never get
+               SSL_ERROR_NONE or a WANT_* value here.
 "ssl_return" = This is the value referred to as "ret" in the above webpage. In
                most cases the value in the ssl_error key will be enough to
                understand what happened, but in some cases this value is needed

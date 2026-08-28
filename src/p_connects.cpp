@@ -713,7 +713,12 @@ prim_descr_sslp(PRIM_PROTOTYPE)
     if (!pdescrp(oper[0].data.number))
         abort_interp("That is not a valid descriptor.");
 #ifdef USE_SSL
-    result = (pdescrtype(oper[0].data.number) == CT_SSL);
+    {
+        struct descriptor_data *dr = descrdata_by_descr(oper[0].data.number);
+
+        result = (pdescrtype(oper[0].data.number) == CT_SSL)
+            || (dr && dr->ssl_session != NULL);
+    }
 #else
     result = 0;
 #endif
@@ -1074,6 +1079,15 @@ prim_getdescrinfo(PRIM_PROTOTYPE)
     temp1.data.string = alloc_prog_string("IPV6");
     temp2.type = PROG_INTEGER;
     temp2.data.number = (d->flags & DF_IPV6 ? 1 : 0);
+    array_setitem(&nw, &temp1, &temp2);
+    CLEAR(&temp1);
+    CLEAR(&temp2);
+#endif
+#ifdef USE_SSL
+    temp1.type = PROG_STRING;
+    temp1.data.string = alloc_prog_string("SSL");
+    temp2.type = PROG_INTEGER;
+    temp2.data.number = (d->type == CT_SSL || d->ssl_session) ? 1 : 0;
     array_setitem(&nw, &temp1, &temp2);
     CLEAR(&temp1);
     CLEAR(&temp2);
