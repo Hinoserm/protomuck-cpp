@@ -14,7 +14,7 @@ const char *
 unparse_flags(dbref thing, char buf[BUFFER_LEN])
 {
     char *p;
-    const char *type_codes = "R-EPFG";
+    const char *type_codes = "R-EPFUG";
 
     p = buf;
     if (Typeof(thing) != TYPE_THING)

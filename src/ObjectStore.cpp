@@ -6,8 +6,11 @@
 #include <dirent.h>
 #include <unistd.h>
 #include <errno.h>
+#include <cctype>
 #include <fstream>
 #include <sstream>
+#include <set>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 #include <nlohmann/json.hpp>
@@ -43,6 +46,76 @@ static const int STORE_FORMAT = 2;
  * never destroy its data. Keyed by uuid string. */
 static std::unordered_map<std::string, json> dormantEntries;
 static std::unordered_map<std::string, json> dormantModules;
+
+/* UNSUPPORTED placeholders: uuid -> {"name": stored type name,
+ * "bits": original TYPE_MASK bits}. Populated at load for objects
+ * whose type module is excluded or unknown; consulted at save so the
+ * file keeps saying what the object would have been. */
+static std::unordered_map<std::string, json> dormantTypeInfo;
+static std::set<std::string> excludedTypes;
+
+/* Chunk payloads referenced by dormant entries, captured at load so a
+ * save into a fresh root can materialize them there. In-place saves
+ * find the chunks already on disk either way. */
+static std::unordered_map<std::string, std::string> dormantChunks;
+
+static bool
+builtinTypeName(const std::string &n)
+{
+    return n == "room" || n == "thing" || n == "exit"
+        || n == "player" || n == "muf_program";
+}
+
+bool
+ObjectStore::excludeType(const char *name, std::string *err)
+{
+    std::string n = name ? name : "";
+
+    for (auto &c : n)
+        c = (char) tolower(c);
+    if (n == "program")
+        n = "muf_program";
+    if (n == "room" || n == "thing" || n == "player") {
+        if (err)
+            *err = "cannot exclude container type '" + n
+                + "' until the storage flip; contents chains would break";
+        return false;
+    }
+    if (n.empty()) {
+        if (err)
+            *err = "empty type name";
+        return false;
+    }
+    excludedTypes.insert(n);
+    return true;
+}
+
+bool
+ObjectStore::typeExcluded(const std::string &name)
+{
+    return excludedTypes.count(name) != 0;
+}
+
+/* A stored type name is supported when it is one of the built-ins and
+ * has not been excluded for this boot. "garbage" passes through the
+ * legacy path untouched. */
+static bool
+storedTypeSupported(const std::string &n)
+{
+    if (n == "garbage")
+        return true;
+    return builtinTypeName(n) && !ObjectStore::typeExcluded(n);
+}
+
+std::string
+ObjectStore::placeholderTypeName(dbref ref)
+{
+    auto it = dormantTypeInfo.find(MUCK::database().uuidOf(ref).toString());
+
+    if (it == dormantTypeInfo.end())
+        return "";
+    return it->second.value("name", "");
+}
 
 static bool
 knownNamespace(const std::string &k)
@@ -434,6 +507,19 @@ objectToJson(dbref i)
     j["type"] = typeName(o);
     j["modules"] = json::array();
 
+    /* An UNSUPPORTED placeholder saves as what it would have been:
+     * the stored type name and its original type bits, verbatim. */
+    int typeBitsOut = (int) (o->flags & TYPE_MASK);
+
+    {
+        auto pt = dormantTypeInfo.find(j["uuid"].get<std::string>());
+
+        if (pt != dormantTypeInfo.end()) {
+            j["type"] = pt->second.value("name", "garbage");
+            typeBitsOut = pt->second.value("bits", 0) & TYPE_MASK;
+        }
+    }
+
     json e;
 
     /* --- $core: what every object has --- */
@@ -441,7 +527,8 @@ objectToJson(dbref i)
     e["$core/location"] = entry("r", refToJson(o->location));
     e["$core/owner"] = entry("r", refToJson(o->owner));
     e["$core/flags"] = entry("l", json::array({
-        (int) (o->flags & ~DUMP_MASK), (int) (o->flag2 & ~DUM2_MASK),
+        (int) (((o->flags & ~DUMP_MASK) & ~TYPE_MASK) | typeBitsOut),
+        (int) (o->flag2 & ~DUM2_MASK),
         (int) (o->flag3 & ~DUM3_MASK), (int) (o->flag4 & ~DUM4_MASK) }));
     e["$core/powers"] = entry("l", json::array({
         (int) (o->powers & ~POWERS_DUMP_MASK),
@@ -522,8 +609,19 @@ objectToJson(dbref i)
         auto d = dormantEntries.find(j["uuid"].get<std::string>());
 
         if (d != dormantEntries.end())
-            for (auto it = d->second.begin(); it != d->second.end(); ++it)
+            for (auto it = d->second.begin(); it != d->second.end(); ++it) {
                 e[it.key()] = it.value();
+                /* materialize referenced chunks in this root */
+                if (it.value().value("t", "") == "c"
+                    && it.value()["v"].is_array())
+                    for (const auto &h : it.value()["v"]) {
+                        auto c = dormantChunks.find(h.get<std::string>());
+
+                        if (c != dormantChunks.end())
+                            ensureChunk(g_objectStore.root(),
+                                        h.get<std::string>(), c->second);
+                    }
+            }
         auto dm = dormantModules.find(j["uuid"].get<std::string>());
 
         if (dm != dormantModules.end())
@@ -1378,21 +1476,72 @@ ObjectStore::loadAll()
                 }
                 if (j.contains("entries")) {
                     json unknown = json::object();
+                    std::string tname = j.value("type", "garbage");
+                    bool unsupported = !storedTypeSupported(tname);
 
                     for (auto eit = j["entries"].begin();
                          eit != j["entries"].end(); ++eit)
-                        if (!knownNamespace(eit.key()))
+                        if (!knownNamespace(eit.key())
+                            || (unsupported
+                                && eit.key().rfind("$type/", 0) == 0)) {
                             unknown[eit.key()] = eit.value();
+                            /* keep chunk payloads reachable for saves
+                             * into a fresh root */
+                            if (eit.value().value("t", "") == "c"
+                                && eit.value()["v"].is_array())
+                                for (const auto &h : eit.value()["v"]) {
+                                    std::string content;
+
+                                    if (readChunk(root_,
+                                                  h.get<std::string>(),
+                                                  content))
+                                        dormantChunks[h.get<std::string>()] =
+                                            content;
+                                }
+                        }
                     if (!unknown.empty())
                         dormantEntries[j.value("uuid", "")] = unknown;
                     if (!j.value("modules", json::array()).empty())
                         dormantModules[j.value("uuid", "")] = j["modules"];
+
+                    if (unsupported) {
+                        /* The type module is absent: keep its slice
+                         * dormant, remember what the object would have
+                         * been, and load only the core. */
+                        json info;
+                        int bits = 0;
+                        const json &ents = j["entries"];
+                        auto fl = ents.find("$core/flags");
+
+                        if (fl != ents.end() && (*fl)["v"].is_array())
+                            bits = (*fl)["v"][0].get<int>() & TYPE_MASK;
+                        info["name"] = tname;
+                        info["bits"] = bits;
+                        dormantTypeInfo[j.value("uuid", "")] = info;
+
+                        for (auto eit = j["entries"].begin();
+                             eit != j["entries"].end();)
+                            if (eit.key().rfind("$type/", 0) == 0)
+                                eit = j["entries"].erase(eit);
+                            else
+                                ++eit;
+                    }
 
                     json v2entries = j["entries"];
                     json v2mods = j.value("modules", json::array());
 
                     j = v2ToV1(j, root_);
                     objectFromJsonPhase1(j, later);
+                    if (unsupported) {
+                        dbref pref = (dbref) j.value("dbref", -1);
+
+                        if (pref >= 0) {
+                            struct object *po = DBFETCH(pref);
+
+                            po->flags =
+                                (po->flags & ~TYPE_MASK) | TYPE_UNSUPPORTED;
+                        }
+                    }
                     if (!later.empty() && later.back().ref == j.value("dbref", -1)) {
                         later.back().entries = v2entries;
                         for (const auto &mn : v2mods)

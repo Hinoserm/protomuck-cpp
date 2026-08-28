@@ -12,6 +12,7 @@
 #include "match.h"
 #include "externs.h"
 #include "Modules.h"
+#include "ObjectStore.h"
 
 #define UPCASE(x) (toupper(x))
 #define DOWNCASE(x) (tolower(x))
@@ -788,6 +789,16 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
                     u.toString().c_str(), u.shortString(12).c_str());
             anotify_nolisten2(player, buf);
         }
+    }
+    if (Typeof(thing) == TYPE_UNSUPPORTED) {
+        std::string tn = MUCK::ObjectStore::placeholderTypeName(thing);
+
+        for (auto &c : tn)
+            c = (char) toupper(c);
+        sprintf(buf, SYSGREEN "TYPE: " SYSYELLOW "%s" SYSGREEN
+                "  STATUS: " SYSRED "UNSUPPORTED",
+                tn.empty() ? "UNKNOWN" : tn.c_str());
+        anotify_nolisten2(player, buf);
     }
     if ((Typeof(thing) == TYPE_PLAYER) && (POWERS(thing)))
         anotify_nolisten(player, power_description(thing), 1);

@@ -240,6 +240,7 @@ extern short dbcheck(const char *file, int line, dbref item);
 #define TYPE_EXIT	    0x2
 #define TYPE_PLAYER	    0x3
 #define TYPE_PROGRAM	    0x4
+#define TYPE_UNSUPPORTED    0x5	/* placeholder: type module not loaded */
 #define TYPE_GARBAGE	    0x6
 #define NOTYPE		    0x7	/* no particular type */
 #define TYPE_MASK	    0x7	/* room for expansion */

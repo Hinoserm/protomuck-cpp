@@ -161,7 +161,10 @@ const char *
 DbObject::typeName()
 {
     ensureModules();
-    return typeModule_ ? typeModule_->moduleName() : "garbage";
+    if (typeModule_)
+        return typeModule_->moduleName();
+    return (legacy_.flags & TYPE_MASK) == TYPE_UNSUPPORTED
+        ? "unsupported" : "garbage";
 }
 
 Module *

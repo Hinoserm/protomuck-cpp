@@ -32,14 +32,16 @@ class Container : public Module {
 
 class Room : public Container {
   public:
-    const char *moduleName() const override { return "room"; }
+    static const char *staticName() { return "room"; }
+    const char *moduleName() const override { return staticName(); }
     DbObject *dropTo() const;
     void setDropTo(DbObject *where);
 };
 
 class Thing : public Container {
   public:
-    const char *moduleName() const override { return "thing"; }
+    static const char *staticName() { return "thing"; }
+    const char *moduleName() const override { return staticName(); }
     DbObject *home() const;
     void setHome(DbObject *where);
     int value() const;
@@ -61,7 +63,8 @@ struct PlayerSession {
 
 class Player : public Container {
   public:
-    const char *moduleName() const override { return "player"; }
+    static const char *staticName() { return "player"; }
+    const char *moduleName() const override { return staticName(); }
     DbObject *home() const;
     void setHome(DbObject *where);
     int pennies() const;
@@ -79,7 +82,8 @@ class Player : public Container {
 
 class Exit : public Module {
   public:
-    const char *moduleName() const override { return "exit"; }
+    static const char *staticName() { return "exit"; }
+    const char *moduleName() const override { return staticName(); }
     std::vector<DbObject *> destinations() const;
     void setDestinations(const std::vector<DbObject *> &dests);
 
@@ -131,7 +135,8 @@ struct ProgramRuntime {
 
 class MufProgram : public Module {
   public:
-    const char *moduleName() const override { return "muf_program"; }
+    static const char *staticName() { return "muf_program"; }
+    const char *moduleName() const override { return staticName(); }
     const std::vector<std::string> *source() const;
     void setSource(std::vector<std::string> lines);
 

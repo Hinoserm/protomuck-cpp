@@ -24,6 +24,19 @@ class ObjectStore {
     /* True if path is a directory containing a manifest.json. */
     static bool isStore(const char *path);
 
+    /* --db-exclude-type: deliberately boot without a type module.
+     * Objects of an excluded (or unknown) type load as UNSUPPORTED
+     * placeholders; their stored type name, type bits, and $type
+     * entries persist verbatim. Returns false with *err set when the
+     * name cannot be excluded (container types, until the storage
+     * flip). docs/DATABASE.txt section 4. */
+    static bool excludeType(const char *name, std::string *err);
+    static bool typeExcluded(const std::string &name);
+
+    /* Stored type name of an UNSUPPORTED placeholder, empty string
+     * for normal objects. */
+    static std::string placeholderTypeName(dbref ref);
+
     /* Bind the store to its data root. Creates the directory tree on
      * first save if needed. */
     void setRoot(const char *path) { root_ = path; }

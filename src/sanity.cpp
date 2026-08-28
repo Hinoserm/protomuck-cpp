@@ -175,6 +175,7 @@ valid_obj(dbref obj)
         case TYPE_PLAYER:
         case TYPE_PROGRAM:
         case TYPE_THING:
+        case TYPE_UNSUPPORTED:
             return 1;
             break;
         default:
@@ -469,6 +470,10 @@ check_object(dbref player, dbref obj)
             break;
         case TYPE_GARBAGE:
             check_garbage(player, obj);
+            break;
+        case TYPE_UNSUPPORTED:
+            /* placeholder for an absent type module: core checks
+             * above suffice, the type slice is dormant */
             break;
         default:
             violate(player, obj, "has an unknown object type, and its flags may also be corrupt");

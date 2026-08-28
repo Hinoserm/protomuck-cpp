@@ -150,8 +150,14 @@ do_open(int descr, dbref player, const char *direction, const char *linkto)
         char buf[BUFFER_LEN];
 
         /* create the exit through the gatekeeper */
-        exit = MUCK::database().Create<MUCK::Exit>(direction, OWNER(player))
-            ->object()->ref();
+        MUCK::Exit *newx =
+            MUCK::database().Create<MUCK::Exit>(direction, OWNER(player));
+
+        if (!newx) {
+            anotify_nolisten2(player, CFAIL "That object type is not available on this server.");
+            return;
+        }
+        exit = newx->object()->ref();
         DBFETCH(exit)->location = loc;         /* chain wiring flips later */
 
         /* link it in */
@@ -602,6 +608,10 @@ do_prog(int descr, dbref player, const char *name)
 
     if ((i = match_result(&md)) == NOTHING) {
         i = MUCK::database().newProgram(OWNER(player), name);
+        if (i == NOTHING) {
+            anotify_nolisten2(player, CFAIL "That object type is not available on this server.");
+            return;
+        }
         FLAGS(i) |= INTERNAL;
         MUCK::playerSession(player).currProg = i;
 
@@ -928,8 +938,14 @@ do_action(int descr, dbref player, const char *action_name, const char *source_n
         return;
     }
 
-    action = MUCK::database().Create<MUCK::Exit>(action_name, OWNER(player))
-        ->object()->ref();
+    MUCK::Exit *newact =
+        MUCK::database().Create<MUCK::Exit>(action_name, OWNER(player));
+
+    if (!newact) {
+        anotify_nolisten2(player, CFAIL "That object type is not available on this server.");
+        return;
+    }
+    action = newact->object()->ref();
 
     set_source(player, action, source);
     sprintf(buf, CSUCC "Action %s created and attached to %s.", unparse_object(player, action), NAME(source));

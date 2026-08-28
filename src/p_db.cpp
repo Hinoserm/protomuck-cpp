@@ -1644,9 +1644,13 @@ prim_newexit(PRIM_PROTOTYPE)
         if (!ok_name(b))
             abort_interp("Invalid name (2)");
 
-        ref = MUCK::database().Create<MUCK::Exit>(oper[0].data.string->data,
-                                                  OWNER(ProgUID))
-            ->object()->ref();
+        MUCK::Exit *newx =
+            MUCK::database().Create<MUCK::Exit>(oper[0].data.string->data,
+                                                OWNER(ProgUID));
+
+        if (!newx)
+            abort_interp("The exit type is not available on this server.");
+        ref = newx->object()->ref();
         DBFETCH(ref)->location = oper[1].data.objref;  /* chain wiring flips later */
         FLAGS(ref) = TYPE_EXIT;
         DBFETCH(ref)->sp.exit.ndest = 0;   /* raw: mid-construction */
@@ -2324,6 +2328,8 @@ prim_newprogram(PRIM_PROTOTYPE)
         abort_interp("Invalid name (2)");
 
     ref = MUCK::database().newProgram(PSafe, oper[0].data.string->data);
+    if (ref == NOTHING)
+        abort_interp("The program type is not available on this server.");
 
     PushObject(ref);
 }

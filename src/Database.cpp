@@ -165,7 +165,12 @@ Database::newProgram(dbref player, const char *name)
 
     player = OWNER(player);
 
-    dbref newprog = Create<MufProgram>(name, player)->object()->ref();
+    MufProgram *mp = Create<MufProgram>(name, player);
+
+    if (!mp)
+        return NOTHING;
+
+    dbref newprog = mp->object()->ref();
 
     sprintf(buf, "A scroll containing a spell called %s", name);
     SETDESC(newprog, buf);
@@ -385,6 +390,10 @@ template <class T>
 T *
 Database::Create(const char *name, dbref owner)
 {
+    /* An excluded type module cannot mint new objects. */
+    if (ObjectStore::typeExcluded(T::staticName()))
+        return nullptr;
+
     dbref r = newObject(owner);
 
     FLAGS(r) = moduleTypeBits((T *) nullptr);

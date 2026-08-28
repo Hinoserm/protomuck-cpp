@@ -19,6 +19,7 @@
 #include "reg.h"
 #include "externs.h"
 #include "Modules.h"
+#include "ObjectStore.h"
 #include "MacroTable.h"
 #include "mufevent.h"
 #include "strutils.h"
@@ -320,6 +321,9 @@ show_program_usage(char *prog)
 #endif
     fprintf(stderr, "       -gamedir PATH     changes directory to PATH before starting up.\n");
     fprintf(stderr, "       -convert          load db, save in current format, and quit.\n");
+    fprintf(stderr, "       --db-exclude-type NAME\n");
+    fprintf(stderr, "                         boot without the NAME type module; its objects\n");
+    fprintf(stderr, "                         load as UNSUPPORTED placeholders, data kept.\n");
     fprintf(stderr, "       -pwconvert        convert passwords to hashed format on next save.\n");
     fprintf(stderr, "       -decompress       when saving db, save in uncompressed format.\n");
     fprintf(stderr, "       -nosanity         don't do db sanity checks at startup time.\n");
@@ -430,6 +434,16 @@ main(int argc, char **argv)
                 store_gc_flag = 1;
             } else if (!strcmp(argv[i], "-convert")) {
                 db_conversion_flag = 1;
+            } else if (!strcmp(argv[i], "--db-exclude-type")) {
+                if (i + 1 >= argc) {
+                    show_program_usage(*argv);
+                }
+                std::string exerr;
+
+                if (!MUCK::ObjectStore::excludeType(argv[++i], &exerr)) {
+                    fprintf(stderr, "--db-exclude-type: %s\n", exerr.c_str());
+                    exit(1);
+                }
             } else if (!strcmp(argv[i], "-decompress")) {
                 db_decompression_flag = 1;
             } else if (!strcmp(argv[i], "-nosanity")) {
