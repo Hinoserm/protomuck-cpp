@@ -24,7 +24,7 @@ PRIM1|PRIMS1|PRIMS|PRIMITIVES
 Variable Prims:
   VAR     VARIABLE     VARIABLE?     LVAR     LOCALVAR
   @       !            ME            TRIGGER  COMMAND
-  DESCR   VAR!
+  DESCR   VAR!         SVAR
 
 Multitasking Prims:
   PREEMPT       FOREGROUND      BACKGROUND     MODE         SETMODE
@@ -115,7 +115,9 @@ Connection Prims:
   DESCRHOST        DESCRIPNUM        DESCRPORT    DESCRCONPORT
   DESCRLEASTIDLE   DESCRMOSTIDLE     FIRSTDESCR   LASTDESCR
   DESCRUSER        GETDESCRINFO      DESCRBOOT    DESCR_SET
-  DESCR_FLAG?      DESCRBUFSIZE
+  DESCR_FLAG?      DESCRBUFSIZE      DESCRTYPE    DESCR_SSL?
+  DESCR_SENDFILE   DESCR_SAFEBOOT    MCCP_START   MCCP_END
+  DESCR_SETUSER_NOPASS              NBSOCKRECV_CHAR
 
 Locks Management:
   SETLOCKSTR     GETLOCKSTR     LOCKED?     PARSELOCK
@@ -206,22 +208,23 @@ File Prims:
   FPUBLISH  FSINFO   FSTATS    CURID      FSIZE    GETDIR
   RMDIR
 
-MCP Prims:
+MCP Prims: (removed in 2021; these no longer exist)
   MCP_REGISTER    MCP_REGISTER EVENT   MCP_SUPPORTS       MCP_BIND
   MCP_SEND        GUI_AVAILABLE        GUI_DLOG_CREATE    GUI_DLOG_SHOW
-  GUI_DLOG_CLOSE  GUI_CTRL_CREATE      GUI_VALUES_SET     GUI_VALUES_GET
+  GUI_DLOG_CLOSE  GUI_CTRL_CREATE     GUI_VALUES_SET     GUI_VALUES_GET
   GUI_VALUE_GET   GUI_CTRL_COMMAND
 
 ~~~~~
 PRIMS7|PRIM7
 
 MUF Editing Prims:
-  KILL_MACRO          INSERT_MACRO      GET_MACROS_ARRAY 
-  PROGRAM_LINECOUNT   PROGRAM_GETLINES  PROGRAM_DELETELINES  
-  PROGRAM_INSERTLINES
+  KILL_MACRO          INSERT_MACRO      GET_MACROS_ARRAY
+  PROGRAM_LINECOUNT   PROGRAM_GETLINES  PROGRAM_DELETELINES
+  PROGRAM_INSERTLINES PRIMINFO_ARRAY
 
 MySQL Prims:
   SQLQUERY    SQLCONNECT    SQLCLOSE    SQLPING    SQL?
+  SQLQUERY_T  SQLQSTAT
 
 ANSI Prims:
  ANSI_MIDSTR            ANSI_NAME              ANSI_NOTIFY
@@ -232,6 +235,15 @@ ANSI Prims:
 
 Webserver Prims:
  BASE64ENCODE           BASE64DECODE           HTTPDATA
+ BODY_GETCHAR           BODY_NEXTCHAR          BODY_PREVCHAR
+ DESCR_SAFEBOOT         DESCR_SENDFILE
+
+Encoding Prims:
+ STR2HEX                HEX2STR                HEX2BASE64STR
+ WCHARLEN               WCHARLEN_SLICE
+
+Debugging Prims:
+ BACKTRACE              FUNCPROF_ARRAY         DEBUG_LINE_STR
 
 Ignore Support Prims:
  MAX_IGNORES            IGNORE_ADD	       IGNORE_DEL
@@ -487,6 +499,8 @@ For working with Descriptors:
   DESCRPORT        DESCRCONPORT      FIRSTDESCR    LASTDESCR
   DESCRLEASTIDLE   DESCRMOSTIDLE     DESCRUSER     GETDESCRINFO
   DESCRBOOT        DESCR_SET         DESCR_FLAG?   DESCRBUFSIZE
+  DESCRTYPE        DESCR_SSL?        DESCR_SENDFILE
+  DESCR_SAFEBOOT   MCCP_START        MCCP_END
 ~~~~~~
 LOCK PRIMS
 
@@ -494,7 +508,7 @@ These prims help MUF interact with locks on the MUCK:
 
 SETLOCKSTR     GETLOCKSTR     LOCKED?     PARSELOCK
 UNPARSELOCK    PRETTYLOCK     TESTLOCK    LOCK?
-ISLOCKED?      CHECKLOCK      CHECKLOCK
+ISLOCKED?      CHECKLOCK
 
 ~~~~~
 SYSTEM PRIMS|SYSTEMPRIMS
@@ -11624,3 +11638,372 @@ FILTER_SMATCH
 FILTER_CASELESS
   Match strings with caseless checks
 
+~~~~
+STR2HEX|HEX2STR|HEX2BASE64STR|HEX
+
+STR2HEX ( s1 -- s2 )
+HEX2STR ( s1 -- s2 )
+HEX2BASE64STR ( s1 -- s2 )
+--------------------------
+Level: M1 Apprentice
+s1 = the string to convert
+s2 = the converted string
+
+STR2HEX converts a raw binary string into its hexadecimal ASCII
+representation, using uppercase digits. Each input byte becomes two
+output characters, so the input may not be longer than half the
+string buffer.
+
+HEX2STR performs the reverse conversion, turning hexadecimal ASCII
+back into raw binary. The string must contain valid hexadecimal
+digits; anything else aborts the program.
+
+HEX2BASE64STR converts hexadecimal ASCII directly to Base64. It is
+equivalent to HEX2STR followed by BASE64ENCODE, but does not build
+the intermediate binary string on the stack.
+
+All three push a null string when given a null string.
+
+See: BASE64ENCODE, BASE64DECODE
+~~~~
+WCHARLEN|WCHARLEN_SLICE
+
+WCHARLEN ( s -- i )
+WCHARLEN_SLICE ( s i1 -- i2 )
+-----------------------------
+Level: M1 Apprentice
+s = the string to measure
+i = the number of wide characters in s
+i1 = a number of wide characters
+i2 = the number of bytes those characters occupy
+
+WCHARLEN returns the number of multibyte (UTF-8) characters in a
+string, where STRLEN counts bytes. For a string of pure 7-bit ASCII
+the two agree.
+
+WCHARLEN_SLICE returns the number of bytes taken up by the first i1
+wide characters of s. Use it to find a byte offset that is safe to
+hand to STRCUT, so that a multibyte character is not split in half.
+
+Both abort with "Illegal multibyte character detected." if the string
+is not valid in the server's current locale.
+
+See: STRLEN, STRCUT, MIDSTR
+~~~~
+DESCRTYPE
+
+DESCRTYPE ( i -- s )
+--------------------
+Level: M2 Journeyman
+i = a valid descriptor number
+s = the connection type
+
+Returns a string naming the kind of connection behind a descriptor.
+The possible values are:
+
+MUCK      A normal player connection.
+MUF       A connection handed off to a MUF program.
+LISTEN    A listening socket.
+INBOUND   An accepted inbound socket.
+OUTBOUND  An outbound socket opened by the MUCK.
+PUEBLO    A connection in Pueblo mode.
+HTTP      A connection being served by the built in web server.
+SSL       A connection wrapped in SSL.
+
+See: DESCR_SSL?, DESCRIPTORS, GETDESCRINFO
+~~~~
+DESCR_SSL?|DESCRSECURE?
+
+DESCR_SSL? ( i -- i2 )
+----------------------
+Level: M3 Master
+i = a valid descriptor number
+i2 = 1 if the connection is encrypted, 0 if it is not
+
+Returns true if the descriptor is an SSL connection. On a server
+built without SSL support this always returns 0.
+
+DESCRSECURE? is an alias, provided for compatibility with FB6.
+
+See: DESCRTYPE, SOCKSECURE, SOCKUNSECURE
+~~~~
+MCCP_START|MCCP_END|MCCP
+
+MCCP_START ( i -- )
+MCCP_END ( i -- )
+-------------------
+Level: MCCP_START is M3 Master. MCCP_END is W1 Mage.
+i = a valid descriptor number
+
+MCCP_START begins MCCP version 2 output compression on a descriptor,
+and MCCP_END stops it.
+
+The client must have negotiated MCCP support for compression to take
+effect. On a server built without MCCP these prims check that the
+descriptor is valid and then do nothing.
+
+Compression applies to output only and is transparent to the player.
+
+See: DESCRTYPE, DESCRBUFSIZE, DESCRFLUSH
+~~~~
+DESCR_SENDFILE
+
+DESCR_SENDFILE ( i1 i2 i3 s -- i4 )
+-----------------------------------
+Level: W4 Boy
+i1 = a valid descriptor number
+i2 = the first byte to send
+i3 = the last byte to send
+s = the file to send
+i4 = the result of the request
+
+Queues a file to be written directly to a descriptor, bypassing the
+normal output path. The web server uses this to serve static files
+without first loading them into MUF strings.
+
+Returns -2 if that descriptor is already sending a file.
+
+The filename goes through the same directory and shortcut checks the
+file prims use, so it cannot reach outside the server's file area.
+
+See: FREAD, DESCRFLUSH, DESCRBUFSIZE, HTTPDATA
+~~~~
+DESCR_SAFEBOOT
+
+DESCR_SAFEBOOT ( i -- )
+-----------------------
+Level: W3 ArchWizard
+i = a valid descriptor number
+
+Marks a descriptor to be disconnected once its pending output has
+been flushed, instead of dropping it at once.
+
+Use this rather than DESCRBOOT when the connection still has queued
+data that the far end ought to receive, such as a final HTTP
+response.
+
+See: DESCRBOOT, CONBOOT, DESCRFLUSH
+~~~~
+BODY_GETCHAR|BODY_NEXTCHAR|BODY_PREVCHAR|BODY
+
+BODY_GETCHAR ( i1 i2 -- i3 )
+BODY_NEXTCHAR ( i1 -- i2 )
+BODY_PREVCHAR ( i1 -- i2 )
+----------------------------
+Level: M2 Journeyman
+i1 = a valid descriptor number on an HTTP connection
+i2 = for BODY_GETCHAR, the byte offset to read
+
+These read the raw request body of an HTTP connection one byte at a
+time. The body is binary and may contain nulls, so it cannot be
+handled as a MUF string.
+
+BODY_GETCHAR returns the byte at an absolute offset and leaves the
+cursor alone. BODY_NEXTCHAR returns the byte at the cursor and then
+advances it. BODY_PREVCHAR moves the cursor back one byte and returns
+the byte found there.
+
+All three return -2 if the request has no body, and -1 if the
+requested position lies outside it.
+
+They abort if the descriptor is not an HTTP connection.
+
+See: HTTPDATA, DESCRTYPE, DESCR_SENDFILE
+~~~~
+PROPERTIES_ARRAY
+
+PROPERTIES_ARRAY ( d s -- a )
+-----------------------------
+Level: M3 Master
+d = the object to read
+s = a wildcard pattern matching property names
+a = a dictionary of the matching properties
+
+Returns a dictionary whose keys are the full names of the properties
+on d that match the pattern, and whose values are those properties'
+values.
+
+The pattern uses SMATCH wildcard syntax and is matched against the
+whole property path, so "_/*" matches everything under _.
+
+Properties the program is not permitted to read are skipped rather
+than causing an error.
+
+See: ARRAY_GET_PROPLIST, ARRAY_GET_PROPVALS, NEXTPROP, SMATCH
+~~~~
+NBSOCKRECV_CHAR
+
+NBSOCKRECV_CHAR ( sock -- i1 i2 )
+---------------------------------
+Level: W3 ArchWizard
+sock = an open, non listening socket
+i1 = 1 if a byte was read, 0 if none was waiting
+i2 = the byte that was read, or 0
+
+Reads a single byte from a socket without blocking. If no data is
+waiting it returns at once with i1 set to 0.
+
+Unlike NBSOCKRECV this does not stop at a line break, so it is the
+prim to use for binary protocols, or for data that does not arrive
+in lines.
+
+Aborts if given a listening socket.
+
+See: NBSOCKRECV, SOCKRECV, SOCKCHECK
+~~~~
+PRIMINFO_ARRAY
+
+PRIMINFO_ARRAY ( s -- a )
+-------------------------
+Level: M1 Apprentice
+s = a pattern matching primitive names, or "" for all of them
+a = a dictionary describing the matching primitives
+
+Returns a dictionary keyed by primitive name. Each value is itself a
+dictionary holding:
+
+name    The primitive's name as the compiler sees it.
+nargs   How many stack items the primitive takes.
+mlev    The MUF level needed to use it, from 2 to 8.
+
+The pattern is matched with SMATCH, so "ARRAY_*" returns every array
+primitive. An empty string returns the whole primitive table.
+
+Names that begin with a space are internal compiler primitives and
+cannot be typed in a program.
+
+See: SMATCH, PRIMS LIST
+~~~~
+SQLQUERY_T
+
+SQLQUERY_T ( m s -- i )
+-----------------------
+Level: W3 ArchWizard
+m = an open MySQL connection
+s = the query to run
+i = the id assigned to this query
+
+Queues a query to run on a background thread and returns at once with
+an id, instead of blocking the whole MUCK until the database answers.
+Use this for any query that might be slow.
+
+When the query finishes, the program receives a MUF event named
+MYSQL.<id>, where <id> is the number this prim returned. Wait for it
+with EVENT_WAITFOR. The event carries the result set in the same form
+SQLQUERY would have pushed.
+
+See: SQLQUERY, SQLQSTAT, SQLCONNECT, EVENT_WAITFOR
+~~~~
+SQLQSTAT
+
+SQLQSTAT ( -- a )
+-----------------
+Level: W3 ArchWizard
+a = a list of the queries queued or running
+
+Returns a list of dictionaries, one per threaded query that has not
+yet finished. Each entry holds:
+
+ID        The id that SQLQUERY_T returned.
+RUNNING   1 if the query has started, 0 if it is still queued.
+QUERY     The query text.
+HOSTNAME  The database host.
+DATABASE  The database name.
+USERNAME  The user the query runs as.
+PROGRAM   The dbref of the program that queued it.
+PLAYER    The dbref of the player it runs for.
+DESCR     The descriptor it runs for.
+
+Use this to see what the SQL queue is doing when queries look like
+they are backing up.
+
+See: SQLQUERY_T, SQLQUERY
+~~~~
+BACKTRACE
+
+BACKTRACE ( d -- )
+------------------
+Level: W3 ArchWizard
+d = the player to send the backtrace to, or #-1
+
+Prints the current MUF call stack to a player, in the same format the
+debugger uses when a program aborts. Passing #-1 sends it nowhere.
+
+This does not stop the program. Execution carries on with the next
+instruction.
+
+See: DEBUG_ON, DEBUG_LINE, DEBUG_LINE_STR, DEBUGGER_BREAK
+~~~~
+FUNCPROF_ARRAY
+
+FUNCPROF_ARRAY ( d -- a )
+-------------------------
+Level: W3 ArchWizard
+d = the program to report on
+a = a dictionary of per function timings
+
+Returns the function level profiling data the server has collected
+for a program. Each entry is keyed by function name and holds:
+
+funcname   The name of the function.
+usecount   How many times it has been called.
+totaltime  Total seconds spent inside it.
+lasttotal  Seconds spent in it during the last run.
+starttime  When the current call started, if one is active.
+
+Profiling data exists only for programs that have run since the last
+restart. A program with no data returns an empty dictionary.
+
+See: TIMER_START, SYSTIME_PRECISE, DEBUG_ON
+~~~~
+DEBUG_LINE_STR
+
+DEBUG_LINE_STR ( -- s )
+-----------------------
+Level: M1 Apprentice
+s = the debug text for the current instruction
+
+Returns the line that DEBUG_LINE would have printed, as a string,
+instead of sending it to the player. The text shows the current
+instruction and the state of the stack, exactly as the debugger
+displays it.
+
+Use this to capture debugging output into a log or a property,
+rather than dumping it on whoever happens to be running the program.
+
+See: DEBUG_LINE, DEBUG_ON, DEBUG_OFF, DEBUGGER_BREAK
+~~~~
+SVAR
+
+SVAR <name>
+-----------
+Level: M1 Apprentice
+
+Declares a static variable. Like VAR, SVAR must appear outside any
+function; declaring one inside a function is a compile error.
+
+A static variable is stored on the program object itself rather than
+in the running frame. That means its value survives after the program
+finishes, and is still there the next time the program is run. Every
+concurrent instance of the program sees the same variable, so two
+copies running at once share it.
+
+Static variables start out as integer 0 when the program is compiled,
+and are cleared if it is uncompiled. They are held in memory only,
+so they do not survive a restart. Use a property if you need a value
+to outlive the server.
+
+Read and write them with @ and ! in the usual way.
+
+    svar hitcount
+    : main
+        hitcount @ 1 + hitcount !
+        hitcount @ intostr me @ swap notify
+    ;
+
+Compare VAR, whose variables are reset for each run; LVAR, whose
+variables are shared by calls within one program but not stored on
+it; and the scoped variables declared in a function header, which are
+fresh for every call.
+
+See: VAR, VAR!, LVAR, LOCALVAR, VARIABLE
