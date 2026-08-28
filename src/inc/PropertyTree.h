@@ -36,6 +36,10 @@ class PropertyTree {
     /* Exact-name lookup (folded identity, so "Foo" finds "foo"). */
     PropNode *find(const char *name) const;
 
+    /* Lookup with a pre-folded key (foldKey output). Lets a scan over
+     * many objects fold its path once. docs/PROPERTIES.txt 3a. */
+    PropNode *findFolded(const uint8_t *key, size_t len) const;
+
     /* Find-or-create. A new node preserves the given spelling; an
      * existing node keeps its original spelling. */
     PropNode *insert(const char *name);

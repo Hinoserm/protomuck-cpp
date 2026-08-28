@@ -118,6 +118,29 @@ there. Format rules per docs/CODING_RULES.txt: 7-bit ASCII.
    loops behave today.
 
 
+3a. PERFORMANCE REQUIREMENTS
+
+   Two real workloads size the design:
+
+   Huge propdirs. Single objects carry hundreds of thousands of
+   properties (registration dirs, mail spools). Every tree operation
+   is O(name length) regardless of population: no rebalancing, no
+   per-level string comparisons, and enumeration by successor never
+   degrades. This is the case where the radix tree most outperforms
+   both the legacy AVL and any comparison-based container.
+
+   Whole-database scans. MUF routinely walks every object testing
+   one property path. Two properties of the design serve this:
+   a MISS costs only the bytes to the first divergence (an object
+   without the prop usually rejects at the root), and the folded
+   path can be computed ONCE per scan and reused against every
+   object (PropertyTree::findFolded; the veneer's path walker folds
+   each component a single time). If measurement ever demands more,
+   the escalation path is a global inverted index (path to object
+   set), deliberately NOT built until a workload proves the write
+   amplification worthwhile.
+
+
 4. VALUE RESIDENCY (THE DISKBASE CONCEPT, OPTIONAL)
 
    The tree and every PropNode's metadata (name, flags, type) are

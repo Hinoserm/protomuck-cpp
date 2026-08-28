@@ -879,6 +879,13 @@ PropNode *
 PropertyTree::find(const char *name) const
 {
     FoldedKey k(name);
+
+    return findFolded(k.data, k.len);
+}
+
+PropNode *
+PropertyTree::findFolded(const uint8_t *key, size_t len) const
+{
     void *p = root_;
     uint32_t depth = 0;
 
@@ -887,21 +894,21 @@ PropertyTree::find(const char *name) const
             PropNode *leaf = asLeaf(p);
             FoldedKey lk(leaf->name());
 
-            if (lk.len == k.len && memcmp(lk.data, k.data, k.len) == 0)
+            if (lk.len == len && memcmp(lk.data, key, len) == 0)
                 return leaf;
             return nullptr;
         }
 
         ArtNode *n = asNode(p);
-        uint32_t match = prefixMatch(n, k.data, k.len, depth);
+        uint32_t match = prefixMatch(n, key, len, depth);
 
         if (match < n->prefixLen)
             return nullptr;
         depth += n->prefixLen;
-        if (depth >= k.len)
+        if (depth >= len)
             return nullptr;
 
-        void **slot = findChild(n, k.data[depth]);
+        void **slot = findChild(n, key[depth]);
 
         if (!slot)
             return nullptr;
