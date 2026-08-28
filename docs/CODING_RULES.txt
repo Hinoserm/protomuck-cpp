@@ -7,10 +7,10 @@ code is brought into compliance as it is touched, not in mass sweeps.
 
 1. NAMING AND FILE LAYOUT
 
-   All new or modernized classes live in namespace muck with unprefixed
+   All new or modernized classes live in namespace MUCK with unprefixed
    PascalCase names:
 
-       namespace muck { class Database; }     used as muck::Database
+       namespace MUCK { class Database; }     used as MUCK::Database
 
    One class per file, file named after the class:
 
@@ -19,7 +19,7 @@ code is brought into compliance as it is touched, not in mass sweeps.
 
    Do not prefix class names with Muck; the namespace carries that.
    Legacy free functions stay outside the namespace and are migrated
-   opportunistically.  Searching the tree for "muck::" shows migration
+   opportunistically.  Searching the tree for "MUCK::" shows migration
    progress.
 
 2. FORMATTING

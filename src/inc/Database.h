@@ -13,7 +13,7 @@
 #include <cstdio>
 #include "db.h"
 
-namespace muck {
+namespace MUCK {
 
 class Database {
   public:
@@ -39,6 +39,6 @@ class Database {
 /* The single global database instance. */
 Database &database();
 
-} /* namespace muck */
+} /* namespace MUCK */
 
 #endif /* MUCK_DATABASE_H */

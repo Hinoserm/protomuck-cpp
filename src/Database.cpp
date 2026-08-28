@@ -2103,13 +2103,13 @@ db_hash_oldconvert(char *out, const char *hash)
 }
 
 /* ---------------------------------------------------------------------
- * muck::Database facade. Storage and the legacy C API above are still
+ * MUCK::Database facade. Storage and the legacy C API above are still
  * authoritative; these methods are the migration target for callers.
  * --------------------------------------------------------------------- */
 
 #include "Database.h"
 
-namespace muck {
+namespace MUCK {
 
 dbref Database::top() const { return db_top; }
 struct object *Database::object(dbref ref) { return &db[ref]; }
@@ -2139,4 +2139,4 @@ Database &database()
     return instance;
 }
 
-} /* namespace muck */
+} /* namespace MUCK */
