@@ -42,6 +42,9 @@ typedef int dbref;
 struct SealedLayer {
     long era = 0;
     dbref ref = -1;
+    /* The object's uuid as a string: the dump thread needs the file
+     * path and must not reach into the live database to get it. */
+    std::string uuid;
     /* entry key -> value, or null for a removal */
     nlohmann::json entries;
     /* True when this is the object's whole state rather than a delta:

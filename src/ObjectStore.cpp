@@ -993,10 +993,12 @@ ensureDir(const std::string &path)
  * same era and would put the whole database in one directory. The
  * tail is random. */
 static std::string
-UUIDObjectPath(const std::string &root, const UUID &id)
+UUIDObjectPath(const std::string &root, const std::string &u)
 {
-    std::string u = id.toString();
     size_t n = u.size();
+
+    if (n < 4)
+        return root + "/objects/xx/xx/" + u + ".json";
 
     return root + "/objects/" + u.substr(n - 4, 2) + "/" + u.substr(n - 2, 2)
         + "/" + u + ".json";
@@ -1005,7 +1007,7 @@ UUIDObjectPath(const std::string &root, const UUID &id)
 std::string
 ObjectStore::objectPath(dbref i) const
 {
-    return UUIDObjectPath(root_, MUCK::database().UUIDOf(i));
+    return UUIDObjectPath(root_, MUCK::database().UUIDOf(i).toString());
 }
 
 /* Durability: torn files after power loss have been a real problem
@@ -1065,8 +1067,8 @@ ObjectStore::isStore(const char *path)
     return stat(manifest.c_str(), &st) == 0;
 }
 
-bool
-ObjectStore::writeManifest()
+std::string
+ObjectStore::buildManifest()
 {
     json m;
 
@@ -1110,7 +1112,7 @@ ObjectStore::writeManifest()
         int reclaimed = 0, pruned = 0;
 
         for (const auto &t : MUCK::database().tombstones()) {
-            std::string path = UUIDObjectPath(root_, t.uuid);
+            std::string path = UUIDObjectPath(root_, t.uuid.toString());
             struct stat st;
             bool haveFile = stat(path.c_str(), &st) == 0;
 
@@ -1183,7 +1185,20 @@ ObjectStore::writeManifest()
             free(pbuf);
         }
     }
-    return atomicWrite(root_ + "/manifest.json", m.dump(1));
+    return m.dump(1);
+}
+
+/* Build on the game thread, write on the dump thread: the manifest
+ * reads live state (the tune parms, the tombstone table, the object
+ * count) and the dump thread may not. */
+bool
+ObjectStore::writeManifest()
+{
+    std::string text = buildManifest();
+
+    if (text.empty())
+        return false;
+    return atomicWrite(root_ + "/manifest.json", text);
 }
 
 std::string
@@ -1296,10 +1311,7 @@ ObjectStore::retireObject(dbref i)
     /* Flush the object's final state as a journal layer so its
      * history survives; a full base rewrite would drop the layers a
      * rollback needs. */
-    CaptureSet set = fireObject(i);
-
-    if (!persist(set))
-        return -1;
+    enqueue(fireObject(i));
     return rev_;
 }
 
@@ -1310,12 +1322,7 @@ ObjectStore::snapshotGlobal(const char *label, bool locked)
 
     /* a marker only covers what is on disk, so fire first: the
      * journal seals what changed and persists it */
-    {
-        CaptureSet set = fire();
-
-        if (!persist(set))
-            return -1;
-    }
+    enqueue(fire());
 
     /* the marker captures the CURRENT era; writes after the snapshot
      * stamp the next one, so a read at the marker excludes them */
@@ -1339,12 +1346,8 @@ ObjectStore::snapshotObject(dbref i, const char *label, bool locked)
 
     /* flush the object first: the marker must cover its current
      * state, not whatever the last dump happened to capture */
-    {
-        CaptureSet set = fireObject(i);
-
-        if (!persist(set))
-            return -1;
-    }
+    enqueue(fireObject(i));
+    drain();                    /* the marker goes into the file below */
 
     std::ifstream pf(path);
 
@@ -1384,6 +1387,8 @@ ObjectStore::snapshotObject(dbref i, const char *label, bool locked)
 std::vector<ObjectStore::Marker>
 ObjectStore::objectMarkers(dbref i) const
 {
+    const_cast<ObjectStore *>(this)->drain();
+
     std::string path;
 
     /* a dead shell has no uuid of its own; its retained file is
@@ -1393,7 +1398,7 @@ ObjectStore::objectMarkers(dbref i) const
 
         if (!MUCK::database().findTombstone(i, &t))
             return {};
-        path = UUIDObjectPath(root_, t.uuid);
+        path = UUIDObjectPath(root_, t.uuid.toString());
     } else {
         path = objectPath(i);
     }
@@ -1452,6 +1457,10 @@ entriesAtRev(const json &file, const std::string &hist, long rev)
 bool
 ObjectStore::rollbackObject(dbref i, long rev)
 {
+    /* rolling back to a marker whose set has not landed yet would
+     * find no stored state */
+    drain();
+
     std::ifstream pf(objectPath(i));
 
     if (!pf)
@@ -1516,7 +1525,9 @@ bool
 ObjectStore::resurrectObject(const MUCK::Database::Tombstone &t, long rev,
                              std::string *err)
 {
-    std::string path = UUIDObjectPath(root_, t.uuid);
+    drain();
+
+    std::string path = UUIDObjectPath(root_, t.uuid.toString());
     std::ifstream pf(path);
 
     if (!pf) {
@@ -1938,6 +1949,7 @@ ObjectStore::fireObject(dbref i)
 
     sealed.era = top ? top->era() : rev_;
     sealed.ref = i;
+    sealed.uuid = MUCK::database().UUIDOf(i).toString();
     sealed.entries = json::object();
 
     if (!o->baseWritten()) {
@@ -1955,6 +1967,7 @@ ObjectStore::fireObject(dbref i)
     }
     o->journal().discardTop();
     set.layers.push_back(std::move(sealed));
+    set.manifest = buildManifest();
     return set;
 }
 
@@ -1984,6 +1997,7 @@ ObjectStore::fire()
 
         sealed.era = top->era();
         sealed.ref = i;
+        sealed.uuid = MUCK::database().UUIDOf(i).toString();
         sealed.entries = json::object();
 
         if (!o->baseWritten()) {
@@ -2007,6 +2021,7 @@ ObjectStore::fire()
         set.layers.push_back(std::move(sealed));
     }
     bulkSaveActive = false;
+    set.manifest = buildManifest();
 
     return set;
 }
@@ -2021,8 +2036,7 @@ ObjectStore::persist(const CaptureSet &set)
     ensureDir(root_ + "/objects");
 
     for (const SealedLayer &layer : set.layers) {
-        std::string path = UUIDObjectPath(root_,
-                                          MUCK::database().UUIDOf(layer.ref));
+        std::string path = UUIDObjectPath(root_, layer.uuid);
 
         ensureDirsFor(path);
 
@@ -2053,10 +2067,115 @@ ObjectStore::persist(const CaptureSet &set)
         syncFile(hist);
     }
 
-    /* the manifest commits the set */
-    if (!writeManifest())
-        return false;
-    return true;
+    /* the manifest commits the set; it was serialized at fire time so
+     * this thread never reads live state */
+    if (!set.manifest.empty())
+        return atomicWrite(root_ + "/manifest.json", set.manifest);
+    return writeManifest();
+}
+
+/* ------------------------------------------------------------------ */
+/* The dump thread (docs/DATABASE.txt 7.1)                            */
+/*                                                                    */
+/* One long-lived worker, the only writer to the store during normal  */
+/* operation. It consumes frozen capture sets and never touches a     */
+/* live object, which is why it takes no object locks and cannot race */
+/* a mutation.                                                        */
+/* ------------------------------------------------------------------ */
+
+void
+ObjectStore::ensureDumpThread()
+{
+    if (dumpThreadRunning_)
+        return;
+    dumpThreadRunning_ = true;
+    dumpThreadStop_ = false;
+    dumpThread_ = std::thread(&ObjectStore::dumpThreadMain, this);
+}
+
+void
+ObjectStore::dumpThreadMain()
+{
+    for (;;) {
+        CaptureSet set;
+
+        {
+            std::unique_lock<std::mutex> hold(queueMutex_);
+
+            queueCv_.wait(hold, [this] {
+                return dumpThreadStop_ || !queue_.empty();
+            });
+            if (queue_.empty()) {
+                if (dumpThreadStop_)
+                    return;
+                continue;
+            }
+            /* FIFO: sets must land in fire order or the eras they
+             * describe stop meaning anything */
+            set = std::move(queue_.front());
+            queue_.pop_front();
+            persisting_ = true;
+        }
+
+        bool ok = persist(set);
+
+        {
+            std::unique_lock<std::mutex> hold(queueMutex_);
+
+            persisting_ = false;
+            if (!ok)
+                log_status("DUMP: persist failed for rev %ld\n", set.rev);
+            idleCv_.notify_all();
+        }
+    }
+}
+
+void
+ObjectStore::enqueue(CaptureSet set)
+{
+    ensureDumpThread();
+    {
+        std::unique_lock<std::mutex> hold(queueMutex_);
+
+        queue_.push_back(std::move(set));
+    }
+    queueCv_.notify_one();
+}
+
+void
+ObjectStore::drain()
+{
+    if (!dumpThreadRunning_)
+        return;
+
+    std::unique_lock<std::mutex> hold(queueMutex_);
+
+    idleCv_.wait(hold, [this] { return queue_.empty() && !persisting_; });
+}
+
+bool
+ObjectStore::persistPending()
+{
+    std::unique_lock<std::mutex> hold(queueMutex_);
+
+    return !queue_.empty() || persisting_;
+}
+
+void
+ObjectStore::stopDumpThread()
+{
+    if (!dumpThreadRunning_)
+        return;
+    drain();
+    {
+        std::unique_lock<std::mutex> hold(queueMutex_);
+
+        dumpThreadStop_ = true;
+    }
+    queueCv_.notify_all();
+    if (dumpThread_.joinable())
+        dumpThread_.join();
+    dumpThreadRunning_ = false;
 }
 
 long

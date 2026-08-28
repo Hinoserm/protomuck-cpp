@@ -804,6 +804,11 @@ main(int argc, char **argv)
         san_main();
     } else {
         dump_database(0);
+        /* The dump thread must finish before we exit or exec: this is
+         * the one place a pause remains, and it is where a pause has
+         * always been expected. docs/DATABASE.txt 7.1. */
+        MUCK::store().drain();
+        MUCK::store().stopDumpThread();
         tune_save_parmsfile();
 
 #ifdef SPAWN_HOST_RESOLVER

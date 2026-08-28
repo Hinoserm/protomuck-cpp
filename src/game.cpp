@@ -286,12 +286,9 @@ dump_database_internal(void)
             ansi_wall_wizards(buf);
         }
     } else {
-        MUCK::ObjectStore::CaptureSet set = MUCK::store().fire();
-
-        if (!MUCK::store().persist(set)) {
-            sprintf(buf, SYSRED "[DANGER] Error writing the object store at %s!  The DB did not save! :(", MUCK::store().root().c_str());
-            ansi_wall_wizards(buf);
-        }
+        /* Fire and return: the dump thread writes the sealed layers
+         * behind the game. docs/DATABASE.txt 7.1. */
+        MUCK::store().enqueue(MUCK::store().fire());
     }
 
     /* Write out the macros */
@@ -334,8 +331,11 @@ panic(const char *message)
     /* shut down interface */
     emergency_shutdown();
 
-    /* dump panic state into the object store: a full write of every
-     * object, not just dirty ones, since we no longer trust flags */
+    /* Dump panic state into the object store: a full write of every
+     * object, not just dirty ones, since we no longer trust flags.
+     * This deliberately bypasses the dump thread and its queue rather
+     * than draining them: a crashing world cannot wait on a thread
+     * that may itself be the casualty. docs/DATABASE.txt 7.1. */
     log_status("DUMP: %s (panic)\n", MUCK::store().root().c_str());
     fprintf(stderr, "DUMP: %s (panic)\n", MUCK::store().root().c_str());
     if (MUCK::store().saveAll(false) < 0) {

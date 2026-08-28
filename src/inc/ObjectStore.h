@@ -15,7 +15,11 @@
  */
 
 #include <cstdio>
+#include <condition_variable>
+#include <deque>
+#include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "Database.h"
@@ -141,6 +145,23 @@ class ObjectStore {
     CaptureSet fire();
     CaptureSet fireObject(dbref i);
 
+    /* Hand a frozen set to the dump thread and return immediately.
+     * This is what makes @dump and @snapshot cheap: the game records
+     * the moment, the disk catches up behind it. */
+    void enqueue(CaptureSet set);
+
+    /* Block until the dump thread has written everything queued.
+     * Rollback, resurrection, marker reads, shutdown and @restart all
+     * take this barrier: reading a marker whose set has not landed
+     * would find no stored state. */
+    void drain();
+
+    /* Stop the dump thread after draining. */
+    void stopDumpThread();
+
+    /* True while the dump thread has work outstanding. */
+    bool persistPending();
+
     /* Dump thread (or inline): write a frozen set. Appends each
      * layer to its object's .hist, or writes a full base when the
      * object has none yet, then commits with the manifest. */
@@ -158,6 +179,20 @@ class ObjectStore {
     std::string objectPath(dbref i) const;
     std::string histPath(dbref i) const;
     bool writeManifest();
+    std::string buildManifest();
+
+    /* --- the dump thread (docs/DATABASE.txt 7.1) --- */
+    void dumpThreadMain();
+    void ensureDumpThread();
+
+    std::thread dumpThread_;
+    std::mutex queueMutex_;
+    std::condition_variable queueCv_;
+    std::condition_variable idleCv_;
+    std::deque<CaptureSet> queue_;
+    bool dumpThreadRunning_ = false;
+    bool dumpThreadStop_ = false;
+    bool persisting_ = false;
 
     std::string root_;
     long rev_ = 0;
