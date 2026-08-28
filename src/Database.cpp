@@ -2101,3 +2101,42 @@ db_hash_oldconvert(char *out, const char *hash)
     sprintf(out, "%s:%s", db_hash_valtotag(HTYPE_MD5), buf);
     return 1;
 }
+
+/* ---------------------------------------------------------------------
+ * muck::Database facade. Storage and the legacy C API above are still
+ * authoritative; these methods are the migration target for callers.
+ * --------------------------------------------------------------------- */
+
+#include "Database.h"
+
+namespace muck {
+
+dbref Database::top() const { return db_top; }
+struct object *Database::object(dbref ref) { return &db[ref]; }
+bool Database::valid(dbref ref) const { return OkObj(ref); }
+
+dbref Database::newObject(dbref player) { return new_object(player); }
+dbref Database::newProgram(dbref player, const char *name) { return new_program(player, name); }
+void Database::clearObject(dbref player, dbref ref) { db_clear_object(player, ref); }
+void Database::freeObject(dbref ref) { db_free_object(ref); }
+void Database::freeAll() { db_free(); }
+dbref Database::parent(dbref obj) { return getparent(obj); }
+
+dbref Database::load(FILE *f) { return db_read(f); }
+void Database::save(FILE *f) { db_write(f); }
+int Database::saveThreaded()
+{
+#ifdef THREADED_DB_DUMP
+    return db_write_threaded();
+#else
+    return -1;
+#endif
+}
+
+Database &database()
+{
+    static Database instance;
+    return instance;
+}
+
+} /* namespace muck */
