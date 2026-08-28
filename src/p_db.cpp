@@ -2056,6 +2056,9 @@ prim_toadplayer(PRIM_PROTOTYPE)
 
     delete[] MUCK::playerPasswordSlot(victim);
     MUCK::playerPasswordSlot(victim) = NULL;
+    /* the credential is gone in memory; say so, or it stays in the
+     * store file for anyone who reads it there */
+    MUCK::journalRecord(victim, "$type/password");
 
     dequeue_prog(victim, 0);    /* dequeue progs that player's running */
 
@@ -2074,8 +2077,8 @@ prim_toadplayer(PRIM_PROTOTYPE)
     MUCK::setFlags2(victim, 0);
     MUCK::setFlags3(victim, 0);
     MUCK::setFlags4(victim, 0);
-    POWERSDB(victim) = 0;
-    POWER2DB(victim) = 0;
+    MUCK::setOwnPowers(victim, 0);
+    MUCK::setOwnPowers2(victim, 0);
     MUCK::setOwner(victim, recipient);
     MUCK::database().get(victim)->As<MUCK::Thing>()->setValue(1);
 

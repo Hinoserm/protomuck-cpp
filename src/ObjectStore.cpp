@@ -778,6 +778,10 @@ objectFromJsonPhase1(const json &j, std::vector<PendingLinks> &later)
     MUCK::database().assignUUID(i, u);
 
     const json &core = j["core"];
+    /* the shell's name is heap-allocated (recycle sets it through
+     * setName), so overwriting the pointer without freeing leaks it */
+    if (o->name)
+        delete[](char *) o->name;
     o->name = alloc_string(junstr(core.value("name", "")).c_str());
 
     const json &fl = core["flags"];
@@ -1366,7 +1370,10 @@ ObjectStore::snapshotObject(dbref i, const char *label, bool locked)
 
     /* flush the object first: the marker must cover its current
      * state, not whatever the last dump happened to capture */
-    enqueue(fireObject(i));
+    /* The era is global, so seal EVERY object before it advances: a
+     * scoped snapshot must not strand another object's pending
+     * layer in the era that just ended. */
+    enqueue(fire());
     drain();                    /* the marker goes into the file below */
 
     std::ifstream pf(path);
@@ -1441,6 +1448,14 @@ static json
 entriesAtRev(const json &file, const std::string &hist, long rev)
 {
     json out = json::object();
+
+    /* The base is the state as of the revision stamped on it, and
+     * layers only move forward. A target below that stamp cannot be
+     * reconstructed: compaction may have folded the layers that would
+     * have taken us back there. Returning the base anyway would hand
+     * back a later state while claiming it is the earlier one. */
+    if (file.contains("rev") && rev < file.value("rev", 0L))
+        return out;
 
     /* Start from the base, which is the object's state as of the
      * revision stamped on the file. A base written after the target
@@ -1561,6 +1576,17 @@ ObjectStore::resurrectObject(const MUCK::Database::Tombstone &t, long rev,
     if (j.is_discarded() || !j.contains("entries")) {
         if (err)
             *err = "the retained file is unreadable";
+        return false;
+    }
+
+    /* A revision at or after the deletion describes the emptied
+     * husk, not the object: reviving that would install garbage as a
+     * live object and destroy the tombstone that points at the real
+     * state. */
+    if (t.deletedRev > 0 && rev >= t.deletedRev) {
+        if (err)
+            *err = "that revision is at or after the deletion; pick an "
+                "earlier one";
         return false;
     }
 
@@ -2087,6 +2113,17 @@ ObjectStore::persist(const CaptureSet &set)
             json j = layer.entries;
 
             j["rev"] = set.rev;
+            /* Carry the object's own markers across, exactly as
+             * saveObject does: a full write must not silently drop the
+             * scoped snapshots taken against this object. */
+            {
+                std::ifstream pf(path);
+                json prev = pf ? json::parse(pf, nullptr, false) : json();
+
+                if (prev.is_object()
+                    && !prev.value("markers", json::array()).empty())
+                    j["markers"] = prev["markers"];
+            }
             if (!atomicWrite(path, j.dump(1)))
                 return false;
             unlink((path.substr(0, path.size() - 5) + ".hist").c_str());
@@ -2189,7 +2226,18 @@ ObjectStore::dumpThreadMain()
             if (attempt)
                 fprintf(stderr, "DUMP: retrying rev %ld (attempt %d)\n",
                         set.rev, attempt + 1);
-            ok = persist(set);
+            /* A throw here would unwind out of the thread function
+             * and take the whole process down through std::terminate.
+             * Treat it as a failed write like any other. */
+            try {
+                ok = persist(set);
+            } catch (const std::exception &ex) {
+                fprintf(stderr, "DUMP: persist threw: %s\n", ex.what());
+                ok = false;
+            } catch (...) {
+                fprintf(stderr, "DUMP: persist threw\n");
+                ok = false;
+            }
             /* persist marks each layer as landed, so a retry appends
              * only what did not make it: retrying wholesale would
              * duplicate .hist records and replay them twice at load */
@@ -2214,6 +2262,10 @@ ObjectStore::dumpThreadMain()
 void
 ObjectStore::enqueue(CaptureSet set)
 {
+    /* A set with nothing to write and no manifest would fail persist
+     * three times over for no reason. */
+    if (set.layers.empty() && set.manifest.empty())
+        return;
     ensureDumpThread();
     {
         std::unique_lock<std::mutex> hold(queueMutex_);

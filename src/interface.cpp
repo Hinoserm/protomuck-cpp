@@ -4999,6 +4999,12 @@ do_armageddon(dbref player, const char *msg)
     sprintf(buf, "\r\nImmediate shutdown by %s.\r\n", MUCK::getName(player));
     log_status("DDAY: %s(%d): %s\n", MUCK::getName(player), player, msg);
     fprintf(stderr, "DDAY: %s(%d)\n", MUCK::getName(player), player);
+
+    /* Exiting with the dump thread still joinable aborts through
+     * std::terminate. Armageddon is a deliberate shutdown, not a
+     * crash, so it can afford to wait for the writer. */
+    MUCK::store().stopDumpThread();
+
     close_sockets(buf);
 
 #ifdef SPAWN_HOST_RESOLVER

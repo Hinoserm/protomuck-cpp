@@ -25,7 +25,7 @@ ts_useobject(dbref player, dbref thing)
     if (thing == NOTHING)
         return;
     MUCK::setLastUsed(thing, current_systime, player);
-    DBFETCH(thing)->ts.usecount++;
+    MUCK::setUseCount(thing, MUCK::getUseCount(thing) + 1);
     DBDIRTY(thing);
     if (Typeof(thing) == TYPE_ROOM)
         ts_useobject(player, MUCK::getLocation(thing));

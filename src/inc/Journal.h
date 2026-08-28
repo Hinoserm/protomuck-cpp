@@ -87,7 +87,13 @@ class Journal {
     /* The layer accepting writes, created on demand so an untouched
      * object carries no journal weight at all. */
     JournalLayer &top(long era) {
-        if (!top_ || top_->era() != era)
+        /* The era is global, so a snapshot of some OTHER object
+         * advances it for everyone. Replacing the layer here would
+         * throw away keys that were recorded and never sealed, and
+         * those changes would never reach disk. Keep accumulating
+         * instead; the layer keeps the era it was opened in, which is
+         * the era its changes actually belong to. */
+        if (!top_)
             top_ = std::unique_ptr<JournalLayer>(new JournalLayer(era));
         return *top_;
     }

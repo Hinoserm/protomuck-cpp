@@ -210,8 +210,9 @@ Database::freeObject(dbref i)
     struct object *o;
 
     o = DBFETCH(i);
-    if (NAME(i) && Typeof(i) != TYPE_GARBAGE)
-        delete[]NAME(i);
+    /* names are always heap-allocated, dead shells included */
+    if (MUCK::getName(i))
+        delete[](char *) MUCK::getName(i);
 
     /* properties, exit destinations, and the player password hash are
      * owned by their modules now and freed with the module objects */

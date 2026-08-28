@@ -154,8 +154,11 @@ setName(dbref ref, const char *name)
      * repeatedly to the same thing out of the history */
     if (o->name && name && !strcmp(o->name, name))
         return;
-    /* a dead shell's name is the static "<garbage>" literal */
-    if (o->name && typeOf(ref) != ObjectType::Garbage)
+    /* Every name here is heap-allocated, dead shells included: recycle
+     * sets "<garbage>" through this same function, so it is a copy and
+     * not the literal it looks like. Skipping the free for garbage
+     * would leak one string per recycled object. */
+    if (o->name)
         delete[](char *) o->name;
     o->name = alloc_string(name);
     journalRecord(ref, "$core/name");

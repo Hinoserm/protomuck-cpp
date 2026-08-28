@@ -703,6 +703,9 @@ do_frob(int descr, dbref player, const char *name, const char *recip)
 
         MUCK::playerPasswordSlot(victim) = NULL;
     }
+    /* the credential is gone in memory; say so, or it stays in the
+     * store file for anyone who reads it there */
+    MUCK::journalRecord(victim, "$type/password");
     dequeue_prog(victim, 0);    /* dequeue progs that player's running */
 
     anotify_nolisten2(victim, SYSBLUE "You have been frobbed!  Been nice knowing you.");
@@ -722,8 +725,8 @@ do_frob(int descr, dbref player, const char *name, const char *recip)
     MUCK::setFlags2(victim, 0);
     MUCK::setFlags3(victim, 0);
     MUCK::setFlags4(victim, 0);
-    POWERSDB(victim) = 0;
-    POWER2DB(victim) = 0;
+    MUCK::setOwnPowers(victim, 0);
+    MUCK::setOwnPowers2(victim, 0);
     MUCK::setOwner(victim, player);     /* you get it */
     MUCK::database().get(victim)->As<MUCK::Thing>()->setValue(1);
 
