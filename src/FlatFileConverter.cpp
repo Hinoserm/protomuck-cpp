@@ -15,14 +15,9 @@
 /* Reading helpers that remain in Database.cpp (shared with the macro
  * file loader) */
 extern dbref getref(FILE *);
-extern int getfref(FILE *, dbref *, dbref *, dbref *, dbref *, dbref *);
-extern int gettimestampEx(FILE *, dbref *);
-extern const char *getstring_noalloc(FILE *);
-extern void getproperties(FILE *, dbref);
 extern int number(const char *);
 extern int ifloat(const char *);
 extern void autostart_progs(void);
-extern int db_load_format;
 #ifndef MALLOC_PROFILING
 extern char *alloc_string(const char *);
 #endif
@@ -40,6 +35,152 @@ namespace MUCK {
 FlatFileConverter g_flatConverter;
 
 } /* namespace MUCK */
+
+/* ---------------------------------------------------------------
+ * Flat-format reading helpers, moved here with the readers. Only
+ * this converter understands the old format.
+ * --------------------------------------------------------------- */
+
+int db_load_format = 0;
+
+
+static int
+do_peek(FILE * f)
+{
+    int peekch;
+
+    ungetc((peekch = getc(f)), f);
+
+    return (peekch);
+}
+dbref
+getfref(FILE * f, dbref *f2, dbref *f3, dbref *f4, dbref *p1, dbref *p2)
+{
+    char buf[BUFFER_LEN];
+    dbref f1;
+    int got, peekch;
+
+    if ((peekch = do_peek(f)) == NUMBER_TOKEN || peekch == LOOKUP_TOKEN) {
+        return (0);
+    }
+    fgets(buf, sizeof(buf), f);
+
+    got = sscanf(buf, "%d %d %d %d %d %d", &f1, f2, f3, f4, p1, p2);
+
+    if (got < 6)
+        (*p2) = 0;
+    if (got < 5)
+        (*p1) = 0;
+    if (got < 4)
+        (*f4) = 0;
+    if (got < 3)
+        (*f3) = 0;
+    if (got < 2)
+        (*f2) = 0;
+    if (got < 1) {
+        fprintf(stderr, "getfref: scanf failed\n");
+        return 0;
+    }
+    return (f1);
+}
+
+dbref
+gettimestampEx(FILE * f, dbref *f2)
+{
+    char buf[BUFFER_LEN];
+    dbref f1;
+    int got, peekch;
+
+    if ((peekch = do_peek(f)) == NUMBER_TOKEN || peekch == LOOKUP_TOKEN) {
+        return (0);
+    }
+    fgets(buf, sizeof(buf), f);
+
+    got = sscanf(buf, "%d %d", &f1, f2);
+
+    if (got < 2)
+        (*f2) = -1;
+    if (got < 1) {
+        fprintf(stderr, "getfref: scanf failed\n");
+        return 0;
+    }
+    return (f1);
+}
+
+
+static char xyzzybuf[BUFFER_LEN];
+
+const char *
+getstring_noalloc(FILE * f)
+{
+    char *p;
+
+    char c;
+
+    if (fgets(xyzzybuf, sizeof(xyzzybuf), f) == NULL) {
+        xyzzybuf[0] = '\0';
+        return xyzzybuf;
+    }
+
+    if (strlen(xyzzybuf) == BUFFER_LEN - 1) {
+        /* ignore whatever comes after */
+        if (xyzzybuf[BUFFER_LEN - 2] != '\n')
+            while ((c = fgetc(f)) != '\n') ;
+    }
+    for (p = xyzzybuf; *p; p++) {
+        if (*p == '\n') {
+            *p = '\0';
+            break;
+        }
+    }
+
+    return xyzzybuf;
+}
+
+/*** CHANGED:
+was: PropPtr getproperties(FILE *f)
+now: void getproperties(FILE *f, dbref obj)
+***/
+void
+getproperties(FILE * f, dbref obj)
+{
+    char buf[BUFFER_LEN], *p;
+    int datalen;
+
+    /* get rid of first line */
+    fgets(buf, sizeof(buf), f);
+
+    if (strcmp(buf, "Props*\n")) {
+        /* initialize first line stuff */
+        fgets(buf, sizeof(buf), f);
+        while (1) {
+            /* fgets reads in \n too! */
+            if (!strcmp(buf, "***Property list end ***\n") || !strcmp(buf, "*End*\n"))
+                break;
+            p = index(buf, PROP_DELIMITER);
+            *(p++) = '\0';
+            datalen = strlen(p);
+            p[datalen - 1] = '\0';
+
+            if ((p - buf) >= BUFFER_LEN)
+                buf[BUFFER_LEN - 1] = '\0';
+            if (datalen >= BUFFER_LEN)
+                buf[BUFFER_LEN - 1] = '\0';
+
+            if ((*p == '^') && (number(p + 1))) {
+                add_prop_nofetch(obj, buf, NULL, atol(p + 1));
+            } else {
+                if (*buf) {
+                    add_prop_nofetch(obj, buf, p, 0);
+                }
+            }
+            fgets(buf, sizeof(buf), f);
+        }
+    } else {
+        db_getprops(f, obj);
+    }
+}
+
 
 #ifdef ARCHAIC_DATABASES
 
@@ -613,7 +754,7 @@ MUCK::FlatFileConverter::import(FILE * f)
         } else if (!strcmp(special, "**Foxen4 TinyMUCK DUMP Format***")) {
             db_load_format = 6;
             i = getref(f);
-            MUCK::database().growTo(i);
+            MUCK::database().ensureTop(i);
         } else
 #endif /* ARCHAIC_DATABASES */
         if (!strcmp(special, "**Foxen5 TinyMUCK DUMP Format***") ||
@@ -640,7 +781,7 @@ MUCK::FlatFileConverter::import(FILE * f)
                 MUCK::PasswordHash::enabled = 1;
             MUCK::PasswordHash::version = MUCK::PasswordHash::enabled ? ((dbflags & HVER_MASK) >> HVER_SHIFT) : HVER_NONE;
 
-            MUCK::database().growTo(i);
+            MUCK::database().ensureTop(i);
 #ifdef ARCHAIC_DATABASES
         } else if (!strcmp(special, "***Foxen Deltas Dump Extention***")) {
             db_load_format = 4;
@@ -658,7 +799,7 @@ MUCK::FlatFileConverter::import(FILE * f)
             db_load_format = !strcmp(special, "***Foxen7 Deltas Dump Extention***") ? 8 : 7;
             doing_deltas = 1;
         }
-        if (doing_deltas && !MUCK::database().rawArray()) {
+        if (doing_deltas && MUCK::database().top() == 0) {
             fprintf(stderr, "Can't read a deltas file without a dbfile.\n");
             return -1;
         }
@@ -683,7 +824,7 @@ MUCK::FlatFileConverter::import(FILE * f)
 #endif
 
                 /* make space */
-                MUCK::database().growTo(thisref + 1);
+                MUCK::database().ensureTop(thisref + 1);
 
                 /* read it in */
                 o = DBFETCH(thisref);

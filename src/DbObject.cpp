@@ -23,10 +23,57 @@ namespace MUCK {
 /* DbObject core                                                   */
 /* --------------------------------------------------------------- */
 
-const Uuid &
-DbObject::uuid() const
+DbObject::DbObject(dbref ref) : ref_(ref)
 {
-    return database().uuidOf(ref_);
+    /* garbage-typed shell until a loader or creator fills it */
+    memset(&legacy_, 0, sizeof(legacy_));
+    legacy_.name = NULL;
+    legacy_.flags = TYPE_GARBAGE;
+    legacy_.location = NOTHING;
+    legacy_.owner = NOTHING;
+    legacy_.contents = NOTHING;
+    legacy_.exits = NOTHING;
+    legacy_.next = NOTHING;
+    legacy_.properties = NULL;
+}
+
+void
+DbObject::ensureModules()
+{
+    int bits = legacy_.flags & TYPE_MASK;
+
+    if (moduleTypeBits_ != bits)
+        rebuildModules();
+}
+
+void
+DbObject::rebuildModules()
+{
+    modules_.clear();
+    typeModule_ = nullptr;
+    moduleTypeBits_ = legacy_.flags & TYPE_MASK;
+
+    switch (moduleTypeBits_) {
+        case TYPE_ROOM:
+            typeModule_ = attach(std::make_unique<Room>());
+            break;
+        case TYPE_THING:
+            typeModule_ = attach(std::make_unique<Thing>());
+            break;
+        case TYPE_PLAYER:
+            typeModule_ = attach(std::make_unique<Player>());
+            break;
+        case TYPE_EXIT:
+            typeModule_ = attach(std::make_unique<Exit>());
+            break;
+        case TYPE_PROGRAM:
+            typeModule_ = attach(std::make_unique<MufProgram>());
+            break;
+        default:               /* garbage: no type module */
+            break;
+    }
+    /* PROPERTIES is a global feature module: every object has it */
+    attach(std::make_unique<Properties>());
 }
 
 const char *
@@ -63,8 +110,9 @@ DbObject::setOwner(DbObject *o)
 }
 
 const char *
-DbObject::typeName() const
+DbObject::typeName()
 {
+    ensureModules();
     return typeModule_ ? typeModule_->moduleName() : "garbage";
 }
 
@@ -74,12 +122,6 @@ DbObject::attach(std::unique_ptr<Module> m)
     m->owner_ = this;
     modules_.push_back(std::move(m));
     return modules_.back().get();
-}
-
-void
-DbObject::setTypeModule(std::unique_ptr<Module> m)
-{
-    typeModule_ = attach(std::move(m));
 }
 
 /* --------------------------------------------------------------- */

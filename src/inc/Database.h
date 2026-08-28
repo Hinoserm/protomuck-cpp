@@ -1,22 +1,35 @@
 #ifndef MUCK_DATABASE_H
 #define MUCK_DATABASE_H
 
-/* The object database: owns the object array, its growth, object
- * lifecycle, and whole-database serialization.
+/* The object database engine. See docs/DATABASE.txt.
  *
- * The hot accessors (object, top, valid) are inline: the DBFETCH macro
- * family in db.h routes through them from the interpreter's innermost
- * loops, and they must compile down to the same array indexing the old
- * bare globals produced.
+ * STORAGE MODEL: objects are individually heap-allocated DbObjects,
+ * stable in memory for the life of the process. The dbref index is a
+ * two-level page table: a fixed top-level array of chunk pointers,
+ * each chunk holding 64K object pointers. Chunks are allocated on
+ * demand and NEVER move or shrink, so a growing database never
+ * invalidates a concurrent reader and there is no realloc of anything
+ * an object lives in. Sized for tens of millions of objects: the top
+ * level is 256KB of pointers; everything else is allocated as used.
+ * The uuid index is a hash map to the same pointers.
  *
- * Storage note: the members are named db and db_top so the method bodies
- * in Database.cpp, which carry decades of history, read unchanged.
+ * THREADING CONTRACT:
+ *   - Index reads (object(), get(), DBFETCH) are lock-free; they rely
+ *     on chunks never moving.
+ *   - Index growth and uuid-map writes serialize on indexMutex_.
+ *   - Object payloads are protected by striped object locks, reached
+ *     through DbObject::lockShared / lockExclusive. New threaded code
+ *     MUST hold the object lock to mutate a payload; the legacy
+ *     single-threaded main loop is exempt by convention.
  */
 
 #include <cstdio>
-#include <vector>
+#include <atomic>
 #include <memory>
+#include <mutex>
+#include <shared_mutex>
 #include <unordered_map>
+#include <vector>
 
 #include "Uuid.h"
 #include "DbObject.h"
@@ -25,15 +38,40 @@ namespace MUCK {
 
 class Database {
   public:
-    /* --- hot path: keep inline, zero-cost --- */
-    dbref top() const { return db_top; }
-    struct object *object(dbref ref) { return &db[ref]; }
-    const struct object *object(dbref ref) const { return &db[ref]; }
+    /* ============================================================ */
+    /* The designed API. This part survives the migration.          */
+    /* ============================================================ */
+
+    /* --- lookup --- */
+    dbref top() const { return top_.load(std::memory_order_acquire); }
+
     bool valid(dbref ref) const {
-        return ref >= 0 && ref < db_top;
+        return ref >= 0 && ref < top();
     }
 
-    /* --- object lifecycle --- */
+    /* The object for a dbref or uuid; null if invalid. Pointers are
+     * stable for the life of the process. */
+    DbObject *get(dbref ref) const {
+        if (!valid(ref))
+            return nullptr;
+        return chunkFor(ref)[slotFor(ref)];
+    }
+    DbObject *get(const Uuid &u) const;
+
+    /* --- identity --- */
+    const Uuid &uuidOf(dbref ref) const;
+    dbref refOf(const Uuid &u) const;
+    void assignUuid(dbref ref, const Uuid &u);
+
+    /* Unique-prefix lookup (git style): NOTHING or AMBIGUOUS on
+     * failure. */
+    dbref resolveUuidPrefix(const char *prefix) const;
+
+    /* --- typed creation: the single creation gatekeeper --- */
+    template <class T>
+    T *Create(const char *name, dbref owner);
+
+    /* --- lifecycle --- */
     dbref newObject(dbref player);
     dbref newProgram(dbref player, const char *name);
     void clearObject(dbref player, dbref ref);
@@ -41,63 +79,66 @@ class Database {
     void freeAll();
     dbref parent(dbref obj);
 
-    /* --- recycle list (garbage chain reused by newObject) --- */
-    dbref recycleHead() const { return recyclable; }
-    void setRecycleHead(dbref ref) { recyclable = ref; }
+    /* ============================================================ */
+    /* LEGACY BRIDGE. Everything below exists only while the old    */
+    /* struct object payload and its call sites survive; it shrinks */
+    /* with every step 2 section and dies with the last one.        */
+    /* ============================================================ */
 
-    /* Whole-database serialization lives in ObjectStore (the JSON
-     * store, the only write path) and FlatFileConverter (one-way
-     * import of the legacy flat format). */
+    /* Raw payload accessor behind DBFETCH. Hot path: lock-free. */
+    struct object *object(dbref ref) const {
+        return chunkFor(ref)[slotFor(ref)]->legacyData();
+    }
 
-    /* --- identity (see docs/DATABASE.txt section 1) --- */
-    /* Every live object carries a UUIDv7 minted at creation or import
-     * and never changed. uuidOf returns the nil uuid for out-of-range
-     * refs; refOf returns NOTHING for unknown uuids. */
-    const Uuid &uuidOf(dbref ref) const;
-    dbref refOf(const Uuid &u) const;
-    void assignUuid(dbref ref, const Uuid &u);
+    /* Ensure objects [current top, newTop) exist as garbage-typed
+     * shells; used by the loaders. Serializes on indexMutex_. */
+    void ensureTop(dbref newTop);
 
-    /* Resolve a short-form hex prefix (git style). Returns NOTHING if
-     * no match, AMBIGUOUS if more than one object matches. */
-    dbref resolveUuidPrefix(const char *prefix) const;
-
-    /* --- the modernized object model (step 2, migration target) --- */
-    /* The DbObject shell for a dbref, created on first use with its
-     * type module attached from the legacy type bits. Null for invalid
-     * refs. Pointers are stable for the life of the process. */
-    DbObject *get(dbref ref);
-    DbObject *get(const Uuid &u) { return get(refOf(u)); }
-
-    /* Typed creation, the eventual single gatekeeper for object
-     * creation. Currently minimal: mints the object with its type
-     * module and name; richer per-type setup still lives in the legacy
-     * create paths and migrates here in later step 2 sections. */
-    template <class T>
-    T *Create(const char *name, dbref owner);
-
-    /* internal: reached from legacy helpers inside Database.cpp */
-    void grow(dbref newtop);
-    void growTo(dbref newtop) { grow(newtop); }
-    struct object *rawArray() { return db; }
+    /* Legacy recycle chain (dies when dbrefs go fully monotonic). */
+    dbref recycleHead() const { return recyclable_; }
+    void setRecycleHead(dbref ref) { recyclable_ = ref; }
 
   private:
-    struct object *db = 0;
-    dbref db_top = 0;
-    dbref recyclable = -3;      /* NOTHING; db.h not yet parsed here */
-    dbref db_size = 0;          /* allocation high-water for DB_DOUBLING */
+    friend class DbObject;      /* striped object locks */
 
-    std::vector<Uuid> uuids;                    /* by dbref */
-    std::unordered_map<Uuid, dbref> byUuid;
-    std::vector<std::unique_ptr<DbObject> > shells;   /* by dbref */
+    /* --- page table --- */
+    static const int CHUNK_BITS = 16;
+    static const int CHUNK_SIZE = 1 << CHUNK_BITS;          /* 64K */
+    static const int TOP_CHUNKS = 32768;    /* 2^31 refs max */
 
-    void attachTypeModule(DbObject *obj);
+    DbObject **chunkFor(dbref ref) const {
+        return chunks_[ref >> CHUNK_BITS];
+    }
+    static int slotFor(dbref ref) { return ref & (CHUNK_SIZE - 1); }
 
-    friend Database &database();
+    DbObject *makeObject(dbref ref);
+
+    /* --- striped object locks --- */
+    static const int LOCK_STRIPES = 1024;
+    std::shared_mutex &stripeFor(dbref ref) const {
+        return objectLocks_[(unsigned) ref % LOCK_STRIPES];
+    }
+
+    DbObject **chunks_[TOP_CHUNKS] = {};
+    std::atomic<dbref> top_{0};
+    dbref allocated_ = 0;       /* shells exist for [0, allocated_) */
+    dbref recyclable_ = -3;     /* NOTHING; db.h not parsed yet here */
+
+    std::unordered_map<Uuid, DbObject *> byUuid_;
+    mutable std::shared_mutex indexMutex_;
+    mutable std::shared_mutex objectLocks_[LOCK_STRIPES];
 };
 
 extern Database g_database;
 
 inline Database &database() { return g_database; }
+
+/* DbObject lock methods stripe through the database. Defined here so
+ * they inline. */
+inline void DbObject::lockShared() const { database().stripeFor(ref_).lock_shared(); }
+inline void DbObject::unlockShared() const { database().stripeFor(ref_).unlock_shared(); }
+inline void DbObject::lockExclusive() const { database().stripeFor(ref_).lock(); }
+inline void DbObject::unlockExclusive() const { database().stripeFor(ref_).unlock(); }
 
 } /* namespace MUCK */
 

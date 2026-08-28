@@ -395,7 +395,7 @@ objectFromJsonPhase1(const json &j, std::vector<PendingLinks> &later)
 
     if (i < 0)
         return;
-    MUCK::database().growTo(i + 1);
+    MUCK::database().ensureTop(i + 1);
     struct object *o = DBFETCH(i);
 
     Uuid u = Uuid::parse(j.value("uuid", "").c_str());
@@ -660,17 +660,9 @@ ObjectStore::loadAll()
     MUCK::PasswordHash::enabled = manifest.value("hash_passwords", false);
     MUCK::PasswordHash::version = manifest.value("hash_version", 0);
 
-    MUCK::database().growTo(top);
+    MUCK::database().ensureTop(top);
 
-    /* every slot starts as garbage; files fill in the live objects */
-    for (dbref i = 0; i < top; i++) {
-        struct object *o = DBFETCH(i);
-        memset(o, 0, sizeof(*o));
-        o->name = NULL;
-        o->flags = TYPE_GARBAGE;
-        o->location = o->owner = o->contents = o->exits = o->next = NOTHING;
-        o->properties = NULL;
-    }
+    /* ensureTop pre-initialized every slot as a garbage shell */
 
     std::string objroot = root_ + "/objects";
     DIR *d0 = opendir(objroot.c_str());

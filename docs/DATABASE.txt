@@ -418,3 +418,51 @@ DbObject and modules  (DbObject.h, Modules.h, DbObject.cpp)  [step 2]
     struct field family or free-function group), give the module the
     method, repoint the call sites, delete the legacy declarations.
     Loop until the sp union and the raw chains have no readers.
+
+
+ENGINE INTERNALS  (Database.h, Database.cpp)  [step 2 cleanup pass]
+
+    The contiguous object array and its realloc allocator are GONE.
+
+    Storage:  every object is an individually heap-allocated DbObject,
+    stable in memory for the life of the process, which embeds the
+    legacy struct object as its transitional payload.
+
+    dbref index:  a two-level page table. Fixed top-level array of
+    32768 chunk pointers (256KB, static); each chunk holds 64K object
+    pointers and is allocated on demand. Chunks never move and never
+    shrink, so index growth cannot invalidate a concurrent reader and
+    a DBFETCH in flight is always safe. Capacity is 2^31 refs; a
+    20-million-object game uses ~305 chunks (~160MB of pointers).
+
+    uuid index:  unordered_map<Uuid, DbObject*> guarded by the index
+    mutex (cold path).
+
+    Threading contract:
+      - object() / get() / DBFETCH reads: lock-free.
+      - index growth (ensureTop) and uuid map writes: exclusive on the
+        database index mutex.
+      - payload mutation from ANY new threaded code: hold the object
+        lock. DbObject::lockExclusive/lockShared, or RAII:
+            MUCK::DbObject::ExclusiveLock hold(obj);
+        Locks are striped (1024 shared_mutexes keyed by ref) so object
+        count does not multiply lock memory; two objects on the same
+        stripe simply contend, they never deadlock from stripe
+        sharing alone. Lock ordering rule: when taking two object
+        locks, take the lower ref first.
+      - the legacy single-threaded main loop predates the contract and
+        is exempt by convention; everything it calls is on the main
+        thread.
+
+    Files:
+      Database.cpp     the engine only: identity, index, lifecycle,
+                       typed creation. Wrapped in namespace MUCK.
+      DbObject.cpp     DbObject core and all module view accessors.
+      LegacyDbIO.cpp   quarantined legacy free helpers (macro-file io,
+                       parse_dbref, number/ifloat, autostart, wizard
+                       level checks). Nothing new may call these; each
+                       migrates to its proper class in later sections.
+      FlatFileConverter.cpp
+                       owns EVERYTHING that understands the old flat
+                       format, including its reading helpers. One way,
+                       import only.

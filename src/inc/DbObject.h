@@ -1,16 +1,23 @@
 #ifndef MUCK_DBOBJECT_H
 #define MUCK_DBOBJECT_H
 
-/* The modernized object model: one concrete DbObject with an exclusive
- * type module and attachable feature modules. See docs/DATABASE.txt
- * sections 2 and 3.
+/* The object: one concrete DbObject with an exclusive type module and
+ * attachable feature modules. See docs/DATABASE.txt sections 2 and 3.
  *
- * TRANSITION NOTE (step 2 in progress): DbObject and the modules are
- * currently VIEWS over the legacy struct object storage, so new-style
- * call sites and legacy code can coexist while call sites migrate.
- * When the last direct user of the legacy struct is gone, storage
- * flips inside these classes and the struct dies. Code written against
- * this API does not change when that happens.
+ * STORAGE: each DbObject is individually heap-allocated and owns its
+ * data for the life of the process; the database's indexes hold
+ * pointers, never copies, so a DbObject pointer is stable forever.
+ * During the step 2 migration the persistent payload is still the
+ * legacy struct object, embedded here as a member; module accessors
+ * are views over it. When the last direct user of the struct is gone,
+ * its fields dissolve into the modules and the struct dies. Code
+ * written against this API does not change when that happens.
+ *
+ * THREADING: mutate an object's payload from concurrent contexts only
+ * under its lock (see lockExclusive / lockShared below; locks are
+ * striped by ref inside the Database, so 20M objects do not carry 20M
+ * mutexes). The main server loop is single-threaded today and is
+ * exempt by convention, but all NEW threaded code must take the lock.
  */
 
 #include <cstdio>
@@ -23,6 +30,7 @@
 namespace MUCK {
 
 class DbObject;
+class Database;
 
 /* --------------------------------------------------------------- */
 /* Module: base of every attachable behavior.                      */
@@ -44,16 +52,16 @@ class Module {
 };
 
 /* --------------------------------------------------------------- */
-/* DbObject core: identity plus what every object has.             */
+/* DbObject                                                        */
 /* --------------------------------------------------------------- */
 
 class DbObject {
   public:
-    /* --- identity (immutable) --- */
-    const Uuid &uuid() const;
+    /* --- identity (immutable once assigned) --- */
+    const Uuid &uuid() const { return uuid_; }
     dbref ref() const { return ref_; }
 
-    /* --- core fields --- */
+    /* --- core fields (views over the legacy payload for now) --- */
     const char *name() const;
     void setName(const char *name);
     DbObject *location() const;
@@ -63,37 +71,70 @@ class DbObject {
     bool isDeleted() const { return deleted_; }
 
     /* --- module access --- */
-    /* Get<T> returns the attached module of that class, or null.
-     * As<T> is the idiomatic type test at boundaries:
-     *     if (Player *p = obj->As<Player>()) { ... }              */
-    template <class T> T *Get() const {
+    /* As<T> is the idiomatic type test at boundaries:
+     *     if (Player *p = obj->As<Player>()) { ... }
+     * Modules attach lazily from the type bits and re-attach if legacy
+     * code changes the object's type under us (newProgram, recycling);
+     * that rebuild vanishes with the legacy struct. */
+    template <class T> T *Get() {
+        ensureModules();
         for (const auto &m : modules_)
             if (T *t = dynamic_cast<T *>(m.get()))
                 return t;
         return nullptr;
     }
-    template <class T> T *As() const { return Get<T>(); }
+    template <class T> T *As() { return Get<T>(); }
 
-    Module *typeModule() const { return typeModule_; }
-    const char *typeName() const;
+    Module *typeModule() { ensureModules(); return typeModule_; }
+    const char *typeName();
 
-    /* Attach a feature module (PROPERTIES is auto-attached). The
-     * object takes ownership. */
+    /* Attach a feature module; the object takes ownership. */
     Module *attach(std::unique_ptr<Module> m);
+
+    /* --- object-level locking (striped; see Database) --- */
+    void lockShared() const;
+    void unlockShared() const;
+    void lockExclusive() const;
+    void unlockExclusive() const;
+
+    class SharedLock {
+      public:
+        explicit SharedLock(const DbObject *o) : o_(o) { o_->lockShared(); }
+        ~SharedLock() { o_->unlockShared(); }
+      private:
+        const DbObject *o_;
+    };
+    class ExclusiveLock {
+      public:
+        explicit ExclusiveLock(DbObject *o) : o_(o) { o_->lockExclusive(); }
+        ~ExclusiveLock() { o_->unlockExclusive(); }
+      private:
+        DbObject *o_;
+    };
+
+    /* --- legacy payload (TRANSITIONAL: dies with step 2) --- */
+    /* The embedded struct object. DBFETCH resolves here; nothing new
+     * should touch it directly, use the modules. */
+    struct object *legacyData() { return &legacy_; }
 
   private:
     friend class Database;
 
-    explicit DbObject(dbref ref) : ref_(ref) {}
+    explicit DbObject(dbref ref);
     DbObject(const DbObject &) = delete;
     DbObject &operator=(const DbObject &) = delete;
 
-    void setTypeModule(std::unique_ptr<Module> m);
+    void ensureModules();
+    void rebuildModules();
 
     dbref ref_;
+    Uuid uuid_;
     bool deleted_ = false;
+    int moduleTypeBits_ = -1;   /* type bits modules were built for */
     Module *typeModule_ = nullptr;
     std::vector<std::unique_ptr<Module> > modules_;
+
+    struct object legacy_;      /* TRANSITIONAL payload */
 };
 
 } /* namespace MUCK */
