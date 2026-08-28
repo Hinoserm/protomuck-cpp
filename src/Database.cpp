@@ -372,7 +372,8 @@ typeInit(dbref r)
             o->sp.exit.dest = NULL;
             break;
         case TYPE_PROGRAM:
-            memset(&o->sp.program, 0, sizeof(o->sp.program));
+            /* Interpreter state lives in ProgramRuntime on the module;
+             * it default-initializes when the module attaches. */
             break;
         default:
             break;

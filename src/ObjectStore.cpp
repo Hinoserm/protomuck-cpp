@@ -621,7 +621,6 @@ objectFromJsonPhase1(const json &j, std::vector<PendingLinks> &later)
             o->sp.player.password = alloc_string(junstr(td.value("password", "")).c_str());
             break;
         case TYPE_PROGRAM:
-            memset(&o->sp.program, 0, sizeof(o->sp.program));
             if (td.contains("source")) {
                 std::vector<std::string> lines;
                 for (const auto &ln : td["source"])

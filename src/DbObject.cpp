@@ -304,6 +304,20 @@ playerSession(dbref ref)
     return p->session();
 }
 
+ProgramRuntime &
+programRuntime(dbref ref)
+{
+    static ProgramRuntime dummy;
+    DbObject *o = database().get(ref);
+    MufProgram *p = o ? o->As<MufProgram>() : nullptr;
+
+    if (!p) {
+        dummy = ProgramRuntime();
+        return dummy;
+    }
+    return p->runtime();
+}
+
 void
 Exit::setDestRefs(const dbref *refs, int n)
 {

@@ -677,19 +677,6 @@ db_read_object_foxen(FILE * f, struct object *o, dbref objno, int dtype, int rea
                 fprintf(stderr, "[type: PROGRAM] ");
             OWNER(objno) = getref(f);
             FLAGS(objno) &= ~INTERNAL;
-            o->sp.program.curr_line = 0;
-            o->sp.program.first = 0;
-            o->sp.program.code = 0;
-            o->sp.program.siz = 0;
-            o->sp.program.start = 0;
-            o->sp.program.pubs = 0;
-            o->sp.program.proftime.tv_sec = 0;
-            o->sp.program.proftime.tv_usec = 0;
-            o->sp.program.profstart = 0;
-            o->sp.program.profuses = 0;
-            o->sp.program.fprofile = NULL;
-            o->sp.program.instances = 0;
-
 #ifdef ARCHAIC_DATABASES
             if (dtype < 5 && MLevel(objno) == 0)
                 SetMLevel(objno, 2);

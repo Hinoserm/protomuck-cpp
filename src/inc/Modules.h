@@ -108,12 +108,42 @@ void playerAddPennies(dbref ref, int delta);
  * blanket conversions stay safe. Do not hold across type changes. */
 PlayerSession &playerSession(dbref ref);
 
+/* Per-program transient interpreter and editor state: compiled code,
+ * running-instance bookkeeping, the editor's working text, profiling.
+ * Lives on the MufProgram module, memory-only, rebuilt from stored
+ * source on demand; the persisted source itself goes through the
+ * program text store. docs/DATABASE.txt section 2. */
+struct ProgramRuntime {
+    short currLine = 0;             /* editor current line */
+    unsigned short instances = 0;   /* running instances of this program */
+    int codeSize = 0;               /* length of compiled code */
+    struct inst *code = nullptr;    /* byte-compiled code */
+    struct inst *start = nullptr;   /* entry point within code */
+    struct line *first = nullptr;   /* editor working text */
+    struct publics *pubs = nullptr; /* public subroutine addresses */
+    struct timeval profTime = {};   /* profiling time spent in program */
+    time_t profStart = 0;           /* when profiling started */
+    unsigned int profUses = 0;      /* calls while profiling */
+    struct funcprof *fprofile = nullptr;
+    struct inst *staticVars = nullptr;
+    int staticVarCnt = 0;
+};
+
 class MufProgram : public Module {
   public:
     const char *moduleName() const override { return "muf_program"; }
     const std::vector<std::string> *source() const;
     void setSource(std::vector<std::string> lines);
+
+    ProgramRuntime &runtime() { return runtime_; }
+
+  private:
+    ProgramRuntime runtime_;
 };
+
+/* Runtime of a program ref; a shared inert dummy for non-programs so
+ * blanket conversions stay safe. Do not hold across type changes. */
+ProgramRuntime &programRuntime(dbref ref);
 
 /* --------------------------------------------------------------- */
 /* Feature modules.                                                */

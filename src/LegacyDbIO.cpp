@@ -7,6 +7,7 @@
 #include "tune.h"
 #include "interface.h"
 #include "externs.h"
+#include "Modules.h"
 #include "strutils.h"
 
 /* LEGACY DATABASE HELPERS.
@@ -239,7 +240,6 @@ void
 autostart_progs(void)
 {
     dbref i;
-    struct object *o;
     struct line *tmp;
 
     if (db_conversion_flag) {
@@ -251,12 +251,12 @@ autostart_progs(void)
             if ((FLAGS(i) & ABODE) && TMage(OWNER(i))) {
                 /* pre-compile AUTOSTART programs. */
                 /* They queue up when they finish compiling. */
-                o = DBFETCH(i);
-                tmp = o->sp.program.first;
-                o->sp.program.first = (struct line *) MUCK::programs().read(i);
+                MUCK::ProgramRuntime &rt = MUCK::programRuntime(i);
+                tmp = rt.first;
+                rt.first = (struct line *) MUCK::programs().read(i);
                 do_compile(-1, OWNER(i), i, 0);
-                free_prog_text(o->sp.program.first);
-                o->sp.program.first = tmp;
+                free_prog_text(rt.first);
+                rt.first = tmp;
             }
         }
     }
