@@ -71,54 +71,47 @@ var arr
   t0 @ "BENCH:rm50000:" report
 
   ( --- wide scans: many objects probed for one path --- )
-  ( create 10000 things; every 10th carries the prop )
+  ( create 100000 things, each with a 20-prop scan directory so a )
+  ( probe walks a populated tree; every 10th also has the target  )
   mark t0 !
   1 i !
-  begin i @ 10000 <= while
+  begin i @ 100000 <= while
     #0 "so" i @ intostr strcat newobject obj !
     i @ 1 = if obj @ first ! then
+    1 cnt !
+    begin cnt @ 20 <= while
+      obj @ "scan/f" cnt @ intostr strcat "x" setprop
+      cnt @ 1 + cnt !
+    repeat
     i @ 10 % not if obj @ "scan/findme" "yes" setprop then
     i @ 1 + i !
   repeat
-  t0 @ "BENCH:mk10000:" report
+  t0 @ "BENCH:mk100000x21:" report
 
-  ( manual scan of the first 1000 )
+  ( manual scan of all 100000 )
   mark t0 !
   0 cnt !
   0 i !
-  begin i @ 1000 < while
+  begin i @ 100000 < while
     first @ int i @ + dbref "scan/findme" getpropstr if
       cnt @ 1 + cnt !
     then
     i @ 1 + i !
   repeat
-  t0 @ "BENCH:scan1000:" report
-  cnt @ intostr "BENCH:scan1000hits:" swap strcat me @ swap notify
+  t0 @ "BENCH:scan100000:" report
+  cnt @ intostr "BENCH:scan100000hits:" swap strcat me @ swap notify
 
-  ( manual scan of all 10000 )
-  mark t0 !
-  0 cnt !
-  0 i !
-  begin i @ 10000 < while
-    first @ int i @ + dbref "scan/findme" getpropstr if
-      cnt @ 1 + cnt !
-    then
-    i @ 1 + i !
-  repeat
-  t0 @ "BENCH:scan10000:" report
-  cnt @ intostr "BENCH:scan10000hits:" swap strcat me @ swap notify
-
-  ( the propsearch primitive shape: array_filter_prop over 10000 )
+  ( the propsearch primitive shape: array_filter_prop over 100000 )
   0 array_make arr !
   0 i !
-  begin i @ 10000 < while
+  begin i @ 100000 < while
     first @ int i @ + dbref arr @ array_appenditem arr !
     i @ 1 + i !
   repeat
   mark t0 !
   arr @ "scan/findme" "*" array_filter_prop array_count cnt !
-  t0 @ "BENCH:filter10000:" report
-  cnt @ intostr "BENCH:filter10000hits:" swap strcat me @ swap notify
+  t0 @ "BENCH:filter100000:" report
+  cnt @ intostr "BENCH:filter100000hits:" swap strcat me @ swap notify
 
   "BENCH:done:1" "" swap strcat me @ swap notify
 ;

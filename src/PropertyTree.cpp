@@ -16,7 +16,9 @@
 
 #include <cctype>
 #include <cstring>
+#include <new>
 #include <string>
+#include <vector>
 
 #include "inc/PropertyTree.h"
 #include "inc/PropNode.h"
@@ -202,14 +204,58 @@ asNode(void *p)
     return (ArtNode *) p;
 }
 
+/* Slab pools for the churny internal node sizes. Mass insertion
+ * splits and regrows Node4/Node16 constantly; a free-list slab turns
+ * that traffic into pointer pops. Single-threaded by the server's
+ * one-big-loop convention; blocks live for the process lifetime. */
+template <class T>
+struct NodePool {
+    union Slot {
+        Slot *next;
+        alignas(T) unsigned char raw[sizeof(T)];
+    };
+    Slot *free_ = nullptr;
+
+    T *take()
+    {
+        if (!free_) {
+            const int N = 256;
+            Slot *block = new Slot[N];
+
+            for (int i = 0; i < N; i++) {
+                block[i].next = free_;
+                free_ = &block[i];
+            }
+        }
+
+        Slot *s = free_;
+
+        free_ = s->next;
+        return new (s->raw) T();
+    }
+
+    void give(T *p)
+    {
+        p->~T();
+
+        Slot *s = (Slot *) p;
+
+        s->next = free_;
+        free_ = s;
+    }
+};
+
+static NodePool<Node4> pool4;
+static NodePool<Node16> pool16;
+
 static ArtNode *
 makeNode(int type)
 {
     ArtNode *n;
 
     switch (type) {
-        case N4:   n = new Node4();   break;
-        case N16:  n = new Node16();  break;
+        case N4:   n = pool4.take();  break;
+        case N16:  n = pool16.take(); break;
         case N48:  n = new Node48();  break;
         default:   n = new Node256(); break;
     }
@@ -223,10 +269,10 @@ static void
 freeNodeOnly(ArtNode *n)
 {
     switch (n->type) {
-        case N4:   delete (Node4 *) n;   break;
-        case N16:  delete (Node16 *) n;  break;
-        case N48:  delete (Node48 *) n;  break;
-        default:   delete (Node256 *) n; break;
+        case N4:   pool4.give((Node4 *) n);   break;
+        case N16:  pool16.give((Node16 *) n); break;
+        case N48:  delete (Node48 *) n;       break;
+        default:   delete (Node256 *) n;      break;
     }
 }
 
@@ -403,7 +449,7 @@ growInsert(void **slot, ArtNode *n, uint8_t b, void *child)
             nw->keys[i] = o->keys[i];
             nw->child[i] = o->child[i];
         }
-        delete o;
+        freeNodeOnly(o);
         *slot = nw;
         addChild(slot, nw, b, child);
     } else if (n->type == N16) {
@@ -416,7 +462,7 @@ growInsert(void **slot, ArtNode *n, uint8_t b, void *child)
             nw->child[i] = o->child[i];
             nw->idx[o->keys[i]] = (uint8_t) (i + 1);
         }
-        delete o;
+        freeNodeOnly(o);
         *slot = nw;
         addChild(slot, nw, b, child);
     } else {
@@ -428,7 +474,7 @@ growInsert(void **slot, ArtNode *n, uint8_t b, void *child)
         for (int k = 0; k < 256; k++)
             if (o->idx[k])
                 nw->child[k] = o->child[o->idx[k] - 1];
-        delete o;
+        freeNodeOnly(o);
         *slot = nw;
         addChild(slot, nw, b, child);
     }
@@ -640,7 +686,7 @@ struct ArtOps {
                         memcpy(c->prefix, merged, MAX_PREFIX);
                         *slot = c;
                     }
-                    delete p;
+                    freeNodeOnly(p);
                 }
                 break;
             }
@@ -664,7 +710,7 @@ struct ArtOps {
                         nw->child[i] = p->child[i];
                     }
                     nw->num = n->num;
-                    delete p;
+                    freeNodeOnly(p);
                     *slot = nw;
                 }
                 break;
@@ -691,7 +737,7 @@ struct ArtOps {
                             w++;
                         }
                     nw->num = (uint16_t) w;
-                    delete p;
+                    freeNodeOnly(p);
                     *slot = nw;
                 }
                 break;
@@ -717,7 +763,7 @@ struct ArtOps {
                             w++;
                         }
                     nw->num = (uint16_t) w;
-                    delete p;
+                    freeNodeOnly(p);
                     *slot = nw;
                 }
                 break;

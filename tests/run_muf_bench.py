@@ -59,7 +59,7 @@ def main():
     sendl('@act bench=me')
     sendl('@link bench=bench.muf')
     sendl('bench')
-    wait_for(b'BENCH:done:1', 120)
+    wait_for(b'BENCH:done:1', 600)
     pump(0.5)
     try:
         os.kill(int(open('protomuck.pid').read().strip()), 9)
