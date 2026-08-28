@@ -57,7 +57,7 @@ superseded mechanisms are deleted, not kept alongside.
    determined by the modules attached to it, not by a class hierarchy.
 
    DbObject core (present on every object, versioned, not modular):
-       uuid, dbref, name, location, flags, timestamps.
+       uuid, dbref, name, location, owner, flags, powers, timestamps.
 
    TYPE modules: PLAYER, THING, ROOM, EXIT, MUFPROG.
        Exactly one per object, attached at creation by
@@ -89,7 +89,7 @@ superseded mechanisms are deleted, not kept alongside.
    Creation:
 
        Player *who = database().Create<Player>(name, where);
-       DbObject *obj = database().GetByRef(ref);      // boundary only
+       DbObject *obj = database().get(ref);           // boundary only
        if (Player *p = obj->As<Player>()) { ... }     // null if absent
 
    Objects cannot be constructed outside Create<T>, so nothing can
@@ -107,7 +107,7 @@ superseded mechanisms are deleted, not kept alongside.
 
    The database defines one closed set of value types:
 
-       string, int, float, bool, ref (a uuid), and ordered list.
+       string, int, float, ref (a uuid), and ordered list.
 
    There is no shared chunk pool.  Everything an object owns lives in
    its own uuid.json (with history in the .hist sidecar); the file
@@ -189,12 +189,12 @@ superseded mechanisms are deleted, not kept alongside.
    because random 128-bit keys have no better structure.
 
    There is no dense array of objects and no managed db_top: the
-   allocation cursor only moves forward, chunks never move once
-   allocated, and a deleted object costs one null pointer slot, never
-   a struct-sized hole.  A mass-grief incident therefore cannot
-   recreate the million-entry-hole problem: 64K refs of pure holes
-   cost one 512KB pointer chunk, and chunks whose range was never
-   allocated cost nothing.
+   allocation cursor only moves forward and chunks never move once
+   allocated.  A dbref that was never allocated costs nothing at all,
+   and a whole 64K range of them costs one 512KB pointer chunk, so
+   the million-entry-hole problem cannot recur.  A DELETED object is
+   different: its shell stays (see below), so deletion frees nothing
+   until restart.
 
    Code holds pointers (to DbObject or to a specific module), not
    dbrefs.  Resolution through the indexes happens at boundaries only:
@@ -206,7 +206,8 @@ superseded mechanisms are deleted, not kept alongside.
    table slot keeps resolving to the tombstoned shell and their
    memory is never freed while the server runs, so neither a held
    pointer nor a stale dbref can dangle.  Holders can check
-   IsDeleted().  Memory is reclaimed at restart.
+   isDeleted().  Memory is reclaimed at restart, where the shell
+   comes back as a bare dead slot rather than a loaded object.
 
    Paging: the design must allow payload to be paged in from disk in
    the future, though today everything stays in RAM.  Two rules
@@ -453,6 +454,8 @@ superseded mechanisms are deleted, not kept alongside.
 
    -convert and -storegc remain offline and single-threaded, and pay
    fsync synchronously, which is acceptable at maintenance time.
+   -storegc is the offline form of compaction: the same merge the
+   background pass does, run over the whole store on demand.
 
    The forked dump (tp_dump_forking) and the THREADED_DB_DUMP ifdefs
    are retired when this lands.
@@ -489,9 +492,9 @@ superseded mechanisms are deleted, not kept alongside.
 DEVELOPER REFERENCE
 =====================================================================
 
-This section documents the classes as they exist on the new-database
-branch.  It grows as code lands.  Everything lives in namespace MUCK;
-headers are in src/inc/.
+This section documents the classes as they exist in the tree.  It
+grows as code lands.  Everything lives in namespace MUCK; headers are
+in src/inc/.
 
 
 UUID  (UUID.h, UUID.cpp)
@@ -637,7 +640,7 @@ ProgramStore additions  (ProgramStore.h)
     nothing else in the tree touches it.
 
 
-DbObject and modules  (DbObject.h, Modules.h, DbObject.cpp)  [step 2]
+DbObject and modules  (DbObject.h, Modules.h, DbObject.cpp)
 
     The modernized object model.  The storage flip is done: type and
     feature modules own their own data, and what remains of struct
@@ -673,8 +676,12 @@ DbObject and modules  (DbObject.h, Modules.h, DbObject.cpp)  [step 2]
     (contents(), exits(), returned as vectors of DbObject pointers).
     Calling exits() on an Exit is a compile error by construction.
 
-    Feature modules: Properties (getString, getInt, getFloat, getRef,
-    setString, setInt, remove, exists), auto-attached to every object.
+    Feature modules: Properties, auto-attached to every object unless
+    excluded for the boot.  It owns the object's root propdir
+    (root(), a PropertyTree) and offers a typed veneer over it:
+    getString, getInt, getFloat, getRef, setString, setInt, remove,
+    exists.  Property integers are 64-bit (MUFINT) end to end.  Full
+    design: docs/PROPERTIES.txt.
 
     Migration pattern, still the rule for whatever legacy remains:
     pick a cluster (a struct field family or free-function group),
@@ -682,13 +689,14 @@ DbObject and modules  (DbObject.h, Modules.h, DbObject.cpp)  [step 2]
     legacy declarations.
 
 
-ENGINE INTERNALS  (Database.h, Database.cpp)  [step 2 cleanup pass]
+ENGINE INTERNALS  (Database.h, Database.cpp)
 
     The contiguous object array and its realloc allocator are GONE.
 
     Storage:  every object is an individually heap-allocated DbObject,
     stable in memory for the life of the process, which embeds the
-    legacy struct object as its transitional payload.
+    core record (name, location, owner, flags, powers, timestamps)
+    reached through DBFETCH.
 
     dbref index:  a two-level page table. Fixed top-level array of
     32768 chunk pointers (256KB, static); each chunk holds 64K object
@@ -715,6 +723,9 @@ ENGINE INTERNALS  (Database.h, Database.cpp)  [step 2 cleanup pass]
       - the legacy single-threaded main loop predates the contract and
         is exempt by convention; everything it calls is on the main
         thread.
+      - the dump thread (section 7.1) never touches a live object at
+        all: it reads only sealed journal layers and files, so it
+        takes no object locks and cannot race a mutation.
 
     Files:
       Database.cpp     the engine only: identity, index, lifecycle,

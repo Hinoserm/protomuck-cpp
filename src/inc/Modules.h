@@ -223,11 +223,11 @@ class Properties : public Module {
     /* Thin typed veneer over the legacy prop tree; call sites migrate
      * here from get_property_class and friends. */
     const char *getString(const char *path) const;
-    int getInt(const char *path) const;
+    MUFINT getInt(const char *path) const;
     double getFloat(const char *path) const;
     dbref getRef(const char *path) const;
     void setString(const char *path, const char *value);
-    void setInt(const char *path, int value);
+    void setInt(const char *path, MUFINT value);
     void remove(const char *path);
     bool exists(const char *path) const;
 

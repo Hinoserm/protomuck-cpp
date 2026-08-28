@@ -686,7 +686,7 @@ Properties::getString(const char *path) const
     return get_property_class(object()->ref(), path);
 }
 
-int
+MUFINT
 Properties::getInt(const char *path) const
 {
     return get_property_value(object()->ref(), path);
@@ -711,7 +711,7 @@ Properties::setString(const char *path, const char *value)
 }
 
 void
-Properties::setInt(const char *path, int value)
+Properties::setInt(const char *path, MUFINT value)
 {
     add_property(object()->ref(), path, NULL, value);
 }
