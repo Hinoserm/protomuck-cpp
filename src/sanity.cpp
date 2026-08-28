@@ -247,6 +247,10 @@ find_orphan_objects(dbref player)
     }
 
     for (i = 0; i < MUCK::database().top(); i++) {
+        /* dead shells (deleted objects) are unreferenced by design:
+         * dbrefs are monotonic, nothing chains to them anymore */
+        if (TYPEOF(i) == TYPE_GARBAGE)
+            continue;
         if (!(FLAGS(i) & SANEBIT)) {
             violate(player, i, "appears to be an orphan object, that is not referred to by any other object");
         }

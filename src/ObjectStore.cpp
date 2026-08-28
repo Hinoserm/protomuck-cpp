@@ -27,7 +27,7 @@ namespace MUCK {
 
 ObjectStore g_objectStore;
 
-static const int STORE_FORMAT = 1;
+static const int STORE_FORMAT = 2;
 
 /* ------------------------------------------------------------------ */
 /* String escaping. MUCK strings are raw 8-bit (latin-1 by long       */
@@ -301,6 +301,95 @@ typeName(struct object *o)
     }
 }
 
+/* ------------------------------------------------------------------ */
+/* The chunk pool: content-addressed storage for bulk values (program */
+/* source lines). A chunk file's name is the sha1 of its content;     */
+/* writing is idempotent, identical lines are stored once, and prune  */
+/* garbage-collects unreferenced chunks. Chunk files hold raw bytes,  */
+/* so no JSON escaping applies. docs/DATABASE.txt section 3.          */
+/* ------------------------------------------------------------------ */
+
+static bool
+ensureDirsFor(const std::string &path)
+{
+    for (size_t i = 1; i < path.size(); i++) {
+        if (path[i] != '/')
+            continue;
+        std::string dir = path.substr(0, i);
+
+        if (mkdir(dir.c_str(), 0755) != 0 && errno != EEXIST)
+            return false;
+    }
+    return true;
+}
+
+static std::string
+chunkPath(const std::string &root, const std::string &hash)
+{
+    return root + "/chunks/" + hash.substr(0, 2) + "/" + hash;
+}
+
+static std::string
+chunkHash(const std::string &content)
+{
+    char hex[48];
+
+    SHA1hex(hex, content.c_str(), (int) content.size());
+    return std::string(hex);
+}
+
+static bool
+ensureChunk(const std::string &root, const std::string &hash,
+            const std::string &content)
+{
+    std::string path = chunkPath(root, hash);
+    struct stat st;
+
+    if (stat(path.c_str(), &st) == 0)
+        return true;            /* dedup: already stored */
+    ensureDirsFor(path);
+
+    std::ofstream f(path + ".tmp", std::ios::trunc | std::ios::binary);
+
+    if (!f)
+        return false;
+    f.write(content.data(), (std::streamsize) content.size());
+    f.close();
+    if (!f)
+        return false;
+    return rename((path + ".tmp").c_str(), path.c_str()) == 0;
+}
+
+static bool
+readChunk(const std::string &root, const std::string &hash, std::string &out)
+{
+    std::ifstream f(chunkPath(root, hash), std::ios::binary);
+
+    if (!f)
+        return false;
+    out.assign(std::istreambuf_iterator<char>(f),
+               std::istreambuf_iterator<char>());
+    return true;
+}
+
+/* ------------------------------------------------------------------ */
+/* Format 2: the value model. An object's persistent state is a set   */
+/* of namespaced entries, each a typed value stamped with the rev at  */
+/* which it took effect. The closed type set (docs section 3):        */
+/*   s string, i int, f float, b bool, r ref, l list, c chunk-ref     */
+/* Prop entries carry the legacy prop flag word as "m".               */
+/* ------------------------------------------------------------------ */
+
+static json
+entry(const char *t, json v)
+{
+    json e;
+
+    e["t"] = t;
+    e["v"] = std::move(v);
+    return e;
+}
+
 static json
 objectToJson(dbref i)
 {
@@ -312,70 +401,90 @@ objectToJson(dbref i)
     j["type"] = typeName(o);
     j["modules"] = json::array();
 
-    json core;
-    core["name"] = jstr(o->name);
-    core["location"] = refToJson(o->location);
-    core["owner"] = refToJson(o->owner);
-    core["flags"] = { (int) (o->flags & ~DUMP_MASK), (int) (o->flag2 & ~DUM2_MASK),
-                      (int) (o->flag3 & ~DUM3_MASK), (int) (o->flag4 & ~DUM4_MASK) };
-    core["powers"] = { (int) (o->powers & ~POWERS_DUMP_MASK),
-                       (int) (o->power2 & ~POWER2_DUMP_MASK) };
-    json ts;
-    ts["created"] = (long) o->ts.created;
-    ts["modified"] = (long) o->ts.modified;
-    ts["lastused"] = (long) o->ts.lastused;
-    ts["usecount"] = o->ts.usecount;
-    ts["dcreated"] = (int) o->ts.dcreated;
-    ts["dmodified"] = (int) o->ts.dmodified;
-    ts["dlastused"] = (int) o->ts.dlastused;
-    core["ts"] = ts;
-    j["core"] = core;
+    json e;
 
-    json td;
+    /* --- $core: what every object has --- */
+    e["$core/name"] = entry("s", jstr(o->name));
+    e["$core/location"] = entry("r", refToJson(o->location));
+    e["$core/owner"] = entry("r", refToJson(o->owner));
+    e["$core/flags"] = entry("l", json::array({
+        (int) (o->flags & ~DUMP_MASK), (int) (o->flag2 & ~DUM2_MASK),
+        (int) (o->flag3 & ~DUM3_MASK), (int) (o->flag4 & ~DUM4_MASK) }));
+    e["$core/powers"] = entry("l", json::array({
+        (int) (o->powers & ~POWERS_DUMP_MASK),
+        (int) (o->power2 & ~POWER2_DUMP_MASK) }));
+    e["$core/ts"] = entry("l", json::array({
+        (long) o->ts.created, (long) o->ts.modified, (long) o->ts.lastused,
+        (long) o->ts.usecount, (long) o->ts.dcreated,
+        (long) o->ts.dmodified, (long) o->ts.dlastused }));
+
+    /* --- $type: the type module's fields --- */
     switch (o->flags & TYPE_MASK) {
         case TYPE_ROOM:
-            td["dropto"] = refToJson(o->sp.room.dropto);
-            td["contents"] = chainToJson(i, o->contents);
-            td["exits"] = chainToJson(i, o->exits);
+            e["$type/dropto"] = entry("r", refToJson(o->sp.room.dropto));
+            e["$type/contents"] = entry("l", chainToJson(i, o->contents));
+            e["$type/exits"] = entry("l", chainToJson(i, o->exits));
             break;
         case TYPE_THING:
-            td["home"] = refToJson(o->sp.thing.home);
-            td["value"] = o->sp.thing.value;
-            td["contents"] = chainToJson(i, o->contents);
-            td["exits"] = chainToJson(i, o->exits);
+            e["$type/home"] = entry("r", refToJson(o->sp.thing.home));
+            e["$type/value"] = entry("i", o->sp.thing.value);
+            e["$type/contents"] = entry("l", chainToJson(i, o->contents));
+            e["$type/exits"] = entry("l", chainToJson(i, o->exits));
             break;
         case TYPE_PLAYER:
-            td["home"] = refToJson(o->sp.player.home);
-            td["pennies"] = o->sp.player.pennies;
-            td["password"] = jstr(o->sp.player.password);
-            td["contents"] = chainToJson(i, o->contents);
-            td["exits"] = chainToJson(i, o->exits);
+            e["$type/home"] = entry("r", refToJson(o->sp.player.home));
+            e["$type/pennies"] = entry("i", o->sp.player.pennies);
+            e["$type/password"] = entry("s", jstr(o->sp.player.password));
+            e["$type/contents"] = entry("l", chainToJson(i, o->contents));
+            e["$type/exits"] = entry("l", chainToJson(i, o->exits));
             break;
         case TYPE_EXIT: {
             json dests = json::array();
+
             for (int k = 0; k < o->sp.exit.ndest; k++)
                 dests.push_back(refToJson((o->sp.exit.dest)[k]));
-            td["dests"] = dests;
+            e["$type/dests"] = entry("l", dests);
             break;
         }
         case TYPE_PROGRAM: {
-            json src = json::array();
+            /* source lines live in the content-addressed chunk pool;
+             * the entry is a list of chunk-refs */
+            json refs = json::array();
             const std::vector<std::string> *lines = MUCK::programs().sourceLines(i);
-            if (lines)
-                for (const auto &ln : *lines)
-                    src.push_back(jstr(ln.c_str()));
-            td["source"] = src;
+
+            if (lines) {
+                for (const auto &ln : *lines) {
+                    std::string h = chunkHash(ln);
+
+                    ensureChunk(g_objectStore.root(), h, ln);
+                    refs.push_back(h);
+                }
+            }
+            e["$type/source"] = entry("c", refs);
             break;
         }
         default:
             break;
     }
-    j["type_data"] = td;
 
-    json props = json::array();
-    propsToJson(o, props, "/", o->properties);
-    j["props"] = props;
+    /* --- properties: their traditional slash paths --- */
+    {
+        json props = json::array();
 
+        propsToJson(o, props, "/", o->properties);
+        for (const auto &pe : props) {
+            std::string key = "/" + pe["n"].get<std::string>();
+            const json &v = pe["v"];
+            const char *t = v.is_string() ? "s"
+                : v.is_number_float() ? "f" : "i";
+            json ent = entry(t, v);
+
+            ent["m"] = pe["f"];
+            e[key] = std::move(ent);
+        }
+    }
+
+    j["entries"] = e;
     return j;
 }
 
@@ -469,6 +578,83 @@ objectFromJsonPhase1(const json &j, std::vector<PendingLinks> &later)
     if (j.contains("props"))
         pl.props = j["props"];
     later.push_back(pl);
+}
+
+/* Translate a format 2 (entry model) object file into the format 1
+ * shape and feed it to the same phase machinery. One wiring
+ * implementation, every format readable forever. */
+static json
+v2ToV1(const json &j, const std::string &root)
+{
+    json out;
+    const json &e = j["entries"];
+
+    out["uuid"] = j.value("uuid", "");
+    out["dbref"] = j.value("dbref", -1);
+    out["type"] = j.value("type", "garbage");
+    out["modules"] = j.value("modules", json::array());
+
+    auto val = [&e](const char *k) -> json {
+        auto it = e.find(k);
+        return it == e.end() ? json() : (*it)["v"];
+    };
+
+    json core;
+    core["name"] = val("$core/name").is_string() ? val("$core/name") : json("");
+    core["location"] = val("$core/location");
+    core["owner"] = val("$core/owner");
+    core["flags"] = val("$core/flags");
+    core["powers"] = val("$core/powers");
+
+    json tsl = val("$core/ts");
+    json ts;
+    if (tsl.is_array() && tsl.size() >= 7) {
+        ts["created"] = tsl[0];
+        ts["modified"] = tsl[1];
+        ts["lastused"] = tsl[2];
+        ts["usecount"] = tsl[3];
+        ts["dcreated"] = tsl[4];
+        ts["dmodified"] = tsl[5];
+        ts["dlastused"] = tsl[6];
+    }
+    core["ts"] = ts;
+    out["core"] = core;
+
+    json td;
+    for (const char *k : { "dropto", "home", "value", "pennies",
+                           "password", "contents", "exits", "dests" }) {
+        std::string key = std::string("$type/") + k;
+        auto it = e.find(key);
+        if (it != e.end())
+            td[k] = (*it)["v"];
+    }
+    if (e.contains("$type/source")) {
+        json lines = json::array();
+        for (const auto &h : e["$type/source"]["v"]) {
+            std::string content;
+            if (readChunk(root, h.get<std::string>(), content))
+                lines.push_back(jstr(content.c_str()));
+            else
+                fprintf(stderr, "STORE: missing chunk %s for #%d\n",
+                        h.get<std::string>().c_str(), out["dbref"].get<int>());
+        }
+        td["source"] = lines;
+    }
+    out["type_data"] = td;
+
+    json props = json::array();
+    for (auto it = e.begin(); it != e.end(); ++it) {
+        if (it.key().empty() || it.key()[0] != '/')
+            continue;
+        json pe;
+        pe["n"] = it.key().substr(1);
+        pe["f"] = it.value().value("m", 0);
+        pe["v"] = it.value()["v"];
+        props.push_back(pe);
+    }
+    out["props"] = props;
+
+    return out;
 }
 
 /* Phase two: every object exists, so UUIDs resolve; wire the refs. */
@@ -728,6 +914,8 @@ ObjectStore::loadAll()
                     fprintf(stderr, "STORE: skipping unparsable %s\n", e2->d_name);
                     continue;
                 }
+                if (j.contains("entries"))
+                    j = v2ToV1(j, root_);
                 objectFromJsonPhase1(j, later);
             }
             closedir(d2);
