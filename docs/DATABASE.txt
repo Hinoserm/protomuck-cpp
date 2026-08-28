@@ -643,6 +643,23 @@ STEP 2 BURNDOWN STATE  (updated as the loop advances)
 
     Step 2 is COMPLETE.
 
+    REMAINING REQUIREMENTS (added 2026-08-28):
+
+    Properties as an optional module. The property system is
+    redesigned as a first-class OPTIONAL feature module with the
+    standard dormancy guarantee: a MUCK booted without the module
+    keeps every property intact across save, snapshot, and reload,
+    with the data unreachable until the module returns. The engine
+    is a bespoke high-performance structure, 100% compatible with
+    all existing MUF code, and carries the DISKBASE concept forward
+    as an optional value-residency mode (metadata always resident,
+    values fetchable on demand). Full design: docs/PROPERTIES.txt.
+
+    Editor text off struct line. The MUF editor and compiler work
+    on std::vector<std::string> directly; the hand-managed struct
+    line linked list (newLine, free_prog_text, the line-splice code
+    in the editor) is abolished. ProgramRuntime.first dies with it.
+
     Site conversion idioms (use these, keep them consistent):
 
         read:   MUCK::Room *r = MUCK::database().get(ref)->As<MUCK::Room>();

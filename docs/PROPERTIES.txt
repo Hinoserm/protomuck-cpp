@@ -1,0 +1,196 @@
+PROTOMUCK PROPERTY SYSTEM REDESIGN
+==================================
+
+Design authority for the modern property engine. Companion to
+docs/DATABASE.txt; the two requirements this fulfills are recorded
+there. Format rules per docs/CODING_RULES.txt: 7-bit ASCII.
+
+
+1. GOALS
+
+   - Properties become an OPTIONAL feature module ("properties"),
+     with the same durability contract as every other module: a MUCK
+     booted without the module keeps every property of every object
+     intact across load, save, snapshot, and rollback; the data is
+     simply unreachable until the module returns.
+   - 100% compatibility with all existing MUF code. Every observable
+     behavior is preserved: lookup results, enumeration order,
+     propdir semantics, permission prefixes, type coercions, and the
+     entire legacy C API.
+   - Dependency-slim: standard library only. The performance comes
+     from a bespoke structure, not a third-party container.
+   - State-of-the-art performance: an Adaptive Radix Tree per
+     propdir (Leis et al., ICDE 2013), the structure modern in-memory
+     databases use for ordered string indexes.
+   - The DISKBASE concept, reborn: property METADATA is always
+     resident; property VALUES may be non-resident and fetched on
+     demand from the object store. This residency layer is designed
+     in from the ground up but is an OPTIONAL mode, off by default;
+     the default configuration keeps everything in RAM and behaves
+     exactly as today.
+
+
+2. THE COMPATIBILITY CONTRACT (measured from the legacy code)
+
+   Ordering.  The legacy AVL comparator is string_compare: the
+   difference of tolower(unsigned char) at the first differing
+   position. All enumeration (NEXTPROP, ARRAY_GET_PROPDIRS, examine
+   listings, the serializer walk) presents siblings of one propdir in
+   exactly this order.
+
+   Identity.  Names that compare equal under the comparator are the
+   SAME property ("Foo" and "foo" collide). The stored spelling is
+   the first writer's; overwriting a value does not change the
+   spelling.
+
+   Shape.  Propdirs are hierarchical; a node can carry a value AND
+   children simultaneously. A dir node with no value has type
+   PROP_DIRTYP. Names never contain the delimiter '/'. The path
+   parsing rules of set_property_nofetch (leading delimiters,
+   PROP_DELIMITER ':' handling in add_property) are preserved
+   verbatim in the veneer layer.
+
+   Types and flags.  PROP_DIRTYP 0, PROP_STRTYP 2, PROP_INTTYP 3,
+   PROP_LOKTYP 4 (boolexp), PROP_REFTYP 5, PROP_FLTTYP 6, plus the
+   permission bits in the same flags word. The props.h accessor
+   macros (PropType, PropDataStr, PropName, SetPDataVal, ...) keep
+   working; they are re-pointed at the modern node.
+
+   Handles.  PropPtr remains a stable pointer for the lifetime of
+   the property: inserting or removing OTHER properties never moves
+   an existing node. (The radix tree's internal nodes reorganize;
+   the leaves are individually heap-allocated PropNodes.)
+
+   The C API.  Every function in props.h keeps its signature and its
+   semantics: locate_prop, new_prop, delete_prop, first_node,
+   next_node, the propdir_* family, set/add/get/remove_property and
+   variants, envprop and friends, copy_prop, next_prop_name,
+   first_prop/next_prop, Prop_Check and the permission macros, and
+   the DISKBASE names (fetchprops, propfetch, dirtyprops, ...) which
+   become the residency layer's real API instead of dead stubs.
+
+
+3. THE STRUCTURE: ONE ADAPTIVE RADIX TREE PER PROPDIR
+
+   Keys.  A property's tree key is its name case-folded byte-by-byte
+   with tolower, terminated with a 0x00 byte (names cannot contain
+   NUL, so every key is prefix-free). In-order traversal of a radix
+   tree over these keys yields exactly string_compare order, which
+   makes the ordering contract structural rather than comparative:
+   there is no comparator to get wrong.
+
+   Nodes.  Classic ART repertoire, implemented from scratch:
+     - Node4:   up to 4 children; parallel key/pointer arrays.
+     - Node16:  up to 16 children; sorted key array, binary or
+                linear scan.
+     - Node48:  256-entry child index bytes into a 48-pointer array.
+     - Node256: direct 256-pointer array.
+     - Leaf:    the PropNode itself.
+   Path compression (the common prefix of a subtree is stored in the
+   internal node) and lazy expansion (a single-descendant chain is
+   one leaf) keep depth proportional to distinguishing bytes, not
+   name length. Grow/shrink transitions happen at the standard
+   occupancy thresholds.
+
+   Costs.  Lookup, insert, erase, and ordered successor are O(k) in
+   the key length with no rebalancing and no per-step string
+   comparisons; memory per entry is close to the name itself. This
+   beats both the legacy AVL (pointer-chasing plus a full
+   string_compare per level) and std::map (same, plus larger nodes)
+   and is the structure of choice in current in-memory database
+   literature.
+
+   PropNode.  The leaf owns everything observable:
+     - original-case name (std::string)
+     - flags word (legacy encoding: type + permission bits)
+     - value: std::string for STRTYP, a scalar union for
+       INTTYP/FLTTYP/REFTYP, struct boolexp * for LOKTYP
+     - children: a nested tree (empty for plain properties)
+     - parent pointer (for cheap path reconstruction)
+     - residency state (section 4)
+   PropPtr is a PropNode pointer. std::string gives string values
+   small-string optimization for the common short case.
+
+   Enumeration.  next_prop_name and NEXTPROP step by NAME, not by
+   iterator: the tree's ordered-successor operation (seek the folded
+   name, walk to the next leaf) makes each step O(k) and immune to
+   concurrent mutation of other properties, which matches how MUF
+   loops behave today.
+
+
+4. VALUE RESIDENCY (THE DISKBASE CONCEPT, OPTIONAL)
+
+   The tree and every PropNode's metadata (name, flags, type) are
+   ALWAYS resident: identity is never paged, mirroring the database
+   rule that object identity is always resident even when payload is
+   not.
+
+   A PropNode's VALUE has two states:
+     RESIDENT  - the value lives in the node (default, and the only
+                 state in the default configuration).
+     UNLOADED  - the value lives in the object store entry for this
+                 path (and, for large strings, in the chunk pool);
+                 the node holds nothing but its metadata.
+
+   Every read goes through the accessor veneers, so the fetch hook
+   is natural: touching an UNLOADED value loads it from the store
+   entry, marks it RESIDENT, and proceeds. The legacy DISKBASE
+   names map directly: propfetch loads one node's value, fetchprops
+   loads a whole object's values, dirtyprops marks for write-back,
+   disposeprops may return clean values to UNLOADED under memory
+   pressure.
+
+   This mode is OPTIONAL and off by default (a future @tune, e.g.
+   lazy_prop_values, plus a size threshold). With it off, load
+   brings every value in and nothing else changes. The design cost
+   of keeping it real from day one is one state byte per node and
+   the discipline that no code reads a value except through the
+   accessors, which the migration enforces anyway.
+
+
+5. THE MODULE AND DORMANCY
+
+   The Properties feature module owns the root tree of each object.
+   The struct-object properties field dies with the flip; sanity,
+   the serializers, and the importer reach properties only through
+   the module.
+
+   Exclusion: --db-exclude-module properties (the feature-module
+   sibling of --db-exclude-type). When the module is absent, every
+   "/..." entry in an object's file rides dormant exactly as
+   feature-module namespaces already do, chunk payloads included;
+   save, snapshot, and rollback carry them byte-identically. The
+   legacy C API is blanket-safe: reads return empty/NULL/0, writes
+   are refused no-ops, so no caller crashes.
+
+
+6. PERSISTENCE
+
+   The on-disk format does not change: one "/path" entry per
+   property with the same type letters, the same skip rules (zero
+   ints, empty strings, NOTHING refs, TRUE_BOOLEXP are not written),
+   the same masked flags in "m", the same revision stamping. The
+   serializer walks the tree in order, which is the same order the
+   AVL walk produced, so a converted database round-trips
+   byte-identically. This is the acceptance test of the flip.
+
+
+7. MIGRATION PLAN
+
+   1. Implement the tree (PropertyTree, PropNode) with a randomized
+      equivalence harness: thousands of scripted insert/erase/
+      lookup/enumerate operations run against both the tree and a
+      trivial reference model, any divergence fails. A hand-rolled
+      structure does not ship without this.
+   2. Re-point props.h and rewrite property.cpp/propdirs.cpp as
+      veneers over the module; delete the AVL (props.cpp) and the
+      dead DISKBASE file code (diskprop.cpp), re-pointing the
+      DISKBASE names at the residency layer.
+   3. Flip the serializer, loader, and importer to the module.
+   4. Prove: equivalence harness, byte-identical round trips (flat
+      import, normal, excluded), the MUF runtime suite, creation and
+      placeholder harnesses, then a live deploy with log reads.
+   5. Sweep every remaining legacy call site to the module API
+      (get_property_class and friends become internal veneers only),
+      with the same proofs after.
+   6. Only then consider enabling lazy values anywhere.
