@@ -716,9 +716,7 @@ const char version_line2[] = SYSGREEN "Compile-time Options: " SYSNORMAL
 #ifdef PCRE_SUPPORT
     "MUF:PCRE "
 #endif
-#ifdef MUF_INT64
     "MUF:INT64 "
-#endif
 #ifdef DEBUGPROCESS
 # ifdef DBDEBUG
     "Debug:3 "

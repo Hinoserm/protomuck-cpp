@@ -711,11 +711,8 @@ include_internal_defs(COMPSTATE *cstat)
 #else
     insert_def(cstat, "HAVE_JSON", "0");
 #endif
-#ifdef MUF_INT64
+    /* 64-bit integers are permanent, not a build option */
     insert_def(cstat, "HAVE_INT64", "1");
-#else
-    insert_def(cstat, "HAVE_INT64", "0");
-#endif
 
 /*
 #ifdef IGNORE_SUPPORT

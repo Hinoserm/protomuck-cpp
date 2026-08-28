@@ -196,14 +196,6 @@
 
 #define MUF_EDIT_PRIMS
 
-/* Define MUF_INT64 when the MUF interpreter's integer type is
- * 64-bit. The property engine, its C API, and the object store
- * already carry 64-bit integers regardless; this flag says the
- * INTERPRETER does too, so the int64 conversion branch flips it on
- * merge. Shown in the @ver compile options as MUF:INT64, and the
- * compiler predefines HAVE_INT64 as 1 or 0 beside the other HAVE_
- * feature defs. Not adjustable at runtime. */
-#undef MUF_INT64
 
 /* Define this to enable support for pre-Foxen5 (FB5) database
  * formats or if you need to build the "olddecompress" utility. 

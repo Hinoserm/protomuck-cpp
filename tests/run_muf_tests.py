@@ -29,7 +29,7 @@ PROP_EXPECT = [
     'PCASE:one', 'PCASENAME:MiXeD', 'PCASE2:two',
     'PRMDIR:0', 'PRMDEEP:gone', 'PZERO:keep', 'PEMPTY:keep',
     'PADD:apval', 'PADDV:99', 'PENV:fromzero1',
-    'PBIG137:v137', 'PBIGN:200', 'PMPI:plain-mpi', 'PI64:0',
+    'PBIG137:v137', 'PBIGN:200', 'PMPI:plain-mpi', 'PI64:1',
     'PDONE:ok',
 ]
 
