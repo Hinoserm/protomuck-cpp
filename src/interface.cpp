@@ -1843,22 +1843,24 @@ shovechars(void)
     ssl_ctx = SSL_CTX_new(TLS_server_method());
     ssl_ctx_client = SSL_CTX_new(TLS_client_method());
 
-    /* Accept and offer everything the linked OpenSSL still implements.
-       Players connect with whatever MUD client they have, some of them
-       very old, and MUF sockets reach equally old peers; we refuse a
-       protocol or algorithm only when the library itself has dropped it.
-       Passing 0 as the version bound means "the library minimum", and
-       security level 0 re-enables the legacy algorithms that OpenSSL 3
-       and distribution crypto-policies otherwise filter out (SHA-1
-       signatures, small keys, older ciphersuites).
+    /* POLICY (project owner, 2026-08-28): accept and offer everything
+       the linked OpenSSL still implements. Players connect with
+       whatever MUD client they have, some of them very old, and MUF
+       sockets reach equally old peers; we refuse a protocol or
+       algorithm only when the library itself has dropped it. This is
+       a deliberate compatibility choice, not an oversight: a MUCK
+       that cannot be connected to is worse than one reachable over a
+       dated cipher. Modern clients still negotiate TLS 1.3 and are
+       unaffected. Do not "harden" this without the owner's say-so.
 
-       Note this is a deliberate compatibility choice, not an oversight:
-       a MUCK that cannot be connected to is worse than one reachable
-       over a dated cipher. Modern clients still negotiate TLS 1.3. */
-    /* Passing 0 defers to the distribution crypto-policy (Fedora and
-       friends pin TLS 1.2+ system-wide), which is exactly what we do not
-       want; ask explicitly for the oldest protocol this library still
-       compiles in, falling back version by version until one sticks. */
+       Security level 0 re-enables the legacy algorithms that OpenSSL 3
+       and distribution crypto-policies otherwise filter out (SHA-1
+       signatures, small keys, older ciphersuites). The protocol floor
+       must be requested explicitly: passing 0 defers to the
+       distribution crypto-policy (Fedora and friends pin TLS 1.2+
+       system-wide), which is exactly what this policy rejects, so we
+       probe from the oldest version this library still compiles in,
+       falling back version by version until one sticks. */
     {
         static const int floors[] = {
 #ifdef SSL3_VERSION
