@@ -54,7 +54,7 @@ add_custom_target(gen_version DEPENDS ${GEN_INC}/version.h)
 # --- sources: mirrors the old Makefile.in COBJ list plus interface.cpp ---
 set(PROTO_SOURCES
     src/array.cpp src/boolexp.cpp src/cgi.cpp src/compile.cpp src/compress.cpp
-    src/create.cpp src/Database.cpp src/MacroTable.cpp src/Uuid.cpp src/DbObject.cpp src/LegacyDbIO.cpp src/ObjectStore.cpp src/FlatFileConverter.cpp src/PasswordHash.cpp src/ProgramStore.cpp src/debugger.cpp src/disassem.cpp
+    src/create.cpp src/Database.cpp src/MacroTable.cpp src/Uuid.cpp src/DbObject.cpp src/LegacyDbIO.cpp src/ModuleRegistry.cpp src/ObjectStore.cpp src/FlatFileConverter.cpp src/PasswordHash.cpp src/ProgramStore.cpp src/debugger.cpp src/disassem.cpp
     src/diskprop.cpp src/edit.cpp src/events.cpp src/game.cpp src/hashtab.cpp
     src/help.cpp src/inst.cpp src/interp.cpp src/log.cpp src/look.cpp
     src/match.cpp src/mfuns.cpp src/mfuns2.cpp src/mfuns3.cpp src/msgparse.cpp
@@ -72,6 +72,8 @@ set(PROTO_SOURCES
     src/interface.cpp)
 
 add_executable(protomuck ${PROTO_SOURCES})
+# export our symbols so dlopened feature modules resolve against them
+set_target_properties(protomuck PROPERTIES ENABLE_EXPORTS ON)
 add_dependencies(protomuck gen_version)
 target_include_directories(protomuck BEFORE PRIVATE
     ${GEN_INC} src/inc ${PCRE_INCLUDE_DIR} ${MYSQL_INCLUDE_DIR})

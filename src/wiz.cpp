@@ -10,6 +10,7 @@
 #include "externs.h"
 #include "Modules.h"
 #include "ObjectStore.h"
+#include "ModuleRegistry.h"
 #include "reg.h"
 #include "maillib.h"
 #include "strutils.h"
@@ -1808,4 +1809,36 @@ do_rollback(int descr, dbref player, const char *arg1, const char *arg2)
                 "Rolled %s back to rev %ld (name, properties, and program "
                 "source; containment is not rolled back).",
                 unparse_object(player, thing), rev);
+}
+
+/* ------------------------------------------------------------------
+ * @module: feature-module administration.
+ *     @module list          registered modules
+ *     @module load=<path>   dlopen a shared-object module (arch)
+ * ------------------------------------------------------------------ */
+
+void
+do_module(int descr, dbref player, const char *arg1, const char *arg2)
+{
+    if (!Arch(player)) {
+        anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
+        return;
+    }
+    if (!string_compare(arg1, "list")) {
+        anotify_nolisten2(player, CINFO "Registered feature modules:");
+        for (const auto &n : MUCK::moduleRegistry().names())
+            anotify_fmt(player, SYSAQUA "  %s", n.c_str());
+        return;
+    }
+    if (!string_compare(arg1, "load") && *arg2) {
+        std::string err;
+
+        if (MUCK::moduleRegistry().loadShared(arg2, &err)) {
+            anotify_fmt(player, CSUCC "Module loaded from %s.", arg2);
+        } else {
+            anotify_fmt(player, CFAIL "Module load failed: %s", err.c_str());
+        }
+        return;
+    }
+    anotify_nolisten2(player, CINFO "Usage: @module list | @module load=<path>");
 }

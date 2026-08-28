@@ -24,6 +24,7 @@
 #include "ObjectStore.h"
 #include "ProgramStore.h"
 #include "PasswordHash.h"
+#include "ModuleRegistry.h"
 
 using json = nlohmann::json;
 
@@ -529,6 +530,24 @@ objectToJson(dbref i)
             j["modules"] = dm->second;
     }
 
+    /* live feature modules persist through the value-model contract
+     * and record their attachment; their fresh entries win over any
+     * dormant copy */
+    {
+        DbObject *obj = MUCK::database().get(i);
+        json &mods = j["modules"];
+
+        obj->eachModule([&](Module *m) {
+            if (!moduleRegistry().knows(m->moduleName()))
+                return;
+            m->saveEntries(e);
+            for (const auto &existing : mods)
+                if (existing == m->moduleName())
+                    return;
+            mods.push_back(m->moduleName());
+        });
+    }
+
     j["entries"] = e;
     return j;
 }
@@ -538,6 +557,8 @@ struct PendingLinks {
     json td;
     json core;
     json props;
+    json entries;               /* raw v2 entries, for module slices */
+    std::vector<std::string> modules;
 };
 
 /* Phase one of load: create the object, set scalars, stash refs. */
@@ -710,6 +731,18 @@ objectFromJsonPhase2(const PendingLinks &pl)
 
     if (pl.props.is_array())
         propsFromJson(pl.ref, pl.props);
+
+    /* re-attach registered feature modules and hand each its entry
+     * slice; unregistered names stay dormant */
+    for (const auto &name : pl.modules) {
+        if (!moduleRegistry().knows(name))
+            continue;
+
+        DbObject *obj = MUCK::database().get(pl.ref);
+        Module *m = obj->attach(moduleRegistry().make(name));
+
+        m->loadEntries(pl.entries);
+    }
 
     o->location = refFromJson(pl.core["location"]);
     o->owner = refFromJson(pl.core["owner"]);
@@ -1359,7 +1392,18 @@ ObjectStore::loadAll()
                         dormantEntries[j.value("uuid", "")] = unknown;
                     if (!j.value("modules", json::array()).empty())
                         dormantModules[j.value("uuid", "")] = j["modules"];
+
+                    json v2entries = j["entries"];
+                    json v2mods = j.value("modules", json::array());
+
                     j = v2ToV1(j, root_);
+                    objectFromJsonPhase1(j, later);
+                    if (!later.empty() && later.back().ref == j.value("dbref", -1)) {
+                        later.back().entries = v2entries;
+                        for (const auto &mn : v2mods)
+                            later.back().modules.push_back(mn.get<std::string>());
+                    }
+                    continue;
                 }
                 objectFromJsonPhase1(j, later);
             }

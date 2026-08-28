@@ -1254,6 +1254,11 @@ process_command(int descr, dbref player, char *command, int len, int wclen)
                             Matched("@memory");
                             do_memory(player);
                             break;
+                        case 'o':
+                        case 'O':
+                            Matched("@module");
+                            do_module(descr, player, arg1, arg2);
+                            break;
                         case 'p':
                         case 'P':
                             Matched("@mpitops");

@@ -25,6 +25,8 @@
 #include <vector>
 #include <memory>
 
+#include <nlohmann/json_fwd.hpp>
+
 #include "Uuid.h"
 
 namespace MUCK {
@@ -43,6 +45,13 @@ class Module {
     /* Namespace tag, unique per module class: "player", "muf_program",
      * "properties", "~vehicle". Type modules use their type name. */
     virtual const char *moduleName() const = 0;
+
+    /* The value-model persist contract (docs section 3): a feature
+     * module writes its state as entries in its own namespace and
+     * rebuilds from its slice at load. Type modules and Properties
+     * serialize through dedicated paths and leave these alone. */
+    virtual void saveEntries(nlohmann::json &entries) const { (void) entries; }
+    virtual void loadEntries(const nlohmann::json &entries) { (void) entries; }
 
     DbObject *object() const { return owner_; }
 
@@ -90,6 +99,13 @@ class DbObject {
 
     /* Attach a feature module; the object takes ownership. */
     Module *attach(std::unique_ptr<Module> m);
+
+    /* Iterate attached modules (type module included). */
+    template <class F> void eachModule(F f) {
+        ensureModules();
+        for (const auto &m : modules_)
+            f(m.get());
+    }
 
     /* --- object-level locking (striped; see Database) --- */
     void lockShared() const;
