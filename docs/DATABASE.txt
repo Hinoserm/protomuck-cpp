@@ -35,10 +35,10 @@ superseded mechanisms are deleted, not kept alongside.
    in-memory sentinel marking a dead shell.  Deleting an object unlinks
    it from the uuid index and records a tombstone row: uuid, dbref,
    deleted timestamp, deleting player uuid, and the store revision era
-   at deletion.  The dbref keeps resolving to a dead shell (section 5), so
-   no held pointer or stale ref can dangle.  Programs holding a deleted
-   object are to receive an OBJECT_DELETED mufevent; that event is
-   DEFERRED pending design discussion and is not raised today.
+   at deletion.  The dbref keeps resolving to a dead shell (section 5),
+   so no held pointer or stale ref can dangle.  Programs holding a
+   deleted object are to receive an OBJECT_DELETED mufevent; that event
+   is DEFERRED pending design discussion and is not raised today.
 
    Deletion does NOT remove the object's store file.  The final state
    is flushed at delete time, and the file plus its history survive as
