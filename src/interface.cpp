@@ -1823,12 +1823,34 @@ shovechars(void)
 #endif
 
 #ifdef USE_SSL
-    SSL_load_error_strings();
-    OpenSSL_add_ssl_algorithms();
-    ssl_ctx = SSL_CTX_new(SSLv23_server_method());
-    ssl_ctx_client = SSL_CTX_new(SSLv23_client_method());
+    /* OpenSSL 1.1.0 and later initialize themselves; the old
+       SSL_load_error_strings/OpenSSL_add_ssl_algorithms calls are no-ops. */
+    ssl_ctx = SSL_CTX_new(TLS_server_method());
+    ssl_ctx_client = SSL_CTX_new(TLS_client_method());
 
-    if (!SSL_CTX_use_certificate_file(ssl_ctx, SSL_CERT_FILE, SSL_FILETYPE_PEM)) {
+    /* Server: refuse everything below TLS 1.2. SSLv2, SSLv3, TLS 1.0 and
+       TLS 1.1 are all long dead and modern clients will not offer them. */
+    SSL_CTX_set_min_proto_version(ssl_ctx, TLS1_2_VERSION);
+
+    /* Client: stay permissive on the floor so MUF can still reach old
+       peers, but never speak SSLv3 or older. */
+    SSL_CTX_set_min_proto_version(ssl_ctx_client, TLS1_VERSION);
+
+    /* Let the library pick curves and ephemeral DH; required for the
+       modern ECDHE suites to be offered at all. */
+    SSL_CTX_set_options(ssl_ctx, SSL_OP_NO_COMPRESSION | SSL_OP_CIPHER_SERVER_PREFERENCE);
+    SSL_CTX_set_options(ssl_ctx_client, SSL_OP_NO_COMPRESSION);
+
+    /* Load the system trust store on the client context so that
+       certificate verification is possible when it is switched on. */
+    if (!SSL_CTX_set_default_verify_paths(ssl_ctx_client))
+        log_status("SSLX: Could not load the system certificate store; "
+                   "outbound certificate verification will not work.\n");
+
+    /* use_certificate_chain_file, unlike use_certificate_file, sends any
+       intermediates present in the PEM. Without the chain, clients that
+       have not cached the intermediate reject an otherwise valid cert. */
+    if (!SSL_CTX_use_certificate_chain_file(ssl_ctx, SSL_CERT_FILE)) {
         log_status("SSLX: Could not load certificate file %s\n", SSL_CERT_FILE);
         ssl_status_ok = 0;
     }

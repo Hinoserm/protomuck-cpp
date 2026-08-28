@@ -193,6 +193,23 @@ update_socket_frame(struct muf_socket *mufSock, struct frame *newfr)
 }
 
 #if defined(SSL_SOCKETS) && defined(USE_SSL)
+/* RFC 6066 forbids sending a literal address in the SNI extension, and
+   OpenSSL will reject the attempt anyway. */
+static int
+is_ip_address(const char *host)
+{
+    struct in_addr v4;
+    struct in6_addr v6;
+
+    if (!host || !*host)
+        return 0;
+    if (inet_pton(AF_INET, host, &v4) == 1)
+        return 1;
+    if (inet_pton(AF_INET6, host, &v6) == 1)
+        return 1;
+    return 0;
+}
+
 int
 handle_ssl_error(struct muf_socket *mufSock, int *IOreturn)
 {
@@ -232,15 +249,24 @@ handle_ssl_error(struct muf_socket *mufSock, int *IOreturn)
     return 0;
 }
 
-/* Keeping the variable names from the caller functions. */
+/* Keeping the variable names from the caller functions.
+
+   These must never spin. The server is single threaded, the sockets are
+   non-blocking, and WANT_READ/WANT_WRITE simply means "no progress is
+   possible until the descriptor is ready again". Retrying immediately
+   pins the whole MUCK at 100% CPU until the peer happens to send bytes,
+   which TLS 1.3 triggers routinely via post-handshake session tickets.
+   On a would-block condition we return with *readme == 0, which is what
+   the callers already treat as "nothing read this pass". */
 void
 ssl_read_loop(struct muf_socket *mufSock, int *readme, char *mystring)
 {
     *readme = SSL_read(mufSock->ssl_session, mystring, 1);
-    while (*readme <= 0) {
-        if (handle_ssl_error(mufSock, readme))
-            break;
-        *readme = SSL_read(mufSock->ssl_session, mystring, 1);
+    if (*readme <= 0) {
+        if (!handle_ssl_error(mufSock, readme)) {
+            /* Would block: no data available right now. */
+            *readme = 0;
+        }
     }
 }
 
@@ -248,10 +274,11 @@ void
 ssl_write_loop(struct muf_socket *mufSock, int *result, char *buf)
 {
     *result = SSL_write(mufSock->ssl_session, buf, strlen(buf));
-    while (*result <= 0) {
-        if (handle_ssl_error(mufSock, result))
-            break;
-        *result = SSL_write(mufSock->ssl_session, buf, strlen(buf));
+    if (*result <= 0) {
+        if (!handle_ssl_error(mufSock, result)) {
+            /* Would block: the write did not go out. */
+            *result = 0;
+        }
     }
 }
 
@@ -803,12 +830,20 @@ prim_socksecure(PRIM_PROTOTYPE)
                     result = 0;
                 /* Assume user wants to renegotiate. */
             } else {
-                ssl_error = SSL_renegotiate(oper[0].data.sock->ssl_session);
-                if (ssl_error <= 0) {
-                    ssl_error = SSL_get_error(oper[0].data.sock->ssl_session, ssl_error);
-                    result = ssl_error;
-                } else
+                /* TLS 1.3 removed renegotiation entirely. Asking for it on a
+                   1.3 session is a protocol error, so report the session as
+                   already established instead of failing. On TLS 1.2 and
+                   below, honor the request as before. */
+                if (SSL_version(oper[0].data.sock->ssl_session) >= TLS1_3_VERSION) {
                     result = 0;
+                } else {
+                    ssl_error = SSL_renegotiate(oper[0].data.sock->ssl_session);
+                    if (ssl_error <= 0) {
+                        ssl_error = SSL_get_error(oper[0].data.sock->ssl_session, ssl_error);
+                        result = ssl_error;
+                    } else
+                        result = 0;
+                }
             }
         } else {
 #if defined(WIN32)
@@ -816,6 +851,18 @@ prim_socksecure(PRIM_PROTOTYPE)
 #endif
             oper[0].data.sock->ssl_session = SSL_new(ssl_ctx_client);
             SSL_set_fd(oper[0].data.sock->ssl_session, oper[0].data.sock->socknum);
+
+            /* Send the server name. Name-based virtual hosting is universal
+               now: without SNI most public TLS endpoints either abort the
+               handshake or hand back a certificate for the wrong site. The
+               hostname was stored when the socket was opened. Numeric
+               addresses must not be sent as SNI, per RFC 6066. */
+            if (oper[0].data.sock->hostname && *oper[0].data.sock->hostname
+                && !is_ip_address(oper[0].data.sock->hostname)) {
+                SSL_set_tlsext_host_name(oper[0].data.sock->ssl_session,
+                                         oper[0].data.sock->hostname);
+            }
+
             ssl_error = SSL_connect(oper[0].data.sock->ssl_session);
             if (ssl_error <= 0) {
                 ssl_error = SSL_get_error(oper[0].data.sock->ssl_session, ssl_error);
@@ -1351,7 +1398,12 @@ prim_ssl_sockaccept(PRIM_PROTOTYPE)
     result->data.sock->readWaiting = 0;
     result->data.sock->username = alloc_string(username); /* not done */
 #if defined(SSL_SOCKETS) && defined(USE_SSL)
-    result->data.sock->ssl_session = NULL;
+    /* Attach the session negotiated above. Nulling it here, as this code
+       used to, leaked the SSL object and handed back a socket that did
+       cleartext I/O on a connection the client believed was encrypted. */
+    result->data.sock->ssl_session = ssl_session;
+    result->data.sock->sslStatus = 0;
+    result->data.sock->sslError = NULL;
 #endif
     add_socket_to_queue(result->data.sock, fr);
     if (tp_log_sockets)
