@@ -287,9 +287,7 @@ superseded mechanisms are deleted, not kept alongside.
 
 7. VERSIONING: THE JOURNAL
 
-   STATUS: sections 7 and 7.1 are DESIGNED, NOT YET BUILT.  The
-   commands and their semantics exist; the mechanism underneath is
-   still the synchronous one.  Amend this document before deviating.
+   STATUS: implemented.  Amend this document before deviating.
 
    One global 64-bit revision counter, incremented by one per
    snapshot, shared by whole-database snapshots and single-object
@@ -320,13 +318,27 @@ superseded mechanisms are deleted, not kept alongside.
    indirection.  The journal is invisible to readers.
 
    Writing goes to two places: the cache is mutated as it is today,
-   and the change is recorded in the TOP layer.  Recording is a hash
-   insert keyed by entry name, so a value written ten thousand times
-   in one era occupies one slot: the layer holds the latest value per
-   key, not a log of writes.  A write that does not change the value
-   records nothing.  Removing an entry records a removal mark, so a
-   read below that era still sees the old value and a current read
-   does not.
+   and the change is recorded in the TOP layer.  Recording NAMES the
+   entry rather than copying its value; the value is materialized when
+   the layer is sealed, through the same serializer that writes the
+   base.  That is deliberate: it means there is exactly one definition
+   of what an entry looks like on disk, so a change persisted through
+   the journal and the same change captured in a full save cannot
+   drift into two encodings.  The cost is that sealing is a
+   serialization per changed entry rather than a pointer swap, which
+   is proportional to what changed and never to object size or
+   database size.  --verify-entries audits the two against each other.
+
+   A key touched ten thousand times in one era is one set member, so a
+   property ticked in a loop costs one entry.  A write that does not
+   change the value records nothing: every setter compares first.
+   Removing an entry records a removal, written as a null, so a read
+   below that era still sees the old value and a current read does
+   not.
+
+   Recording also adds the object to a dirty index, and firing walks
+   that index rather than every slot in the database, so a dump costs
+   what changed rather than what exists.
 
    The top layer is therefore also the unsaved set: it replaces the
    OBJECT_CHANGED dirty flag entirely.  @stats counts an object as
@@ -392,11 +404,13 @@ superseded mechanisms are deleted, not kept alongside.
           this instant.
        5. Hand the sealed set to the persist queue and return.
 
-   No serialization, no disk I/O, no walk of the database: the sealed
-   layers already hold exactly the changes, in memory, ready to
-   write.  The cost is proportional to the number of objects touched
-   since the last fire, and per object it is a pointer swap.  The
-   command returns immediately.
+   No disk I/O and no walk of the database: firing serializes only the
+   entries that actually changed, on the objects the dirty index
+   names.  The command returns immediately.  Measured on the real
+   GinkoMUCK database of 7950 objects: a dump with 20 changed objects
+   returns in 17ms and a snapshot in 4ms.  An idle dump costs 53ms,
+   all of it the manifest and the macro file, both bounded and
+   independent of how many objects exist.
 
 
    PERSISTING
@@ -898,8 +912,8 @@ WHAT IS LEFT OF struct object
 
 REMAINING WORK
 
-    THE JOURNAL AND THREADED PERSISTENCE (sections 7 and 7.1).  What
-    has to change:
+    THE JOURNAL AND THREADED PERSISTENCE ARE DONE (sections 7 and
+    7.1).  What landed, in the order it was built:
 
       1. Accessors for every core field: name, location, owner,
          flags, powers, timestamps, and the description.  Every raw
@@ -924,15 +938,33 @@ REMAINING WORK
       8. Barriers: rollback, resurrection, and marker reads drain the
          queue first; shutdown and @restart drain before exec.
          panic() writes synchronously outside the queue.
-      9. Delete what the journal replaces: OBJECT_CHANGED, the
-         save-time diff in saveObject, the forked dump
-         (tp_dump_forking), and the THREADED_DB_DUMP ifdefs.
+      9. Delete what the journal replaces: the save-time diff in
+         saveObject, the forked dump (tp_dump_forking), and the
+         THREADED_DB_DUMP ifdefs.  OBJECT_CHANGED survives only as
+         the marker saveAll consults during a full conversion write;
+         nothing in normal operation reads it, and the journal is the
+         authority on what is unsaved.
      10. @stats counts unsaved objects from their layers.
 
-    The .json/.hist semantics invert (base plus forward layers, where
-    today the .json is current state and the .hist holds undo records),
-    so the store schema changes: Ginko is deleted and re-imported from
-    the flat file when this lands.
+    The .json/.hist semantics inverted (base plus forward layers,
+    where before the .json was current state and the .hist held undo
+    records), so the store schema changed and Ginko was rebuilt by
+    re-importing the flat file.
+
+    Still open, and deliberately so:
+
+      - Sealing serializes each changed entry rather than swapping a
+        pointer, because the value is materialized through the store's
+        own serializer to keep one definition of an entry.  Recording
+        values eagerly at write time would make sealing a pointer swap
+        at the cost of a second encoder; measure before trading.
+      - The base is rewritten only by compaction and by conversion.
+        An object whose layers outnumber its entries is cheaper to
+        rewrite than to replay; nothing decides that yet.
+      - Backpressure is not implemented.  The queue is bounded by
+        memory and nothing blocks the game thread if the dump thread
+        falls behind, which cannot happen at present dump intervals
+        but is a real limit at scale.
 
     Editor text off struct line.  The MUF editor and compiler work
     on std::vector<std::string> directly; the hand-managed struct
