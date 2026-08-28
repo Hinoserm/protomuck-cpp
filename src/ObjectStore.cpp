@@ -1915,6 +1915,7 @@ ObjectStore::loadAll()
         DBFETCH(i)->flags &= ~OBJECT_CHANGED;
         if (DbObject *o = MUCK::database().get(i)) {
             o->journal().discardTop();
+            forgetDirty(i);
             /* it came off disk, so it has a base there already */
             if (MUCK::typeOf(i) != ObjectType::Garbage)
                 o->setBaseWritten(true);
@@ -1966,6 +1967,7 @@ ObjectStore::fireObject(dbref i)
         return set;             /* nothing to say about this object */
     }
     o->journal().discardTop();
+    forgetDirty(i);
     set.layers.push_back(std::move(sealed));
     set.manifest = buildManifest();
     return set;
@@ -1982,7 +1984,10 @@ ObjectStore::fire()
     chainClaimed.clear();
     bulkSaveActive = true;
 
-    for (dbref i = 0; i < MUCK::database().top(); i++) {
+    /* Walk what changed, not what exists. */
+    std::vector<dbref> dirty(dirtyObjects().begin(), dirtyObjects().end());
+
+    for (dbref i : dirty) {
         DbObject *o = MUCK::database().get(i);
 
         if (!o)
@@ -2021,6 +2026,7 @@ ObjectStore::fire()
         set.layers.push_back(std::move(sealed));
     }
     bulkSaveActive = false;
+    clearDirtyObjects();
     set.manifest = buildManifest();
 
     return set;

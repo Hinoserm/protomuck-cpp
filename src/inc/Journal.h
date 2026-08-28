@@ -117,6 +117,14 @@ void journalRecordProp(dbref ref, const char *path);
  * counts; it replaces the OBJECT_CHANGED dirty flag. */
 bool hasUnsavedChanges(dbref ref);
 
+/* The objects with something in their top layer. Firing walks this,
+ * not the whole database, so a dump costs what changed rather than
+ * what exists: the difference between nothing and seconds once a game
+ * has millions of objects. */
+const std::set<dbref> &dirtyObjects();
+void forgetDirty(dbref ref);
+void clearDirtyObjects();
+
 } /* namespace MUCK */
 
 #endif /* MUCK_JOURNAL_H */

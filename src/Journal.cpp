@@ -7,6 +7,8 @@
 #include "copyright.h"
 #include "config.h"
 
+#include <set>
+
 #include <nlohmann/json.hpp>
 
 #include "db.h"
@@ -26,6 +28,27 @@ currentEra()
     return store().rev();
 }
 
+/* Every object with a non-empty top layer. */
+static std::set<dbref> g_dirty;
+
+const std::set<dbref> &
+dirtyObjects()
+{
+    return g_dirty;
+}
+
+void
+forgetDirty(dbref ref)
+{
+    g_dirty.erase(ref);
+}
+
+void
+clearDirtyObjects()
+{
+    g_dirty.clear();
+}
+
 void
 journalRecord(dbref ref, const char *key)
 {
@@ -34,6 +57,7 @@ journalRecord(dbref ref, const char *key)
     if (!o || !key)
         return;
     o->journal().top(currentEra()).touch(key);
+    g_dirty.insert(ref);
 }
 
 void
@@ -44,6 +68,7 @@ journalRecord(dbref ref, const std::string &key)
     if (!o)
         return;
     o->journal().top(currentEra()).touch(key);
+    g_dirty.insert(ref);
 }
 
 std::string
