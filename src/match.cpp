@@ -207,7 +207,7 @@ absolute_name(struct match_data *md)
             p++;
         }
         if (!*p && hexes >= 6) {
-            match = MUCK::database().resolveUuidPrefix(md->match_name);
+            match = MUCK::database().resolveUUIDPrefix(md->match_name);
             if (match != NOTHING && match != AMBIGUOUS)
                 return match;
         }

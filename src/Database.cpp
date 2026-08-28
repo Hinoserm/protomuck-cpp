@@ -27,18 +27,18 @@ Database g_database;
 /* Identity                                                         */
 /* ================================================================ */
 
-static const Uuid nilUuid;
+static const UUID nilUUID;
 
-const Uuid &
-Database::uuidOf(dbref ref) const
+const UUID &
+Database::UUIDOf(dbref ref) const
 {
     DbObject *o = get(ref);
 
-    return o ? o->uuid() : nilUuid;
+    return o ? o->uuid() : nilUUID;
 }
 
 dbref
-Database::refOf(const Uuid &u) const
+Database::refOf(const UUID &u) const
 {
     DbObject *o = get(u);
 
@@ -46,19 +46,19 @@ Database::refOf(const Uuid &u) const
 }
 
 DbObject *
-Database::get(const Uuid &u) const
+Database::get(const UUID &u) const
 {
     if (u.isNil())
         return nullptr;
 
     std::shared_lock<std::shared_mutex> hold(indexMutex_);
-    auto it = byUuid_.find(u);
+    auto it = byUUID_.find(u);
 
-    return it == byUuid_.end() ? nullptr : it->second;
+    return it == byUUID_.end() ? nullptr : it->second;
 }
 
 void
-Database::assignUuid(dbref ref, const Uuid &u)
+Database::assignUUID(dbref ref, const UUID &u)
 {
     DbObject *o = get(ref);
 
@@ -68,19 +68,19 @@ Database::assignUuid(dbref ref, const Uuid &u)
     std::unique_lock<std::shared_mutex> hold(indexMutex_);
 
     if (!o->uuid_.isNil())
-        byUuid_.erase(o->uuid_);
+        byUUID_.erase(o->uuid_);
     o->uuid_ = u;
     if (!u.isNil())
-        byUuid_[u] = o;
+        byUUID_[u] = o;
 }
 
 dbref
-Database::resolveUuidPrefix(const char *prefix) const
+Database::resolveUUIDPrefix(const char *prefix) const
 {
     std::shared_lock<std::shared_mutex> hold(indexMutex_);
     dbref found = NOTHING;
 
-    for (const auto &pair : byUuid_) {
+    for (const auto &pair : byUUID_) {
         if (!pair.first.matchesPrefix(prefix))
             continue;
         if (found != NOTHING)
@@ -153,7 +153,7 @@ Database::newObject(dbref player)
 
     ensureTop(newobj + 1);
     clearObject(player, newobj);
-    assignUuid(newobj, Uuid::generate());
+    assignUUID(newobj, UUID::generate());
     DBDIRTY(newobj);
     return newobj;
 }
@@ -226,7 +226,7 @@ Database::freeAll()
             delete[] chunks_[c];
             chunks_[c] = nullptr;
         }
-        byUuid_.clear();
+        byUUID_.clear();
         tombstones_.clear();
         allocated_ = 0;
         top_.store(0, std::memory_order_release);
@@ -269,7 +269,7 @@ Database::deleteObject(dbref victim, dbref deleter)
     t.uuid = o->uuid();
     t.ref = victim;
     t.deletedAt = (long) current_systime;
-    t.deletedBy = uuidOf(deleter);
+    t.deletedBy = UUIDOf(deleter);
     t.deletedRev = drev < 0 ? 0 : drev;
 
     {
@@ -277,7 +277,7 @@ Database::deleteObject(dbref victim, dbref deleter)
 
         tombstones_.push_back(t);
         if (!o->uuid_.isNil())
-            byUuid_.erase(o->uuid_);
+            byUUID_.erase(o->uuid_);
     }
     o->deleted_ = true;
 
@@ -314,7 +314,7 @@ Database::findTombstone(dbref ref, Tombstone *out) const
 }
 
 void
-Database::removeTombstone(const Uuid &u)
+Database::removeTombstone(const UUID &u)
 {
     std::unique_lock<std::shared_mutex> hold(indexMutex_);
 

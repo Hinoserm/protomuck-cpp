@@ -48,15 +48,15 @@ static const int STORE_FORMAT = 1;
 /* Dormant module data (docs section 4): entries in namespaces no
  * loaded module claims, plus unrecognized attached-module names, are
  * carried verbatim across load and save so unloading a module can
- * never destroy its data. Keyed by uuid string. */
-static std::unordered_map<std::string, json> dormantEntries;
-static std::unordered_map<std::string, json> dormantModules;
+ * never destroy its data. Keyed by UUID. */
+static std::unordered_map<UUID, json> dormantEntries;
+static std::unordered_map<UUID, json> dormantModules;
 
 /* UNSUPPORTED placeholders: uuid -> {"name": stored type name,
  * "bits": original TYPE_MASK bits}. Populated at load for objects
  * whose type module is excluded or unknown; consulted at save so the
  * file keeps saying what the object would have been. */
-static std::unordered_map<std::string, json> dormantTypeInfo;
+static std::unordered_map<UUID, json> dormantTypeInfo;
 static std::set<std::string> excludedTypes;
 
 
@@ -135,7 +135,7 @@ storedTypeSupported(const std::string &n)
 std::string
 ObjectStore::placeholderTypeName(dbref ref)
 {
-    auto it = dormantTypeInfo.find(MUCK::database().uuidOf(ref).toString());
+    auto it = dormantTypeInfo.find(MUCK::database().UUIDOf(ref));
 
     if (it == dormantTypeInfo.end())
         return "";
@@ -228,7 +228,7 @@ refToJson(dbref ref)
 {
     if (ref < 0 || !MUCK::database().valid(ref))
         return json((int) ref);
-    return json(MUCK::database().uuidOf(ref).toString());
+    return json(MUCK::database().UUIDOf(ref).toString());
 }
 
 static dbref
@@ -237,7 +237,7 @@ refFromJson(const json &v)
     if (v.is_number_integer())
         return (dbref) v.get<int>();
     if (v.is_string()) {
-        Uuid u = Uuid::parse(v.get<std::string>().c_str());
+        UUID u = UUID::parse(v.get<std::string>().c_str());
         return MUCK::database().refOf(u);
     }
     return NOTHING;
@@ -479,7 +479,7 @@ objectToJson(dbref i)
     struct object *o = DBFETCH(i);
     json j;
 
-    j["uuid"] = MUCK::database().uuidOf(i).toString();
+    j["uuid"] = MUCK::database().UUIDOf(i).toString();
     j["dbref"] = (int) i;
     j["type"] = typeName(o);
     j["modules"] = json::array();
@@ -489,7 +489,7 @@ objectToJson(dbref i)
     int typeBitsOut = (int) (o->flags & TYPE_MASK);
 
     {
-        auto pt = dormantTypeInfo.find(j["uuid"].get<std::string>());
+        auto pt = dormantTypeInfo.find(UUID::parse(j["uuid"].get<std::string>()));
 
         if (pt != dormantTypeInfo.end()) {
             j["type"] = pt->second.value("name", "garbage");
@@ -578,12 +578,13 @@ objectToJson(dbref i)
 
     /* dormant module data rides along untouched */
     {
-        auto d = dormantEntries.find(j["uuid"].get<std::string>());
+        UUID du = UUID::parse(j["uuid"].get<std::string>());
+        auto d = dormantEntries.find(du);
 
         if (d != dormantEntries.end())
             for (auto it = d->second.begin(); it != d->second.end(); ++it)
                 e[it.key()] = it.value();
-        auto dm = dormantModules.find(j["uuid"].get<std::string>());
+        auto dm = dormantModules.find(du);
 
         if (dm != dormantModules.end())
             j["modules"] = dm->second;
@@ -632,8 +633,8 @@ objectFromJsonPhase1(const json &j, std::vector<PendingLinks> &later)
     MUCK::database().ensureTop(i + 1);
     struct object *o = DBFETCH(i);
 
-    Uuid u = Uuid::parse(j.value("uuid", "").c_str());
-    MUCK::database().assignUuid(i, u);
+    UUID u = UUID::parse(j.value("uuid", "").c_str());
+    MUCK::database().assignUUID(i, u);
 
     const json &core = j["core"];
     o->name = alloc_string(junstr(core.value("name", "")).c_str());
@@ -846,8 +847,9 @@ ensureDir(const std::string &path)
  * same era and would put the whole database in one directory. The
  * tail is random. */
 static std::string
-uuidObjectPath(const std::string &root, const std::string &u)
+UUIDObjectPath(const std::string &root, const UUID &id)
 {
+    std::string u = id.toString();
     size_t n = u.size();
 
     return root + "/objects/" + u.substr(n - 4, 2) + "/" + u.substr(n - 2, 2)
@@ -857,7 +859,7 @@ uuidObjectPath(const std::string &root, const std::string &u)
 std::string
 ObjectStore::objectPath(dbref i) const
 {
-    return uuidObjectPath(root_, MUCK::database().uuidOf(i).toString());
+    return UUIDObjectPath(root_, MUCK::database().UUIDOf(i));
 }
 
 static bool
@@ -929,7 +931,7 @@ ObjectStore::writeManifest()
         int reclaimed = 0, pruned = 0;
 
         for (const auto &t : MUCK::database().tombstones()) {
-            std::string path = uuidObjectPath(root_, t.uuid.toString());
+            std::string path = UUIDObjectPath(root_, t.uuid);
             struct stat st;
             bool haveFile = stat(path.c_str(), &st) == 0;
 
@@ -1244,12 +1246,12 @@ ObjectStore::objectMarkers(dbref i) const
 
     /* a dead shell has no uuid of its own; its retained file is
      * findable through the tombstone */
-    if (MUCK::database().uuidOf(i).isNil()) {
+    if (MUCK::database().UUIDOf(i).isNil()) {
         Database::Tombstone t;
 
         if (!MUCK::database().findTombstone(i, &t))
             return {};
-        path = uuidObjectPath(root_, t.uuid.toString());
+        path = UUIDObjectPath(root_, t.uuid);
     } else {
         path = objectPath(i);
     }
@@ -1378,7 +1380,7 @@ bool
 ObjectStore::resurrectObject(const MUCK::Database::Tombstone &t, long rev,
                              std::string *err)
 {
-    std::string path = uuidObjectPath(root_, t.uuid.toString());
+    std::string path = UUIDObjectPath(root_, t.uuid);
     std::ifstream pf(path);
 
     if (!pf) {
@@ -1580,10 +1582,10 @@ ObjectStore::loadAll()
         for (const auto &e : manifest["tombstones"]) {
             Database::Tombstone t;
 
-            t.uuid = Uuid::parse(e.value("uuid", "").c_str());
+            t.uuid = UUID::parse(e.value("uuid", "").c_str());
             t.ref = (dbref) e.value("dbref", -1);
             t.deletedAt = e.value("deleted_at", 0L);
-            t.deletedBy = Uuid::parse(e.value("deleted_by", "").c_str());
+            t.deletedBy = UUID::parse(e.value("deleted_by", "").c_str());
             t.deletedRev = e.value("deleted_rev", 0L);
             list.push_back(t);
         }
@@ -1592,10 +1594,10 @@ ObjectStore::loadAll()
 
     /* deleted objects keep their files while snapshots cover them;
      * they load as dead shells, not live objects */
-    std::unordered_set<std::string> deadUuids;
+    std::unordered_set<UUID> deadUUIDs;
 
     for (const auto &t : MUCK::database().tombstones())
-        deadUuids.insert(t.uuid.toString());
+        deadUUIDs.insert(t.uuid);
 
     MUCK::database().ensureTop(top);
 
@@ -1635,7 +1637,9 @@ ObjectStore::loadAll()
                     fprintf(stderr, "STORE: skipping unparsable %s\n", e2->d_name);
                     continue;
                 }
-                if (deadUuids.count(j.value("uuid", "")))
+                UUID fileUUID = UUID::parse(j.value("uuid", ""));
+
+                if (deadUUIDs.count(fileUUID))
                     continue;
                 if (j.contains("entries")) {
                     json unknown = json::object();
@@ -1649,9 +1653,9 @@ ObjectStore::loadAll()
                                 && eit.key().rfind("$type/", 0) == 0))
                             unknown[eit.key()] = eit.value();
                     if (!unknown.empty())
-                        dormantEntries[j.value("uuid", "")] = unknown;
+                        dormantEntries[fileUUID] = unknown;
                     if (!j.value("modules", json::array()).empty())
-                        dormantModules[j.value("uuid", "")] = j["modules"];
+                        dormantModules[fileUUID] = j["modules"];
 
                     if (unsupported) {
                         /* The type module is absent: keep its slice
@@ -1666,7 +1670,7 @@ ObjectStore::loadAll()
                             bits = (*fl)["value"][0].get<int>() & TYPE_MASK;
                         info["name"] = tname;
                         info["bits"] = bits;
-                        dormantTypeInfo[j.value("uuid", "")] = info;
+                        dormantTypeInfo[fileUUID] = info;
 
                         for (auto eit = j["entries"].begin();
                              eit != j["entries"].end();)

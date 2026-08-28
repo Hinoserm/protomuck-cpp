@@ -925,7 +925,7 @@ MUCK::FlatFileConverter::import(FILE * f)
 #endif /* !ARCHAIC_DATABASES */
 
                 /* every imported object gets a fresh identity */
-                MUCK::database().assignUuid(thisref, MUCK::Uuid::generate());
+                MUCK::database().assignUUID(thisref, MUCK::UUID::generate());
 
                 if (Typeof(thisref) == TYPE_PLAYER) {
                     OWNER(thisref) = thisref;

@@ -2,14 +2,14 @@
 #include <ctime>
 #include <sys/random.h>
 
-#include "inc/Uuid.h"
+#include "inc/UUID.h"
 
 namespace MUCK {
 
-Uuid
-Uuid::generate()
+UUID
+UUID::generate()
 {
-    Uuid u;
+    UUID u;
     struct timespec ts;
 
     clock_gettime(CLOCK_REALTIME, &ts);
@@ -48,22 +48,19 @@ hexval(char c)
 }
 
 bool
-Uuid::tryParse(const char *text, Uuid &out)
+UUID::tryParse(const char *text, UUID &out)
 {
-    /* xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx */
-    static const int hyphens[] = { 8, 13, 18, 23 };
-    unsigned char buf[16];
-    int i = 0, nibble = 0, h = 0;
+    /* Accepts the canonical hyphenated form and the bare 32-hex form:
+     * hyphens are ignored wherever they appear, and exactly 32 hex
+     * digits must remain. */
+    unsigned char buf[SIZE];
+    int nibble = 0;
 
     if (!text)
         return false;
-    for (const char *p = text; *p; p++, i++) {
-        if (h < 4 && i == hyphens[h]) {
-            if (*p != '-')
-                return false;
-            h++;
+    for (const char *p = text; *p; p++) {
+        if (*p == '-')
             continue;
-        }
         int v = hexval(*p);
         if (v < 0 || nibble >= 32)
             return false;
@@ -73,24 +70,24 @@ Uuid::tryParse(const char *text, Uuid &out)
             buf[nibble / 2] |= (unsigned char) v;
         nibble++;
     }
-    if (i != 36 || nibble != 32)
+    if (nibble != 32)
         return false;
     out.setBytes(buf);
     return true;
 }
 
-Uuid
-Uuid::parse(const char *text)
+UUID
+UUID::parse(const char *text)
 {
-    Uuid u;
+    UUID u;
 
     if (!tryParse(text, u))
-        return Uuid();
+        return UUID();
     return u;
 }
 
 std::string
-Uuid::toString() const
+UUID::toString() const
 {
     char buf[37];
 
@@ -102,7 +99,7 @@ Uuid::toString() const
 }
 
 std::string
-Uuid::shortString(int digits) const
+UUID::shortString(int digits) const
 {
     std::string full = toString();
     std::string out;
@@ -118,7 +115,7 @@ Uuid::shortString(int digits) const
 }
 
 bool
-Uuid::matchesPrefix(const char *prefix) const
+UUID::matchesPrefix(const char *prefix) const
 {
     std::string full = toString();
     size_t fi = 0;
@@ -141,7 +138,7 @@ Uuid::matchesPrefix(const char *prefix) const
 }
 
 bool
-Uuid::isNil() const
+UUID::isNil() const
 {
     for (int i = 0; i < 16; i++)
         if (b_[i])

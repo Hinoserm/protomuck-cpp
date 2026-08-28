@@ -31,7 +31,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "Uuid.h"
+#include "UUID.h"
 #include "DbObject.h"
 
 namespace MUCK {
@@ -56,16 +56,16 @@ class Database {
             return nullptr;
         return chunkFor(ref)[slotFor(ref)];
     }
-    DbObject *get(const Uuid &u) const;
+    DbObject *get(const UUID &u) const;
 
     /* --- identity --- */
-    const Uuid &uuidOf(dbref ref) const;
-    dbref refOf(const Uuid &u) const;
-    void assignUuid(dbref ref, const Uuid &u);
+    const UUID &UUIDOf(dbref ref) const;
+    dbref refOf(const UUID &u) const;
+    void assignUUID(dbref ref, const UUID &u);
 
     /* Unique-prefix lookup (git style): NOTHING or AMBIGUOUS on
      * failure. */
-    dbref resolveUuidPrefix(const char *prefix) const;
+    dbref resolveUUIDPrefix(const char *prefix) const;
 
     /* --- typed creation: the single creation gatekeeper --- */
     template <class T>
@@ -89,10 +89,10 @@ class Database {
     void deleteObject(dbref victim, dbref deleter);
 
     struct Tombstone {
-        Uuid uuid;
+        UUID uuid;
         dbref ref;
         long deletedAt;
-        Uuid deletedBy;
+        UUID deletedBy;
         /* store revision era at deletion: a snapshot marker with
          * rev < deletedRev was taken while the object was alive and
          * pins its store file until the marker ages out */
@@ -101,7 +101,7 @@ class Database {
     const std::vector<Tombstone> &tombstones() const { return tombstones_; }
     void setTombstones(std::vector<Tombstone> list);
     bool findTombstone(dbref ref, Tombstone *out) const;
-    void removeTombstone(const Uuid &u);
+    void removeTombstone(const UUID &u);
     /* Clear the deleted mark on a shell being resurrected. */
     void reviveHole(dbref ref);
 
@@ -151,7 +151,7 @@ class Database {
     dbref allocated_ = 0;       /* shells exist for [0, allocated_) */
 
     std::vector<Tombstone> tombstones_;
-    std::unordered_map<Uuid, DbObject *> byUuid_;
+    std::unordered_map<UUID, DbObject *> byUUID_;
     mutable std::shared_mutex indexMutex_;
     mutable std::shared_mutex objectLocks_[LOCK_STRIPES];
 };

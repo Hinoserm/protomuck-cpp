@@ -27,7 +27,7 @@
 
 #include <nlohmann/json_fwd.hpp>
 
-#include "Uuid.h"
+#include "UUID.h"
 
 namespace MUCK {
 
@@ -68,7 +68,7 @@ class Module {
 class DbObject {
   public:
     /* --- identity (immutable once assigned) --- */
-    const Uuid &uuid() const { return uuid_; }
+    const UUID &uuid() const { return uuid_; }
     dbref ref() const { return ref_; }
 
     /* --- core fields (views over the legacy payload for now) --- */
@@ -169,7 +169,7 @@ class DbObject {
     void rebuildModules();
 
     dbref ref_;
-    Uuid uuid_;
+    UUID uuid_;
     std::vector<DbObject *> contents_;
     std::vector<DbObject *> exits_;
     bool deleted_ = false;

@@ -789,7 +789,7 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
 #ifdef VERBOSE_EXAMINE
     anotify_nolisten(player, flag_description(thing), 1);
     {
-        const MUCK::Uuid &u = MUCK::database().uuidOf(thing);
+        const MUCK::UUID &u = MUCK::database().UUIDOf(thing);
 
         if (!u.isNil()) {
             sprintf(buf, SYSGREEN "UUID: " SYSYELLOW "%s" SYSGREEN
