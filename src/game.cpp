@@ -11,6 +11,7 @@
 #include "match.h"
 #include "msgparse.h"
 #include "externs.h"
+#include "MacroTable.h"
 #include "strutils.h"
 #include "netresolve.h"
 
@@ -311,7 +312,7 @@ dump_database_internal(void)
     sprintf(tmpfile, "%s.#%d#", MACRO_FILE, epoch);
 
     if ((f = fopen(tmpfile, "w")) != NULL) {
-        macrodump(macrotop, f);
+        MUCK::macros().dump(f);
         fclose(f);
 #ifdef WIN_VC
         if (unlink(MACRO_FILE))
@@ -372,7 +373,7 @@ panic(const char *message)
     /* Write out the macros */
     sprintf(panicfile, "%s.PANIC", MACRO_FILE);
     if ((f = fopen(panicfile, "w")) != NULL) {
-        macrodump(macrotop, f);
+        MUCK::macros().dump(f);
         fclose(f);
     } else {
         perror("CANNOT OPEN MACRO PANIC FILE, YOU LOSE");
@@ -520,7 +521,7 @@ init_game(const char *infile, const char *outfile)
     if ((f = fopen(MACRO_FILE, "r")) == NULL)
         log_status_nowall("INIT: Macro storage file %s is tweaked.\n", MACRO_FILE);
     else {
-        macroload(f);
+        MUCK::macros().load(f);
         fclose(f);
     }
     log_status_nowall("init_game: macro file loaded\n");

@@ -15,6 +15,7 @@
 #include "mpi.h"
 #include "reg.h"
 #include "externs.h"
+#include "MacroTable.h"
 #include "mufevent.h"
 #include "strutils.h"
 #include "interp.h"
@@ -344,7 +345,6 @@ pem_passwd_cb(char *buf, int size, int rwflag, void *userdata)
 #endif
 
 //#ifdef MALLOC_PROFILING
-extern void free_old_macros(void);
 extern void purge_all_free_frames(void);
 extern void purge_mfns(void);
 extern void cleanup_game(void);
@@ -778,7 +778,7 @@ main(int argc, char **argv)
 #endif
 
 #ifdef MALLOC_PROFILING
-        free_old_macros();
+        MUCK::macros().purge();
         purge_all_free_frames();
         purge_timenode_free_pool();
         purge_for_pool();
@@ -4877,7 +4877,7 @@ do_armageddon(dbref player, const char *msg)
 #endif
 
 #ifdef MALLOC_PROFILING
-    free_old_macros();
+    MUCK::macros().purge();
     purge_all_free_frames();
     purge_timenode_free_pool();
     purge_for_pool();

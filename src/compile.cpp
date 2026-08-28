@@ -4,6 +4,7 @@
 
 #include "copyright.h"
 #include "config.h"
+#include "MacroTable.h"
 
 #include "db.h"
 #include "props.h"
@@ -400,7 +401,7 @@ expand_def(COMPSTATE *cstat, const char *defname)
 
     if (!exp) {
         if ((*defname == BEGINMACRO) && (cstat->use_macros)) {
-            return (macro_expansion(macrotop, &defname[1]));
+            return (MUCK::macros().expansion(&defname[1]));
         } else {
             return (NULL);
         }

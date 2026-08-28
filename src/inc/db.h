@@ -1095,14 +1095,6 @@ struct object {
     struct timeval   mpi_proftime;
 };
 
-struct macrotable {
-    char   *name;
-    char   *definition;
-    dbref   implementor;
-    struct macrotable *left;
-    struct macrotable *right;
-};
-
 /* Possible data types that may be stored in a hash table */
 union u_hash_data {
     int     ival;		/* Store compiler tokens here */
@@ -1127,7 +1119,6 @@ typedef hash_entry *hash_tab;
 #define DEFHASHSIZE        (256)    /* Table for compiler $defines */
 
 extern struct object *db;
-extern struct macrotable *macrotop;
 extern dbref db_top;
 
 #ifndef MALLOC_PROFILING
@@ -1173,8 +1164,6 @@ extern void getproperties(FILE *f, int obj);
 extern void free_line(struct line *l);
 extern void db_free_object(dbref i);
 extern void db_clear_object(dbref player, dbref i);
-extern void macrodump(struct macrotable *node, FILE *f);
-extern void macroload(FILE *f);
 extern int WLevel(dbref player);
 extern int db_load_format;
 extern bool db_hash_passwords;

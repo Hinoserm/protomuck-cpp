@@ -9,6 +9,7 @@
 #include "tune.h"
 #include "match.h"
 #include "strutils.h"
+#include "MacroTable.h"
 
 #define DOWNCASE(x) (tolower(x))
 
@@ -54,196 +55,6 @@ interactive(int descr, dbref player, const char *command, int len, int wclen)
     }
 }
 
-char *
-macro_expansion(struct macrotable *node, const char *match)
-{
-    if (!node)
-        return NULL;
-    else {
-        int value = string_compare(match, node->name);
-
-        if (value < 0)
-            return macro_expansion(node->left, match);
-        else if (value > 0)
-            return macro_expansion(node->right, match);
-        else
-            return alloc_string(node->definition);
-    }
-}
-
-struct macrotable *
-new_macro(const char *name, const char *definition, dbref player)
-{
-    struct macrotable *newmacro = new macrotable;
-    char buf[BUFFER_LEN];
-    int i;
-
-    for (i = 0; name[i]; i++)
-        buf[i] = DOWNCASE(name[i]);
-    buf[i] = '\0';
-    newmacro->name = alloc_string(buf);
-    newmacro->definition = alloc_string(definition);
-    newmacro->implementor = player;
-    newmacro->left = NULL;
-    newmacro->right = NULL;
-    return (newmacro);
-}
-
-int
-grow_macro_tree(struct macrotable *node, struct macrotable *newmacro)
-{
-    int value = strcmp(newmacro->name, node->name);
-
-    if (!value)
-        return 0;
-    else if (value < 0) {
-        if (node->left)
-            return grow_macro_tree(node->left, newmacro);
-        else {
-            node->left = newmacro;
-            return 1;
-        }
-    } else if (node->right)
-        return grow_macro_tree(node->right, newmacro);
-    else {
-        node->right = newmacro;
-        return 1;
-    }
-}
-
-int
-insert_macro(const char *macroname, const char *macrodef, dbref player, struct macrotable **node)
-{
-    struct macrotable *newmacro;
-
-    newmacro = new_macro(macroname, macrodef, player);
-    if (!(*node)) {
-        *node = newmacro;
-        return 1;
-    } else
-        return (grow_macro_tree((*node), newmacro));
-}
-
-void
-do_list_tree(struct macrotable *node, const char *first, const char *last, int length, dbref player)
-{
-    static char buf[BUFFER_LEN];
-
-    if (!node)
-        return;
-    else {
-        if (strncmp(node->name, first, strlen(first)) >= 0)
-            do_list_tree(node->left, first, last, length, player);
-        if ((strncmp(node->name, first, strlen(first)) >= 0) && (strncmp(node->name, last, strlen(last)) <= 0)) {
-            if (length) {
-                sprintf(buf, "%-16s %-16s  %s", node->name, NAME(node->implementor), node->definition);
-                notify(player, buf);
-                buf[0] = '\0';
-            } else {
-                sprintf(buf + strlen(buf), "%-16s", node->name);
-                if (strlen(buf) > 70) {
-                    notify(player, buf);
-                    buf[0] = '\0';
-                }
-            }
-        }
-        if (strncmp(last, node->name, strlen(last)) >= 0)
-            do_list_tree(node->right, first, last, length, player);
-        if ((node == macrotop) && !length) {
-            notify(player, buf);
-            buf[0] = '\0';
-        }
-    }
-}
-
-void
-list_macros(const char *word[], int k, dbref player, int length)
-{
-    if (!k--) {
-        do_list_tree(macrotop, "a", "z", length, player);
-    } else {
-        do_list_tree(macrotop, word[0], word[k], length, player);
-    }
-    anotify_nolisten(player, CINFO "End of list.", 1);
-    return;
-}
-
-void
-purge_macro_tree(struct macrotable *node)
-{
-    if (!node)
-        return;
-    purge_macro_tree(node->left);
-    purge_macro_tree(node->right);
-    delete[]node->name;
-    delete[]node->definition;
-    delete node;
-}
-
-int
-erase_node(struct macrotable *oldnode, struct macrotable *node, const char *killname, struct macrotable *mtop)
-{
-    if (!node)
-        return 0;
-    else if (strcmp(killname, node->name) < 0)
-        return erase_node(node, node->left, killname, mtop);
-    else if (strcmp(killname, node->name))
-        return erase_node(node, node->right, killname, mtop);
-    else {
-        if (node == oldnode->left) {
-            oldnode->left = node->left;
-            if (node->right)
-                grow_macro_tree(mtop, node->right);
-            delete[]node->name;
-            delete[]node->definition;
-            delete node;
-
-            return 1;
-        } else {
-            oldnode->right = node->right;
-            if (node->left)
-                grow_macro_tree(mtop, node->left);
-            delete[]node->name;
-            delete[]node->definition;
-            delete node;
-
-            return 1;
-        }
-    }
-}
-
-
-int
-kill_macro(const char *macroname, dbref player, struct macrotable **mtop)
-{
-    if (!(*mtop)) {
-        return (0);
-    } else if (!string_compare(macroname, (*mtop)->name)) {
-        struct macrotable *macrotemp = (*mtop);
-        int whichway = ((*mtop)->left) ? 1 : 0;
-
-        *mtop = whichway ? (*mtop)->left : (*mtop)->right;
-        if ((*mtop) && (whichway ? macrotemp->right : macrotemp->left))
-            grow_macro_tree((*mtop), whichway ? macrotemp->right : macrotemp->left);
-        delete[]macrotemp->name;
-        delete[]macrotemp->definition;
-        delete macrotemp;
-
-        return (1);
-    } else if (erase_node((*mtop), (*mtop), macroname, (*mtop)))
-        return (1);
-    else
-        return (0);
-}
-
-
-void
-free_old_macros(void)
-{
-    purge_macro_tree(macrotop);
-}
-
-
 /* The editor itself --- this gets called each time every time to
  * parse a command.
  */
@@ -285,7 +96,7 @@ editor(int descr, dbref player, const char *command)
             } else if (!word[2]) {
                 anotify_nolisten(player, CFAIL "Invalid definition syntax.", 1);
             } else {
-                if (insert_macro(word[1], word[2], player, &macrotop)) {
+                if (MUCK::macros().insert(word[1], word[2], player)) {
                     anotify_nolisten(player, CSUCC "Entry created.", 1);
                 } else {
                     anotify_nolisten(player, CINFO "That macro already exists.", 1);
@@ -315,17 +126,17 @@ editor(int descr, dbref player, const char *command)
                 if (!Mage(player)) {
                     anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
                 } else {
-                    if (kill_macro(word[0], player, &macrotop))
+                    if (MUCK::macros().remove(word[0]))
                         anotify_nolisten(player, CSUCC "Macro entry deleted.", 1);
                     else
                         anotify_nolisten(player, CINFO "Macro to delete not found.", 1);
                 }
                 break;
             case SHOW_COMMAND:
-                list_macros(word, i, player, 1);
+                MUCK::macros().list(word, i, player, true);
                 break;
             case SHORTSHOW_COMMAND:
-                list_macros(word, i, player, 0);
+                MUCK::macros().list(word, i, player, false);
                 break;
             case INSERT_COMMAND:
                 do_insert(player, program, arg, i);

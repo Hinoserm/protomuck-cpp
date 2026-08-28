@@ -199,8 +199,6 @@ extern void undirtyprops(dbref obj);
 #endif
 
 /* from edit.c */
-extern struct macrotable *new_macro(const char *name, const char *definition, dbref player);
-extern char *macro_expansion(struct macrotable *node, const char *match);
 extern void match_and_list(int descr, dbref player, const char *name,
                            char *linespec, int editor);
 extern void do_list(dbref player, dbref program, int arg[], int argc,

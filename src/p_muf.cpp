@@ -1,5 +1,6 @@
 #include "copyright.h"
 #include "config.h"
+#include "MacroTable.h"
 #ifdef MUF_EDIT_PRIMS
 #include "db.h"
 #include "inst.h"
@@ -12,7 +13,6 @@
 #include "strutils.h"
 #include "interp.h"
 /* Some externs to functions elsewhere in the code. */
-extern int kill_macro(const char *, dbref, struct macrotable **);
 
 void
 prim_priminfo_array(PRIM_PROTOTYPE)
@@ -57,11 +57,10 @@ prim_kill_macro(PRIM_PROTOTYPE)
         abort_interp("Permission denied.");
     strcpy(tmp, (const char *) oper[0].data.string->data);
 
-    result = kill_macro(tmp, player, &macrotop);
+    result = MUCK::macros().remove(tmp) ? 1 : 0;
     PushInt(result);
 }
 
-extern int insert_macro(const char *, const char *, dbref, struct macrotable **);
 void
 prim_insert_macro(PRIM_PROTOTYPE)
 {
@@ -81,19 +80,16 @@ prim_insert_macro(PRIM_PROTOTYPE)
     strcpy(namebuf, (const char *) oper[1].data.string->data);
     strcpy(defbuf, (const char *) oper[0].data.string->data);
 
-    result = insert_macro(namebuf, defbuf, player, &macrotop);
+    result = MUCK::macros().insert(namebuf, defbuf, player) ? 1 : 0;
     PushInt(result);
 }
 
-stk_array *
-make_macros_array(stk_array *dict, struct macrotable *node)
+static void
+add_macro_to_array(void *ctx, const char *name, const char *definition, dbref implementor)
 {
-    if (!node)
-        return 0;
-    make_macros_array(dict, node->left);
-    array_set_strkey_strval(&dict, node->name, node->definition);
-    make_macros_array(dict, node->right);
-    return dict;
+    stk_array **dict = (stk_array **) ctx;
+
+    array_set_strkey_strval(dict, name, definition);
 }
 
 void
@@ -106,7 +102,7 @@ prim_get_macros_array(PRIM_PROTOTYPE)
         abort_interp("Permission denied.");
     CHECKOFLOW(1);
     nw = new_array_dictionary();
-    make_macros_array(nw, macrotop);
+    MUCK::macros().forEach(add_macro_to_array, &nw);
     PushArrayRaw(nw);
 }
 
