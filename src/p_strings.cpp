@@ -2960,8 +2960,7 @@ prim_base64encode(PRIM_PROTOTYPE)
         std::string tmp;
         
         try {
-            std::string in(oper[0].data.string->data.c_str(), oper[0].data.string->length());
-            tmp = http_encode64(in);
+            tmp = http_encode64(oper[0].data.string->data);
         }
         catch(std::exception & e) {
             abort_interp(e.what());
@@ -3012,8 +3011,7 @@ prim_str2hex(PRIM_PROTOTYPE)
         if (oper[0].data.string->length() * 2 >= BUFFER_LEN)
             abort_interp("Resultant string would overflow buffer.");
 
-        std::string in(oper[0].data.string->data.c_str(), oper[0].data.string->length()); 
-        std::string out = strToHex(in, 1);
+        std::string out = strToHex(oper[0].data.string->data, 1);
 
         PushString(out);
     }
@@ -3031,8 +3029,7 @@ prim_hex2str(PRIM_PROTOTYPE)
         std::string out;
 
         try {
-            std::string in(oper[0].data.string->data.c_str(), oper[0].data.string->length());
-            out = hexToStr(in);
+            out = hexToStr(oper[0].data.string->data);
         }
         catch(std::exception & e) {
             abort_interp(e.what());
