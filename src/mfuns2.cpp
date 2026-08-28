@@ -145,7 +145,7 @@ mfn_links(MFUNARGS)
             obj = DBFETCH(obj)->sp.player.home;
             break;
         case TYPE_THING:
-            obj = DBFETCH(obj)->sp.thing.home;
+            obj = [&]{ MUCK::Thing *t = MUCK::database().get(obj)->As<MUCK::Thing>(); return (t && t->home()) ? t->home()->ref() : NOTHING; }();
             break;
         case TYPE_EXIT:
             *buf = '\0';

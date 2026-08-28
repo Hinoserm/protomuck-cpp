@@ -10,6 +10,7 @@
 #include "match.h"
 #include "interface.h"
 #include "externs.h"
+#include "Modules.h"
 
 #define DOWNCASE(x) (tolower(x))
 
@@ -575,7 +576,7 @@ match_all_exits(struct match_data *md)
 
     /* if player is in a vehicle, use environment of vehicle's home */
     if (Typeof(loc) == TYPE_THING) {
-        loc = DBFETCH(loc)->sp.thing.home;
+        loc = [&]{ MUCK::Thing *t = MUCK::database().get(loc)->As<MUCK::Thing>(); return (t && t->home()) ? t->home()->ref() : NOTHING; }();
         if (loc == NOTHING)
             return;
         if (loc == NIL)

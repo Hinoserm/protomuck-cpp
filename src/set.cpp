@@ -848,7 +848,7 @@ controls_link(dbref who, dbref what)
 
         case TYPE_THING:
         {
-            if (controls(who, DBFETCH(what)->sp.thing.home))
+            if (controls(who, [&]{ MUCK::Thing *t = MUCK::database().get(what)->As<MUCK::Thing>(); return (t && t->home()) ? t->home()->ref() : NOTHING; }()))
                 return 1;
             return 0;
         }
@@ -922,7 +922,8 @@ _do_unlink(int descr, dbref player, const char *name, int quiet)
                         break;
                     case TYPE_THING:
                         ts_modifyobject(player, exit);
-                        DBSTORE(exit, sp.thing.home, OWNER(exit));
+                        MUCK::database().get(exit)->As<MUCK::Thing>()
+                            ->setHome(MUCK::database().get(OWNER(exit)));
                         if (!quiet)
                             anotify_fmt(player, CSUCC "%s's home reset to owner.", NAME(exit));
                         break;

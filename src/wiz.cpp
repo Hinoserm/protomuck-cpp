@@ -173,7 +173,7 @@ do_teleport(int descr, dbref player, const char *arg1, const char *arg2)
                             destination = DBFETCH(OWNER(victim))->sp.player.home;
                         break;
                     case TYPE_THING:
-                        destination = DBFETCH(victim)->sp.thing.home;
+                        destination = [&]{ MUCK::Thing *t = MUCK::database().get(victim)->As<MUCK::Thing>(); return (t && t->home()) ? t->home()->ref() : NOTHING; }();
                         if (parent_loop_check(victim, destination)) {
                             destination = DBFETCH(OWNER(victim))->sp.player.home;
                             if (parent_loop_check(victim, destination)) {
@@ -684,8 +684,9 @@ do_frob(int descr, dbref player, const char *name, const char *recip)
                     break;
             }
         }
-        if (Typeof(stuff) == TYPE_THING && DBFETCH(stuff)->sp.thing.home == victim) {
-            DBSTORE(stuff, sp.thing.home, tp_player_start);
+        if (MUCK::Thing *t = MUCK::database().get(stuff)->As<MUCK::Thing>()) {
+            if (t->home() && t->home()->ref() == victim)
+                t->setHome(MUCK::database().get(tp_player_start));
         }
     }
     if (DBFETCH(victim)->sp.player.password) {
@@ -720,7 +721,7 @@ do_frob(int descr, dbref player, const char *name, const char *recip)
     POWERSDB(victim) = 0;
     POWER2DB(victim) = 0;
     OWNER(victim) = player;     /* you get it */
-    DBFETCH(victim)->sp.thing.value = 1;
+    MUCK::database().get(victim)->As<MUCK::Thing>()->setValue(1);
 
     if (tp_recycle_frobs)
         recycle(descr, player, victim);

@@ -7,6 +7,7 @@
 #include "tune.h"
 #include "mpi.h"
 #include "externs.h"
+#include "Modules.h"
 #include "props.h"
 #include "match.h"
 #include "interp.h"
@@ -1640,7 +1641,7 @@ mfn_money(MFUNARGS)
         ABORT_MPI("MONEY", tp_noperm_mesg);
     switch (Typeof(obj)) {
         case TYPE_THING:
-            sprintf(buf, "%d", DBFETCH(obj)->sp.thing.value);
+            sprintf(buf, "%d", MUCK::database().get(obj)->As<MUCK::Thing>()->value());
             break;
         case TYPE_PLAYER:
             sprintf(buf, "%d", DBFETCH(obj)->sp.player.pennies);

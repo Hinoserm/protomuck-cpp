@@ -427,10 +427,10 @@ prim_addpennies(PRIM_PROTOTYPE)
     } else if (Typeof(ref) == TYPE_THING) {
         if (mlev < LMAGE)
             abort_interp(tp_noperm_mesg);
-        result = DBFETCH(ref)->sp.thing.value + oper[0].data.number;
+        result = MUCK::database().get(ref)->As<MUCK::Thing>()->value() + oper[0].data.number;
         if (result < 1)
             abort_interp("Result must be positive");
-        DBFETCH(ref)->sp.thing.value += oper[0].data.number;
+        { MUCK::Thing *t = MUCK::database().get(ref)->As<MUCK::Thing>(); t->setValue(t->value() + oper[0].data.number); }
         DBDIRTY(ref);
     } else {
         abort_interp("Invalid object type");
@@ -593,7 +593,7 @@ prim_pennies(PRIM_PROTOTYPE)
             result = DBFETCH(oper[0].data.objref)->sp.player.pennies;
             break;
         case TYPE_THING:
-            result = DBFETCH(oper[0].data.objref)->sp.thing.value;
+            result = MUCK::database().get(oper[0].data.objref)->As<MUCK::Thing>()->value();
             break;
         default:
             abort_interp("Invalid object type argument");
@@ -1323,7 +1323,7 @@ prim_getlink(PRIM_PROTOTYPE)
             ref = DBFETCH(oper[0].data.objref)->sp.player.home;
             break;
         case TYPE_THING:
-            ref = DBFETCH(oper[0].data.objref)->sp.thing.home;
+            ref = [&]{ MUCK::Thing *t = MUCK::database().get(oper[0].data.objref)->As<MUCK::Thing>(); return (t && t->home()) ? t->home()->ref() : NOTHING; }();
             break;
         case TYPE_ROOM:
             ref = [&]{ MUCK::Room *r = MUCK::database().get(oper[0].data.objref)->As<MUCK::Room>(); return (r && r->dropTo()) ? r->dropTo()->ref() : NOTHING; }();
@@ -1364,7 +1364,7 @@ prim_getlinks(PRIM_PROTOTYPE)
             PushInt(count);
             break;
         case TYPE_THING:
-            ref = DBFETCH(ref2)->sp.thing.home;
+            ref = [&]{ MUCK::Thing *t = MUCK::database().get(ref2)->As<MUCK::Thing>(); return (t && t->home()) ? t->home()->ref() : NOTHING; }();
             count = 1;
             PushObject(ref);
             PushInt(count);
@@ -1486,7 +1486,7 @@ prim_setlink(PRIM_PROTOTYPE)
                     abort_interp(tp_noperm_mesg);
                 if (parent_loop_check(ref, oper[0].data.objref))
                     abort_interp("That would cause a parent paradox");
-                DBFETCH(ref)->sp.thing.home = oper[0].data.objref;
+                MUCK::database().get(ref)->As<MUCK::Thing>()->setHome(MUCK::database().get(oper[0].data.objref));
                 break;
             case TYPE_ROOM:
                 if (!permissions(mlev, ProgUID, ref))
@@ -1570,14 +1570,14 @@ prim_newobject(PRIM_PROTOTYPE)
         NAME(ref) = alloc_string(b);
         DBFETCH(ref)->location = oper[1].data.objref;
         OWNER(ref) = OWNER(ProgUID);
-        DBFETCH(ref)->sp.thing.value = 1;
+        MUCK::database().get(ref)->As<MUCK::Thing>()->setValue(1);
         DBFETCH(ref)->exits = NOTHING;
         FLAGS(ref) = TYPE_THING;
 
         if ((loc = DBFETCH(PSafe)->location) != NOTHING && controls(PSafe, loc)) {
-            DBFETCH(ref)->sp.thing.home = loc; /* home */
+            MUCK::database().get(ref)->As<MUCK::Thing>()->setHome(MUCK::database().get(loc)); /* home */
         } else {
-            DBFETCH(ref)->sp.thing.home = DBFETCH(PSafe)->sp.player.home;
+            MUCK::database().get(ref)->As<MUCK::Thing>()->setHome(MUCK::database().get(DBFETCH(PSafe)->sp.player.home));
             /* set to player's home instead */
         }
     }
@@ -1877,7 +1877,7 @@ prim_nextentrance(PRIM_PROTOTYPE)
                         foundref = 1;
                     break;
                 case TYPE_THING:
-                    if (DBFETCH(ref)->sp.thing.home == linkref)
+                    if ([&]{ MUCK::Thing *t = MUCK::database().get(ref)->As<MUCK::Thing>(); return (t && t->home()) ? t->home()->ref() : NOTHING; }() == linkref)
                         foundref = 1;
                     break;
                 case TYPE_EXIT:
@@ -2050,8 +2050,9 @@ prim_toadplayer(PRIM_PROTOTYPE)
                     break;
             }
         }
-        if (Typeof(stuff) == TYPE_THING && DBFETCH(stuff)->sp.thing.home == victim) {
-            DBSTORE(stuff, sp.thing.home, tp_player_start);
+        if (MUCK::Thing *t = MUCK::database().get(stuff)->As<MUCK::Thing>()) {
+            if (t->home() && t->home()->ref() == victim)
+                t->setHome(MUCK::database().get(tp_player_start));
         }
     }
 
@@ -2082,7 +2083,7 @@ prim_toadplayer(PRIM_PROTOTYPE)
     POWERSDB(victim) = 0;
     POWER2DB(victim) = 0;
     OWNER(victim) = recipient;
-    DBFETCH(victim)->sp.thing.value = 1;
+    MUCK::database().get(victim)->As<MUCK::Thing>()->setValue(1);
 
     if (tp_recycle_frobs)
         recycle(fr->descr, recipient, victim);
@@ -2142,13 +2143,13 @@ prim_movepennies(PRIM_PROTOTYPE)
         } else if (Typeof(ref2) == TYPE_THING) {
             if (mlev < 4)
                 abort_interp(tp_noperm_mesg);
-            result2 = DBFETCH(ref2)->sp.thing.value + oper[0].data.number;
+            result2 = MUCK::database().get(ref2)->As<MUCK::Thing>()->value() + oper[0].data.number;
             if (result < (result - oper[0].data.number))
                 abort_interp("Would roll over player's score. (1)");
             if ((result - oper[0].data.number) < 0)
                 abort_interp("Result would be negative. (1)");
             DBFETCH(ref)->sp.player.pennies += -(oper[0].data.number);
-            DBFETCH(ref2)->sp.thing.value += oper[0].data.number;
+            { MUCK::Thing *t = MUCK::database().get(ref2)->As<MUCK::Thing>(); t->setValue(t->value() + oper[0].data.number); }
             DBDIRTY(ref);
             DBDIRTY(ref2);
         } else {
@@ -2157,7 +2158,7 @@ prim_movepennies(PRIM_PROTOTYPE)
     } else if (Typeof(ref) == TYPE_THING) {
         if (mlev < 4)
             abort_interp(tp_noperm_mesg);
-        result = DBFETCH(ref)->sp.thing.value - oper[0].data.number;
+        result = MUCK::database().get(ref)->As<MUCK::Thing>()->value() - oper[0].data.number;
         if (result < 1)
             abort_interp("Result must be positive. (1)");
         if (Typeof(ref2) == TYPE_PLAYER) {
@@ -2166,13 +2167,13 @@ prim_movepennies(PRIM_PROTOTYPE)
                 abort_interp("Would roll over player's score. (2)");
             if ((result2 + oper[0].data.number) > tp_max_pennies)
                 abort_interp("Would exceed MAX_PENNIES. (2)");
-            DBFETCH(ref)->sp.thing.value += -(oper[0].data.number);
+            { MUCK::Thing *t = MUCK::database().get(ref)->As<MUCK::Thing>(); t->setValue(t->value() - oper[0].data.number); }
             DBFETCH(ref2)->sp.player.pennies += oper[0].data.number;
             DBDIRTY(ref);
             DBDIRTY(ref2);
         } else if (Typeof(ref2) == TYPE_THING) {
-            DBFETCH(ref)->sp.thing.value += -(oper[0].data.number);
-            DBFETCH(ref2)->sp.thing.value += oper[0].data.number;
+            { MUCK::Thing *t = MUCK::database().get(ref)->As<MUCK::Thing>(); t->setValue(t->value() - oper[0].data.number); }
+            { MUCK::Thing *t = MUCK::database().get(ref2)->As<MUCK::Thing>(); t->setValue(t->value() + oper[0].data.number); }
             DBDIRTY(ref);
             DBDIRTY(ref2);
         } else {
@@ -2468,7 +2469,7 @@ array_getlinks(dbref obj)
                 temp1.type = PROG_INTEGER;
                 temp1.data.number = count++;
                 temp2.type = PROG_OBJECT;
-                temp2.data.objref = DBFETCH(obj)->sp.thing.home;
+                temp2.data.objref = [&]{ MUCK::Thing *t = MUCK::database().get(obj)->As<MUCK::Thing>(); return (t && t->home()) ? t->home()->ref() : NOTHING; }();
                 array_setitem(&nw, &temp1, &temp2);
                 CLEAR(&temp1);
                 CLEAR(&temp2);
@@ -2614,14 +2615,14 @@ prim_getobjinfo(PRIM_PROTOTYPE)
             temp1.type = PROG_STRING;
             temp1.data.string = alloc_prog_string("HOME");
             temp2.type = PROG_OBJECT;
-            temp2.data.objref = DBFETCH(ref)->sp.thing.home;
+            temp2.data.objref = [&]{ MUCK::Thing *t = MUCK::database().get(ref)->As<MUCK::Thing>(); return (t && t->home()) ? t->home()->ref() : NOTHING; }();
             array_setitem(&nw, &temp1, &temp2);
             CLEAR(&temp1);
             CLEAR(&temp2);
             temp1.type = PROG_STRING;
             temp1.data.string = alloc_prog_string("VALUE");
             temp2.type = PROG_INTEGER;
-            temp2.data.objref = DBFETCH(ref)->sp.thing.value;
+            temp2.data.objref = MUCK::database().get(ref)->As<MUCK::Thing>()->value();
             array_setitem(&nw, &temp1, &temp2);
             CLEAR(&temp1);
             CLEAR(&temp2);
@@ -2781,7 +2782,7 @@ prim_entrances_array(PRIM_PROTOTYPE)
                     array_appendref(&nw, i);
                 break;
             case TYPE_THING:
-                if (DBFETCH(i)->sp.thing.home == ref)
+                if ([&]{ MUCK::Thing *t = MUCK::database().get(i)->As<MUCK::Thing>(); return (t && t->home()) ? t->home()->ref() : NOTHING; }() == ref)
                     array_appendref(&nw, i);
                 break;
             case TYPE_ROOM:

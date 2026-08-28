@@ -7,6 +7,7 @@
 #include "interface.h"
 #include "match.h"
 #include "externs.h"
+#include "Modules.h"
 
 void
 do_give(int descr, dbref player, const char *recipient, int amount)
@@ -69,11 +70,14 @@ do_give(int descr, dbref player, const char *recipient, int amount)
                 sprintf(buf, CNOTE "%s gives you %d %s.", NAME(player), amount, amount == 1 ? tp_penny : tp_pennies);
                 anotify_nolisten2(who, buf);
                 break;
-            case TYPE_THING:
-                DBFETCH(who)->sp.thing.value += amount;
-                sprintf(buf, CSUCC "You change the value of %s to %d %s.", NAME(who), DBFETCH(who)->sp.thing.value, DBFETCH(who)->sp.thing.value == 1 ? tp_penny : tp_pennies);
+            case TYPE_THING: {
+                MUCK::Thing *t = MUCK::database().get(who)->As<MUCK::Thing>();
+
+                t->setValue(t->value() + amount);
+                sprintf(buf, CSUCC "You change the value of %s to %d %s.", NAME(who), t->value(), t->value() == 1 ? tp_penny : tp_pennies);
                 anotify_nolisten2(player, buf);
                 break;
+            }
             default:
                 anotify_fmt(player, CFAIL "You can't give %s to that!", tp_pennies);
                 break;

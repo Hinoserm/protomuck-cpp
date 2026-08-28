@@ -37,7 +37,7 @@ moveto(dbref what, dbref where)
                     where = DBFETCH(what)->sp.player.home;
                     break;
                 case TYPE_THING:
-                    where = DBFETCH(what)->sp.thing.home;
+                    where = [&]{ MUCK::Thing *t = MUCK::database().get(what)->As<MUCK::Thing>(); return (t && t->home()) ? t->home()->ref() : NOTHING; }();
                     if (parent_loop_check(what, where))
                         where = DBFETCH(OWNER(what))->sp.player.home;
                     break;
@@ -131,7 +131,7 @@ parent_loop_check(dbref source, dbref dest)
         return 0;
     if (dest == NIL)
         return 0;
-    if (Typeof(dest) == TYPE_THING && parent_loop_check(source, DBFETCH(dest)->sp.thing.home))
+    if (Typeof(dest) == TYPE_THING && parent_loop_check(source, [&]{ MUCK::Thing *t = MUCK::database().get(dest)->As<MUCK::Thing>(); return (t && t->home()) ? t->home()->ref() : NOTHING; }()))
         return 1;
     return parent_loop_check(source, DBFETCH(dest)->location);
 }
@@ -912,7 +912,8 @@ recycle(int descr, dbref player, dbref thing)
             break;
         case TYPE_THING:
             if (!Mage(OWNER(thing)))
-                DBFETCH(OWNER(thing))->sp.player.pennies += DBFETCH(thing)->sp.thing.value;
+                DBFETCH(OWNER(thing))->sp.player.pennies +=
+                    MUCK::database().get(thing)->As<MUCK::Thing>()->value();
             DBDIRTY(OWNER(thing));
             for (first = DBFETCH(thing)->exits; first != NOTHING; first = rest) {
                 rest = DBFETCH(first)->next;
@@ -953,10 +954,11 @@ recycle(int descr, dbref player, dbref thing)
                 }
                 break;
             case TYPE_THING:
-                if (DBFETCH(rest)->sp.thing.home == thing) {
+                if ([&]{ MUCK::Thing *t = MUCK::database().get(rest)->As<MUCK::Thing>(); return (t && t->home()) ? t->home()->ref() : NOTHING; }() == thing) {
                     if (DBFETCH(OWNER(rest))->sp.player.home == thing)
                         DBSTORE(OWNER(rest), sp.player.home, tp_player_start);
-                    DBFETCH(rest)->sp.thing.home = DBFETCH(OWNER(rest))->sp.player.home;
+                    MUCK::database().get(rest)->As<MUCK::Thing>()->setHome(
+                        MUCK::database().get(DBFETCH(OWNER(rest))->sp.player.home));
                     DBDIRTY(rest);
                 }
                 if (DBFETCH(rest)->exits == thing) {

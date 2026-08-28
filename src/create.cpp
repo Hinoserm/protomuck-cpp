@@ -431,7 +431,8 @@ do_link(int descr, dbref player, const char *thing_name, const char *dest_name)
             }
             /* do the link */
             if (Typeof(thing) == TYPE_THING) {
-                DBFETCH(thing)->sp.thing.home = dest;
+                MUCK::database().get(thing)->As<MUCK::Thing>()
+                    ->setHome(MUCK::database().get(dest));
             } else
                 DBFETCH(thing)->sp.player.home = dest;
             sprintf(buf, CSUCC "%s's home set to %s.", NAME(thing), unparse_object(player, dest));
@@ -757,18 +758,18 @@ do_create(dbref player, char *name, char *acost)
         NAME(thing) = alloc_string(name);
         DBFETCH(thing)->location = player;
         OWNER(thing) = OWNER(player);
-        DBFETCH(thing)->sp.thing.value = OBJECT_ENDOWMENT(cost);
+        DBFETCH(thing)->sp.thing.value = OBJECT_ENDOWMENT(cost);   /* raw: mid-construction */
         DBFETCH(thing)->exits = NOTHING;
         FLAGS(thing) = TYPE_THING;
 
         /* endow the object */
-        if (DBFETCH(thing)->sp.thing.value > tp_max_object_endowment) {
-            DBFETCH(thing)->sp.thing.value = tp_max_object_endowment;
+        if (DBFETCH(thing)->sp.thing.value > tp_max_object_endowment) {   /* raw: mid-construction */
+            DBFETCH(thing)->sp.thing.value = tp_max_object_endowment;   /* raw: mid-construction */
         }
         if ((loc = DBFETCH(player)->location) != NOTHING && controls(player, loc)) {
-            DBFETCH(thing)->sp.thing.home = loc; /* home */
+            DBFETCH(thing)->sp.thing.home = loc; /* raw: mid-construction */
         } else {
-            DBFETCH(thing)->sp.thing.home = player;
+            DBFETCH(thing)->sp.thing.home = player;    /* raw: mid-construction */
             /* set thing's home to player instead */
         }
 

@@ -760,7 +760,8 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
             break;
         case TYPE_THING:
             sprintf(buf, "%.*s" SYSNORMAL "  Owner: %s  Value: %d",
-                    (int) (BUFFER_LEN - strlen(NAME(OWNER(thing))) - 35), ansi_unparse_object(OWNER(player), thing), NAME(OWNER(thing)), DBFETCH(thing)->sp.thing.value);
+                    (int) (BUFFER_LEN - strlen(NAME(OWNER(thing))) - 35), ansi_unparse_object(OWNER(player), thing), NAME(OWNER(thing)),
+                    MUCK::database().get(thing)->As<MUCK::Thing>()->value());
             break;
         case TYPE_PLAYER:
             sprintf(buf, "%.*s" SYSNORMAL "  %s: %d  ",
@@ -934,7 +935,8 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
             break;
         case TYPE_THING:
             /* print home */
-            sprintf(buf, SYSAQUA "Home: %s", ansi_unparse_object(OWNER(player), DBFETCH(thing)->sp.thing.home)); /* home */
+            sprintf(buf, SYSAQUA "Home: %s",
+                    ansi_unparse_object(OWNER(player), [&]{ MUCK::Thing *t = MUCK::database().get(thing)->As<MUCK::Thing>(); return (t && t->home()) ? t->home()->ref() : NOTHING; }())); /* home */
             anotify_nolisten(player, buf, 1);
             /* print location if player can link to it */
             if (DBFETCH(thing)->location != NOTHING && (controls(OWNER(player), DBFETCH(thing)->location)
@@ -1746,7 +1748,8 @@ display_objinfo(dbref player, dbref obj, char output_type)
                     sprintf(buf, "%-38.512s  %.512s", buf2, ansi_unparse_object(player, DBFETCH(obj)->sp.player.home));
                     break;
                 case TYPE_THING:
-                    sprintf(buf, "%-38.512s  %.512s", buf2, ansi_unparse_object(player, DBFETCH(obj)->sp.thing.home));
+                    sprintf(buf, "%-38.512s  %.512s", buf2,
+                            ansi_unparse_object(player, [&]{ MUCK::Thing *t = MUCK::database().get(obj)->As<MUCK::Thing>(); return (t && t->home()) ? t->home()->ref() : NOTHING; }()));
                     break;
                 default:
                     sprintf(buf, "%-38.512s  %.512s", buf2, "N/A");
@@ -1943,7 +1946,7 @@ do_entrances(int descr, dbref player, const char *name, const char *flags)
                     }
                     break;
                 case TYPE_THING:
-                    if (DBFETCH(i)->sp.thing.home == thing) {
+                    if ([&]{ MUCK::Thing *t = MUCK::database().get(i)->As<MUCK::Thing>(); return (t && t->home()) ? t->home()->ref() : NOTHING; }() == thing) {
                         display_objinfo(player, i, output_type);
                         total++;
                     }
