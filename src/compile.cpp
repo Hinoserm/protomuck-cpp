@@ -2548,7 +2548,7 @@ do_directive(COMPSTATE *cstat, const char *direct)
                 sprintf(propname, "/_defs/%s", tmpname.c_str());
             }
 
-            snprintf(defstr, sizeof(defstr), "#%i \"%s\" call", cstat->program, tmpname);
+            snprintf(defstr, sizeof(defstr), "#%i \"%s\" call", cstat->program, tmpname.c_str());
 
             if (doitset)
                 add_property(cstat->program, propname, defstr, 0);

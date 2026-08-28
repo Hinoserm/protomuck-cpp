@@ -51,3 +51,27 @@ Known code bugs found during the 2026-08-27 man.txt audit
 * mancheck.cpp references eight PRIMS_*_NAMES macros that no longer
   exist and is not in the CMake build; it cannot compile. Rewrite it
   to walk primlist[] instead, or retire it.
+
+std::string conversion notes (2026-08-28)
+-----------------------------------------
+
+* Embedded-NUL semantics: the rewritten string prims (SPLIT, RSPLIT,
+  STRCUT, MIDSTR, SUBST, TOUPPER, TOLOWER, STRIPLEAD, STRIPTAIL) now
+  operate on the full stored byte range of a MUF string. The old code
+  truncated at the first NUL byte, and RSPLIT read uninitialized
+  stack memory past it. Strings containing NULs only arise from
+  BASE64DECODE / HEX2STR output; ordinary text is unaffected. The old
+  behavior was partially undefined and cannot be reproduced exactly;
+  the new behavior is binary-safe. Flagged for review.
+
+* MALLOC_PROFILING: CrT_alloc_prog_string now constructs shared_string
+  normally; the profiler no longer tracks MUF string allocations.
+
+* FILE_PRIMS: a forced -DFILE_PRIMS syntax pass of p_file.cpp is
+  clean, but the configuration has not been fully built and tested
+  since the conversion.
+
+* Remaining perf candidates from the review fleet, deliberately not
+  taken: prim_explode / prim_explode_array whole-source copies (scan
+  semantics are load-bearing), macro-splice strlen/strcpy/strcat in
+  next_token (compile-time only).
