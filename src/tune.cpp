@@ -920,16 +920,6 @@ tune_get_parmstring(const char *name, int mlev)
     static char buf[BUFFER_LEN + 50];
     struct tune_str_entry *tstr = tune_str_list;
 
-    /* virtual, read-only build-feature parameters: they reflect the
-     * compiled binary and no @tune can change them */
-    if (!string_compare(name, "muf_int64")) {
-#ifdef MUF_INT64
-        return "yes";
-#else
-        return "no";
-#endif
-    }
-
     struct tune_time_entry *ttim = tune_time_list;
     struct tune_val_entry *tval = tune_val_list;
     struct tune_ref_entry *tref = tune_ref_list;

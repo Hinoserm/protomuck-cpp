@@ -111,8 +111,8 @@ var i
   me @ "mpi" "plain-mpi" setprop
   me @ "mpi" "" 0 parseprop "PMPI:" t
 
-  ( build-feature parameter: 64-bit MUF integers )
-  "muf_int64" sysparm "PSP64:" t
+  ( build-feature compiler define: 64-bit MUF integers )
+  HAVE_INT64 intostr "PI64:" t
 
   "PDONE:ok" "" swap t
 ;
