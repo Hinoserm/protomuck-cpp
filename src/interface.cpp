@@ -2385,7 +2385,7 @@ shovechars(void)
                             if (FLAG2(d->player) & F2TRUEIDLE)
                                 announce_unidle(d); /* really idle */
                             if (FLAG2(d->player) & F2IDLE)
-                                FLAG2(d->player) &= ~F2IDLE; /*remove idle */
+                                MUCK::clearFlags2(d->player, F2IDLE); /*remove idle */
                             MUCK::playerSession(d->player).lastDescr = d->descriptor; /* least idle */
                         } else { /* not a player */
                             if (DR_RAW_FLAGS(d, DF_TRUEIDLE))
@@ -2459,7 +2459,7 @@ shovechars(void)
                         if (!idx_idletime)
                             idx_idletime = (int) tp_idletime;
                         if (dr_idletime >= d->idletime_set) {
-                            FLAG2(d->player) |= F2IDLE;
+                            MUCK::addFlags2(d->player, F2IDLE);
                             if (!(DR_RAW_FLAGS(d, DF_IDLE)))
                                 DR_RAW_ADD_FLAGS(d, DF_IDLE);
                         } else {
@@ -4531,14 +4531,14 @@ check_connect(struct descriptor_data *d, const char *msg)
                 update_desc_count_table();
                 remember_player_descr(player, d->descriptor);
                 if (!string_compare(command, "ch")) {
-                    FLAG2(player) |= F2HIDDEN;
+                    MUCK::addFlags2(player, F2HIDDEN);
                 } else {
-                    FLAG2(player) &= ~F2HIDDEN;
+                    MUCK::clearFlags2(player, F2HIDDEN);
                 }
                 if (d->type == CT_PUEBLO) {
-                    FLAG2(player) |= F2PUEBLO;
+                    MUCK::addFlags2(player, F2PUEBLO);
                 } else {
-                    FLAG2(player) &= ~F2PUEBLO;
+                    MUCK::clearFlags2(player, F2PUEBLO);
                 }
 
                 /* If player has enabled 256 color, set the descr flag */
@@ -5347,7 +5347,7 @@ announce_connect(int descr, dbref player)
     total_loggedin_connects++;
 
     if (Guest(player)) {
-        FLAGS(player) &= ~CHOWN_OK;
+        MUCK::clearFlags(player, CHOWN_OK);
     }
 
     MUCK::playerSession(player).lastDescr = descr;
@@ -5441,11 +5441,11 @@ announce_disconnect(struct descriptor_data *d)
     update_desc_count_table();
 
     if (!online(player) && (FLAG2(player) & F2IDLE)) {
-        FLAG2(player) &= ~F2IDLE;
+        MUCK::clearFlags2(player, F2IDLE);
     }
 
     if (!online(player) && (FLAG2(player) & F2TRUEIDLE)) {
-        FLAG2(player) &= ~F2TRUEIDLE;
+        MUCK::clearFlags2(player, F2TRUEIDLE);
     }
 
     /* trigger local disconnect action */
@@ -5488,7 +5488,7 @@ announce_idle(struct descriptor_data *d)
     if ((FLAG2(player) & F2TRUEIDLE))
         return;
 
-    FLAG2(player) |= F2TRUEIDLE;
+    MUCK::addFlags2(player, F2TRUEIDLE);
 
     if ((!Dark(player)) && (!Dark(loc)) && (tp_enable_idle_msgs)) {
         sprintf(buf, CMOVE "%s has become terminally idle.", MUCK::getName(player));
@@ -5522,7 +5522,7 @@ announce_unidle(struct descriptor_data *d)
     if (!(FLAG2(player) & F2TRUEIDLE))
         return;
 
-    FLAG2(player) &= ~F2TRUEIDLE;
+    MUCK::clearFlags2(player, F2TRUEIDLE);
 
     if ((!Dark(player)) && (!Dark(loc)) && (tp_enable_idle_msgs)) {
         sprintf(buf, CMOVE "%s has unidled.", MUCK::getName(player));
@@ -6130,9 +6130,9 @@ pset_user(struct descriptor_data *d, dbref who)
             remember_player_descr(who, d->descriptor);
             announce_connect(d->descriptor, who);
             if (d->type == CT_PUEBLO) {
-                FLAG2(d->player) |= F2PUEBLO;
+                MUCK::addFlags2(d->player, F2PUEBLO);
             } else {
-                FLAG2(d->player) &= ~F2PUEBLO;
+                MUCK::clearFlags2(d->player, F2PUEBLO);
             }
         }
         return 1;
@@ -6162,9 +6162,9 @@ plogin_user(struct descriptor_data *d, dbref who)
         remember_player_descr(who, d->descriptor);
         announce_connect(d->descriptor, who);
         if (d->type == CT_PUEBLO) {
-            FLAG2(d->player) |= F2PUEBLO;
+            MUCK::addFlags2(d->player, F2PUEBLO);
         } else {
-            FLAG2(d->player) &= ~F2PUEBLO;
+            MUCK::clearFlags2(d->player, F2PUEBLO);
         }
     }
     return 1;
@@ -6202,7 +6202,7 @@ silent_connect(int descr, dbref player)
 
 
     if (Guest(player)) {
-        FLAGS(player) &= ~CHOWN_OK;
+        MUCK::clearFlags(player, CHOWN_OK);
     }
     MUCK::playerSession(player).lastDescr = descr;
     if (!tp_quiet_connects) {
@@ -6239,10 +6239,10 @@ silent_disconnect(struct descriptor_data *d)
     }
 
     if (!online(player) && (FLAG2(player) & F2IDLE)) {
-        FLAG2(player) &= ~F2IDLE;
+        MUCK::clearFlags2(player, F2IDLE);
     }
     if (!online(player) && (FLAG2(player) & F2TRUEIDLE)) {
-        FLAG2(player) &= ~F2TRUEIDLE;
+        MUCK::clearFlags2(player, F2TRUEIDLE);
     }
     DBDIRTY(player);
 }
@@ -6292,9 +6292,9 @@ pset_user_suid(int c, dbref who)
     DR_ADD_FLAGS(d->descriptor, DF_SUID);
 
     if (d->type == CT_PUEBLO) {
-        FLAG2(d->player) |= F2PUEBLO;
+        MUCK::addFlags2(d->player, F2PUEBLO);
     } else {
-        FLAG2(d->player) &= ~F2PUEBLO;
+        MUCK::clearFlags2(d->player, F2PUEBLO);
     }
     return 1;
 }

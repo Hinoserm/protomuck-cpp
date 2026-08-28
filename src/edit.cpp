@@ -266,8 +266,8 @@ do_quit(dbref player, dbref program)
 
     free_prog_text(MUCK::programRuntime(program).first);
     MUCK::programRuntime(program).first = NULL;
-    FLAGS(program) &= ~INTERNAL;
-    FLAGS(player) &= ~INTERACTIVE;
+    MUCK::clearFlags(program, INTERNAL);
+    MUCK::clearFlags(player, INTERACTIVE);
     MUCK::playerSession(player).currProg = NOTHING;
     DBDIRTY(player);
     DBDIRTY(program);
@@ -280,8 +280,8 @@ do_cancel(dbref player, dbref program)
     uncompile_program(program);
     free_prog_text(MUCK::programRuntime(program).first);
     MUCK::programRuntime(program).first = NULL;
-    FLAGS(program) &= ~INTERNAL;
-    FLAGS(player) &= ~INTERACTIVE;
+    MUCK::clearFlags(program, INTERNAL);
+    MUCK::clearFlags(player, INTERACTIVE);
     MUCK::playerSession(player).currProg = NOTHING;
     DBDIRTY(player);
 
@@ -335,9 +335,9 @@ match_and_list(int descr, dbref player, const char *name, char *linespec, int ed
     }
     tempFlags = FLAGS(player);
     if (haveNumbers == -1)      /* no numbers no matter what */
-        FLAGS(player) &= ~INTERNAL;
+        MUCK::clearFlags(player, INTERNAL);
     if (haveNumbers == 1)       /* force number displaying */
-        FLAGS(player) |= INTERNAL;
+        MUCK::addFlags(player, INTERNAL);
 
     if (!*linespec) {
         range[0] = 1;
@@ -376,7 +376,7 @@ match_and_list(int descr, dbref player, const char *name, char *linespec, int ed
     free_prog_text(MUCK::programRuntime(thing).first);
     MUCK::programRuntime(thing).first = tmpline;
     if (haveNumbers)
-        FLAGS(player) = tempFlags;
+        MUCK::setFlags(player, tempFlags);
     return;
 }
 
@@ -544,20 +544,20 @@ toggle_numbers(dbref player, int arg[], int argc)
     if (argc) {
         switch (arg[0]) {
             case 0:
-                FLAGS(player) &= ~INTERNAL;
+                MUCK::clearFlags(player, INTERNAL);
                 anotify_nolisten(player, CINFO "Line numbers off.", 1);
                 break;
 
             default:
-                FLAGS(player) |= INTERNAL;
+                MUCK::addFlags(player, INTERNAL);
                 anotify_nolisten(player, CINFO "Line numbers on.", 1);
                 break;
         }
     } else if (FLAGS(player) & INTERNAL) {
-        FLAGS(player) &= ~INTERNAL;
+        MUCK::clearFlags(player, INTERNAL);
         anotify_nolisten(player, CINFO "Line numbers off.", 1);
     } else {
-        FLAGS(player) |= INTERNAL;
+        MUCK::addFlags(player, INTERNAL);
         anotify_nolisten(player, CINFO "Line numbers on.", 1);
     }
 }

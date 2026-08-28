@@ -134,7 +134,7 @@ Database::clearObject(dbref player, dbref i)
     bzero(o, sizeof(struct object));
     MUCK::setName(i, 0);
     ts_newobject(player, o);
-    o->location = NOTHING;
+    MUCK::setLocation(i, NOTHING);
     contentsOf(i).clear();
     exitsOf(i).clear();
     if (DbObject *sh = get(i))
@@ -246,7 +246,7 @@ Database::noteHole(dbref ref)
         return;
     o->deleted_ = true;
     if (!NAME(ref))
-        NAME(ref) = (char *) "<garbage>";
+        MUCK::setName(ref, "<garbage>");
 }
 
 void

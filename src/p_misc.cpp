@@ -995,13 +995,13 @@ prim_debugger_break(PRIM_PROTOTYPE)
 void
 prim_debug_on(PRIM_PROTOTYPE)
 {
-    FLAGS(program) |= DARK;
+    MUCK::addFlags(program, DARK);
 }
 
 void
 prim_debug_off(PRIM_PROTOTYPE)
 {
-    FLAGS(program) &= ~DARK;
+    MUCK::clearFlags(program, DARK);
 }
 
 void

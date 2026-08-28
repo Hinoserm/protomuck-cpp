@@ -215,15 +215,15 @@ db_read_object_old(FILE * f, struct object *o, dbref objno)
     const char *password;
 
     MUCK::database().clearObject(-1, objno);
-    FLAGS(objno) = 0;
-    FLAG2(objno) = 0;
-    FLAG3(objno) = 0;
-    FLAG4(objno) = 0;
+    MUCK::setFlags(objno, 0);
+    MUCK::setFlags2(objno, 0);
+    MUCK::setFlags3(objno, 0);
+    MUCK::setFlags4(objno, 0);
     POWERSDB(objno) = 0;
     POWER2DB(objno) = 0;
     MUCK::setName(objno, getstring_noalloc(f));
     LOADDESC(objno, getstring_oldcomp_noalloc(f));
-    o->location = getref(f);
+    MUCK::setLocation(objno, getref(f));
     rawContents[objno] = getref(f);
     exits = getref(f);
     rawNext[objno] = getref(f);
@@ -242,10 +242,18 @@ db_read_object_old(FILE * f, struct object *o, dbref objno)
     MUCK::setModified(objno, current_systime, -1);
 
 
-    FLAGS(objno) |= getfref(f, &f2, &f3, &f4, &p1, &p2);
-    FLAG2(objno) |= f2;
-    FLAG3(objno) |= f3;
-    FLAG4(objno) |= f4;
+    {
+        /* the legacy flags word carries the type; lift it out before
+         * the rest of the bits go in, exactly as the Foxen reader
+         * does, because addFlags refuses the type bits */
+        dbref rawflags = getfref(f, &f2, &f3, &f4, &p1, &p2);
+
+        MUCK::setType(objno, (MUCK::ObjectType) (rawflags & TYPE_MASK));
+        MUCK::addFlags(objno, rawflags);
+    }
+    MUCK::addFlags2(objno, f2);
+    MUCK::addFlags3(objno, f3);
+    MUCK::addFlags4(objno, f4);
     POWERSDB(objno) |= p1;
     POWER2DB(objno) |= p2;
     /*
@@ -254,12 +262,12 @@ db_read_object_old(FILE * f, struct object *o, dbref objno)
      * corresponding HAVEN and ABODE flags
      */
     if (FLAGS(objno) & CHOWN_OK) {
-        FLAGS(objno) &= ~CHOWN_OK;
-        FLAGS(objno) |= HAVEN;
+        MUCK::clearFlags(objno, CHOWN_OK);
+        MUCK::addFlags(objno, HAVEN);
     }
     if (FLAGS(objno) & JUMP_OK) {
-        FLAGS(objno) &= ~JUMP_OK;
-        FLAGS(objno) |= ABODE;
+        MUCK::clearFlags(objno, JUMP_OK);
+        MUCK::addFlags(objno, ABODE);
     }
     password = getstring(f);
     /* convert GENDER flag to property */
@@ -276,12 +284,12 @@ db_read_object_old(FILE * f, struct object *o, dbref objno)
         default:
             break;
     }
-    FLAGS(objno) &= ~GENDER_MASK;
+    MUCK::clearFlags(objno, GENDER_MASK);
     /* For downward compatibility with databases using the */
     /* obsolete ANTILOCK flag. */
     if (FLAGS(objno) & ANTILOCK) {
         LOADLOCK(objno, negate_boolexp(copy_bool(GETLOCK(objno))))
-            FLAGS(objno) &= ~ANTILOCK;
+            MUCK::clearFlags(objno, ANTILOCK);
     }
     switch (MUCK::typeOf(objno)) {
         case TYPE_THING:
@@ -290,7 +298,7 @@ db_read_object_old(FILE * f, struct object *o, dbref objno)
             break;
         case TYPE_ROOM:
             o->sp.room.dropto = o->location;
-            o->location = NOTHING;
+            MUCK::setLocation(objno, NOTHING);
             rawExits[objno] = exits;
             break;
         case TYPE_EXIT:
@@ -303,7 +311,7 @@ db_read_object_old(FILE * f, struct object *o, dbref objno)
 
                 (o->sp.exit.dest)[0] = o->location;
             }
-            o->location = NOTHING;
+            MUCK::setLocation(objno, NOTHING);
             break;
         case TYPE_PLAYER:
             o->sp.player.home = exits;
@@ -327,15 +335,15 @@ db_read_object_new(FILE * f, struct object *o, dbref objno)
     int j;
 
     db_clear_object(-1, objno);
-    FLAGS(objno) = 0;
-    FLAG2(objno) = 0;
-    FLAG3(objno) = 0;
-    FLAG4(objno) = 0;
+    MUCK::setFlags(objno, 0);
+    MUCK::setFlags2(objno, 0);
+    MUCK::setFlags3(objno, 0);
+    MUCK::setFlags4(objno, 0);
     POWERSDB(objno) = 0;
     POWER2DB(objno) = 0;
     MUCK::setName(objno, getstring_noalloc(f));
     LOADDESC(objno, getstring_noalloc(f));
-    o->location = getref(f);
+    MUCK::setLocation(objno, getref(f));
     rawContents[objno] = getref(f);
     rawNext[objno] = getref(f);
     LOADLOCK(objno, getboolexp(f));
@@ -352,10 +360,18 @@ db_read_object_new(FILE * f, struct object *o, dbref objno)
 
     /* OWNER(objno) = getref(f); */
     /* o->pennies = getref(f); */
-    FLAGS(objno) |= getfref(f, &f2, &f3, &f4, &p1, &p2);
-    FLAG2(objno) |= f2;
-    FLAG3(objno) |= f3;
-    FLAG4(objno) |= f4;
+    {
+        /* the legacy flags word carries the type; lift it out before
+         * the rest of the bits go in, exactly as the Foxen reader
+         * does, because addFlags refuses the type bits */
+        dbref rawflags = getfref(f, &f2, &f3, &f4, &p1, &p2);
+
+        MUCK::setType(objno, (MUCK::ObjectType) (rawflags & TYPE_MASK));
+        MUCK::addFlags(objno, rawflags);
+    }
+    MUCK::addFlags2(objno, f2);
+    MUCK::addFlags3(objno, f3);
+    MUCK::addFlags4(objno, f4);
     POWERSDB(objno) |= p1;
     POWER2DB(objno) |= p2;
     /*
@@ -364,12 +380,12 @@ db_read_object_new(FILE * f, struct object *o, dbref objno)
      * corresponding HAVEN and ABODE flags
      */
     if (FLAGS(objno) & CHOWN_OK) {
-        FLAGS(objno) &= ~CHOWN_OK;
-        FLAGS(objno) |= HAVEN;
+        MUCK::clearFlags(objno, CHOWN_OK);
+        MUCK::addFlags(objno, HAVEN);
     }
     if (FLAGS(objno) & JUMP_OK) {
-        FLAGS(objno) &= ~JUMP_OK;
-        FLAGS(objno) |= ABODE;
+        MUCK::clearFlags(objno, JUMP_OK);
+        MUCK::addFlags(objno, ABODE);
     }
     /* convert GENDER flag to property */
     switch ((FLAGS(objno) & GENDER_MASK) >> GENDER_SHIFT) {
@@ -385,14 +401,14 @@ db_read_object_new(FILE * f, struct object *o, dbref objno)
         default:
             break;
     }
-    FLAGS(objno) &= ~GENDER_MASK;
+    MUCK::clearFlags(objno, GENDER_MASK);
 
     /* o->password = getstring(f); */
     /* For downward compatibility with databases using the */
     /* obsolete ANTILOCK flag. */
     if (FLAGS(objno) & ANTILOCK) {
         LOADLOCK(objno, negate_boolexp(copy_bool(GETLOCK(objno))))
-            FLAGS(objno) &= ~ANTILOCK;
+            MUCK::clearFlags(objno, ANTILOCK);
     }
     switch (MUCK::typeOf(objno)) {
         case TYPE_THING:
@@ -441,10 +457,10 @@ db_read_object_foxen(FILE * f, struct object *o, dbref objno, int dtype, int rea
     }
     MUCK::database().clearObject(-1, objno);
 
-    FLAGS(objno) = 0;
-    FLAG2(objno) = 0;
-    FLAG3(objno) = 0;
-    FLAG4(objno) = 0;
+    MUCK::setFlags(objno, 0);
+    MUCK::setFlags2(objno, 0);
+    MUCK::setFlags3(objno, 0);
+    MUCK::setFlags4(objno, 0);
     POWERSDB(objno) = 0;
     POWER2DB(objno) = 0;
 
@@ -457,7 +473,7 @@ db_read_object_foxen(FILE * f, struct object *o, dbref objno, int dtype, int rea
         LOADDESC(objno, getstring_oldcomp_noalloc(f));
 #endif /* ARCHAIC_DATABASES */
 
-    o->location = getref(f);
+    MUCK::setLocation(objno, getref(f));
     rawContents[objno] = getref(f);
     rawNext[objno] = getref(f);
 
@@ -507,14 +523,14 @@ db_read_object_foxen(FILE * f, struct object *o, dbref objno, int dtype, int rea
      * line below cannot smuggle a type in behind setType's back.) */
     MUCK::setType(objno, (MUCK::ObjectType) (tmp & TYPE_MASK));
 
-    FLAGS(objno) |= tmp;
-    FLAG2(objno) |= f2;
-    FLAG3(objno) |= f3;
-    FLAG4(objno) |= f4;
+    MUCK::addFlags(objno, tmp);
+    MUCK::addFlags2(objno, f2);
+    MUCK::addFlags3(objno, f3);
+    MUCK::addFlags4(objno, f4);
     POWERSDB(objno) |= p1;
     POWER2DB(objno) |= p2;
 
-    FLAGS(objno) &= ~SAVED_DELTA;
+    MUCK::clearFlags(objno, SAVED_DELTA);
 
     if (dtype != 3) {
         if (verboseload)
@@ -575,14 +591,14 @@ db_read_object_foxen(FILE * f, struct object *o, dbref objno, int dtype, int rea
                 break;
         }
     }
-    FLAGS(objno) &= ~GENDER_MASK;
+    MUCK::clearFlags(objno, GENDER_MASK);
 
     /* o->password = getstring(f); */
     /* For downward compatibility with databases using the */
     /* obsolete ANTILOCK flag. */
     if (FLAGS(objno) & ANTILOCK) {
         LOADLOCK(objno, negate_boolexp(copy_bool(GETLOCK(objno))))
-            FLAGS(objno) &= ~ANTILOCK;
+            MUCK::clearFlags(objno, ANTILOCK);
     }
 
     switch (MUCK::typeOf(objno)) {
@@ -693,7 +709,7 @@ db_read_object_foxen(FILE * f, struct object *o, dbref objno, int dtype, int rea
             if (verboseload)
                 fprintf(stderr, "[type: PROGRAM] ");
             MUCK::setOwner(objno, getref(f));
-            FLAGS(objno) &= ~INTERNAL;
+            MUCK::clearFlags(objno, INTERNAL);
 #ifdef ARCHAIC_DATABASES
             if (dtype < 5 && MLevel(objno) == 0)
                 SetMLevel(objno, 2);

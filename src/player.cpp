@@ -310,8 +310,8 @@ create_player(dbref creator, const char *name, const char *password)
 
     if (OkObj(tp_player_prototype)
         && (Typeof(tp_player_prototype) == TYPE_PLAYER)) {
-        FLAGS(player) = FLAGS(tp_player_prototype);
-        FLAG2(player) = FLAG2(tp_player_prototype);
+        MUCK::setFlags(player, MUCK::getFlags(tp_player_prototype));
+        MUCK::setFlags2(player, MUCK::getFlags2(tp_player_prototype));
 
         if (tp_pcreate_copy_props) {
             copy_prop(tp_player_prototype, player);

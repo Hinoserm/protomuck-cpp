@@ -110,8 +110,8 @@ free_timenode(timequeue ptr)
         }
         if (ptr->typ == TQ_MUF_TYP && (ptr->subtyp == TQ_MUF_READ || ptr->subtyp == TQ_MUF_TREAD)) {
             if (OkObj(ptr->uid)) {
-                FLAGS(ptr->uid) &= ~INTERACTIVE;
-                FLAGS(ptr->uid) &= ~READMODE;
+                MUCK::clearFlags(ptr->uid, INTERACTIVE);
+                MUCK::clearFlags(ptr->uid, READMODE);
                 anotify_nolisten(ptr->uid, CINFO "Data input aborted.  The command you were using was killed.", 1);
             } else {
                 if ((curdescr = get_descr(ptr->fr->descr, NOTHING))) {
@@ -268,7 +268,7 @@ int
 add_muf_read_event(int descr, dbref player, dbref prog, struct frame *fr)
 {
     if (OkObj(player))
-        FLAGS(player) |= (INTERACTIVE | READMODE);
+        MUCK::addFlags(player, (INTERACTIVE | READMODE));
 
     return add_event(TQ_MUF_TYP, TQ_MUF_READ, -1, descr, player, -1, fr->trig, prog, fr, "READ", NULL, NULL);
 }
@@ -277,7 +277,7 @@ int
 add_muf_tread_event(int descr, dbref player, dbref prog, struct frame *fr, int delay)
 {
     if (OkObj(player))
-        FLAGS(player) |= (INTERACTIVE | READMODE);
+        MUCK::addFlags(player, (INTERACTIVE | READMODE));
 
     return add_event(TQ_MUF_TYP, TQ_MUF_TREAD, delay, descr, player, -1, fr->trig, prog, fr, "READ", NULL, NULL);
 }
@@ -360,7 +360,7 @@ handle_read_event(int descr, dbref player, const char *command, struct timenode 
 
     if (OkObj(player)) {
         oldflags = FLAGS(player);
-        FLAGS(player) &= ~(INTERACTIVE | READMODE);
+        MUCK::clearFlags(player, (INTERACTIVE | READMODE));
     } else {
         if ((curdescr = get_descr(descr, NOTHING))) {
             curdescr->interactive = 0;
@@ -390,7 +390,7 @@ handle_read_event(int descr, dbref player, const char *command, struct timenode 
             if (!fr->wantsblanks && command && !*command && !event) {
                 /* put flags back on player and return */
                 if (OkObj(player)) {
-                    FLAGS(player) = oldflags;
+                    MUCK::setFlags(player, oldflags);
                 } else {
                     if ((curdescr = get_descr(descr, NOTHING))) {
                         curdescr->interactive = 2;
@@ -504,7 +504,7 @@ handle_read_event(int descr, dbref player, const char *command, struct timenode 
         while (ptr) {
             if (ptr->typ == TQ_MUF_TYP && (ptr->subtyp == TQ_MUF_READ || ptr->subtyp == TQ_MUF_TREAD)) {
                 if (OkObj(player) && ptr->uid == player) {
-                    FLAGS(player) |= (INTERACTIVE | READMODE);
+                    MUCK::addFlags(player, (INTERACTIVE | READMODE));
                 }
             }
             ptr = ptr->next;
@@ -1060,7 +1060,7 @@ dequeue_prog(dbref program, int sleeponly)
     /* Make sure to re-set any READ/INTERACTIVE flags needed */
     for (ptr = tqhead; ptr; ptr = ptr->next) {
         if (OkObj(ptr->uid) && ptr->typ == TQ_MUF_TYP && (ptr->subtyp == TQ_MUF_READ || ptr->subtyp == TQ_MUF_TREAD)) {
-            FLAGS(ptr->uid) |= (INTERACTIVE | READMODE);
+            MUCK::addFlags(ptr->uid, (INTERACTIVE | READMODE));
         }
     }
     return (count);
@@ -1158,7 +1158,7 @@ dequeue_process(int pid)
 
     for (ptr = tqhead; ptr; ptr = ptr->next) {
         if (OkObj(ptr->uid) && ptr->typ == TQ_MUF_TYP && (ptr->subtyp == TQ_MUF_READ || ptr->subtyp == TQ_MUF_TREAD)) {
-            FLAGS(ptr->uid) |= (INTERACTIVE | READMODE);
+            MUCK::addFlags(ptr->uid, (INTERACTIVE | READMODE));
         }
     }
 

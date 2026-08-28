@@ -683,7 +683,7 @@ do_frob(int descr, dbref player, const char *name, const char *recip)
                 case TYPE_PROGRAM:
                 case TYPE_UNSUPPORTED:
                     dequeue_prog(stuff, 0); /* dequeue player's progs */
-                    FLAGS(stuff) &= ~(ABODE | W1 | W2 | W3);
+                    MUCK::clearFlags(stuff, ABODE | W1 | W2 | W3);
                     SetMLevel(stuff, 0);
                 case TYPE_ROOM:
                 case TYPE_THING:
@@ -719,9 +719,9 @@ do_frob(int descr, dbref player, const char *name, const char *recip)
     DBDIRTY(victim);
     MUCK::setType(victim, MUCK::ObjectType::Thing);
     MUCK::setFlags(victim, 0);
-    FLAG2(victim) = 0;
-    FLAG3(victim) = 0;
-    FLAG4(victim) = 0;
+    MUCK::setFlags2(victim, 0);
+    MUCK::setFlags3(victim, 0);
+    MUCK::setFlags4(victim, 0);
     POWERSDB(victim) = 0;
     POWER2DB(victim) = 0;
     MUCK::setOwner(victim, player);     /* you get it */

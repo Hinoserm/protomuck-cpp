@@ -43,12 +43,12 @@ list_proglines(dbref player, dbref program, struct frame *fr, int start, int end
     {
         int tmpflg = (FLAGS(player) & INTERNAL);
 
-        FLAGS(player) |= INTERNAL;
+        MUCK::addFlags(player, INTERNAL);
 
         do_list(player, program, range, argc, 0);
 
         if (!tmpflg) {
-            FLAGS(player) &= ~INTERNAL;
+            MUCK::clearFlags(player, INTERNAL);
         }
     }
     MUCK::programRuntime(program).first = tmpline;
@@ -271,10 +271,10 @@ muf_backtrace(dbref player, dbref program, int count, struct frame *fr)
             sprintf(buf, "%3d) %s(#%d) %s:", j, MUCK::getName(ref), ref, ptr);
             notify_nolisten(player, buf, 1);
             flag = ((FLAGS(player) & INTERNAL) ? 1 : 0);
-            FLAGS(player) &= ~INTERNAL;
+            MUCK::clearFlags(player, INTERNAL);
             list_proglines(player, ref, fr, (pinst - 1)->line, 0);
             if (flag) {
-                FLAGS(player) |= INTERNAL;
+                MUCK::addFlags(player, INTERNAL);
             }
         }
     }

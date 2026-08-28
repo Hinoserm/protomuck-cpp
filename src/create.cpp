@@ -526,7 +526,7 @@ do_dig(int descr, dbref player, const char *name, const char *pname)
 
     MUCK::database().get(room)->setName(name);
     MUCK::setLocation(room, newparent);        /* chain wiring flips later */
-    FLAGS(room) |= (FLAGS(player) & JUMP_OK);
+    MUCK::addFlags(room, MUCK::getFlags(player) & JUMP_OK);
     MUCK::attachContent(newparent, room);
     DBDIRTY(room);
     DBDIRTY(newparent);
@@ -616,7 +616,7 @@ do_prog(int descr, dbref player, const char *name)
             anotify_nolisten2(player, CFAIL "That object type is not available on this server.");
             return;
         }
-        FLAGS(i) |= INTERNAL;
+        MUCK::addFlags(i, INTERNAL);
         MUCK::playerSession(player).currProg = i;
 
         anotify_fmt(player, CSUCC "Program %s created with number %d.", name, i);
@@ -634,7 +634,7 @@ do_prog(int descr, dbref player, const char *name)
         }
 
         MUCK::programRuntime(i).first = MUCK::programs().read(i);
-        FLAGS(i) |= INTERNAL;
+        MUCK::addFlags(i, INTERNAL);
         MUCK::playerSession(player).currProg = i;
         anotify_fmt(player, CINFO "Entering editor for %s.", unparse_object(player, i));
         /* list current line */
@@ -642,7 +642,7 @@ do_prog(int descr, dbref player, const char *name)
         DBDIRTY(i);
     }
 
-    FLAGS(player) |= INTERACTIVE;
+    MUCK::addFlags(player, INTERACTIVE);
     DBDIRTY(player);
 }
 
@@ -683,13 +683,13 @@ do_edit(int descr, dbref player, const char *name)
         return;
     }
 
-    FLAGS(i) |= INTERNAL;
+    MUCK::addFlags(i, INTERNAL);
     MUCK::programRuntime(i).first = MUCK::programs().read(i);
     MUCK::playerSession(player).currProg = i;
     anotify_fmt(player, CINFO "Entering editor for %s.", unparse_object(player, i));
     /* list current line */
     do_list(player, i, 0, 0, 0);
-    FLAGS(player) |= INTERACTIVE;
+    MUCK::addFlags(player, INTERACTIVE);
     DBDIRTY(i);
     DBDIRTY(player);
 }

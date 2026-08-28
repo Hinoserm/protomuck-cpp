@@ -21,7 +21,7 @@ copyobj(dbref player, dbref old, dbref nw)
 {
     struct object *newp = DBFETCH(nw);
 
-    NAME(nw) = alloc_string(NAME(old));
+    MUCK::setName(nw, NAME(old));
     copy_prop(old, nw);
     MUCK::exitsOf(nw).clear();
     MUCK::contentsOf(nw).clear();
@@ -1021,11 +1021,11 @@ prim_set(PRIM_PROTOTYPE)
             abort_interp(tp_noperm_mesg);
         if (!result) {
             ts_modifyobject(program, ref);
-            FLAGS(ref) |= tmp;
+            MUCK::addFlags(ref, tmp);
             DBDIRTY(ref);
         } else {
             ts_modifyobject(program, ref);
-            FLAGS(ref) &= ~tmp;
+            MUCK::clearFlags(ref, tmp);
             DBDIRTY(ref);
         }
     }
@@ -1034,11 +1034,11 @@ prim_set(PRIM_PROTOTYPE)
             abort_interp(tp_noperm_mesg);
         if (!result) {
             ts_modifyobject(program, ref);
-            FLAG2(ref) |= tmp2;
+            MUCK::addFlags2(ref, tmp2);
             DBDIRTY(ref);
         } else {
             ts_modifyobject(program, ref);
-            FLAG2(ref) &= ~tmp2;
+            MUCK::clearFlags2(ref, tmp2);
             DBDIRTY(ref);
         }
     }
@@ -1051,11 +1051,11 @@ prim_set(PRIM_PROTOTYPE)
                 abort_interp(tp_noperm_mesg);
         if (!result) {
             ts_modifyobject(program, ref);
-            FLAG4(ref) |= tmp4;
+            MUCK::addFlags4(ref, tmp4);
             DBDIRTY(ref);
         } else {
             ts_modifyobject(program, ref);
-            FLAG4(ref) &= ~tmp4;
+            MUCK::clearFlags4(ref, tmp4);
             DBDIRTY(ref);
         }
     }
@@ -1610,7 +1610,7 @@ prim_newroom(PRIM_PROTOTYPE)
 
         ref = MUCK::database().Create<MUCK::Room>(b, MUCK::getOwner(ProgUID))
             ->object()->ref();
-        FLAGS(ref) |= (FLAGS(PSafe) & JUMP_OK);
+        MUCK::addFlags(ref, (FLAGS(PSafe) & JUMP_OK));
         MUCK::setLocation(ref, oper[1].data.objref);  /* chain wiring flips later */
         MUCK::exitsOf(ref).clear();
         MUCK::database().get(ref)->As<MUCK::Room>()->setDropTo(nullptr);
@@ -1949,8 +1949,8 @@ prim_copyplayer(PRIM_PROTOTYPE)
         ->object()->ref();
     newp = DBFETCH(newplayer);
 
-    FLAGS(newplayer) = FLAGS(ref);
-    FLAG2(newplayer) = FLAG2(ref);
+    MUCK::setFlags(newplayer, FLAGS(ref));
+    MUCK::setFlags2(newplayer, FLAG2(ref));
 
     copy_prop(ref, newplayer);
     MUCK::exitsOf(newplayer).clear();
@@ -2027,7 +2027,7 @@ prim_toadplayer(PRIM_PROTOTYPE)
                 case TYPE_PROGRAM:
                 case TYPE_UNSUPPORTED:
                     dequeue_prog(stuff, 0); /* dequeue player's progs */
-                    FLAGS(stuff) &= ~(ABODE | W1 | W2 | W3 | W4);
+                    MUCK::clearFlags(stuff, (ABODE | W1 | W2 | W3 | W4));
                     SetMLevel(stuff, 0);
                 case TYPE_ROOM:
                 case TYPE_THING:
@@ -2060,9 +2060,9 @@ prim_toadplayer(PRIM_PROTOTYPE)
     DBDIRTY(victim);
     MUCK::setType(victim, MUCK::ObjectType::Thing);
     MUCK::setFlags(victim, 0);
-    FLAG2(victim) = 0;
-    FLAG3(victim) = 0;
-    FLAG4(victim) = 0;
+    MUCK::setFlags2(victim, 0);
+    MUCK::setFlags3(victim, 0);
+    MUCK::setFlags4(victim, 0);
     POWERSDB(victim) = 0;
     POWER2DB(victim) = 0;
     MUCK::setOwner(victim, recipient);

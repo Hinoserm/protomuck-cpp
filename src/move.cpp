@@ -1013,8 +1013,8 @@ recycle(int descr, dbref player, dbref thing)
                         free_prog_text(MUCK::programRuntime(thing).first);
                         MUCK::programRuntime(thing).first = NULL;
                         MUCK::playerSession(rest).insertMode = 0;
-                        FLAGS(thing) &= ~INTERNAL;
-                        FLAGS(rest) &= ~INTERACTIVE;
+                        MUCK::clearFlags(thing, INTERNAL);
+                        MUCK::clearFlags(rest, INTERACTIVE);
                         MUCK::playerSession(rest).currProg = NOTHING;
                         anotify_nolisten2(rest, CINFO "The program you were editing has been recycled.  Exiting Editor.");
                     }

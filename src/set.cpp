@@ -1520,13 +1520,13 @@ do_set(int descr, dbref player, const char *name, const char *flag)
         if (*flag == NOT_TOKEN) {
             /* reset the flag */
             ts_modifyobject(player, thing);
-            LFLAG(thing) &= ~f4;
+            MUCK::clearFlags4(thing, f4);
             DBDIRTY(thing);
             anotify_nolisten2(player, CSUCC "Flag reset.");
         } else {
             /* set the flag */
             ts_modifyobject(player, thing);
-            LFLAG(thing) |= f4;
+            MUCK::addFlags4(thing, f4);
             DBDIRTY(thing);
             anotify_nolisten2(player, CSUCC "Flag set.");
         }
@@ -1542,7 +1542,7 @@ do_set(int descr, dbref player, const char *name, const char *flag)
         if (*flag == NOT_TOKEN) {
             /* reset the flag */
             ts_modifyobject(player, thing);
-            FLAGS(thing) &= ~f;
+            MUCK::clearFlags(thing, f);
             DBDIRTY(thing);
             anotify_nolisten2(player, CSUCC "Flag reset.");
             if (f == F256COLOR) {
@@ -1552,7 +1552,7 @@ do_set(int descr, dbref player, const char *name, const char *flag)
         } else {
             /* set the flag */
             ts_modifyobject(player, thing);
-            FLAGS(thing) |= f;
+            MUCK::addFlags(thing, f);
             DBDIRTY(thing);
             anotify_nolisten2(player, CSUCC "Flag set.");
             if (f == F256COLOR) {
@@ -1573,13 +1573,13 @@ do_set(int descr, dbref player, const char *name, const char *flag)
         if (*flag == NOT_TOKEN) {
             /* reset the flag */
             ts_modifyobject(player, thing);
-            FLAG2(thing) &= ~f2;
+            MUCK::clearFlags2(thing, f2);
             DBDIRTY(thing);
             anotify_nolisten2(player, CSUCC "Flag reset.");
         } else {
             /* set the flag */
             ts_modifyobject(player, thing);
-            FLAG2(thing) |= f2;
+            MUCK::addFlags2(thing, f2);
             DBDIRTY(thing);
             anotify_nolisten2(player, CSUCC "Flag set.");
         }
@@ -1599,13 +1599,13 @@ do_set(int descr, dbref player, const char *name, const char *flag)
         if (*flag == NOT_TOKEN) {
             /* reset the flag */
             ts_modifyobject(player, thing);
-            LFLAG(thing) &= ~f4;
+            MUCK::clearFlags4(thing, f4);
             DBDIRTY(thing);
             anotify_nolisten2(player, CSUCC "Flag reset.");
         } else {
             /* set the flag */
             ts_modifyobject(player, thing);
-            LFLAG(thing) |= f4;
+            MUCK::addFlags4(thing, f4);
             DBDIRTY(thing);
             anotify_nolisten2(player, CSUCC "Flag set.");
         }

@@ -220,31 +220,31 @@ find_orphan_objects(dbref player)
     SanPrint(player, "Searching for orphan objects...");
 
     for (i = 0; i < MUCK::database().top(); i++) {
-        FLAGS(i) &= ~SANEBIT;
+        MUCK::clearFlags(i, SANEBIT);
     }
 
-    FLAGS(GLOBAL_ENVIRONMENT) |= SANEBIT;
+    MUCK::addFlags(GLOBAL_ENVIRONMENT, SANEBIT);
 
     for (i = 0; i < MUCK::database().top(); i++) {
         if (!MUCK::getExits(i).empty()) {
             if (FLAGS(EXITS(i)) & SANEBIT) {
                 violate(player, EXITS(i), "is referred to by more than one object's Next, Contents, or Exits field");
             } else {
-                FLAGS(EXITS(i)) |= SANEBIT;
+                MUCK::addFlags(EXITS(i), SANEBIT);
             }
         }
         if (!MUCK::getContents(i).empty()) {
             if (FLAGS(CONTENTS(i)) & SANEBIT) {
                 violate(player, CONTENTS(i), "is referred to by more than one object's Next, Contents, or Exits field");
             } else {
-                FLAGS(CONTENTS(i)) |= SANEBIT;
+                MUCK::addFlags(CONTENTS(i), SANEBIT);
             }
         }
         if (NEXTOBJ(i) != NOTHING) {
             if (FLAGS(NEXTOBJ(i)) & SANEBIT) {
                 violate(player, NEXTOBJ(i), "is referred to by more than one object's Next, Contents, or Exits field");
             } else {
-                FLAGS(NEXTOBJ(i)) |= SANEBIT;
+                MUCK::addFlags(NEXTOBJ(i), SANEBIT);
             }
         }
     }
@@ -260,7 +260,7 @@ find_orphan_objects(dbref player)
     }
 
     for (i = 0; i < MUCK::database().top(); i++) {
-        FLAGS(i) &= ~SANEBIT;
+        MUCK::clearFlags(i, SANEBIT);
     }
 }
 
@@ -584,7 +584,7 @@ cut_bad_contents(dbref obj)
             DBDIRTY(obj);
             return;
         }
-        FLAGS(loop) |= SANEBIT;
+        MUCK::addFlags(loop, SANEBIT);
     }
 }
 
@@ -612,7 +612,7 @@ cut_bad_exits(dbref obj)
             DBDIRTY(obj);
             return;
         }
-        FLAGS(loop) |= SANEBIT;
+        MUCK::addFlags(loop, SANEBIT);
     }
 }
 
@@ -785,7 +785,7 @@ find_misplaced_objects(void)
             switch TYPEOF
                 (loop) {
                 case TYPE_GARBAGE:
-                    NAME(loop) = "<garbage>";
+                    MUCK::setName(loop, "<garbage>");
                     break;
                 case TYPE_PLAYER:
                 {
@@ -839,7 +839,7 @@ find_misplaced_objects(void)
                 } else {
                     MUCK::attachContent(MUCK::getLocation(loop), loop);
                 }
-                FLAGS(loop) |= SANEBIT;
+                MUCK::addFlags(loop, SANEBIT);
                 SanFixed2(loop, MUCK::getLocation(loop), "Set location of %s to %s");
             }
         } else {
@@ -935,9 +935,9 @@ sanfix(dbref player)
     sanity_violated = 0;
 
     for (loop = 0; loop < MUCK::database().top(); loop++) {
-        FLAGS(loop) &= ~SANEBIT;
+        MUCK::clearFlags(loop, SANEBIT);
     }
-    FLAGS(GLOBAL_ENVIRONMENT) |= SANEBIT;
+    MUCK::addFlags(GLOBAL_ENVIRONMENT, SANEBIT);
 
     if (!valid_obj(tp_player_start) || TYPEOF(tp_player_start) != TYPE_ROOM) {
         SanFixed(GLOBAL_ENVIRONMENT, "Reset invalid player_start to %s");
@@ -950,7 +950,7 @@ sanfix(dbref player)
     clean_global_environment();
 
     for (loop = 0; loop < MUCK::database().top(); loop++) {
-        FLAGS(loop) &= ~SANEBIT;
+        MUCK::clearFlags(loop, SANEBIT);
     }
 
     if (player > NOTHING) {

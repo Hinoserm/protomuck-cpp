@@ -101,13 +101,13 @@ set_property_nofetch(dbref object, const char *pname, PData * dat, bool pure)
          string_prefix(buf, "@olisten") ||
          string_prefix(buf, "_alisten") || string_prefix(buf, "~alisten") || string_prefix(buf, "@alisten") || string_prefix(buf, "_aolisten") || string_prefix(buf, "~aolisten")
          || string_prefix(buf, "@aolisten"))) {
-        FLAGS(object) |= LISTENER;
+        MUCK::addFlags(object, LISTENER);
     }
 
     if ((!(FLAG2(object) & F2COMMAND)) &&
         (string_prefix(buf, "_command") || string_prefix(buf, "~command") || string_prefix(buf, "@command") || string_prefix(buf, "_ocommand") || string_prefix(buf, "~ocommand")
          || string_prefix(buf, "@ocommand"))) {
-        FLAG2(object) |= F2COMMAND;
+        MUCK::addFlags2(object, F2COMMAND);
     }
 
     PropDirPtr root_ = MUCK::propRoot(object);
@@ -300,14 +300,14 @@ remove_property_nofetch(dbref player, const char *type)
                                         get_property(player, "~alisten") ||
                                         get_property(player, "~aolisten") || get_property(player, "@aolisten") || get_property(player, "@alisten")
         )) {
-        FLAGS(player) &= ~LISTENER;
+        MUCK::clearFlags(player, LISTENER);
     }
     if ((FLAG2(player) & F2COMMAND) && !(get_property(player, "_command") ||
                                          get_property(player, "_ocommand") ||
                                          get_property(player, "~command") ||
                                          get_property(player, "~ocommand") || get_property(player, "@ocommand") || get_property(player, "@command")
         )) {
-        FLAG2(player) &= ~F2COMMAND;
+        MUCK::clearFlags2(player, F2COMMAND);
     }
     DBDIRTY(player);
 }
