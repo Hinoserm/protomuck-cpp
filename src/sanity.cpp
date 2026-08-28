@@ -7,6 +7,7 @@
 #include "interface.h"
 #include "tune.h"
 #include "externs.h"
+#include "Journal.h"
 #include "ObjectAccess.h"
 #include "Modules.h"
 
@@ -542,11 +543,13 @@ cut_all_chains(dbref obj)
     if (!MUCK::getContents(obj).empty()) {
         SanFixed(obj, "Cleared contents of %s");
         MUCK::contentsOf(obj).clear();
+        MUCK::journalRecord(obj, "$type/contents");
         DBDIRTY(obj);
     }
     if (!MUCK::getExits(obj).empty()) {
         SanFixed(obj, "Cleared exits of %s");
         MUCK::exitsOf(obj).clear();
+        MUCK::journalRecord(obj, "$type/exits");
         DBDIRTY(obj);
     }
 }
@@ -1023,6 +1026,7 @@ sanechange(dbref player, const char *command)
         strcpy(buf2, unparse(EXITS(d)));
         if (v == NOTHING) {
             MUCK::exitsOf(d).clear();
+            MUCK::journalRecord(d, "$type/exits");
             SanPrint(player, MARK "Cleared #%d's Exits list", d);
         } else {
             MUCK::attachExit(d, v);
@@ -1034,6 +1038,7 @@ sanechange(dbref player, const char *command)
         strcpy(buf2, unparse(CONTENTS(d)));
         if (v == NOTHING) {
             MUCK::contentsOf(d).clear();
+            MUCK::journalRecord(d, "$type/contents");
             SanPrint(player, MARK "Cleared #%d's Contents list", d);
         } else {
             MUCK::attachContent(d, v);

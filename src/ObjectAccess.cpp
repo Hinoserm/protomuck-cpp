@@ -162,6 +162,15 @@ setName(dbref ref, const char *name)
     touched(ref);
 }
 
+void
+disownName(dbref ref)
+{
+    struct object *o = rec(ref);
+
+    if (o)
+        o->name = nullptr;
+}
+
 /* --- links ------------------------------------------------------ */
 
 dbref

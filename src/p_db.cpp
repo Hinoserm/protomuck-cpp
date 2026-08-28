@@ -9,6 +9,7 @@
 #include "props.h"
 #include "inst.h"
 #include "externs.h"
+#include "Journal.h"
 #include "Modules.h"
 #include "match.h"
 #include "interface.h"
@@ -21,7 +22,16 @@ copyobj(dbref player, dbref old, dbref nw)
 {
     struct object *newp = DBFETCH(nw);
 
-    MUCK::setName(nw, NAME(old));
+    /* The caller struct-copies the source over this object first, so
+     * nw and old share one name buffer at this instant. Disown it
+     * before setting, or setName frees the shared buffer and then
+     * reads it back to copy it, leaving old dangling too. */
+    MUCK::disownName(nw);
+    MUCK::setName(nw, MUCK::getName(old));
+
+    /* the struct copy also brought the source's type across in the
+     * flags mirror without touching the type field */
+    MUCK::setType(nw, MUCK::typeOf(old));
     copy_prop(old, nw);
     MUCK::exitsOf(nw).clear();
     MUCK::contentsOf(nw).clear();
@@ -1613,6 +1623,7 @@ prim_newroom(PRIM_PROTOTYPE)
         MUCK::addFlags(ref, (FLAGS(PSafe) & JUMP_OK));
         MUCK::setLocation(ref, oper[1].data.objref);  /* chain wiring flips later */
         MUCK::exitsOf(ref).clear();
+        MUCK::journalRecord(ref, "$type/exits");
         MUCK::database().get(ref)->As<MUCK::Room>()->setDropTo(nullptr);
         MUCK::attachContent(oper[1].data.objref, ref);
         DBDIRTY(ref);

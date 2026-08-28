@@ -11,6 +11,7 @@
 #include "interface.h"
 #include "match.h"
 #include "externs.h"
+#include "Journal.h"
 #include "ObjectAccess.h"
 #include "Modules.h"
 
@@ -87,6 +88,7 @@ send_contents(int descr, dbref loc, dbref dest)
     std::vector<MUCK::DbObject *> snapshot = MUCK::contentsOf(loc);
 
     MUCK::contentsOf(loc).clear();
+    MUCK::journalRecord(loc, "$type/contents");
 
     /* blast locations of everything in the old list */
     for (MUCK::DbObject *o : snapshot)

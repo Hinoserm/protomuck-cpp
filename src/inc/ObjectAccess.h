@@ -62,6 +62,13 @@ char typeCode(ObjectType type);
 const char *getName(dbref ref);
 void setName(dbref ref, const char *name);
 
+/* Drop the name WITHOUT freeing it, for the one case where the
+ * pointer is not this object's to free: prim_copyobj struct-copies a
+ * source object over a fresh one, so for an instant both hold the same
+ * name buffer. Calling setName there would free the shared buffer,
+ * read it back to copy it, and leave the source dangling. */
+void disownName(dbref ref);
+
 /* --- links ------------------------------------------------------ */
 dbref getLocation(dbref ref);
 void setLocation(dbref ref, dbref loc);

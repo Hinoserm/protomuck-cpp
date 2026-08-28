@@ -47,6 +47,11 @@ struct SealedLayer {
     std::string uuid;
     /* entry key -> value, or null for a removal */
     nlohmann::json entries;
+    /* The object's stored type name at seal time. The type name lives
+     * at the top level of the object file rather than in the entries
+     * map, so a layer has to carry it or a type change never reaches
+     * the file. */
+    std::string typeName;
     /* Set once this layer has been written. A retry after a partial
      * failure skips what already landed; re-appending would duplicate
      * the record and replay it twice at load. */

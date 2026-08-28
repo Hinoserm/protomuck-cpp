@@ -14,6 +14,7 @@
 #include "ProgramStore.h"
 #include "ObjectStore.h"
 #include "ObjectAccess.h"
+#include "Journal.h"
 #include "strutils.h"
 
 #ifndef MALLOC_PROFILING
@@ -131,15 +132,26 @@ Database::clearObject(dbref player, dbref i)
 {
     struct object *o = DBFETCH(i);
 
+    /* The bzero wipes the flags word, and the type bits mirrored in it
+     * go with it, leaving the mirror disagreeing with the type field.
+     * Put the object back in a coherent state explicitly rather than
+     * leaving two sources of truth pointing different ways. */
     bzero(o, sizeof(struct object));
+    if (DbObject *sh = get(i))
+        sh->setType(ObjectType::Garbage);
     MUCK::setName(i, 0);
     ts_newobject(player, o);
     MUCK::setLocation(i, NOTHING);
     contentsOf(i).clear();
+    journalRecord(i, "$type/contents");
     exitsOf(i).clear();
-    if (DbObject *sh = get(i))
-        if (Properties *pp = sh->As<Properties>())
+    journalRecord(i, "$type/exits");
+    if (DbObject *sh = get(i)) {
+        if (Properties *pp = sh->As<Properties>()) {
+            journalRecordPropTree(i, "");
             pp->root().clear();
+        }
+    }
 
     /* flags and type-specific fields are the caller's to initialize */
 }

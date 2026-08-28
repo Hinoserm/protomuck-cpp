@@ -1295,10 +1295,15 @@ ObjectStore::saveObject(dbref i)
     cur["rev"] = rev_;
 
     /* A full base supersedes every layer that sat on it, so the
-     * history goes with it. This is the compacting write: conversion
-     * and maintenance use it. Ordinary saves append layers instead
-     * (persist), which is what preserves rollback history. */
+     * history goes with it. This is the compacting write, used by
+     * conversion and by panic; ordinary saves append layers instead
+     * (persist), which is what preserves rollback history.
+     *
+     * Dropping the layers also drops what the object's own markers
+     * pointed at, so those go too rather than being left dangling at
+     * revisions nothing can reconstruct. */
     unlink(histPath(i).c_str());
+    cur.erase("markers");
 
     if (DbObject *o = MUCK::database().get(i)) {
         o->journal().discardTop();
@@ -1827,6 +1832,8 @@ ObjectStore::loadAll()
                              * describes new values and does not */
                             if (layer.contains("key"))
                                 continue;
+                            if (layer.contains("type"))
+                                j["type"] = layer["type"];
                             for (auto lit = layer["entries"].begin();
                                  lit != layer["entries"].end(); ++lit) {
                                 if (lit.value().is_null())
@@ -1967,6 +1974,7 @@ ObjectStore::fireObject(dbref i)
     sealed.era = top ? top->era() : rev_;
     sealed.ref = i;
     sealed.uuid = MUCK::database().UUIDOf(i).toString();
+    sealed.typeName = typeNameOf(i);
     sealed.entries = json::object();
 
     if (!o->baseWritten()) {
@@ -2022,6 +2030,7 @@ ObjectStore::fire()
         sealed.era = top->era();
         sealed.ref = i;
         sealed.uuid = MUCK::database().UUIDOf(i).toString();
+        sealed.typeName = typeNameOf(i);
         sealed.entries = json::object();
 
         if (!o->baseWritten()) {
@@ -2069,12 +2078,18 @@ ObjectStore::persist(const CaptureSet &set)
         ensureDirsFor(path);
 
         if (layer.full) {
-            /* the object's first appearance: write the base itself */
+            /* This is the object's whole state, so it supersedes every
+             * layer that sat on the old base. Leaving a stale .hist
+             * beside it would replay those layers over the new base at
+             * load: a resurrected object would revert, because its
+             * pre-deletion layers would be applied on top of the state
+             * it was resurrected to. */
             json j = layer.entries;
 
             j["rev"] = set.rev;
             if (!atomicWrite(path, j.dump(1)))
                 return false;
+            unlink((path.substr(0, path.size() - 5) + ".hist").c_str());
             layer.landed = true;
             continue;
         }
@@ -2084,6 +2099,12 @@ ObjectStore::persist(const CaptureSet &set)
 
         rec["era"] = layer.era;
         rec["entries"] = layer.entries;
+        /* The stored type name lives at the top level of the object
+         * file, outside the entries map, so a layer has to carry it
+         * explicitly: without this a @toad would leave the file
+         * claiming the old type until something rewrote the base. */
+        if (!layer.typeName.empty())
+            rec["type"] = layer.typeName;
 
         std::string hist = path.substr(0, path.size() - 5) + ".hist";
         std::ofstream hf(hist, std::ios::app);
