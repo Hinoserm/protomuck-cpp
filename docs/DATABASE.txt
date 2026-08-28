@@ -33,9 +33,9 @@ superseded mechanisms are deleted, not kept alongside.
    The garbage object type is abolished as a storable type: nothing
    can create or save one, and TYPE_GARBAGE survives only as the
    in-memory sentinel marking a dead shell.  Deleting an object unlinks
-   it from the uuid index and records a tombstone row: uuid, dbref, deleted
-   timestamp, deleting player uuid, and the store revision era at
-   deletion.  The dbref keeps resolving to a dead shell (section 5), so
+   it from the uuid index and records a tombstone row: uuid, dbref,
+   deleted timestamp, deleting player uuid, and the store revision era
+   at deletion.  The dbref keeps resolving to a dead shell (section 5), so
    no held pointer or stale ref can dangle.  Programs holding a deleted
    object are to receive an OBJECT_DELETED mufevent; that event is
    DEFERRED pending design discussion and is not raised today.
