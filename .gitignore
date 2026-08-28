@@ -65,3 +65,10 @@ nethost.cache
 !/game/logs/README-LOGS
 /game/backup/
 /dat/backup/
+
+# Runtime database and dumps. The server builds data/proto.db from
+# data/minimal.proto on first run; only the template belongs in the repo.
+/game/data/proto.db
+/game/out
+/dat/data/proto.db
+/dat/out
