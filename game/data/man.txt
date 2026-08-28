@@ -14,7 +14,7 @@ PRIMS2 - Stacks, Control Structures, Props
 PRIMS3 - Time, Data Conversion, Notifying (I/O)
 PRIMS4 - Connections, Locks, Strings
 PRIMS5 - Data Base, System, Sockets
-PRIMS6 - Arrays, Files, MCP Prims
+PRIMS6 - Arrays, Files
 PRIMS7 - MUF editing prims, MySQL prims, ANSI prims
 PRIMS8 - Regexp Prims
 
@@ -41,7 +41,7 @@ Math and Logic Prims:
   ATAN2      DIST3D    XYZ_TO_POLAR            POLAR_TO_XYZ  
   EXP        LOG       LOG10      FABS         POW    FRAND
   FMOD       MODF      AND        OR           NOT    ABS
-  SRAND      GETSEED   SETSEED    SIGN         XOR    INF
+  SIGN       XOR       INF        (unsupported: SRAND GETSEED SETSEED)
   EPSILON
 
 See: PRIMS2
@@ -54,7 +54,7 @@ Stack Prims:
   SOCKET?     LOCK?      FLOAT?        VARIABLE?   ARRAY?   
   MARK        }          CHECKARGS     REVERSE     LREVERSE 
   POPN        PICK       PUT           DESCR?      SQL? 
-  MARK?       NIP        TUCK
+  MARK?       NIP        TUCK          ?DUP        NDUP
 
 Control Structures:
   EXIT         CALL       EXECUTE     READ        PUBLIC      SLEEP
@@ -117,7 +117,7 @@ Connection Prims:
   DESCRUSER        GETDESCRINFO      DESCRBOOT    DESCR_SET
   DESCR_FLAG?      DESCRBUFSIZE      DESCRTYPE    DESCR_SSL?
   DESCR_SENDFILE   DESCR_SAFEBOOT    MCCP_START   MCCP_END
-  DESCR_SETUSER_NOPASS              NBSOCKRECV_CHAR
+  DESCR_SETUSER_NOPASS   NBSOCKRECV_CHAR   SUID
 
 Locks Management:
   SETLOCKSTR     GETLOCKSTR     LOCKED?     PARSELOCK
@@ -208,12 +208,6 @@ File Prims:
   FPUBLISH  FSINFO   FSTATS    CURID      FSIZE    GETDIR
   RMDIR
 
-MCP Prims: (removed in 2021; these no longer exist)
-  MCP_REGISTER    MCP_REGISTER EVENT   MCP_SUPPORTS       MCP_BIND
-  MCP_SEND        GUI_AVAILABLE        GUI_DLOG_CREATE    GUI_DLOG_SHOW
-  GUI_DLOG_CLOSE  GUI_CTRL_CREATE     GUI_VALUES_SET     GUI_VALUES_GET
-  GUI_VALUE_GET   GUI_CTRL_COMMAND
-
 ~~~~~
 PRIMS7|PRIM7
 
@@ -269,7 +263,6 @@ MULTITASKING PRIMS - Prims that handle MUF multitasking levels.
 SOCKET PRIMS       - Prims for working with ProtoMUCK socket control.
 FILE PRIMS         - Prims for managing files on the server level.
 ARRAY PRIMS        - Prims for working with MUF arrays.
-MCP PRIMS          - Prims for working with graphical MUF protocal.
 MUF EDIT PRIMS     - Prims for making MUF editors.
 SQL PRIMS          - Prims for working with MySQL databases.
 ANSI PRIMS         - Prims for working with ANSI color.
@@ -300,7 +293,6 @@ ARRAY PRIMS        - Some notes on using arrays with MUF.
 FUNCTION HEADERS   - Notes about using function headers in MUF.
 MUF EVENTS         - Notes on how to use events in MUF.
 MUF LABELS         - Notes on how to use the new MUF label points system.
-MCP PRIMS          - Notes on the graphical MUF prims.
 WEBSERVER/HTMUF/CGI- Notes on how to take advantage of cgi MUF support.
 EXCEPTION HANDLING - Notes on exception handling in MUF.
 INTERRUPTS         - Explanation and examples of MUF interrupt support.
@@ -319,7 +311,7 @@ SIN        COS       TAN        ASIN         ACOS   ATAN
 ATAN2      DIST3D    XYZ_TO_POLAR     	     POLAR_TO_XYZ  
 EXP        LOG       LOG10      FABS         POW    FRAND
 FMOD       MODF      ABS        SIGN
-SRAND      GETSEED   SETSEED
+(unsupported: SRAND GETSEED SETSEED)
 See: FLOAT PRIMS
 ~~~~
 LOGICAL OPERATORS|LOGIC PRIMS|LOGICAL PRIMS
@@ -338,7 +330,7 @@ GETPROPSTR  GETPROPVAL    GETPROPFVAL     ENVPROPSTR    NEXTPROP
 DESC        IDESC         HTMLDESC        IHTMLDESC     PROPDIR?
 SETDESC     SETSUCC       SETFAIL         SETDROP       SETOSUCC
 SETOFAIL    SETODROP      SUCC            FAIL          DROP
-SUCC        OFAIL         ODROP           GETLOCKSTR  
+OSUCC       OFAIL         ODROP           GETLOCKSTR
 ANSIDESC    SETANSIDESC   IANSIDESC       SETIANSIDESC
 REFLIST_ADD REFLIST_FIND  REFLIST_DEL     COPYPROPS
 
@@ -349,11 +341,11 @@ The following prims are used to notify messages from MUF:
 
 NOTIFY              NOTIFY_EXCLUDE              NOTIFY_EXCEPT
 ANSI_NOTIFY         ANSI_NOTIFY_EXCLUDE         ANSI_NOTIFY_EXCEPT
-NOTIFY_HTML         NOTIFY_HTML_EXCLUDE         NOTIFY_HTML_EXCLUDE
-NOTIFY_HTML_NOCR    NOTIFY_HTML_EXCLUDE_NOCR    HTML_NOCR_EXCEPT
+NOTIFY_HTML         NOTIFY_HTML_EXCLUDE         NOTIFY_HTML_EXCEPT
+HTML_NOCR           HTML_EXCLUDE_NOCR           HTML_NOCR_EXCEPT
 NOTIFY_DESCRIPTOR   ARRAY_NOTIFY                DESCRFLUSH
 STOPMIDI            PLAYMIDI                    COMMANDTEXT
-ARRAY_ANSI_NOTIFY   NOTIFY_ARRAY_HTML           ANSI_NOTIFY_DESCRIPTOR
+ARRAY_ANSI_NOTIFY   ARRAY_NOTIFY_HTML           ANSI_NOTIFY_DESCRIPTOR
 NOTIFY_DESCRIPTOR_CHAR
 
 ~
@@ -372,6 +364,7 @@ DTOS      ( d -- s )
 FLOAT     ( i -- f )
 STRTOF    ( s -- f )
 FTOSTR    ( f -- s )
+FTOSTRC   ( f -- s )
 ITOH      ( i -- s )
 HTOI      ( s -- i )
 
@@ -409,7 +402,7 @@ These prims are used to move and manipulate things on the stack:
   SOCKET?     LOCK?      FLOAT?        VARIABLE?   ARRAY?   
   MARK        }          CHECKARGS     REVERSE     LREVERSE 
   POPN        PICK       PUT           DESCR?      SQL? 
-  MARK?       NIP        TUCK
+  MARK?       NIP        TUCK          ?DUP        NDUP
 
 See: DATA TYPES
 ~~~~~
@@ -501,6 +494,7 @@ For working with Descriptors:
   DESCRBOOT        DESCR_SET         DESCR_FLAG?   DESCRBUFSIZE
   DESCRTYPE        DESCR_SSL?        DESCR_SENDFILE
   DESCR_SAFEBOOT   MCCP_START        MCCP_END
+  SUID
 ~~~~~~
 LOCK PRIMS
 
@@ -526,7 +520,7 @@ These prims are used to manage MUF program run-modes:
 
 PREEMPT       FOREGROUND       BACKGROUND     MODE     SETMODE
 PR_MODE       FG_MODE          BG_MODE        SLEEP
-EVENT_WAIT    EVENT_SEND       EVENT_COUNT
+EVENT_WAIT    EVENT_SEND       EVENT_COUNT    EVENT_EXISTS
 TIMER_START   TIMER_STOP       EVENT_WAITFOR  WATCHPID
 ONEVENT       INTERRUPT_LEVEL
 
@@ -1524,8 +1518,8 @@ These work like their normal counterparts, only they are only sent to
 Pueblo users and any HTML code in the string will be executed by the
 Pueblo client.
 
-notify_html_nocr         ( d s -- )
-notify_html_nocr_exclude ( d s -- )
+html_nocr         ( d s -- )
+html_exclude_nocr ( d s -- )
 -----------------------------------
 Level: M1 Apprentice
 For details, see NOTIFY, and NOTIFY_EXCLUDE
@@ -1891,7 +1885,8 @@ all actually $defines to addprop with the apporpriate property name.
 They are effectively defined as:
 $define setdesc      "_/de"  swap 0 addprop $enddef
 $define setidesc     "_/ide" swap 0 addprop $enddef
-$define setansidesc  "_/
+$define setansidesc  "_/anside" swap 0 addprop $enddef
+$define setiansidesc "_/ianside" swap 0 addprop $enddef
 $define sethtmldesc  "_/htmlde" swap 0 addprop $enddef
 $define setihtmldesc "_/ihtmlde" swap 0 addprop $enddef
 $define setsucc      "_/sc"  swap 0 addprop $enddef
@@ -2827,7 +2822,7 @@ FORK
 
 fork ( -- i)
 ------------
-Level: W1 Mage
+Level: W2 Wizard
 i = integer representing the PID of the new process, or failed result.
 
 This primitive forks off a BACKGROUND (muf) process from the currently
@@ -3290,7 +3285,7 @@ s1 = string to check for s2 in.
 s2 = string to find within s1.
 i  = integer representing last location of s2 in s1.
 
-Returns the last occurrence of string s2 in string s1, or -1 if s1 is
+Returns the last occurrence of string s2 in string s1, or 0 if s2 is
 not found. Non-case sensitive. This is an inserver define to
 'tolower swap tolower swap rinstr'
 
@@ -3475,7 +3470,6 @@ newexit                (d1 s -- d2)
 conhost                (i -- s)
 conipnum               (i -- s)
 nextdescr              (i1 -- i2)
-fork                   ( -- i)
 nextowned              ( d -- d' )
 notify_descriptor      ( i s -- )
 ansi_notify_descriptor ( i s -- )
@@ -3487,10 +3481,6 @@ nextthing_flag         ( d s -- d )
 nextplayer_power       ( d s -- d )
 nextentrance           ( d d -- d )
 descrhost              ( i -- s )
-descripnum             ( i -- s )
-firstdescr             ( d -- i )
-lastdescr              ( d -- i )
-descr_flag?            ( i s -- i )
 notify_descriptor_char ( i i -- )
 bandwidth              ( -- i i i )
 get_macros_array       ( -- dict )
@@ -3505,9 +3495,9 @@ object in order to make changes to it. There is little a W3
 can do with these prims that a W2 cannot do.
 
 conboot             (i -- )
+fork                ( -- i)
 parsempi            ( d s1 s2 i -- s3 )
 descr_setuser       ( i1 d s -- i2 )
-program_getlines    ( d i i -- arr )
 program_linecount   ( d -- i )
 insert_macro        ( s s -- i )
 kill_macro          ( s -- i )
@@ -3597,6 +3587,12 @@ shutdown            ( s -- )
 restart             ( s -- )
 program_insertlines ( d i1 arr -- i2 )
 program_deletelines ( d i1 i2 -- i3 )
+ssl_sockaccept      ( lsocket -- socket )
+socksecure          ( socket -- i )
+sockunsecure        ( socket -- )
+descr_setuser_nopass ( i1 d -- i2 )
+descr_sendfile      ( i1 i2 i3 s -- i4 )
+suid                ( i d -- i )
 
 See: W4, MUCKER LEVELS, individual prim entries for more details.
 ~
@@ -4124,9 +4120,9 @@ See: FLAGS5
 ~~~~~
 FLAGS5|FLAG5|NO_OPTIMIZE|NO_COMMENT
 
-NO_OPTIMIZIE (N) = Setting this flag on a MUF object will keep that 
+NO_OPTIMIZE (N) = Setting this flag on a MUF object will keep that 
             program from being optimized during compile time if the
-            MUF optimizer is @tuned to yes. See MUF OPTIMING.
+            MUF optimizer is @tuned to yes. See MUF OPTIMIZING.
 
 WIZARD/MUCKER (M1 - W4 ) = The limit of what a program can and cannot do
             is influenced by the M/W bit of the owner of the program. 
@@ -5113,9 +5109,9 @@ it. When a MUF program ends, either by crashing, or ending normally,
 any open socket connections are automatically closed. Still, it is a 
 good practice to close them manually when they are no longer needed.
 
-This prim is depricated as of 1.80 and newer. Starting with Proto 1.9,
-it will be replaced by an in-server define of:
-2 SOCKSHUTDOWN
+This prim is deprecated as of 1.80 and newer. It remains a real
+primitive, equivalent to '2 SOCKSHUTDOWN', which should be preferred
+in new code.
 
 See: SOCKETS, SOCKSHUTDOWN
 ~
@@ -5652,11 +5648,17 @@ Returns the value of PI.
 See: FLOAT PRIMS
 ~
 INF
-INF ( -- f )
+inf ( -- f )
+-inf ( -- f )
+nan ( -- f )
 
-  Returns the value of an Infinite result.  Most functions will not
-  accept this value as a legal input.
-  Also see: EPSILON and FLOAT
+  INF is not a primitive. The compiler recognizes "inf", "-inf", and
+  "nan" as floating point literals, the same way it recognizes "3.14",
+  and compiles them directly to float values of positive infinity,
+  negative infinity, and not-a-number. Most functions will not accept
+  these values as legal input. Math that overflows produces INF or
+  sets an error flag depending on the alt_infinity_handler @tune.
+  Also see: EPSILON, FLOAT, ERROR?
 ~
 EPSILON
 EPSILON ( -- flt:epsilon )
@@ -7139,40 +7141,26 @@ Returns what objects d is linked to.  If d is an unlinked exit,
 a program, or a room with no dropto, getlinks returns 0.  A count of
 1 and #-3 is returned if the dropto is linked to HOME.
 ~~~~
-SRAND
+SRAND|GETSEED|SETSEED
 
 srand ( -- i )
---------------
-Level: M1 Apprentice
-i = A random integer.
-
-Generates a seeded random number.
-
-See also SETSEED and GETSEED.
-~~~
-GETSEED
-
 getseed ( -- s )
-----------------
-Level: M1 Apprentice
-s = string representing the srand seed string.
-
-Returns the the current SRAND seed string.
-
-See: SETSEED, SRAND
-~~~
-SETSEED
-
 setseed ( s -- )
 ----------------
-Level: M1 Apprentice
-s = string to become the seed for SRAND.
+*** NOT CURRENTLY SUPPORTED ***
 
-Sets the seed for SRAND.  Only the first thirty-two characters are
-significant.  If SRAND is called before SETSEED is called, then SRAND
-is seeded with a semi-random value.
+These seeded random number prims exist in FuzzBall 6 but are not
+implemented in this server. Attempting to use them will fail to
+compile with "Unrecognized word". They are documented here so the
+gap is known; support may be added in a future version. See
+docs/TODO.txt in the source distribution.
 
-See: GETSEED, SRAND
+In FB6, SRAND generates a seeded random number, SETSEED sets the
+seed (first thirty-two characters significant), and GETSEED returns
+the current seed string. Until they are implemented, use RANDOM or
+FRAND instead.
+
+See: RANDOM, FRAND
 ~~~
 TOKENSPLIT
            
@@ -7782,8 +7770,8 @@ a2 = A list array.
 Given array a1 and something to look for as x, returns a list style
 array containing the index markers of every element of a1 that pointed
 to values matching the given value x. In other words:
-{ "1" #1 "2" #2 "3" #1 } array_make_dict #1 array_findvals
-would return an array that looks like: { 1,"1" 2 "3" }
+{ "1" #1 "2" #2 "3" #1 } array_make_dict #1 array_findval
+would return a list array of the matching keys: { "1" "3" }
 
 See: ARRAY PRIMS, ARRAY_EXCLUDEVAL
 ~~~
@@ -7799,8 +7787,8 @@ a2 = A list array.
 Given array a1 and something to look for as x, returns a list style
 array containing the index markers of every element of a1 that did NOT
 point to values matching the given value x. In other words:
-{ "1" #1 "2" #2 "3" #1 } array_make_dict #1 array_findvals
-would return an array that looks like: { 1,"2" }
+{ "1" #1 "2" #2 "3" #1 } array_make_dict #1 array_excludeval
+would return a list array of the non-matching keys: { "2" }
 
 See: ARRAY PRIMS, ARRAY_FINDVAL
 ~~~~
@@ -8006,7 +7994,7 @@ d1 = Any valid dbref.
 d2 = Next room in the data base, or #-1.
 
 Given a valid dbref, returns the dbref of the next object in the 
-data base that is of type exit. If there are no more exits in the
+data base that is of type room. If there are no more rooms in the
 data base after d1, then #-1 is returned.
 
 See: NEXTPLAYER, NEXTTHING, NEXTPROGRAM, NEXTEXIT
@@ -8222,250 +8210,6 @@ of character that could be returned will still be put on the stack.
 If s1 is an empty string, returns an empty string no matter what.
 If i1 is a point that is beyond the range of s1, returns a null string.
 ~~~~~
-MCP PRIMS|MCP|MCPPRIMS|GUI PRIMS|GUIPRIMS|GUI
-
-GUI MCP from FB6. 
-At the time this version of the manual was completed, I had no idea
-how to use the MCP prims. Below is a list of the MCP prims that are
-in Proto, and each one is documented within this manual. Further
-documentation regarding the use of this prims will be provided once
-the way they are to be used becomes more clear. All of the manual
-entries for them were taken straight from the FB6 MUF Manual.
-
-MCP: MCP_REGISTER, MCP_REGISTER_EVENT, MCP_SUPPORTS, MCP_BIND, MCP_SEND
-GUI: GUI_AVAILABLE, GUI_DLOG_CREATE, GUI_DLOG_SHOW, GUI_DLOG_CLOSE
-     GUI_CTRL_CREATE, GUI_VALUES_SET, GUI_VALUES_GET, GUI_CTRL_COMMAND
-     GUI_VALUE_GET
-
-~~~~~~~~~~~~~~
-MCP_REGISTER
-
-mcp_register ( s f1 f2 -- )
----------------------------
-Level: M1 Apprentice
-s  = String containing the name of an MCP package to register.
-f1 = Float representing minimum version number supported.
-f2 = Float representing maximum version number supported.
-
-Registers an MCP package so that clients can know what is supported. 
-The minimum and maximum versions supported are represented as floating 
-point numbers, with the minor version number being divided by 1000. For 
-example, an MCP package of version 1.1 is represented as 1.001, and a 
-version of 1.23 is represented as 1.023. This lets you use mathematical 
-compares to check version numbers. 
-
-See: MCP PRIMS
-~~~~~~~
-MCP_REGISTER_EVENT
-
-mcp_register_event ( s f1 f2 -- )
----------------------------------
-Level: M1 Apprentice
-s  = string containing package name to register.
-f1 = Float representing the minimum version package supported.
-f2 = Float representing the maximum version package supported.
-
-Registers an MCP package so that clients can know what is supported, 
-and marks this process as wanting to receive MCP messages as Muf Events. 
-These events can be read with EVENT_WAIT, and will have event ids 
-starting with "MCP.", followed by the package and message names. The 
-event data will be a dictionary, containing "descr", "package", 
-"message", and "args" elements. The args element will have a dictionary 
-of message arguments as it's value. The minimum and maximum package
-versions supported are represented as floating point numbers, with the 
-minor version number being divided by 1000. For example, an MCP package 
-of version 1.1 is represented as 1.001, and a version of 1.23 is 
-represented as 1.023. This lets you use arithmetic compares to check 
-version numbers. Since this primitive arranges for MCP messages to be 
-received as muf events, there is no need to use the MCP_BIND primitive 
-with this. A side benefit is that _any_ MCP message sent for this package 
-can be caught, not just the ones you bound. Also, the process that will 
-handle the events is kept alive, so your data stored in variables, or on 
-the stack, is kept.
-
-See: MCP PRIMS
-~~~~~~~~~~~~
-MCP_SUPPORTS
-
-mcp_supports ( i s -- f )
--------------------------
-Level: M1 Apprentice
-i = integer representing a valid descriptor.
-s = string representing a MCP package name.
-f = float representing the packet version number supported.
-
-Returns the version number of this package that is supported by this 
-connection descriptor. If this package isn't supported, returns 0.0 
-The version number is represented as a floating point number, with 
-the minor version number being divided by 1000. For example, an MCP 
-package of version 1.1 is represented as 1.001, and a version of 1.23 
-is represented as 1.023. This lets you use mathematical compares to 
-check version numbers. 
-
-See: MCP PRIMS
-~~~~~~~~~~~
-MCP_BIND
-
-mcp_bind ( s1 s2 a -- )
------------------------
-Level: M1 Apprentice
-s1 = string containing a package name.
-s2 = string containing a specific message.
-a  = A function address.
-
-Binds a specific message, so if it is received, the given function is called. The callback function is assumed to accept the args: ( intDescr dictArgs -- ) where dictArgs is a dictionary array contain- ing key-value pairs that represent the arguments of the message. Each argument can either have a string value, or a list array of strings, where the list array is used for multi-line values. 
-
-See: MCP PRIMS
-~~~~~ 
-MCP_SEND
-
-mcp_send ( i s1 s2 dict -- )
-----------------------------
-Level: M1 Apprentice
-i  = integer representing valid descriptor.
-s1 = string representing package name.
-s2 = string containing MCP message.
-dict = Dictionary array.
-
-Sends an MCP message for the given package to the given connection 
-descriptor. dictArgs contains key-value pairs, where each key is an 
-argument name, and the value is the argument value. Values can be 
-strings, floats, dbrefs, integers, or array lists of strings. They 
-all get translated into an appropriate string format before getting 
-sent. 
-
-See: MCP PRIMS
-~~~~~
-GUI_AVAILABLE
-
-gui_available ( i -- f )
-------------------------
-Level: M1 Apprentice
-i = integer containing valid descriptor.
-f = float representing a version number.
-
-Returns the floating point version number of the MCP GUI protocol 
-supported by the given descriptor's connection. The version is 
-encoded in the number such that major version 8, minor version 12 
-is represented as 8.012. If the MCP protocol is not available on 
-that descriptor, then 0.0 is returned. 
-
-See: MCP PRIMS
-~~~~~~~~
-GUI_DLOG_CREATE
-
-gui_dlog_create ( i s1 s2 dict -- s3 )
---------------------------------------
-Level: M1 Apprentice
-i  = integer representing a valid descriptor.
-s1 = string representing the type of dialog to show user.
-s2 = string representing title to appear in the title bar.
-dict = dictionary array.
-s3 = string representing dialogid.
-
-If a user has a client that can support the MCP GUI protocol, then 
-this primitive can be used to generate a dialog on their screen. The 
-intDescr is the integer descriptor of the connection to show the dialog 
-on. The strType is the type of the dialog to create. Currently, the only 
-options for strType are D_SIMPLE, D_TABBED, or D_HELPER. The strTitle 
-argument is the title to show in the titlebar of the dialog. dictArgs 
-is a dictionary array that contains extra optional arguments for creating 
-the dialog. In general, dictArgs is only used to specify "panes" and "names"
- for D_TABBED and D_HELPER dialogs. This primitive returns a string 
-containing the dialogid, used by other prims to add controls or make various 
-changes. This dialog will be hidden and not shown to the user until it has 
-been displayed with the GUI_DLOG_SHOW command. 
-
-Supported optional args are:
-    names      list of user-viewable pane names for D_TABBED & D_HELPER dlogs.
-    panes      list of pane ids for D_TABBED and D_HELPER dialogs.
-    width      requested width of dialog in pixels.
-    height     requested height of dialog in pixels.
-    resizable  allows resizing in "x", "y", or "both" dimensions.
-    minwidth   minimum width of window in pixels.
-    minheight  minimum height of window in pixels.
-    maxwidth   maximum width of window in pixels.
-    maxheight  maximum height of window in pixels.
-
-See: MCP PRIMS
-~~~~~~~~
-GUI_DLOG_SHOW
-
-gui_dlog_show ( s -- )
-----------------------
-Level: M1 Apprentice
-s = string containing a MCP dialog to be shown to user.
-
-Forces a given dialog to be shown to the user. The strDlogId 
-is what was returned by the GUI_DLOG_CREATE (or similar) command. 
-
-See: MCP PRIMS
-~~~~~~
-GUI_DLOG_CLOSE
-
-gui_dlog_close ( s -- )
------------------------
-Level: M1 Apprentice
-s = string containing a dialog id.
-
-Forces a given dialog to be closed and destroyed. The strDlogId 
-is what was returned by the GUI_DLOG_CREATE (or similar) command. 
-
-See: MCP PRIMS, GUI_DLOG_CREATE
-~~~~~ 
-GUI_CTRL_CREATE
-
-gui_ctrl_create ( s1 s2 s3 dict -- )
-------------------------------------
-Level: M1 Apprentice
-s1 = string containing a dialog ID.
-s2 = string containing dialog type.
-s3 = string containing control ID.
-dict - dictionary array.
-
-Creates a new control in a given dialog. strDlogID contains the 
-dlogid returned from a GUI_DLOG_SIMPLE (or similar) command. 
-strType contains the control type. To make debugging easier and 
-faster, MUF $defs have been provided for each control type. They 
-are: C_DATUM, C_LABEL, C_HRULE, C_VRULE, C_BUTTON, C_CHECKBOX, 
-C_EDIT, C_MULTIEDIT, C_COMBOBOX, C_SPINNER, C_SCALE, C_LISTBOX, 
-C_FRAME, C_NOTEBOOK. If you use these instead of the actual type 
-name strings, then if you mistype one, it will throw an error when 
-trying to compile, instead of when you try to run it. The strCtrlID 
-arg is the id to give the control, for use in reading the values 
-back later, or modifying the control. dictArgs is used to pass any 
-other arguments needed to create the control. This will be used by 
-almost all controls. It is a dictionary array that contains argnames 
-as keys, each with an argument value. 
-
-See: MCP PRIMS
-~~~~~ 
-GUI_VALUES_GET
-
-gui_values_get ( s -- dict )
-----------------------------
-Level: M1 Apprentice
-s = string containing a dialog ID.
-dict = dictionary array.
-
-Returns a dictionary containing all the control values for the given 
-dialog. The keys are the control ids. 
-
-See: MCP PRIMS
-~~~~~~~~~
-GUI_VALUE_SET
-
-gui_value_set ( s1 s2 s3 -- )
------------------------------
-Level: M1 Apprentice
-s1 = string containing dialog ID.
-s2 = string containing control ID.
-s3 = string containing value to assign to control id.
-
-Sets the value of a given control in a given dialog.
-
-See: MCP PRIMS
-~~~~~~~~~~~
 FORCE_LEVEL
 
 force_level ( -- i )
@@ -8541,35 +8285,6 @@ i = integer representing the number of pending events with that ID.
 Returns the number of pending events that have the given eventID type.
 
 See: MUF EVENTS
-~~~~~
-GUI_CTRL_COMMAND
-
-gui_ctrl_command ( s1 s2 s3 a -- )
-----------------------------------
-Level: M1 Apprentice
-s1 = string with the Dialogue ID.
-s2 = string with the control ID.
-s3 = string with the specific GUI command.
-a  = dictionary style array with the arguements of the command.
-
-This is the generic primitive for executing a GUI control specific 
-command. The dictionary contains the arguments for the given command.
-
-See: MCP PRIMS
-~~~~~~~~
-GUI_VALUE_GET
-
-gui_value_get ( s1 s2 -- a )
-----------------------------
-Level: M1 Apprentice
-s1 = string with the dialogue ID.
-s2 = string with the control ID.
-a  = A string list array representing the current value of the given control.
-
-This gets the current value of the given GUI control, and returns it 
-as a string list array. 
-
-See: MCP PRIMS
 ~~~~~
 PARSE_NEON
 
@@ -8696,7 +8411,7 @@ that connection's IP address.
 DESCRIPNUM
 descripnum ( i -- s )
 ---------------------
-Level: W1 Mage
+Level: M1 Apprentice
 i = Valid descriptor.
 s = string representing a IP number.
 
@@ -8747,7 +8462,7 @@ connection.
 FIRSTDESCR
 firstdescr ( d -- i )
 ---------------------
-Level: W1 Mage
+Level: M1 Apprentice
 d = A valid player dbref or #-1.
 i = integer representing a descriptor.
 
@@ -8758,12 +8473,12 @@ to the MUCK out of all the players.
 LASTDESCR
 lastdescr ( d -- i )
 --------------------
-Level: W1 Mage
+Level: M1 Apprentice
 d = A valid dbref or #-1.
 i = integer representing a descriptor.
 
-Given a valid player dbref, returns that player's first descriptor
-number to the MUCK. If given #-1, returns the very first descriptor
+Given a valid player dbref, returns that player's last descriptor
+number to the MUCK. If given #-1, returns the very last descriptor
 connected to the MUCK out of all the players.
 ~~~~
 ARRAY_JOIN
@@ -10570,8 +10285,8 @@ i1 can be the following values:
 2 = Close down the socket in both directions. This is the traditional
     SOCKCLOSE behavior. 
 
-This prim will replace SOCKCLOSE in 1.9. SOCKCLOSE will be defined
-as '2 SOCKSHUTDOWN' come 1.9. 
+SOCKCLOSE is equivalent to '2 SOCKSHUTDOWN' and is deprecated in
+favor of this prim.
 
 See: SOCKCLOSE
 ~~~~
@@ -10748,11 +10463,12 @@ Level: M1 Apprentice
 i = number of ignores compiled into the MUCK, or 0 if not compiled on
 
 Returns the maximum number of ignores that have been compiled in.
-Usually this is 16.  More or less may be added to the ignore list but only
+Usually this is 64.  More or less may be added to the ignore list but only
 the first ones up to MAX_IGNORES will actually work.
 
-If MAX_IGNORES is 0, ignore support isnt compiled in, setting @/ignore will
-do nothing, and none of the ignore prims but this one will work.
+If MAX_IGNORES is 0, ignore support is not compiled in, setting @/ignore
+will do nothing, and the other ignore words are not defined at all, so
+programs using them will fail to compile.
 
 See: HELP IGNORE
 ~~~

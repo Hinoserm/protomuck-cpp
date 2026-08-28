@@ -1,0 +1,46 @@
+PROTOMUCK C++ TODO
+==================
+
+MUF primitives
+--------------
+
+* SRAND, GETSEED, SETSEED: seeded random number prims from FB6 are
+  documented in man.txt but were never implemented in this server.
+  Either port the FB6 implementations (prim_srand, prim_setseed,
+  prim_getseed in fb6 p_math.c, plus the per-frame seed storage in
+  struct frame) or remove the man.txt stubs. The man.txt entry
+  currently marks them as NOT CURRENTLY SUPPORTED.
+
+* PRIMLIST_STRINGS_UTF8 (WCHARLEN, WCHARLEN_SLICE) is implemented in
+  p_strings.cpp but never included in primlist[] in interp.cpp, so
+  the prims are unreachable. Decide whether UTF8_SUPPORT is staying
+  and either register or remove them.
+
+Known code bugs found during the 2026-08-27 man.txt audit
+---------------------------------------------------------
+
+* compile.cpp: "#ifdef SQL_SUPPPORT" (three Ps) means HAVE_SQL is
+  always defined as 0, even in SQL builds.
+
+* compile.cpp: JSON_DISABLE_EOF_CHECK is inserted with the value of
+  JSON_SORT_KEYS (copy-paste error).
+
+* compile.cpp: SSL_SOCKETS / SSL_SOCKOPEN defines are inserted twice.
+
+* p_connects.cpp prim_descrtype: local "p" is uninitialized when the
+  descriptor type matches no known CT_* constant; strcpy(dtype, p)
+  is then undefined behavior.
+
+* p_http.cpp BODY_GETCHAR / BODY_NEXTCHAR / BODY_PREVCHAR: bounds
+  checks allow reading index == body.len (one past the end).
+
+* p_mysql.cpp lines ~632-642: eleven orphaned struct member
+  declarations at file scope (stray globals from a bad paste).
+
+* Stale PRIMS_*_CNT counts: PRIMS_STRINGS_CNT says 60 (63 actual),
+  PRIMS_MISC_CNT says 50 (53 actual). Harmless while BASE_MAX is
+  computed at runtime, but wrong.
+
+* mancheck.cpp references eight PRIMS_*_NAMES macros that no longer
+  exist and is not in the CMake build; it cannot compile. Rewrite it
+  to walk primlist[] instead, or retire it.
