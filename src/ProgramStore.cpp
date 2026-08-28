@@ -48,8 +48,7 @@ void
 MUCK::ProgramStore::write(struct line *first, dbref i)
 {
     /* The source cache is authoritative; the object store persists it
-     * with the object. The legacy muf/<ref>.m file is refreshed too so
-     * a flat-era installation stays consistent until conversion. */
+     * with the object. */
     std::vector<std::string> lines;
 
     for (struct line *l = first; l; l = l->next)
@@ -57,23 +56,6 @@ MUCK::ProgramStore::write(struct line *first, dbref i)
             lines.push_back(l->this_line);
     setSourceLines(i, std::move(lines));
     DBDIRTY(i);
-
-    FILE *f;
-    char fname[BUFFER_LEN];
-
-    sprintf(fname, "muf/%d.m", (int) i);
-    f = fopen(fname, "wb");
-    if (!f) {
-        log_status("Couldn't open file %s!\n", fname);
-        return;
-    }
-    for (const auto &ln : source_[i]) {
-        if (fputs(ln.c_str(), f) == EOF || fputc('\n', f) == EOF) {
-            fprintf(stderr, "PANIC: Unable to write program text.\n");
-            abort();
-        }
-    }
-    fclose(f);
 }
 
 struct line *
@@ -97,29 +79,12 @@ MUCK::ProgramStore::newLine()
 struct line *
 MUCK::ProgramStore::read(dbref i)
 {
-    /* Serve from the source cache, filling it from the legacy
-     * muf/<ref>.m file on first miss (flat-era installations). */
+    /* Serve from the source cache only; the cache is populated by the
+     * object store at load and by write(). No file fallback. */
     auto it = source_.find(i);
 
-    if (it == source_.end()) {
-        char buf[BUFFER_LEN];
-        std::vector<std::string> lines;
-        FILE *f;
-        int len;
-
-        sprintf(buf, "muf/%d.m", (int) i);
-        f = fopen(buf, "rb");
-        if (!f)
-            return 0;
-        while (fgets(buf, BUFFER_LEN, f)) {
-            len = strlen(buf);
-            if (len > 0 && buf[len - 1] == '\n')
-                buf[len - 1] = '\0';
-            lines.push_back(*buf ? buf : " ");
-        }
-        fclose(f);
-        it = source_.emplace(i, std::move(lines)).first;
-    }
+    if (it == source_.end())
+        return 0;
 
     struct line *first = NULL;
     struct line *prev = NULL;
@@ -146,7 +111,7 @@ MUCK::ProgramStore::sourceLines(dbref i)
     auto it = source_.find(i);
 
     if (it == source_.end()) {
-        /* try the legacy file through read(), which fills the cache */
+        /* one more look through read() for symmetry; no fallback */
         struct line *l = read(i);
 
         free_prog_text(l);

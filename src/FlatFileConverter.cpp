@@ -694,6 +694,43 @@ db_read_object_foxen(FILE * f, struct object *o, dbref objno, int dtype, int rea
         fprintf(stderr, "OK\n");
 }
 
+/* First-time import of program text from the flat era's muf/<ref>.m
+ * files into the source cache, which the object store then persists.
+ * This is the ONLY place that reads those files; the server itself
+ * has no muf-file fallback. */
+static void
+importProgramSources(void)
+{
+    char buf[BUFFER_LEN];
+    int loaded = 0;
+
+    for (dbref i = 0; i < MUCK::database().top(); i++) {
+        if (Typeof(i) != TYPE_PROGRAM)
+            continue;
+
+        FILE *f;
+
+        sprintf(buf, "muf/%d.m", (int) i);
+        f = fopen(buf, "rb");
+        if (!f)
+            continue;
+
+        std::vector<std::string> lines;
+
+        while (fgets(buf, BUFFER_LEN, f)) {
+            int len = strlen(buf);
+
+            if (len > 0 && buf[len - 1] == '\n')
+                buf[len - 1] = '\0';
+            lines.push_back(*buf ? buf : " ");
+        }
+        fclose(f);
+        MUCK::programs().setSourceLines(i, std::move(lines));
+        loaded++;
+    }
+    log_status("IMPORT: program text for %d programs from muf/\n", loaded);
+}
+
 dbref
 MUCK::FlatFileConverter::import(FILE * f)
 {
@@ -867,6 +904,7 @@ MUCK::FlatFileConverter::import(FILE * f)
                                         MUCK::PasswordHash::version = HVER_CURRENT;
                                     else
                                         MUCK::PasswordHash::version = HVER_NONE;
+                                    importProgramSources();
                                     autostart_progs();
                                     return MUCK::database().top();
                                 } else {

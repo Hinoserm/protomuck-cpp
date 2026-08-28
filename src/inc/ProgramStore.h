@@ -1,9 +1,11 @@
 #ifndef MUCK_PROGRAMSTORE_H
 #define MUCK_PROGRAMSTORE_H
 
-/* MUF program text storage: programs live outside the database proper as
- * muf/<ref>.m files, loaded on demand and written back from the editor.
- * Extracted from Database.cpp.
+/* MUF program text storage: the in-memory source cache, populated by
+ * the object store at load and by the editor through write(); the
+ * object store persists it with each program. The flat-era muf/<ref>.m
+ * files are read once by FlatFileConverter at first import and never
+ * touched by the server again.
  */
 
 #include <cstdio>
@@ -21,9 +23,9 @@ class ProgramStore {
     struct line *newLine();
 
     /* Source cache: the authoritative in-memory copy of program text.
-     * Populated from the object store at load (or lazily from legacy
-     * muf/<ref>.m files), updated by write(), serialized by the
-     * ObjectStore. Returns null when a program has no source. */
+     * Populated from the object store at load, updated by write(),
+     * serialized by the ObjectStore. Returns null when a program has
+     * no source. */
     const std::vector<std::string> *sourceLines(dbref i);
     void setSourceLines(dbref i, std::vector<std::string> lines);
     void dropSource(dbref i);
