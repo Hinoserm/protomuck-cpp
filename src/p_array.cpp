@@ -1721,11 +1721,7 @@ prim_array_join(PRIM_PROTOTYPE)
 {
     struct inst *in;
     stk_array *arr;
-    char outbuf[BUFFER_LEN];
-    char *ptr;
     const char *text;
-    char *delim;
-    int tmplen;
     int done;
     struct inst temp1;
     char buf[BUFFER_LEN];
@@ -1736,9 +1732,10 @@ prim_array_join(PRIM_PROTOTYPE)
         abort_interp("Argument not a string pattern. (2)");
 
     arr = oper[1].data.array;
-    delim = (char *) DoNullInd(oper[0].data.string);
-    ptr = outbuf;
-    *outbuf = '\0';
+    const char *delim = DoNullInd(oper[0].data.string);
+    const size_t delimlen = strlen(delim);
+    std::string out;
+
     done = !array_first(arr, &temp1);
     while (!done) {
         in = array_getitem(arr, &temp1);
@@ -1765,30 +1762,25 @@ prim_array_join(PRIM_PROTOTYPE)
                 text = "<UNSUPPORTED>";
                 break;
         }
-        tmplen = strlen(text);
-        if (tmplen > BUFFER_LEN - (ptr - outbuf) - 1) {
-            strncpy(ptr, text, BUFFER_LEN - (ptr - outbuf) - 1);
-            outbuf[BUFFER_LEN - 1] = '\0';
+        size_t tlen = strlen(text);
+        size_t room = (size_t) BUFFER_LEN - 1 - out.size();
+        if (tlen > room) {
+            out.append(text, room);
             break;
-        } else {
-            strcpy(ptr, text);
-            ptr += tmplen;
         }
+        out.append(text, tlen);
         done = !array_next(arr, &temp1);
         if (!done) {
-            tmplen = strlen(delim);
-            if (tmplen > BUFFER_LEN - (ptr - outbuf) - 1) {
-                strncpy(ptr, delim, BUFFER_LEN - (ptr - outbuf) - 1);
-                outbuf[BUFFER_LEN - 1] = '\0';
+            room = (size_t) BUFFER_LEN - 1 - out.size();
+            if (delimlen > room) {
+                out.append(delim, room);
                 break;
-            } else {
-                strcpy(ptr, delim);
-                ptr += tmplen;
             }
+            out.append(delim, delimlen);
         }
     }
 
-    PushString(outbuf);
+    push(arg, top, std::move(out));
 }
 
 void

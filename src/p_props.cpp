@@ -81,9 +81,8 @@ prim_getpropfval(PRIM_PROTOTYPE)
         abort_interp(tp_noperm_mesg);
 
     {
-        char type[BUFFER_LEN];
-
-        strcpy(type, oper[0].data.string->data.c_str());
+        
+        const char *type = oper[0].data.string->data.c_str();
         fresult = get_property_fvalue(oper[1].data.objref, type);
 
 #ifdef LOG_PROPS
@@ -123,9 +122,8 @@ prim_getpropval(PRIM_PROTOTYPE)
         abort_interp(tp_noperm_mesg);
 
     {
-        char type[BUFFER_LEN];
-
-        strcpy(type, oper[0].data.string->data.c_str());
+        
+        const char *type = oper[0].data.string->data.c_str();
         result = get_property_value(oper[1].data.objref, type);
 
 #ifdef LOG_PROPS
@@ -154,8 +152,7 @@ prim_getprop(PRIM_PROTOTYPE)
         abort_interp("Non-object argument (1)");
     CHECKREMOTE(oper[1].data.objref);
     {
-        char type[BUFFER_LEN];
-        const char *tmpptr;
+                const char *tmpptr;
 
         tmpptr = oper[0].data.string->data.c_str();
         while ((tmpptr = index(tmpptr, PROPDIR_DELIMITER)))
@@ -165,7 +162,7 @@ prim_getprop(PRIM_PROTOTYPE)
         if (!prop_read_perms(ProgUID, oper[1].data.objref, oper[0].data.string->data.c_str(), mlev))
             abort_interp(tp_noperm_mesg);
 
-        strcpy(type, oper[0].data.string->data.c_str());
+        const char *type = oper[0].data.string->data.c_str();
         obj2 = oper[1].data.objref;
         prptr = get_property(obj2, type);
 
@@ -229,8 +226,7 @@ prim_getpropstr(PRIM_PROTOTYPE)
         abort_interp("Non-object argument (1)");
     CHECKREMOTE(oper[1].data.objref);
     {
-        char type[BUFFER_LEN];
-        const char *tmpptr;
+                const char *tmpptr;
         PropPtr ptr;
 
         tmpptr = oper[0].data.string->data.c_str();
@@ -241,7 +237,7 @@ prim_getpropstr(PRIM_PROTOTYPE)
         if (!prop_read_perms(ProgUID, oper[1].data.objref, oper[0].data.string->data.c_str(), mlev))
             abort_interp(tp_noperm_mesg);
 
-        strcpy(type, oper[0].data.string->data.c_str());
+        const char *type = oper[0].data.string->data.c_str();
         ptr = get_property(oper[1].data.objref, type);
         if (!ptr) {
             temp = "";
@@ -345,15 +341,14 @@ prim_envprop(PRIM_PROTOTYPE)
     CHECKREMOTE(oper[1].data.objref);
     {
         const char *type;
-        char tname[BUFFER_LEN];
-        dbref what, ref;
+                dbref what, ref;
         PropPtr ptr;
 
         type = oper[0].data.string->data.c_str();
         while ((type = index(type, PROPDIR_DELIMITER)))
             if (!(*(++type)))
                 abort_interp("Cannot access a propdir directly");
-        strcpy(tname, oper[0].data.string->data.c_str());
+        const char *tname = oper[0].data.string->data.c_str();
         what = oper[1].data.objref;
         ptr = envprop(&what, tname, 0);
         if (what != NOTHING) {
@@ -416,8 +411,7 @@ prim_envpropstr(PRIM_PROTOTYPE)
     CHECKREMOTE(oper[1].data.objref);
     {
         const char *type;
-        char tname[BUFFER_LEN];
-        dbref what;
+                dbref what;
         PropPtr ptr;
         const char *temp;
         char buf[BUFFER_LEN];
@@ -426,7 +420,7 @@ prim_envpropstr(PRIM_PROTOTYPE)
         while ((type = index(type, PROPDIR_DELIMITER)))
             if (!(*(++type)))
                 abort_interp("Cannot access a propdir directly");
-        strcpy(tname, oper[0].data.string->data.c_str());
+        const char *tname = oper[0].data.string->data.c_str();
         what = oper[1].data.objref;
         ptr = envprop(&what, tname, 0);
         if (!ptr) {
@@ -504,8 +498,7 @@ prim_setprop(PRIM_PROTOTYPE)
 
     {
         const char *tmpe;
-        char tname[BUFFER_LEN];
-
+        
         tmpe = oper[1].data.string->data.c_str();
         while (*tmpe && *tmpe != '\r' && *tmpe != ':' && *tmpe != '\n')
             tmpe++;
@@ -517,7 +510,7 @@ prim_setprop(PRIM_PROTOTYPE)
             if (!(*(++tmpe)))
                 abort_interp("Cannot access a propdir directly");
 
-        strcpy(tname, oper[1].data.string->data.c_str());
+        const char *tname = oper[1].data.string->data.c_str();
 
         switch (oper[0].type) {
             case PROG_STRING:
@@ -576,8 +569,7 @@ prim_addprop(PRIM_PROTOTYPE)
     {
         const char *temp;
         const char *tmpe;
-        char tname[BUFFER_LEN];
-
+        
         temp = (oper[1].data.string ? oper[1].data.string->data.c_str() : 0);
         tmpe = oper[2].data.string->data.c_str();
         while (*tmpe && *tmpe != '\r')
@@ -591,7 +583,7 @@ prim_addprop(PRIM_PROTOTYPE)
             if (!(*(++tmpe)))
                 abort_interp("Cannot access a propdir directly");
 
-        strcpy(tname, oper[2].data.string->data.c_str());
+        const char *tname = oper[2].data.string->data.c_str();
 
         /* if ((temp) || (oper[0].data.number)) */
         {
@@ -744,8 +736,7 @@ prim_parseprop(PRIM_PROTOTYPE)
         abort_interp("Integer of 0 or 1 expected. (4)");
     CHECKREMOTE(oper[3].data.objref);
     {
-        char type[BUFFER_LEN];
-        const char *tmpptr;
+                const char *tmpptr;
 
         tmpptr = oper[2].data.string->data.c_str();
         while ((tmpptr = index(tmpptr, PROPDIR_DELIMITER)))
@@ -758,7 +749,7 @@ prim_parseprop(PRIM_PROTOTYPE)
         if (mlev < 3 && !permissions(mlev, PSafe, oper[3].data.objref) && prop_write_perms(ProgUID, oper[3].data.objref, oper[2].data.string->data.c_str(), mlev))
             abort_interp(tp_noperm_mesg);
 
-        strcpy(type, oper[2].data.string->data.c_str());
+        const char *type = oper[2].data.string->data.c_str();
         temp = get_property_class(oper[3].data.objref, type);
 
 #ifdef LOG_PROPS
