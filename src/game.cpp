@@ -1559,7 +1559,8 @@ process_command(int descr, dbref player, char *command, int len, int wclen)
                     Matched("@version");
                     anotify_nolisten2(player, version_line1);
                     anotify_nolisten2(player, version_line2);
-                    anotify_nolisten2(player, SYSRED "This copy of ProtoMUCK has been extensively altered from the public version.");
+                    anotify_nolisten2(player, SYSGREEN "Build: " SYSNORMAL
+                                      "git " PROTO_GIT_REVISION ", built " PROTO_BUILD_DATE);
                     break;
                 case 'w':
                 case 'W':
