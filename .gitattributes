@@ -1,0 +1,5 @@
+# Line-ending policy: LF everywhere, in the repository and in the
+# working tree. Development is on Linux; the MUCK's network protocol
+# uses explicit \r\n in output strings and is unaffected by source
+# file line endings. Binary files are detected and left alone.
+* text=auto eol=lf
