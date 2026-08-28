@@ -13,7 +13,7 @@ ARRAY_EXPECT = [
     'ASETR:a-X-c', 'AINSR:a-X-b', 'ADELI:a-c', 'ADELR:a-d',
     'ANUNI:a-b-c', 'ANINT:b', 'ANDIF:e-f', 'AUNIO:a-b-c', 'AINTE:b',
     'ADIFF:e-f', 'AREVE:b-a', 'ASORT:a-b-c', 'ASRTI:a', 'APROPV:v1',
-    'APROPD:a', 'APROPL:0', 'AREFL:#1-#0', 'AFIND:0-2', 'AEXCL:1',
+    'APROPD:a', 'APROPL:l1-l2', 'AREFL:#1-#0', 'AFIND:0-2', 'AEXCL:1',
     'AEXPA:a-b', 'ACUT:a|b-c', 'ACOMP:0', 'AINTR:q5', 'AFFLG:1',
     'ANGET:qux', 'ANSET:q', 'ANDEL:1', 'ASUM:6', 'AFRAG:Gre-eti-ngs',
     'APRAR:1', 'AFPRP:1', 'AFSMT:1', 'ARGMK:1', 'ARGMV:1', 'ARGSB:aXc',

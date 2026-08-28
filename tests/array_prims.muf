@@ -35,9 +35,7 @@
   me @ "tst2/a/b" "x" setprop
   me @ "tst2/" array_get_propdirs "APROPD:" j
   me @ "lst" { "l1" "l2" }list array_put_proplist
-  me @ "lst" array_get_proplist array_count intostr "APROPL:" t
-  ( NOTE: expected 2, but ARRAY_PUT_PROPLIST silently writes nothing; )
-  ( verified identical on pre-conversion binary 25c3b42. See TODO.    )
+  me @ "lst" array_get_proplist "APROPL:" j
   me @ "rl" { #1 #0 }list array_put_reflist
   me @ "rl" array_get_reflist "AREFL:" j
   { "a" "b" "a" }list "a" array_findval "AFIND:" j

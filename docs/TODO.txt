@@ -76,8 +76,13 @@ std::string conversion notes (2026-08-28)
   semantics are load-bearing), macro-splice strlen/strcpy/strcat in
   next_token (compile-time only).
 
-* ARRAY_PUT_PROPLIST silently stores nothing (no entries, no counter)
-  for a plain 'me @ "lst" { "l1" "l2" }list array_put_proplist' on a
-  minimal db as #1. Verified byte-identical on the pre-conversion
-  binary (25c3b42), so it is a pre-existing bug, not a conversion
-  regression. tests/array_prims.muf pins the current behavior.
+* RESOLVED 2026-08-28: ARRAY_PUT_PROPLIST appearing to store nothing
+  was a tune-loader bug, not a proplist bug. tune_load_parms_from_file
+  trimmed values at newline but kept a preceding carriage return, so
+  any parmfile.cfg with CRLF line endings (the shipped one dates to
+  the Windows era and has them) loaded every string @tune with a
+  trailing \r. proplist_entry_fmt became "P#/N\r", entries were
+  stored under CR-suffixed names, and clean-name lookups missed them
+  forever. Fixed by trimming \r in the loader. Note this affected
+  EVERY string tune loaded from a CRLF parmfile, not just proplists.
+  game/data/parmfile.cfg still has CRLF endings; consider normalizing.
