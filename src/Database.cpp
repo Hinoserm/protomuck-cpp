@@ -278,12 +278,13 @@ Database::deleteObject(dbref victim, dbref deleter)
     }
     o->deleted_ = true;
 
-    /* programs holding this object learn it is gone */
+    /* OBJECT_DELETED broadcast disabled pending design discussion.
     struct inst temp;
 
     temp.type = PROG_OBJECT;
     temp.data.objref = victim;
     broadcast_muf_event((char *) "OBJECT_DELETED", &temp, 1, 0);
+    */
 }
 
 void
