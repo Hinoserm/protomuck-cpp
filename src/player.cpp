@@ -29,11 +29,11 @@ check_password(dbref player, const char *check_pw)
     if (!password || !*password)
         return 1;
 
-    if (!db_hash_passwords)
+    if (!MUCK::PasswordHash::enabled)
         return !strcmp(check_pw, password);
 
-    if (db_hash_compare(password, check_pw)) {
-        switch (db_hash_tagtoval(password)) {
+    if (MUCK::PasswordHash::compare(password, check_pw)) {
+        switch (MUCK::PasswordHash::tagToVal(password)) {
             case HTYPE_CURRENT:
                 break;          /* Our current best, preserve */
             case HTYPE_NONE:
@@ -63,12 +63,12 @@ set_password(dbref player, const char *password)
     if (!password || !*password) {
         delete[]DBFETCH(player)->sp.player.password;
 
-        if (!db_hash_passwords) {
+        if (!MUCK::PasswordHash::enabled) {
             DBFETCH(player)->sp.player.password = NULL;
             return 1;
         }
 
-        res = db_hash_password(HTYPE_NONE, hashbuf, NULL, NULL);
+        res = MUCK::PasswordHash::hash(HTYPE_NONE, hashbuf, NULL, NULL);
 
         if (!res)
             return 0;
@@ -81,10 +81,10 @@ set_password(dbref player, const char *password)
 
     delete[]DBFETCH(player)->sp.player.password;
 
-    if (db_hash_passwords) {
+    if (MUCK::PasswordHash::enabled) {
         char hashbuf[BUFFER_LEN];
 
-        res = db_hash_password(HTYPE_CURRENT, hashbuf, password, NULL);
+        res = MUCK::PasswordHash::hash(HTYPE_CURRENT, hashbuf, password, NULL);
 
         if (!res)
             return 0;

@@ -13,8 +13,6 @@
 #include "strutils.h"
 
 int db_load_format = 0;
-bool db_hash_passwords = 0;
-int db_hash_ver = 0;
 
 #ifndef DB_INITIAL_SIZE
 #define DB_INITIAL_SIZE 10000
@@ -361,8 +359,8 @@ db_write_header(FILE * f)
     putstring(f, "***NeonMuck V2 DUMP Format***");
 
     putref(f, MUCK::database().top());
-    putref(f, DB_PARMSINFO + (db_hash_passwords ? DB_NEWPASSES : 0)
-           + (db_hash_passwords ? ((HVER_CURRENT << HVER_SHIFT) & HVER_MASK) : 0)
+    putref(f, DB_PARMSINFO + (MUCK::PasswordHash::enabled ? DB_NEWPASSES : 0)
+           + (MUCK::PasswordHash::enabled ? ((HVER_CURRENT << HVER_SHIFT) & HVER_MASK) : 0)
         );
     putref(f, tune_count_parms());
     tune_save_parms_to_file(f);
@@ -1417,7 +1415,7 @@ db_read_object_foxen(FILE * f, struct object *o, dbref objno, int dtype, int rea
             o->sp.player.home = prop_flag ? getref(f) : j;
             o->exits = getref(f);
             o->sp.player.pennies = getref(f);
-            if (db_hash_passwords) {
+            if (MUCK::PasswordHash::enabled) {
                 if (db_hash_convert) {
                     // Update legacy untagged raw plaintext to new tagged hex encoded best algorithm
                     char hashbuf[BUFFER_LEN];
@@ -1427,33 +1425,33 @@ db_read_object_foxen(FILE * f, struct object *o, dbref objno, int dtype, int rea
 
                     if (!p || !*p) {
                         // Convert blank legacy untagged raw plaintext password to new tagged NONE indicator
-                        db_hash_password(HTYPE_NONE, hashbuf, NULL, NULL);
+                        MUCK::PasswordHash::hash(HTYPE_NONE, hashbuf, NULL, NULL);
                     } else {
                         // Convert legacy untagged raw plaintext password to new tagged hex encoded best algorithm
-                        db_hash_password(HTYPE_CURRENT, hashbuf, p, NULL);
+                        MUCK::PasswordHash::hash(HTYPE_CURRENT, hashbuf, p, NULL);
                     }
                     o->sp.player.password = alloc_string(hashbuf);
                 } else {
-                    if (db_hash_ver == HVER_NONE) {
+                    if (MUCK::PasswordHash::version == HVER_NONE) {
                         // Update legacy untagged base64 encoded md5 to new tagged hex encoded unsalted MD5 algorithm
                         char hashbuf[BUFFER_LEN];
 
                         hashbuf[0] = '\0';
                         const char *p = getstring_noalloc(f);
 
-                        db_hash_oldconvert(hashbuf, p);
+                        MUCK::PasswordHash::oldConvert(hashbuf, p);
                         o->sp.player.password = alloc_string(hashbuf);
                     } else {
                         // Handle new tagged methods
                         const char *p = getstring_noalloc(f);
 
-                        if (db_hash_tagtoval(p) == HTYPE_PLAIN) {
+                        if (MUCK::PasswordHash::tagToVal(p) == HTYPE_PLAIN) {
                             // Update new tagged plaintext to new tagged hex encoded best algorithm
                             char hashbuf[BUFFER_LEN];
 
                             hashbuf[0] = '\0';
-                            db_hash_split(p, NULL, hashbuf, NULL);
-                            db_hash_password(HTYPE_CURRENT, hashbuf, hashbuf, NULL);
+                            MUCK::PasswordHash::split(p, NULL, hashbuf, NULL);
+                            MUCK::PasswordHash::hash(HTYPE_CURRENT, hashbuf, hashbuf, NULL);
                             o->sp.player.password = alloc_string(hashbuf);
                         } else {
                             // Preserve new tagged methods
@@ -1471,10 +1469,10 @@ db_read_object_foxen(FILE * f, struct object *o, dbref objno, int dtype, int rea
 
                     if (!p || !*p) {
                         // Convert blank legacy untagged raw plaintext password to new tagged NONE indicator
-                        db_hash_password(HTYPE_NONE, hashbuf, NULL, NULL);
+                        MUCK::PasswordHash::hash(HTYPE_NONE, hashbuf, NULL, NULL);
                     } else {
                         // Convert legacy untagged raw plaintext password to new tagged hex encoded best algorithm
-                        db_hash_password(HTYPE_CURRENT, hashbuf, p, NULL);
+                        MUCK::PasswordHash::hash(HTYPE_CURRENT, hashbuf, p, NULL);
                     }
                     o->sp.player.password = alloc_string(hashbuf);
                 } else {
@@ -1605,11 +1603,11 @@ MUCK::Database::load(FILE * f)
 #endif
             }
 
-            if ((db_hash_passwords = (dbflags & DB_NEWPASSES || db_load_format == 8)))
+            if ((MUCK::PasswordHash::enabled = (dbflags & DB_NEWPASSES || db_load_format == 8)))
                 db_hash_convert = 0;
             else if (db_hash_convert)
-                db_hash_passwords = 1;
-            db_hash_ver = db_hash_passwords ? ((dbflags & HVER_MASK) >> HVER_SHIFT) : HVER_NONE;
+                MUCK::PasswordHash::enabled = 1;
+            MUCK::PasswordHash::version = MUCK::PasswordHash::enabled ? ((dbflags & HVER_MASK) >> HVER_SHIFT) : HVER_NONE;
 
             grow(i);
 #ifdef ARCHAIC_DATABASES
@@ -1719,10 +1717,10 @@ MUCK::Database::load(FILE * f)
                                             recyclable = i;
                                         }
                                     }
-                                    if (db_hash_passwords)
-                                        db_hash_ver = HVER_CURRENT;
+                                    if (MUCK::PasswordHash::enabled)
+                                        MUCK::PasswordHash::version = HVER_CURRENT;
                                     else
-                                        db_hash_ver = HVER_NONE;
+                                        MUCK::PasswordHash::version = HVER_NONE;
                                     autostart_progs();
                                     return db_top;
                                 } else {
@@ -1782,237 +1780,6 @@ WLevel(dbref player)
     int mlev = MLevel(player);
 
     return mlev >= LMAGE ? mlev : 0;
-}
-
-char *
-db_hash_valtotag(int type)
-{
-    switch (type) {
-        case HTYPE_SHA1SALT:
-            return "SHA1SALTED";
-        case HTYPE_MD5:
-            return "MD5";
-        case HTYPE_NONE:
-            return "NONE";
-        case HTYPE_DISABLED:
-            return "DISABLED";
-        case HTYPE_PLAIN:
-            return "PLAIN";
-        case HTYPE_SHA1:
-            return "SHA1";
-        case HTYPE_MD5SALT:
-            return "MD5SALTED";
-        case HTYPE_INVALID:
-            return NULL;
-        default:
-            return NULL;
-    }
-}
-
-int
-db_hash_tagtoval(const char *tag)
-{
-    char buf[BUFFER_LEN];
-    int i = 0;
-
-    if (!tag)
-        return HTYPE_INVALID;
-
-    for (i = 0; (i < BUFFER_LEN - 1); i++) {
-        if (tag[i] == '\0' || tag[i] == ':')
-            break;
-        buf[i] = (char) toupper((int) tag[i]);
-    }
-
-    buf[i++] = '\0';
-
-    if (!strcmp(buf, "SHA1SALTED"))
-        return HTYPE_SHA1SALT;
-    if (!strcmp(buf, "MD5"))
-        return HTYPE_MD5;
-    if (!strcmp(buf, "NONE"))
-        return HTYPE_NONE;
-    if (!strcmp(buf, "DISABLED"))
-        return HTYPE_DISABLED;
-    if (!strcmp(buf, "PLAIN"))
-        return HTYPE_PLAIN;
-    if (!strcmp(buf, "SHA1"))
-        return HTYPE_SHA1;
-    if (!strcmp(buf, "MD5SALTED"))
-        return HTYPE_MD5SALT;
-
-    return HTYPE_INVALID;
-}
-
-int
-db_hash_password(int type, char *out, const char *password, const char *saltin)
-{
-    char buf[BUFFER_LEN];
-    char sbuf[17];
-    char salt[9];
-    int i = 0;
-
-    if (!out)
-        return 0;
-    if (!password || !*password) {
-        sprintf(out, "%s", db_hash_valtotag(HTYPE_NONE));
-        return 1;
-    }
-    if (!saltin || !*saltin) {
-        for (i = 0; i < 8; i++)
-            salt[i] = (unsigned char) (RANDOM() & 0xFF);
-        salt[8] = '\0';
-    } else {
-        memcpy(salt, saltin, 8);
-        salt[8] = '\0';
-    }
-
-    strtohex(sbuf, 17, salt, 8);
-
-    switch (type) {
-        case HTYPE_SHA1SALT:
-            sprintf(buf, "%.8s%s", salt, password);
-            SHA1hex(buf, buf, strlen(password) + 8);
-            sprintf(out, "%s:%s:%s", db_hash_valtotag(type), buf, sbuf);
-            break;
-        case HTYPE_MD5:
-            MD5hex(buf, password, strlen(password));
-            sprintf(out, "%s:%s", db_hash_valtotag(type), buf);
-            break;
-        case HTYPE_NONE:
-            sprintf(out, "%s", db_hash_valtotag(type));
-            break;
-        case HTYPE_DISABLED:
-            sprintf(out, "%s", db_hash_valtotag(type));
-            break;
-        case HTYPE_PLAIN:
-            sprintf(buf, "%s", password);
-            sprintf(out, "%s:%s", db_hash_valtotag(type), buf);
-            break;
-        case HTYPE_SHA1:
-            SHA1hex(buf, password, strlen(password));
-            sprintf(out, "%s:%s", db_hash_valtotag(type), buf);
-            break;
-        case HTYPE_MD5SALT:
-            sprintf(buf, "%.8s%s", salt, password);
-            MD5hex(buf, buf, strlen(password) + 8);
-            sprintf(out, "%s:%s:%s", db_hash_valtotag(type), buf, sbuf);
-            break;
-        case HTYPE_INVALID:
-            *out = '\0';
-            return 0;
-        default:
-            *out = '\0';
-            return 0;
-    }
-    return 1;
-}
-
-int
-db_hash_split(const char *hashin, int *tagout, char *hashout, char *saltout)
-{
-    int i = 0, k = 0, mode = 0;
-    int j[3];
-
-    if (!hashin)
-        return 0;
-
-    if (hashin[i] == '\0')
-        return 0;
-
-    mode = 1;
-
-    for (i = 0; (i < BUFFER_LEN - 1) && (mode < 4); i++) {
-        if (hashin[i] == ':') {
-            j[mode - 1] = i;
-            mode++;
-        }
-        if (hashin[i] == '\0') {
-            j[mode - 1] = i;
-            break;
-        }
-    }
-
-    switch (mode) {
-        case 4:
-            mode--;
-        case 3:
-            for (i = j[1] + 1, k = 0; i < j[2]; i++, k++) {
-                if (saltout)
-                    saltout[k] = hashin[i];
-            }
-            if (saltout)
-                saltout[k++] = '\0';
-        case 2:
-            for (i = j[0] + 1, k = 0; i < j[1]; i++, k++) {
-                if (hashout)
-                    hashout[k] = hashin[i];
-            }
-            if (hashout)
-                hashout[k++] = '\0';
-        case 1:
-            if (tagout)
-                *tagout = db_hash_tagtoval(hashin);
-            break;
-        default:
-            return 0;
-    }
-
-    return mode;
-}
-
-int
-db_hash_compare(const char *hash, const char *password)
-{
-    char buf[BUFFER_LEN];
-    char hbuf[BUFFER_LEN];
-    char sbuf[BUFFER_LEN];
-    char salt[9];
-    int res = 0, tag = 0, i = 0;
-
-    sbuf[0] = '\0';
-    salt[0] = '\0';
-
-    if (!hash)
-        return 1;
-    for (i = 0; hash[i] != 0 && i < BUFFER_LEN - 1; i++)
-        buf[i] = toupper(hash[i]);
-    buf[i] = '\0';
-    res = db_hash_split(buf, &tag, NULL, sbuf);
-    if (res == 0)
-        return 0;
-    if (tag == HTYPE_DISABLED)
-        return 0;
-    if (tag == HTYPE_NONE)
-        return 1;
-    if (!password || !*password)
-        return 0;
-    if (res == 3) {
-        hextostr(salt, 9, sbuf, 16);
-        if (!db_hash_password(tag, hbuf, password, salt))
-            return 0;
-    } else {
-        if (!db_hash_password(tag, hbuf, password, NULL))
-            return 0;
-    }
-    return !strcmp(buf, hbuf);
-}
-
-int
-db_hash_oldconvert(char *out, const char *hash)
-{
-    char buf[BUFFER_LEN];
-
-    if (!hash || !*hash) {
-        sprintf(out, "%s", db_hash_valtotag(HTYPE_NONE));
-        return 1;
-    }
-
-    if (!base64tohex(buf, BUFFER_LEN, hash, strlen(hash)))
-        return 0;
-
-    sprintf(out, "%s:%s", db_hash_valtotag(HTYPE_MD5), buf);
-    return 1;
 }
 
 /* ---------------------------------------------------------------------
