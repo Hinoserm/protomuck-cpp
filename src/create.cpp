@@ -12,7 +12,6 @@
 #include "match.h"
 #include "strutils.h"
 
-struct line *read_program(dbref i);
 
 /* parse_linkable_dest()
  *
@@ -635,7 +634,7 @@ do_prog(int descr, dbref player, const char *name)
             return;
         }
 
-        DBFETCH(i)->sp.program.first = read_program(i);
+        DBFETCH(i)->sp.program.first = MUCK::programs().read(i);
         FLAGS(i) |= INTERNAL;
         DBFETCH(player)->sp.player.curr_prog = i;
         anotify_fmt(player, CINFO "Entering editor for %s.", unparse_object(player, i));
@@ -686,7 +685,7 @@ do_edit(int descr, dbref player, const char *name)
     }
 
     FLAGS(i) |= INTERNAL;
-    DBFETCH(i)->sp.program.first = read_program(i);
+    DBFETCH(i)->sp.program.first = MUCK::programs().read(i);
     DBFETCH(player)->sp.player.curr_prog = i;
     anotify_fmt(player, CINFO "Entering editor for %s.", unparse_object(player, i));
     /* list current line */

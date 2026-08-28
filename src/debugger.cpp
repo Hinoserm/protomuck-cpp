@@ -14,7 +14,6 @@
 #include "interp.h"
 
 
-extern struct line *read_program(dbref prog);
 
 void
 list_proglines(dbref player, dbref program, struct frame *fr, int start, int end)
@@ -34,7 +33,7 @@ list_proglines(dbref player, dbref program, struct frame *fr, int start, int end
     }
     if (!fr->brkpt.proglines || program != fr->brkpt.lastproglisted) {
         free_prog_text(fr->brkpt.proglines);
-        fr->brkpt.proglines = read_program(program);
+        fr->brkpt.proglines = MUCK::programs().read(program);
         fr->brkpt.lastproglisted = program;
     }
     tmpline = DBFETCH(program)->sp.program.first;

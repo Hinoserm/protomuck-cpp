@@ -1096,21 +1096,18 @@ typedef hash_entry *hash_tab;
 #define DEFHASHSIZE        (256)    /* Table for compiler $defines */
 
 #include "Database.h"
+#include "ProgramStore.h"
 
 #ifndef MALLOC_PROFILING
 extern char *alloc_string(const char *);
 #endif
 
-extern struct line * read_program(dbref);
-extern struct line * get_new_line(void);
 extern int fetch_propvals(dbref obj, const char *dir);
 
 
 extern void free_prog_text(struct line * l);
 
-extern void write_program(struct line * first, dbref i);
 
-extern void log_program_text(struct line * first, dbref player, dbref i);
 
 #ifndef MALLOC_PROFILING
 /* alloc_prog_string is now a macro, works exactly the way it used to. */

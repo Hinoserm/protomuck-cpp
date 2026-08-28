@@ -11,7 +11,6 @@
 #include "tune.h"
 #include "strutils.h"
 #include "interp.h"
-extern struct line *read_program(dbref i);
 extern int tune_setparm(const dbref player, const char *parmname, const char *val);
 extern struct frame *aForceFrameStack[9];
 void
@@ -757,7 +756,7 @@ prim_cancallp(PRIM_PROTOTYPE)
         struct line *tmpline;
 
         tmpline = DBFETCH(oper[1].data.objref)->sp.program.first;
-        DBFETCH(oper[1].data.objref)->sp.program.first = ((struct line *) read_program(oper[1].data.objref));
+        DBFETCH(oper[1].data.objref)->sp.program.first = ((struct line *) MUCK::programs().read(oper[1].data.objref));
         do_compile(fr->descr, OWNER(oper[1].data.objref), oper[1].data.objref, 0);
         free_prog_text(DBFETCH(oper[1].data.objref)->sp.program.first);
         DBFETCH(oper[1].data.objref)->sp.program.first = tmpline;

@@ -20,7 +20,6 @@
 /* mutex? -hinoserm */
 extern struct frame *aForceFrameStack[9];
 
-extern struct line *read_program(dbref i);
 extern int tune_setparm(const dbref player, const char *parmname, const char *val);
 
 void

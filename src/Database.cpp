@@ -10,6 +10,7 @@
 #include "interface.h"
 #include "externs.h"
 #include "MacroTable.h"
+#include "ProgramStore.h"
 #include "strutils.h"
 
 int db_load_format = 0;
@@ -295,63 +296,7 @@ extern FILE *input_file;
 extern FILE *delta_infile;
 extern FILE *delta_outfile;
 
-void
-log_program_text(struct line *first, dbref player, dbref i)
-{
-    FILE *f;
-    char fname[BUFFER_LEN], buf1[BUFFER_LEN], buf2[BUFFER_LEN];
-    time_t lt = current_systime;
 
-#ifndef SANITY
-    strcpy(fname, PROGRAM_LOG);
-    f = fopen(fname, "ab");
-    if (!f) {
-        log_status("Couldn't open file %s!\n", fname);
-        return;
-    }
-
-    fprintf(f, "{{{ PROGRAM %s, SAVED AT %s BY %s\n", strcpy(buf1, unparse_object(player, i)), ctime(&lt), strcpy(buf2, unparse_object(player, player))
-        );
-
-    while (first) {
-        if (!first->this_line)
-            continue;
-        fputs(first->this_line, f);
-        fputc('\n', f);
-        first = first->next;
-    }
-    fputs("\n\n\n", f);
-    fclose(f);
-#endif
-}
-
-void
-write_program(struct line *first, dbref i)
-{
-    FILE *f;
-    char fname[BUFFER_LEN];
-
-    sprintf(fname, "muf/%d.m", (int) i);
-    f = fopen(fname, "wb");
-    if (!f) {
-        log_status("Couldn't open file %s!\n", fname);
-        return;
-    }
-    while (first) {
-        if (!first->this_line)
-            continue;
-        if (fputs(first->this_line, f) == EOF) {
-            fprintf(stderr, "PANIC: Unable to write to db file.\n");
-            abort();
-        }
-        if (fputc('\n', f) == EOF) {
-            fprintf(stderr, "PANIC: Unable to write to db file.\n");
-            abort();
-        }
-        first = first->next;
-    }
-    fclose(f);
-}
 
 void
 db_write_header(FILE * f)
@@ -926,62 +871,7 @@ MUCK::Database::freeAll()
 }
 
 
-struct line *
-get_new_line(void)
-{
-    struct line *nw;
 
-    nw = new line;
-
-    if (!nw) {
-        fprintf(stderr, "get_new_line(): Out of memory!\n");
-        abort();
-    }
-    nw->this_line = NULL;
-    nw->next = NULL;
-    nw->prev = NULL;
-
-    return nw;
-}
-
-struct line *
-read_program(dbref i)
-{
-    char buf[BUFFER_LEN];
-    struct line *first;
-    struct line *prev = NULL;
-    struct line *nw;
-    FILE *f;
-    int len;
-
-    first = NULL;
-    sprintf(buf, "muf/%d.m", (int) i);
-    f = fopen(buf, "rb");
-    if (!f)
-        return 0;
-
-    while (fgets(buf, BUFFER_LEN, f)) {
-        nw = get_new_line();
-        len = strlen(buf);
-        if (len > 0 && buf[len - 1] == '\n') {
-            buf[len - 1] = '\0';
-        }
-        if (!*buf)
-            strcpy(buf, " ");
-        nw->this_line = alloc_string(buf);
-        if (!first) {
-            prev = nw;
-            first = nw;
-        } else {
-            prev->next = nw;
-            nw->prev = prev;
-            prev = nw;
-        }
-    }
-
-    fclose(f);
-    return first;
-}
 
 #ifdef ARCHAIC_DATABASES
 
@@ -998,7 +888,7 @@ db_read_object_old(FILE * f, struct object *o, dbref objno)
     int pennies;
     const char *password;
 
-    db_clear_object(-1, objno);
+    MUCK::database().clearObject(-1, objno);
     FLAGS(objno) = 0;
     FLAG2(objno) = 0;
     FLAG3(objno) = 0;
@@ -1541,7 +1431,7 @@ autostart_progs(void)
                 /* They queue up when they finish compiling. */
                 o = DBFETCH(i);
                 tmp = o->sp.program.first;
-                o->sp.program.first = (struct line *) read_program(i);
+                o->sp.program.first = (struct line *) MUCK::programs().read(i);
                 do_compile(-1, OWNER(i), i, 0);
                 free_prog_text(o->sp.program.first);
                 o->sp.program.first = tmp;

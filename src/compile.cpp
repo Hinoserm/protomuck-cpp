@@ -2223,7 +2223,7 @@ do_directive(COMPSTATE *cstat, char *direct)
             struct line *tmpline;
 
             tmpline = DBFETCH(i)->sp.program.first;
-            DBFETCH(i)->sp.program.first = ((struct line *) read_program(i));
+            DBFETCH(i)->sp.program.first = ((struct line *) MUCK::programs().read(i));
             do_compile(cstat->descr, OWNER(i), i, 0);
             free_prog_text(DBFETCH(i)->sp.program.first);
             DBFETCH(i)->sp.program.first = tmpline;

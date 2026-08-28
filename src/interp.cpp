@@ -1230,7 +1230,6 @@ do_abort_loop(dbref player, dbref program, const char *msg, struct frame *fr, st
     }
 }
 
-extern struct line *read_program(dbref prog);
 extern char *show_line_prims(struct frame *fr, dbref program, struct inst *pc, int maxprims, int markpc);
 void
 interp_set_depth(struct frame *fr)
@@ -1275,7 +1274,7 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
         struct line *tmpline;
 
         tmpline = DBFETCH(program)->sp.program.first;
-        DBFETCH(program)->sp.program.first = read_program(program);
+        DBFETCH(program)->sp.program.first = MUCK::programs().read(program);
         do_compile(-1, OWNER(program), program, 0);
         free_prog_text(DBFETCH(program)->sp.program.first);
         DBSTORE(program, sp.program.first, tmpline);
@@ -1729,7 +1728,7 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
                     struct line *tmpline;
 
                     tmpline = DBFETCH(temp1->data.objref)->sp.program.first;
-                    DBFETCH(temp1->data.objref)->sp.program.first = read_program(temp1->data.objref);
+                    DBFETCH(temp1->data.objref)->sp.program.first = MUCK::programs().read(temp1->data.objref);
                     do_compile(-1, OWNER(temp1->data.objref), temp1->data.objref, 0);
                     free_prog_text(DBFETCH(temp1->data.objref)->sp.program.first);
                     DBSTORE(temp1->data.objref, sp.program.first, tmpline);

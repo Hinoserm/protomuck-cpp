@@ -569,7 +569,6 @@ extern void show_status(const char *format, ...);
 extern void log_other(const char *format, ...);
 extern void notify_fmt(dbref player, const char *format, ...);
 extern void anotify_fmt(dbref player, const char *format, ...);
-extern void log_program_text(struct line *first, dbref player, dbref i);
 
 /* From signal.c */
 extern void set_signals(void);

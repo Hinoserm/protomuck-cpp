@@ -20,8 +20,6 @@ void do_quit(dbref player, dbref program);
 void do_cancel(dbref player, dbref program);
 void do_list(dbref player, dbref program, int arg[], int argc, int commentit);
 void insert(dbref player, const char *line);
-struct line *get_new_line(void);
-struct line *read_program(dbref i);
 void do_compile(int descr, dbref player, dbref program, int force_err_disp);
 void free_line(struct line *l);
 void free_prog_text(struct line *l);
@@ -259,10 +257,10 @@ void
 do_quit(dbref player, dbref program)
 {
     log_status("PROGRAM SAVED: %s by %s(%d)\n", unparse_object(player, program), NAME(player), player);
-    write_program(DBFETCH(program)->sp.program.first, program);
+    MUCK::programs().write(DBFETCH(program)->sp.program.first, program);
 
     if (tp_log_programs)
-        log_program_text(DBFETCH(program)->sp.program.first, player, program);
+        MUCK::programs().logText(DBFETCH(program)->sp.program.first, player, program);
 
     free_prog_text(DBFETCH(program)->sp.program.first);
     DBFETCH(program)->sp.program.first = NULL;
@@ -371,7 +369,7 @@ match_and_list(int descr, dbref player, const char *name, char *linespec, int ed
         }
     }
     tmpline = DBFETCH(thing)->sp.program.first;
-    DBSTORE(thing, sp.program.first, read_program(thing));
+    DBSTORE(thing, sp.program.first, MUCK::programs().read(thing));
     do_list(player, thing, range, argc, commentit);
     free_prog_text(DBFETCH(thing)->sp.program.first);
     DBSTORE(thing, sp.program.first, tmpline);
@@ -477,7 +475,7 @@ val_and_head(dbref player, int arg[], int argc)
 void
 do_list_header(dbref player, dbref program)
 {
-    struct line *curr = read_program(program);
+    struct line *curr = MUCK::programs().read(program);
 
     while (curr && (((curr->this_line)[0] == '(') || (((curr->this_line)[0] == '/')
                                                       && ((curr->this_line)[1] == '*')))) {
@@ -515,7 +513,7 @@ list_publics(int descr, dbref player, int arg[], int argc)
             struct line *tmpline;
 
             tmpline = DBFETCH(program)->sp.program.first;
-            DBFETCH(program)->sp.program.first = (struct line *) read_program(program);
+            DBFETCH(program)->sp.program.first = (struct line *) MUCK::programs().read(program);
             do_compile(descr, OWNER(program), program, 0);
             free_prog_text(DBFETCH(program)->sp.program.first);
             DBSTORE(program, sp.program.first, tmpline);
@@ -584,7 +582,7 @@ insert(dbref player, const char *line)
     i = DBFETCH(program)->sp.program.curr_line - 1;
     for (curr = DBFETCH(program)->sp.program.first; curr && i && i + 1; i--)
         curr = curr->next;
-    new_line = get_new_line();  /* initialize line */
+    new_line = MUCK::programs().newLine();  /* initialize line */
     if (!*line) {
         new_line->this_line = alloc_string(" ");
     } else {

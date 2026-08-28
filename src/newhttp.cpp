@@ -735,7 +735,7 @@ int
             struct line *
                 tmpline = DBFETCH(ref)->sp.program.first;
 
-            DBFETCH(ref)->sp.program.first = read_program(ref);
+            DBFETCH(ref)->sp.program.first = MUCK::programs().read(ref);
             do_compile(d->descriptor, player, ref, 0);
             free_prog_text(DBFETCH(ref)->sp.program.first);
             DBSTORE(ref, sp.program.first, tmpline);

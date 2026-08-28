@@ -2346,7 +2346,6 @@ prim_newprogram(PRIM_PROTOTYPE)
     PushObject(ref);
 }
 
-extern struct line *read_program(dbref prog);
 
 void
 prim_compile(PRIM_PROTOTYPE)
@@ -2363,7 +2362,7 @@ prim_compile(PRIM_PROTOTYPE)
         abort_interp("No boolean integer given.");
 
     tmpline = DBFETCH(ref)->sp.program.first;
-    DBFETCH(ref)->sp.program.first = (struct line *) read_program(ref);
+    DBFETCH(ref)->sp.program.first = (struct line *) MUCK::programs().read(ref);
     do_compile(fr->descr, PSafe, ref, oper[0].data.number);
     free_prog_text(DBFETCH(ref)->sp.program.first);
     DBFETCH(ref)->sp.program.first = tmpline;
