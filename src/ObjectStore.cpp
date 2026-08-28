@@ -1549,6 +1549,21 @@ ObjectStore::loadAll()
                     }
                     continue;
                 }
+                /* format 1 object file: readable forever, but the
+                 * type-dormancy machinery is entry-based, so exclusion
+                 * needs the file upgraded first (any full save). */
+                if (!storedTypeSupported(j.value("type", "garbage"))) {
+                    fprintf(stderr,
+                            "STORE: %s is a format 1 object of excluded "
+                            "type '%s'; run a full save to upgrade the "
+                            "store before using --db-exclude-type.\n",
+                            e2->d_name,
+                            j.value("type", "garbage").c_str());
+                    closedir(d2);
+                    closedir(d1);
+                    closedir(d0);
+                    return -1;
+                }
                 objectFromJsonPhase1(j, later);
             }
             closedir(d2);

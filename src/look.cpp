@@ -453,6 +453,9 @@ flag_description(dbref thing)
         case TYPE_GARBAGE:
             strcat(buf, "GARBAGE");
             break;
+        case TYPE_UNSUPPORTED:
+            strcat(buf, "UNSUPPORTED");
+            break;
         default:
             strcat(buf, "***UNKNOWN TYPE***");
             break;

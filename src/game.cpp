@@ -272,8 +272,10 @@ dump_database_internal(void)
     /* The object store writes each object to its own file with an
      * atomic rename, so there is no monolithic tmpfile dance and no
      * rotating backup copies: unchanged objects are untouched on disk
-     * and history belongs to the versioning layer (step 3). */
-    if (MUCK::store().saveAll(true) < 0) {
+     * and history belongs to the versioning layer (step 3). A
+     * -convert run is a format conversion, so it writes every object,
+     * upgrading older-format files in place. */
+    if (MUCK::store().saveAll(!db_conversion_flag) < 0) {
         sprintf(buf, SYSRED "[DANGER] Error writing the object store at %s!  The DB did not save! :(", MUCK::store().root().c_str());
         ansi_wall_wizards(buf);
     }
