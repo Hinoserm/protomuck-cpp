@@ -75,3 +75,9 @@ std::string conversion notes (2026-08-28)
   taken: prim_explode / prim_explode_array whole-source copies (scan
   semantics are load-bearing), macro-splice strlen/strcpy/strcat in
   next_token (compile-time only).
+
+* ARRAY_PUT_PROPLIST silently stores nothing (no entries, no counter)
+  for a plain 'me @ "lst" { "l1" "l2" }list array_put_proplist' on a
+  minimal db as #1. Verified byte-identical on the pre-conversion
+  binary (25c3b42), so it is a pre-existing bug, not a conversion
+  regression. tests/array_prims.muf pins the current behavior.
