@@ -1,3 +1,6 @@
+/* Baked build configuration. Temporary: carried over from the last proven
+ * autoconf run until proper feature detection returns. Do not regenerate. */
+
 /* inc/autoconf.h.  Generated from autoconf.h.in by configure.  */
 /* inc/autoconf.h.in.  Generated from configure.in by autoheader.  */
 
@@ -219,7 +222,7 @@
 /* #undef TM_IN_SYS_TIME */
 
 /* The value of the uname -a command. */
-#define UNAME_VALUE "Linux dextrose 5.2.7-100.fc29.x86_64 #1 SMP Thu Aug 8 05:30:19 UTC 2019 x86_64 x86_64 x86_64 GNU/Linux"
+#define UNAME_VALUE "Linux dextrose-new 6.18.16-200.fc43.x86_64 #1 SMP PREEMPT_DYNAMIC Wed Mar  4 19:13:32 UTC 2026 x86_64 GNU/Linux"
 
 /* Defined to enable SSL support. */
 #define USE_SSL /**/

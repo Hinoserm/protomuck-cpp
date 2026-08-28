@@ -11,7 +11,7 @@
 #include "params.h"
 #include "interface.h"
 #include "interp.h"
-#include "strings.h"
+#include "strutils.h"
 
 /* String utilities */
 

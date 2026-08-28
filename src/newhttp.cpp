@@ -38,7 +38,7 @@
 #include "mufevent.h"
 #include "externs.h"
 #include "newhttp.h"
-#include "strings.h"
+#include "strutils.h"
 #include "params.h"
 #include "interp.h"
 #include "match.h"

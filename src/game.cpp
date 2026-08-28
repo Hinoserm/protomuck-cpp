@@ -11,7 +11,7 @@
 #include "match.h"
 #include "msgparse.h"
 #include "externs.h"
-#include "strings.h"
+#include "strutils.h"
 #include "netresolve.h"
 
 #define anotify_nolisten2(x, y) anotify_nolisten(x, y, 1);

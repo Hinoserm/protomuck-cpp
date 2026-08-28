@@ -9,7 +9,7 @@
 #include "interface.h"
 #include "params.h"
 #include "tune.h"
-#include "strings.h"
+#include "strutils.h"
 #include "interp.h"
 extern struct line *read_program(dbref i);
 extern int tune_setparm(const dbref player, const char *parmname, const char *val);

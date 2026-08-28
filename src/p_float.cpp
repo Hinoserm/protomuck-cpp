@@ -12,7 +12,7 @@
 #include "match.h"
 #include "interface.h"
 #include "params.h"
-#include "strings.h"
+#include "strutils.h"
 #include "interp.h"
 #define no_good(x) ((x == INF) || (x == NINF) || (x == NAN))
 #define ISINF(x) ((x == INF) || (x == NINF))

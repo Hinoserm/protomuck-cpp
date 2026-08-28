@@ -33,7 +33,7 @@
 #include "interface.h"
 #include "params.h"
 #include "tune.h"
-#include "strings.h"
+#include "strutils.h"
 #include "interp.h"
 #include "cgi.h"
 #include "mufevent.h"

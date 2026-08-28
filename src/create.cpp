@@ -10,7 +10,7 @@
 #include "interface.h"
 #include "externs.h"
 #include "match.h"
-#include "strings.h"
+#include "strutils.h"
 
 struct line *read_program(dbref i);
 

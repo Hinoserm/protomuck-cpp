@@ -2,7 +2,7 @@
 /* Attributions as given, modified by Jonah 'Points' Safar */
 
 #include "config.h"
-#include "strings.h"
+#include "strutils.h"
 
 
 /*****************************************************************/

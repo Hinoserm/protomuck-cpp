@@ -9,7 +9,7 @@
 #include "tune.h"
 #include "interface.h"
 #include "externs.h"
-#include "strings.h"
+#include "strutils.h"
 
 struct object *db = 0;
 dbref db_top = 0;

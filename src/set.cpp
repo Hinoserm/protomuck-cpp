@@ -2,7 +2,7 @@
 #include "config.h"
 
 /* commands which set parameters */
-#include "strings.h"
+#include "strutils.h"
 
 #include "db.h"
 #include "params.h"

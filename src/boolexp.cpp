@@ -6,7 +6,7 @@
 #include "copyright.h"
 #include "config.h"
 /* --- */
-#include "strings.h"
+#include "strutils.h"
 #include "db.h"
 #include "props.h"
 #include "match.h"

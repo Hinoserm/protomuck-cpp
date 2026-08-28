@@ -10,7 +10,7 @@
 #include "interface.h"
 #include "params.h"
 #include "tune.h"
-#include "strings.h"
+#include "strutils.h"
 #include "interp.h"
 
 /* We'll put the external temp vars here */

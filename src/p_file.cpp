@@ -12,7 +12,7 @@
 #include "match.h"
 #include "interface.h"
 #include "params.h"
-#include "strings.h"
+#include "strutils.h"
 #include "interp.h"
 
 char *tempc = NULL;

@@ -9,7 +9,7 @@
 #include "interface.h"
 #include "params.h"
 #include "tune.h"
-#include "strings.h"
+#include "strutils.h"
 #include "interp.h"
 /* Some externs to functions elsewhere in the code. */
 extern int kill_macro(const char *, dbref, struct macrotable **);

@@ -11,7 +11,7 @@
 #include "interface.h"
 #include "params.h"
 #include "tune.h"
-#include "strings.h"
+#include "strutils.h"
 #include "interp.h"
 #ifndef WIN_VC
 # define MAXINT ~(1<<((sizeof(int)*8)-1))

@@ -32,7 +32,7 @@
 #include "config.h"
 #include "db.h"
 #include "externs.h"
-#include "strings.h"
+#include "strutils.h"
 #include "sha1.h"
 
 #ifdef USE_SSL

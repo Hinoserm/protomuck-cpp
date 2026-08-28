@@ -15,7 +15,7 @@
 #include "externs.h"
 #include "match.h"
 #include "interface.h"
-#include "strings.h"
+#include "strutils.h"
 #include "interp.h"
 #include "p_mysql.h"
 #include "mufevent.h"

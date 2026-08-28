@@ -16,7 +16,7 @@
 #include "reg.h"
 #include "externs.h"
 #include "mufevent.h"
-#include "strings.h"
+#include "strutils.h"
 #include "interp.h"
 #include "newhttp.h"            /* hinoserm */
 #include "netresolve.h"         /* hinoserm */

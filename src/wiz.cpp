@@ -10,7 +10,7 @@
 #include "externs.h"
 #include "reg.h"
 #include "maillib.h"
-#include "strings.h"
+#include "strutils.h"
 #include "netresolve.h"
 
 #ifdef HAVE_SYS_RESOURCE_H

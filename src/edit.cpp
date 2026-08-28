@@ -8,7 +8,7 @@
 #include "params.h"
 #include "tune.h"
 #include "match.h"
-#include "strings.h"
+#include "strutils.h"
 
 #define DOWNCASE(x) (tolower(x))
 

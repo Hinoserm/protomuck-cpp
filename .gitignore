@@ -72,3 +72,10 @@ nethost.cache
 /game/out
 /dat/data/proto.db
 /dat/out
+
+# CMake build output and generated headers
+/build/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+/src/inc/version.h

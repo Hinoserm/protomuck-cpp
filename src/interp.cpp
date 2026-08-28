@@ -10,7 +10,7 @@
 #include "params.h"
 #include "tune.h"
 #include "props.h"
-#include "strings.h"
+#include "strutils.h"
 #include "interp.h"
 #include "mufevent.h"
 

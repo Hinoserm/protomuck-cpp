@@ -6,7 +6,7 @@
 
 #include "config.h"
 
-#include "strings.h"
+#include "strutils.h"
 #include "interface.h"
 #include "externs.h"
 

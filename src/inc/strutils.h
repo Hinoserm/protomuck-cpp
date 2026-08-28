@@ -1,3 +1,6 @@
+#ifndef PROTO_STRUTILS_H
+#define PROTO_STRUTILS_H
+
 /*
  * (c) 1990 Chelsea Dyerman, University of California, Berkeley (XCF)
  *
@@ -49,3 +52,5 @@ extern size_t escapestr(char *obuf, const size_t olen, const char *ibuf, const s
 extern std::string strToHex(const std::string &in, bool uppercase = true);       
 extern std::string hexToStr(const std::string &in);
 extern std::string ascii_to_utf8(const std::string& in);
+
+#endif /* PROTO_STRUTILS_H */
