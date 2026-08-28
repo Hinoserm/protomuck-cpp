@@ -1,7 +1,6 @@
 PROTOMUCK DATABASE REDESIGN
 ===========================
 
-Design agreed 2026-08-27, revised same day to the module architecture.
 This document is the authority for the database.  Where code and this
 document disagree during development, this document wins until amended.
 
@@ -31,8 +30,10 @@ superseded mechanisms are deleted, not kept alongside.
    resolves (like git), and listings display the short form.  Full
    UUIDs are always stored on disk.
 
-   The garbage object type is abolished.  Deleting an object unlinks it
-   from the uuid index and records a tombstone row: uuid, dbref, deleted
+   The garbage object type is abolished as a storable type: nothing
+   can create or save one, and TYPE_GARBAGE survives only as the
+   in-memory sentinel marking a dead shell.  Deleting an object unlinks
+   it from the uuid index and records a tombstone row: uuid, dbref, deleted
    timestamp, deleting player uuid, and the store revision era at
    deletion.  The dbref keeps resolving to a dead shell (section 5), so
    no held pointer or stale ref can dangle.  Programs holding a deleted
@@ -61,7 +62,7 @@ superseded mechanisms are deleted, not kept alongside.
 
    TYPE modules: PLAYER, THING, ROOM, EXIT, MUFPROG.
        Exactly one per object, attached at creation by
-       Database.Create<T>(), immutable for the object's life.
+       Database::Create<T>(), immutable for the object's life.
        Exclusivity is enforced by construction, not by runtime checks.
        Typeof() reports the type module.  Containment state (contents
        and exits vectors) lives on the type modules that can contain:
@@ -230,10 +231,10 @@ superseded mechanisms are deleted, not kept alongside.
        data/objects/01/8f/018f3a2b-....hist      journal layers
 
    The object file records: the type module name, the list of
-   individually attached feature modules, and the entries grouped by
-   namespace.  Object references serialize as UUIDs, including the
-   contents and exits vectors.  MUF source is stored inline inside the
-   object file, not in muf/<ref>.m.
+   individually attached feature modules, and the entries, one flat
+   map keyed by namespaced entry name.  Object references serialize as
+   UUIDs, including the contents and exits vectors.  MUF source is
+   stored inline inside the object file, not in muf/<ref>.m.
 
    A manifest file at the data root stores the format version, the
    global revision counter, the next dbref, the globally enabled
@@ -267,6 +268,10 @@ superseded mechanisms are deleted, not kept alongside.
 
 
 7. VERSIONING: THE JOURNAL
+
+   STATUS: sections 7 and 7.1 are DESIGNED, NOT YET BUILT.  The
+   commands and their semantics exist; the mechanism underneath is
+   still the synchronous one.  Amend this document before deviating.
 
    One global 64-bit revision counter, incremented by one per
    snapshot, shared by whole-database snapshots and single-object
@@ -325,9 +330,6 @@ superseded mechanisms are deleted, not kept alongside.
 
 
 7.1 THREADED PERSISTENCE: FIRE, THEN WRITE BEHIND THE GAME
-
-   STATUS: DESIGNED, NOT IMPLEMENTED.  This subsection is the agreed
-   design; amend it before deviating.
 
    Firing a snapshot must be cheap and persisting it must happen
    behind the game.  Fork-based dumping approximated that by letting
@@ -628,7 +630,7 @@ FlatFileConverter  (FlatFileConverter.h, FlatFileConverter.cpp)
         protomuck -convert data/old.db data/store
 
 
-ProgramStore additions  (ProgramStore.h)
+ProgramStore  (ProgramStore.h)
 
     programs().sourceLines(ref)   authoritative source, or null
     programs().setSourceLines(ref, lines)
@@ -741,7 +743,7 @@ ENGINE INTERNALS  (Database.h, Database.cpp)
                        import only.
 
 
-DELETION AND TOMBSTONES  (implemented)
+DELETION AND TOMBSTONES
 
     dbref recycling is ABOLISHED. newObject always takes the next
     monotonic ref; the recycle chain and the TYPE_GARBAGE reuse path
@@ -776,11 +778,10 @@ DELETION AND TOMBSTONES  (implemented)
     never be orphaned into loading as a live object.
 
 
-VERSIONING, IMPLEMENTED  (@snapshot, @rollback, -storegc)
+VERSIONING COMMANDS  (@snapshot, @rollback, -storegc)
 
-    Sections 7 and 7.1 are the design.  Not yet built: firing is
-    still synchronous and change is still found by diffing at save
-    time.  Nothing a wizard types changes when the journal lands.
+    These behave exactly as described and are not changed by the
+    journal landing; only the mechanism underneath them changes.
 
     @snapshot                global snapshot (arch only)
     @snapshot =label         labeled (note the space; the command
@@ -792,7 +793,7 @@ VERSIONING, IMPLEMENTED  (@snapshot, @rollback, -storegc)
                              dead shell through its tombstone)
     @rollback obj=rev        restore name, props, program source as of
                              that revision (containment stays live)
-    @rollback #deadref=rev   resurrect a recycled object into its
+    @rollback #deadref=rev   resurrect a deleted object into its
                              original slot as of that revision
 
     A marker captures the current era and advances it, so writes
@@ -803,8 +804,9 @@ VERSIONING, IMPLEMENTED  (@snapshot, @rollback, -storegc)
     @tune parameter (days; -1 forever). Examine shows the rollback
     points: "Snapshots: N available (oldest date)".
 
-    protomuck -storegc <store> <store> walks the store at maintenance
-    time and drops history entries no retained marker can see.
+    protomuck -storegc <store> <store> is the offline compactor: it
+    walks the whole store at maintenance time and drops history no
+    retained marker can see.
 
     Dormant module data: entries in namespaces no loaded module claims
     ride through load and save verbatim, so unloading a module can
@@ -817,101 +819,77 @@ VERSIONING, IMPLEMENTED  (@snapshot, @rollback, -storegc)
     prefix anywhere object names are matched.
 
 
-STEP 2 BURNDOWN STATE  (updated as the loop advances)
+WHERE TYPE DATA LIVES
 
-    Retired from game logic (module API everywhere outside the
-    serializers, the module views, object construction, and sanity):
+    There is no sp union and no raw type payload: type-specific data
+    is owned by the type modules.
 
-        sp.room     DONE   (MUCK::Room: dropTo, setDropTo)
-        sp.thing    DONE   (MUCK::Thing: home, value)
-        sp.exit     DONE   (MUCK::Exit: destCount, destRef,
-                            setDestRefs, destinations)
-        sp.player   DONE   Data fields (home, pennies) via MUCK::Player;
-                           password through PasswordHash. Session and
-                           editor state (descriptors, last descriptor,
-                           editor program, insert mode, read block,
-                           ignore cache) lives in PlayerSession on the
-                           PLAYER module, reached with
-                           MUCK::playerSession(ref). Home, pennies,
-                           and the password hash are owned by the
-                           PLAYER module. Session state is memory-only
-                           and never serialized.
+        Room        dropTo (raw ref access preserves a HOME dropto)
+        Thing       home, value
+        Player      home, pennies, password (through PasswordHash)
+        Exit        destinations (a dbref vector that may hold the
+                    HOME and NIL sentinels)
+        MufProgram  the runtime plus the stored source
 
-        sp.program  DONE   Interpreter and editor state (compiled code,
-                           entry point, editor working text, publics,
-                           instance count, static vars, profiling)
-                           lives in ProgramRuntime on the MUF_PROGRAM
-                           module, reached with
-                           MUCK::programRuntime(ref). The union block
-                           is deleted; the persisted source itself was
-                           already going through the program text
-                           store. Runtime state is memory-only and
-                           never serialized.
+    Blanket-safe ref-level helpers (roomDropToRef, thingHomeRef,
+    playerPennies, playerPasswordSlot, exitDestRef, and their setters)
+    serve the serializers and repair tools, and return harmless
+    defaults on an object of the wrong type.
 
-    The sp union is DELETED. Type-specific data is owned by the type
-    modules: Room dropto (raw ref access preserves a HOME dropto),
-    Thing home/value, Player home/pennies/password, Exit destinations
-    (a dbref vector that may hold the HOME and NIL sentinels), and
-    the MufProgram runtime plus externally stored source. Blanket-safe
-    ref-level helpers (roomDropToRef, thingHomeRef, playerPennies,
-    playerPasswordSlot, exitDestRef, and their setters) serve the
-    serializers and repair tools.
+    Memory-only state hangs off the same modules and is NEVER
+    serialized: PlayerSession on PLAYER (descriptors, last descriptor,
+    editor program, insert mode, read block, ignore cache), reached
+    with MUCK::playerSession(ref); ProgramRuntime on MUF_PROGRAM
+    (compiled code, entry point, editor working text, publics,
+    instance count, static vars, profiling), reached with
+    MUCK::programRuntime(ref).
 
-    CHAINS ARE DEAD. Containment is two owning vectors on every
+
+CONTAINMENT
+
+    Chains are dead.  Containment is two owning vectors on every
     DbObject (contentsVec, exitsVec), empty for most types; the front
     of a vector is the old chain head and arrivals prepend, so the
-    MUF-visible CONTENTS/NEXT/EXITS order is unchanged. The CONTENTS,
+    MUF-visible CONTENTS/NEXT/EXITS order is unchanged.  The CONTENTS,
     EXITS, and NEXTOBJ macros remain as rvalue read facades over the
     vectors, DOLIST walks via nextSiblingRef with a per-object
     position hint that keeps sequential walks at the old O(1) per
     step, and mutation goes through attachContent, detachContent,
     attachExit, detachExit.
 
-    STRUCT DEATH. What is left of struct object (name, location,
-    owner, properties, flags, powers, timestamps) is the core record
-    embedded inside DbObject; the DBFETCH macro survives purely as
-    the accessor for that core record. The garbage TYPE is abolished:
-    nothing can create or store a garbage object; the TYPE_GARBAGE
-    bits value remains only as the in-memory sentinel that marks a
-    dead shell (isDeleted).
 
-    Create<T> absorption is DONE: create_player, @create, @dig, @open,
-    @action, @program, and the MUF creation prims all construct
-    through Database::Create<T>; module constructors own their own
-    defaults, and no code anywhere initializes raw type payload.
+WHAT IS LEFT OF struct object
 
-    Wizard-level checks are DONE: DbObject::muckerLevel and wizLevel,
-    with the legacy names as shims for the MLevel macro family.
+    The core record (name, location, owner, flags, powers,
+    timestamps) embedded inside DbObject; DBFETCH survives purely as
+    its accessor.  Nothing can create or store a garbage object; the
+    TYPE_GARBAGE bits value remains only as the in-memory sentinel
+    marking a dead shell (isDeleted).
 
-    Step 2 is COMPLETE.
+    Every creation path (create_player, @create, @dig, @open, @action,
+    @program, and the MUF creation prims) runs through
+    Database::Create<T>; module constructors own their own defaults.
+    Wizard levels are DbObject::muckerLevel and wizLevel, with the
+    legacy MLevel macro family as shims.
 
-    Properties as an optional module: DONE. The property system is a
-    first-class OPTIONAL feature module with the standard dormancy
-    guarantee (a MUCK booted with --db-exclude-module properties
-    keeps every property intact across save, snapshot, and reload,
-    unreachable until the module returns), built on a bespoke
-    adaptive radix tree that is 100% compatible with existing MUF
-    code. Full design: docs/PROPERTIES.txt.
 
-    REMAINING WORK:
+REMAINING WORK
 
     The journal and threaded persistence (sections 7 and 7.1).
 
-    Editor text off struct line. The MUF editor and compiler work
+    Editor text off struct line.  The MUF editor and compiler work
     on std::vector<std::string> directly; the hand-managed struct
     line linked list (newLine, free_prog_text, the line-splice code
-    in the editor) is abolished. ProgramRuntime.first dies with it.
+    in the editor) is abolished.  ProgramRuntime.first dies with it.
 
     Discussion-gated, do not start without asking: the MUF OBJECT
     stack type and the OBJECT_DELETED event.
 
-    Site conversion idioms (use these, keep them consistent):
+
+CONVERSION IDIOMS  (use these, keep them consistent)
 
         read:   MUCK::Room *r = MUCK::database().get(ref)->As<MUCK::Room>();
                 ... r->dropTo() ? r->dropTo()->ref() : NOTHING ...
         write:  r->setDropTo(MUCK::database().get(dest));
         expression contexts use an immediately invoked lambda; see
         p_db.cpp for examples.
-
-    There is no raw type payload left to access: the sp union is
-    deleted and every creation path runs through Create<T>.
