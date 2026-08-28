@@ -250,3 +250,124 @@ amended.
         PLAYER module, MUF OBJECT type, tunables fully in manifest,
         dlopen module delivery, further feature modules (VEHICLE as
         the model case).
+
+
+=====================================================================
+DEVELOPER REFERENCE
+=====================================================================
+
+This section documents the classes as they exist on the new-database
+branch.  It grows as code lands.  Everything lives in namespace MUCK;
+headers are in src/inc/.
+
+
+Uuid  (Uuid.h, Uuid.cpp)
+
+    Sixteen-byte UUID value type.
+
+    Uuid::generate()              mint a fresh version 7 uuid
+    Uuid::parse(text)             canonical 36-char form; nil on error
+    Uuid::tryParse(text, out)     bool form of the above
+    u.toString()                  "018f3a2b-7c41-7e39-9f2a-..."
+    u.shortString(n)              first n hex digits, default 8
+    u.matchesPrefix(hex)          git-style prefix test
+    u.isNil()                     all-zero check
+    ==, !=, <, std::hash          usable as any map key
+
+    Version 7 means the top 48 bits are a millisecond timestamp:
+    uuids sort by creation time.  Two uuids minted the same instant
+    share a long prefix, so DISPLAY short forms may need more digits;
+    matchesPrefix handles any length.
+
+
+Database identity  (Database.h)
+
+    database().uuidOf(ref)        uuid for a dbref (nil if invalid)
+    database().refOf(uuid)        dbref for a uuid (NOTHING if none)
+    database().assignUuid(r, u)   bind identity (loader/importer only)
+    database().resolveUuidPrefix(s)
+                                  unique-prefix lookup; NOTHING or
+                                  AMBIGUOUS on failure
+
+    newObject() mints a fresh uuid ALWAYS, including on a recycled
+    garbage slot: a reused dbref is a new object and never inherits
+    the old identity.
+
+
+ObjectStore  (ObjectStore.h, ObjectStore.cpp)
+
+    The only database write path.  Layout:
+
+        <root>/manifest.json
+        <root>/objects/aa/bb/<uuid>.json
+
+    ObjectStore::isStore(path)    manifest present?
+    store().setRoot(path)         bind the data root
+    store().saveAll(dirtyOnly)    write manifest + objects; dirtyOnly
+                                  skips objects without OBJECT_CHANGED
+                                  (forced full into a fresh root)
+    store().loadAll()             read an entire store
+    store().saveObject(ref)       rewrite one object
+    store().removeObject(ref)     delete one object file
+
+    Object file schema (format 1):
+
+        uuid, dbref, type         identity; type is the type module
+                                  name: room, thing, exit, player,
+                                  muf_program (garbage only until the
+                                  legacy allocator dies in step 2)
+        modules                   individually attached feature
+                                  modules (empty for now)
+        core                      name, location, owner, flags[4],
+                                  powers[2], ts{...}
+        type_data                 per type: dropto/home/value/pennies/
+                                  password, contents[], exits[],
+                                  dests[], source[]
+        props                     flat array of {n, f, v}: full slash
+                                  path, raw flag word, value typed by
+                                  the flag's type bits
+
+    Encodings and rules:
+
+        refs        uuid string, or negative integer for the NOTHING,
+                    AMBIGUOUS, HOME, NIL sentinels
+        strings     latin-1 encoded losslessly to UTF-8 and back
+        props       values the flat format never persisted (zero int,
+                    empty string, NOTHING ref, TRUE_BOOLEXP lock) are
+                    skipped; the compression flag is stripped and
+                    values always stored uncompressed; prop refs stay
+                    dbref integers until the step 2 memory rebuild
+        chains      contents and exits serialize as ordered uuid
+                    lists validated against legacy chain corruption
+                    (location must equal container; one chain
+                    membership per object per save)
+        writes      content to <file>.tmp, then atomic rename
+
+    Loading is two-phase: phase one creates every object and assigns
+    identity, phase two wires refs, chains, and props (lock props
+    parse by dbref and need every target to exist).  Phase one must
+    leave links NOTHING; phase two only wires.  Do not reorder this.
+
+
+FlatFileConverter  (FlatFileConverter.h, FlatFileConverter.cpp)
+
+    flatConverter().import(f)     read a legacy flat dump, minting
+                                  uuids; returns top dbref or -1
+
+    One-way.  Nothing in the tree can write the flat format.  The
+    server auto-detects: a store root loads through ObjectStore, a
+    flat file imports and the first dump writes the store.  Offline:
+
+        protomuck -convert data/old.db data/store
+
+
+ProgramStore additions  (ProgramStore.h)
+
+    programs().sourceLines(ref)   authoritative source, or null
+    programs().setSourceLines(ref, lines)
+    programs().dropSource(ref)
+
+    The in-memory cache is authoritative; the object store serializes
+    it inside the program's file.  muf/<ref>.m is read as a fallback
+    for flat-era installs and refreshed on write for compatibility,
+    and goes away entirely in a later step.
