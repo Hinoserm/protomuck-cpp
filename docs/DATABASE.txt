@@ -130,19 +130,33 @@ amended.
 
 5. IN-MEMORY MODEL
 
-   Two hash maps own lookup: uuid -> DbObject and dbref -> DbObject.
-   There is NO dense array and NO db_top.  A mass-grief incident
-   creates no million-entry hole because there is nothing to hole.
+   Lookup is owned by two indexes: a paged pointer table for
+   dbref -> DbObject (a fixed top level of chunk pointers, 64K-slot
+   chunks allocated on demand; resolution is two array loads, no
+   hashing, no locks on the read path) and a hash map for
+   uuid -> DbObject.  The page table wins for dbrefs because the keys
+   are dense monotonic integers; the uuid index stays a hash map
+   because random 128-bit keys have no better structure.
+
+   There is no dense array of objects and no managed db_top: the
+   allocation cursor only moves forward, chunks never move once
+   allocated, and a deleted object costs one null pointer slot, never
+   a struct-sized hole.  A mass-grief incident therefore cannot
+   recreate the million-entry-hole problem: 64K refs of pure holes
+   cost one 512KB pointer chunk, and chunks whose range was never
+   allocated cost nothing.
 
    Code holds pointers (to DbObject or to a specific module), not
-   dbrefs.  Resolution through the maps happens at boundaries only:
+   dbrefs.  Resolution through the indexes happens at boundaries only:
    MUF primitive arguments, player input, disk load.  Eventually MUF
    gains an OBJECT type alongside DBREF and the interpreter resolves
    stack values straight to pointers.
 
-   Deleted objects are unlinked from both maps but their memory is
-   never freed while the server runs, so no held pointer can dangle.
-   Holders can check IsDeleted().  Memory is reclaimed at restart.
+   Deleted objects are unlinked from the uuid index, but their page
+   table slot keeps resolving to the tombstoned shell and their
+   memory is never freed while the server runs, so neither a held
+   pointer nor a stale dbref can dangle.  Holders can check
+   IsDeleted().  Memory is reclaimed at restart.
 
    Paging: the design must allow payload to be paged in from disk in
    the future, though today everything stays in RAM.  Two rules
