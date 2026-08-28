@@ -27,20 +27,34 @@ namespace MUCK {
 
 DbObject::DbObject(dbref ref) : ref_(ref)
 {
-    /* garbage-typed shell until a loader or creator fills it */
+    /* a dead shell until a loader or creator fills it in */
     memset(&legacy_, 0, sizeof(legacy_));
     legacy_.name = NULL;
-    legacy_.flags = TYPE_GARBAGE;
+    legacy_.flags = 0;
     legacy_.location = NOTHING;
     legacy_.owner = NOTHING;
+    type_ = ObjectType::Garbage;
+}
+
+void
+DbObject::setType(ObjectType t)
+{
+    type_ = t;
+    /* Mirror into the flags word. Several places still treat that word
+     * as a unit (the "any flag but the type" test that gates examine's
+     * Flags: header, the MUF frame save/restore, SetMLevel's
+     * read-modify-write) and the store keeps type inside the versioned
+     * $core/flags entry, which is what gives rollback its type
+     * fidelity. This is the only place the two are written. */
+    legacy_.flags = (legacy_.flags & ~TYPE_MASK) | (int) t;
+    legacy_.flags |= OBJECT_CHANGED;
+    /* modules rebuild lazily: ensureModules sees moduleType_ drift */
 }
 
 void
 DbObject::ensureModules()
 {
-    int bits = legacy_.flags & TYPE_MASK;
-
-    if (moduleTypeBits_ != bits)
+    if (moduleType_ != type_)
         rebuildModules();
 }
 
@@ -50,25 +64,25 @@ DbObject::rebuildModules()
     modules_.clear();
     typeModule_ = nullptr;
     propsCache_ = nullptr;
-    moduleTypeBits_ = legacy_.flags & TYPE_MASK;
+    moduleType_ = type_;
 
-    switch (moduleTypeBits_) {
-        case TYPE_ROOM:
+    switch (type_) {
+        case ObjectType::Room:
             typeModule_ = attach(std::make_unique<Room>());
             break;
-        case TYPE_THING:
+        case ObjectType::Thing:
             typeModule_ = attach(std::make_unique<Thing>());
             break;
-        case TYPE_PLAYER:
+        case ObjectType::Player:
             typeModule_ = attach(std::make_unique<Player>());
             break;
-        case TYPE_EXIT:
+        case ObjectType::Exit:
             typeModule_ = attach(std::make_unique<Exit>());
             break;
-        case TYPE_PROGRAM:
+        case ObjectType::Program:
             typeModule_ = attach(std::make_unique<MufProgram>());
             break;
-        default:               /* garbage: no type module */
+        default:               /* garbage/unsupported: no type module */
             break;
     }
     /* PROPERTIES is a global feature module: every object has it,
@@ -160,11 +174,7 @@ namespace MUCK {
 const char *
 DbObject::typeName()
 {
-    ensureModules();
-    if (typeModule_)
-        return typeModule_->moduleName();
-    return (legacy_.flags & TYPE_MASK) == TYPE_UNSUPPORTED
-        ? "unsupported" : "garbage";
+    return MUCK::typeName(type_);
 }
 
 Module *

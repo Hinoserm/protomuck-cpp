@@ -271,7 +271,7 @@ dbref tp_www_root = -1;         /* hinoserm */
 struct tune_ref_entry {
     const char *group;
     const char *name;
-    int typ;
+    MUCK::ObjectType typ;
     dbref *ref;
     int writemlev;
     int readmlev;
@@ -290,7 +290,7 @@ struct tune_ref_entry tune_ref_list[] = {
 #ifdef NEWHTTPD                 /* hinoserm */
     {"System", "www_root", TYPE_ROOM, &tp_www_root, LARCH, LMAGE}, /* hinoserm */
 #endif /* hinoserm */
-    {NULL, NULL, 0, NULL, 0, 0}
+    {NULL, NULL, MUCK::ObjectType::NoType, NULL, 0, 0}
 };
 
 /* booleans */

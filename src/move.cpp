@@ -1080,6 +1080,6 @@ recycle(int descr, dbref player, dbref thing)
     /* the slot stays a dead shell forever; dbrefs are never reused */
     MUCK::setName(thing, "<garbage>");
     MUCK::setDesc(thing, "<recyclable>");
-    FLAGS(thing) = TYPE_GARBAGE;
+    MUCK::setType(thing, MUCK::ObjectType::Garbage);
     MUCK::setOwner(thing, NOTHING);
 }

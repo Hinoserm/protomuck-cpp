@@ -13,6 +13,7 @@
 #include "externs.h"
 #include "ObjectAccess.h"
 #include "Modules.h"
+#include <cstring>
 
 #ifndef MALLOC_PROFILING
 extern char *alloc_string(const char *);
@@ -42,6 +43,94 @@ touched(dbref ref)
         o->flags |= OBJECT_CHANGED;
 }
 
+/* --- type ------------------------------------------------------- */
+
+ObjectType
+typeOf(dbref ref)
+{
+    /* HOME has always answered "room" and MUF depends on it:
+     * "#-3 room?" returns 1. Every other non-object ref is Invalid,
+     * NOT Room; the legacy macro read out of bounds here. */
+    if (ref == HOME)
+        return ObjectType::Room;
+
+    DbObject *o = database().get(ref);
+
+    return o ? o->type() : ObjectType::Invalid;
+}
+
+ObjectType
+rawTypeOf(dbref ref)
+{
+    DbObject *o = database().get(ref);
+
+    return o ? o->type() : ObjectType::Invalid;
+}
+
+void
+setType(dbref ref, ObjectType type)
+{
+    DbObject *o = database().get(ref);
+
+    if (!o || !isStorableType(type))
+        return;
+    o->setType(type);
+}
+
+const char *
+typeName(ObjectType type)
+{
+    switch (type) {
+        case ObjectType::Room:        return "room";
+        case ObjectType::Thing:       return "thing";
+        case ObjectType::Exit:        return "exit";
+        case ObjectType::Player:      return "player";
+        case ObjectType::Program:     return "muf_program";
+        case ObjectType::Unsupported: return "unsupported";
+        case ObjectType::Garbage:     return "garbage";
+        default:                      return "garbage";
+    }
+}
+
+ObjectType
+typeFromName(const char *name)
+{
+    if (!name)
+        return ObjectType::Invalid;
+    if (!strcmp(name, "room"))
+        return ObjectType::Room;
+    if (!strcmp(name, "thing"))
+        return ObjectType::Thing;
+    if (!strcmp(name, "exit"))
+        return ObjectType::Exit;
+    if (!strcmp(name, "player"))
+        return ObjectType::Player;
+    if (!strcmp(name, "muf_program") || !strcmp(name, "program"))
+        return ObjectType::Program;
+    if (!strcmp(name, "unsupported"))
+        return ObjectType::Unsupported;
+    if (!strcmp(name, "garbage"))
+        return ObjectType::Garbage;
+    return ObjectType::Invalid;
+}
+
+char
+typeCode(ObjectType type)
+{
+    /* the legacy "R-EPFUG" table, as a switch: the enum must not be
+     * silently convertible back to an array index */
+    switch (type) {
+        case ObjectType::Room:        return 'R';
+        case ObjectType::Thing:       return '-';
+        case ObjectType::Exit:        return 'E';
+        case ObjectType::Player:      return 'P';
+        case ObjectType::Program:     return 'F';
+        case ObjectType::Unsupported: return 'U';
+        case ObjectType::Garbage:     return 'G';
+        default:                      return '?';
+    }
+}
+
 /* --- name ------------------------------------------------------- */
 
 const char *
@@ -60,7 +149,7 @@ setName(dbref ref, const char *name)
     if (!o)
         return;
     /* a dead shell's name is the static "<garbage>" literal */
-    if (o->name && (o->flags & TYPE_MASK) != TYPE_GARBAGE)
+    if (o->name && typeOf(ref) != ObjectType::Garbage)
         delete[](char *) o->name;
     o->name = alloc_string(name);
     touched(ref);
@@ -154,7 +243,10 @@ setFlags(dbref ref, object_flag_type v)
 
     if (!o)
         return;
-    o->flags = v;
+    /* The type bits are not the caller's to set: they mirror the type
+     * field, and setType is the only writer. A whole-word write keeps
+     * whatever type the object already has. */
+    o->flags = (v & ~TYPE_MASK) | (o->flags & TYPE_MASK);
     touched(ref);
 }
 
@@ -165,7 +257,7 @@ addFlags(dbref ref, object_flag_type bits)
 
     if (!o)
         return;
-    o->flags |= bits;
+    o->flags |= (bits & ~TYPE_MASK);
     touched(ref);
 }
 
@@ -176,7 +268,7 @@ clearFlags(dbref ref, object_flag_type bits)
 
     if (!o)
         return;
-    o->flags &= ~bits;
+    o->flags &= ~(bits & ~TYPE_MASK);
     touched(ref);
 }
 
@@ -185,20 +277,6 @@ FLAGWORD(3, flag3)
 FLAGWORD(4, flag4)
 
 #undef FLAGWORD
-
-int
-typeOf(dbref ref)
-{
-    if (ref == HOME)
-        return TYPE_ROOM;
-    return getFlags(ref) & TYPE_MASK;
-}
-
-int
-rawTypeOf(dbref ref)
-{
-    return getFlags(ref) & TYPE_MASK;
-}
 
 /* --- powers ----------------------------------------------------- */
 

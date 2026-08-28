@@ -5520,7 +5520,7 @@ announce_unidle(struct descriptor_data *d)
         anotify_except(CONTENTS(loc), player, buf, player);
     }
 
-    if (OkObj(d->player) ? (Typeof(d->player) & TYPE_PLAYER) : 0) {
+    if (OkObj(d->player) && Typeof(d->player) == TYPE_PLAYER) {
         MUCK::playerSession(d->player).lastDescr = d->descriptor;
     }
 

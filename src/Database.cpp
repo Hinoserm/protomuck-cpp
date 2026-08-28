@@ -362,11 +362,11 @@ Database::parent(dbref obj)
 /* Typed creation                                                   */
 /* ================================================================ */
 
-static int moduleTypeBits(Room *) { return TYPE_ROOM; }
-static int moduleTypeBits(Thing *) { return TYPE_THING; }
-static int moduleTypeBits(Player *) { return TYPE_PLAYER; }
-static int moduleTypeBits(Exit *) { return TYPE_EXIT; }
-static int moduleTypeBits(MufProgram *) { return TYPE_PROGRAM; }
+static ObjectType moduleObjectType(Room *) { return ObjectType::Room; }
+static ObjectType moduleObjectType(Thing *) { return ObjectType::Thing; }
+static ObjectType moduleObjectType(Player *) { return ObjectType::Player; }
+static ObjectType moduleObjectType(Exit *) { return ObjectType::Exit; }
+static ObjectType moduleObjectType(MufProgram *) { return ObjectType::Program; }
 
 /* Type payload initialization happens in the type modules' own
  * constructors now (NOTHING homes, zero pennies, empty destinations,
@@ -388,7 +388,7 @@ Database::Create(const char *name, dbref owner)
 
     dbref r = newObject(owner);
 
-    FLAGS(r) = moduleTypeBits((T *) nullptr);
+    MUCK::setType(r, moduleObjectType((T *) nullptr));
     MUCK::setName(r, name);
     MUCK::setOwner(r, owner);
     typeInit(r);

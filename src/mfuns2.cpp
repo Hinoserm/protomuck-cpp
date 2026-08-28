@@ -234,7 +234,8 @@ mfn_contents(MFUNARGS)
     char buf2[50];
     int list_limit = MAX_MFUN_LIST_LEN;
     dbref obj = mesg_dbref_local(descr, player, what, perms, argv[0]);
-    int typchk, ownroom;
+    MUCK::ObjectType typchk;
+    int ownroom;
     int outlen, nextlen;
 
     if (obj == AMBIGUOUS || obj == UNKNOWN || obj == NOTHING || obj == HOME)

@@ -21,8 +21,36 @@
 #include <vector>
 
 #include "db.h"
+#include "ObjectType.h"
 
 namespace MUCK {
+
+/* --- type ------------------------------------------------------- */
+/* HOME reports as Room, exactly as the legacy Typeof did, because MUF
+ * asks "#-3 room?" and has always been told yes. Every other
+ * non-object ref reads Invalid. */
+ObjectType typeOf(dbref ref);
+
+/* Same, without the HOME special case. */
+ObjectType rawTypeOf(dbref ref);
+
+/* The one writer. Sets the field and mirrors the bits into the flags
+ * word, so the two can never drift; the modules rebuild themselves on
+ * their next access. */
+void setType(dbref ref, ObjectType type);
+
+/* Stored name of a type ("room", "thing", "exit", "player",
+ * "muf_program", "unsupported", "garbage") and its inverse; this is
+ * the on-disk representation. typeFromName yields Invalid on an
+ * unknown name so the loader can tell a corrupt file from a type this
+ * build does not implement. */
+const char *typeName(ObjectType type);
+ObjectType typeFromName(const char *name);
+
+/* The single-letter code examine and unparse show: R - E P F U G.
+ * A function rather than an array index because the enum must not be
+ * silently convertible back to an integer. */
+char typeCode(ObjectType type);
 
 /* --- name ------------------------------------------------------- */
 /* getName CAN return null, deliberately: an unnamed object and an
@@ -62,9 +90,6 @@ object_flag_type getFlags4(dbref ref);
 void setFlags4(dbref ref, object_flag_type v);
 void addFlags4(dbref ref, object_flag_type bits);
 void clearFlags4(dbref ref, object_flag_type bits);
-
-int typeOf(dbref ref);
-int rawTypeOf(dbref ref);
 
 /* --- powers ----------------------------------------------------- */
 /* The legacy POWERS(x) reads the powers of x's OWNER, not of x, and

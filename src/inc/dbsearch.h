@@ -7,7 +7,7 @@
 
 struct flgchkdat {
     int     fortype;            /* check FOR a type? */
-    int     istype;             /* If check FOR a type, which one? */
+    MUCK::ObjectType istype;    /* If check FOR a type, which one? */
     int     isnotroom;          /* not a room. */
     int     isnotexit;          /* not an exit. */
     int     isnotthing;         /* not type thing */

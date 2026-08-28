@@ -7,6 +7,9 @@
 #include <stdio.h>
 #include <math.h>
 #include <string>
+
+#include "ObjectType.h"
+
 #ifndef WIN_VC
 # include <time.h>
 #include <sys/time.h>
@@ -104,6 +107,14 @@ extern char match_args[BUFFER_LEN];
 extern char match_cmdname[BUFFER_LEN];
 
 typedef int dbref;		/* offset into db */
+
+/* Type access, declared here because the Typeof macros below expand to
+ * it and nearly every file reaches it through db.h. Defined in
+ * ObjectAccess.cpp; the full accessor set lives in ObjectAccess.h. */
+namespace MUCK {
+    ObjectType typeOf(dbref ref);
+    ObjectType rawTypeOf(dbref ref);
+}
 #include <cstdint>
 typedef int64_t MUFINT;	/* the MUF integer type: 64-bit as of 2026 */
 #ifndef __cplusplus
@@ -151,7 +162,8 @@ extern short dbcheck(const char *file, int line, dbref item);
 #define POWERSDB(x) (DBFETCH(x)->powers)
 #define POWER2(x)   (DBFETCH(OWNER(x))->power2)
 #define POWER2DB(x) (DBFETCH(x)->power2)
-#define TYPEOF(i)   (DBFETCH((i))->flags & TYPE_MASK)
+/* The raw form: same as Typeof but without the HOME special case. */
+#define TYPEOF(i)   (MUCK::rawTypeOf(i))
 #define LOCATION(x) (DBFETCH((x))->location)
 
 /* Containment lives in owning vectors on MUCK::DbObject now. These
@@ -248,15 +260,22 @@ namespace MUCK {
 
 #include "PasswordHash.h"
 
-#define TYPE_ROOM	    0x0
-#define TYPE_THING	    0x1
-#define TYPE_EXIT	    0x2
-#define TYPE_PLAYER	    0x3
-#define TYPE_PROGRAM	    0x4
-#define TYPE_UNSUPPORTED    0x5	/* placeholder: type module not loaded */
-#define TYPE_GARBAGE	    0x6
-#define NOTYPE		    0x7	/* no particular type */
-#define TYPE_MASK	    0x7	/* room for expansion */
+/* Object type is MUCK::ObjectType (ObjectType.h), not a flag bit.
+ * These names remain as spellings of the enumerators so the hundreds
+ * of "Typeof(x) == TYPE_ROOM" comparisons keep reading naturally; the
+ * enum being scoped means anything that tried to do ARITHMETIC on a
+ * type is now a compile error instead of a silent integer. */
+#define TYPE_ROOM	    MUCK::ObjectType::Room
+#define TYPE_THING	    MUCK::ObjectType::Thing
+#define TYPE_EXIT	    MUCK::ObjectType::Exit
+#define TYPE_PLAYER	    MUCK::ObjectType::Player
+#define TYPE_PROGRAM	    MUCK::ObjectType::Program
+#define TYPE_UNSUPPORTED    MUCK::ObjectType::Unsupported
+#define TYPE_GARBAGE	    MUCK::ObjectType::Garbage
+#define NOTYPE		    MUCK::ObjectType::NoType
+/* stays a plain integer: it is a bitmask over the flags word, and the
+ * type bits are still mirrored there */
+#define TYPE_MASK	    0x7
 #define ANTILOCK	    0x8	/* negates key (*OBSOLETE*) */
 #define W3		   0x10	/* gets automatic control */
 #define LINK_OK		   0x20	/* anybody can link to this room */
@@ -399,7 +418,9 @@ typedef int object_flag_type;
 typedef int object_power_type;
 
 #define DoNull(s) ((s) ? (s) : "")
-#define Typeof(x) ((x == HOME) ? TYPE_ROOM : (FLAGS(x) & TYPE_MASK))
+/* Type reads go through the accessor: it knows HOME reports as a room
+ * and that a bad ref is Invalid rather than an out-of-bounds read. */
+#define Typeof(x) (MUCK::typeOf(x))
 
 #define MAN	(1)
 #define Man(x)  ((x) == MAN)

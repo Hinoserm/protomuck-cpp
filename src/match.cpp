@@ -19,7 +19,8 @@ char match_cmdname[BUFFER_LEN]; /* triggering command */
 char match_args[BUFFER_LEN];    /* remaining text */
 
 void
-init_match(int descr, dbref player, const char *name, int type, struct match_data *md)
+init_match(int descr, dbref player, const char *name, MUCK::ObjectType type,
+           struct match_data *md)
 {
     md->exact_match = md->last_match = NOTHING;
     md->match_count = 0;
@@ -35,14 +36,16 @@ init_match(int descr, dbref player, const char *name, int type, struct match_dat
 }
 
 void
-init_match_check_keys(int descr, dbref player, const char *name, int type, struct match_data *md)
+init_match_check_keys(int descr, dbref player, const char *name,
+                      MUCK::ObjectType type, struct match_data *md)
 {
     init_match(descr, player, name, type, md);
     md->check_keys = 1;
 }
 
 void
-init_match_remote(int descr, dbref player, dbref what, const char *name, int type, struct match_data *md)
+init_match_remote(int descr, dbref player, dbref what, const char *name,
+                  MUCK::ObjectType type, struct match_data *md)
 {
     init_match(descr, player, name, type, md);
     md->match_from = what;
@@ -53,7 +56,7 @@ choose_thing(int descr, dbref thing1, dbref thing2, struct match_data *md)
 {
     int has1;
     int has2;
-    int preferred = md->preferred_type;
+    MUCK::ObjectType preferred = md->preferred_type;
 
     if (thing1 == NOTHING) {
         return thing2;

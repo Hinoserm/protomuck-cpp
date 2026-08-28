@@ -1126,7 +1126,7 @@ init_checkflags(dbref player, const char *flags, struct flgchkdat *check)
     }
 
     check->fortype = 0;
-    check->istype = 0;
+    check->istype = MUCK::ObjectType::NoType;
     check->isnotroom = 0;
     check->isnotexit = 0;
     check->isnotthing = 0;

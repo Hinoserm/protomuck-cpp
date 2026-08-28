@@ -1389,7 +1389,7 @@ prim_getlinks(PRIM_PROTOTYPE)
 }
 
 int
-prog_can_link_to(int mlev, dbref who, object_flag_type what_type, dbref where)
+prog_can_link_to(int mlev, dbref who, MUCK::ObjectType what_type, dbref where)
 {
     if (where == HOME || where == NIL)
         return 1;
@@ -1654,7 +1654,7 @@ prim_newexit(PRIM_PROTOTYPE)
             abort_interp("The exit type is not available on this server.");
         ref = newx->object()->ref();
         MUCK::setLocation(ref, oper[1].data.objref);  /* chain wiring flips later */
-        FLAGS(ref) = TYPE_EXIT;
+        MUCK::setType(ref, MUCK::ObjectType::Exit);
 
         /* link it in */
         MUCK::attachExit(oper[1].data.objref, ref);
@@ -2058,7 +2058,8 @@ prim_toadplayer(PRIM_PROTOTYPE)
     sprintf(buf, "The soul of %s", MUCK::getName(victim));
     MUCK::setName(victim, buf);
     DBDIRTY(victim);
-    FLAGS(victim) = TYPE_THING;
+    MUCK::setType(victim, MUCK::ObjectType::Thing);
+    MUCK::setFlags(victim, 0);
     FLAG2(victim) = 0;
     FLAG3(victim) = 0;
     FLAG4(victim) = 0;

@@ -13,7 +13,7 @@ struct match_data {
     dbref match_from;		/* object which is being matched around */
     int match_descr;		/* descriptor initiating the match */
     const char *match_name;	/* name to match */
-    int preferred_type;		/* preferred type */
+    MUCK::ObjectType preferred_type;	/* preferred type */
     size_t longest_match;	/* longest matched string */
     int match_level;		/* the highest priority level so far */
     int block_equals;		/* block matching of same name exits */
@@ -24,12 +24,14 @@ struct match_data {
 /* Then get value from match_result() */
 
 /* initialize matcher */
-extern void init_match(int descr, dbref player, const char *name, int type,
+extern void init_match(int descr, dbref player, const char *name,
+		       MUCK::ObjectType type,
 		       struct match_data *md);
-extern void init_match_check_keys(int descr, dbref player, const char *name, int type,
+extern void init_match_check_keys(int descr, dbref player, const char *name,
+				  MUCK::ObjectType type,
 				  struct match_data *md);
 extern void init_match_remote(int descr, dbref player, dbref what, const char *name,
-			int type, struct match_data * md);
+			MUCK::ObjectType type, struct match_data * md);
 
 /* match (LOOKUP_TOKEN)player */
 extern void match_player(struct match_data *md);

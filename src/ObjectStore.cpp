@@ -419,16 +419,9 @@ listFromJson(std::vector<MUCK::DbObject *> &out, const json &arr)
 /* ------------------------------------------------------------------ */
 
 static const char *
-typeName(struct object *o)
+typeNameOf(dbref i)
 {
-    switch (o->flags & TYPE_MASK) {
-        case TYPE_ROOM:    return "room";
-        case TYPE_THING:   return "thing";
-        case TYPE_EXIT:    return "exit";
-        case TYPE_PLAYER:  return "player";
-        case TYPE_PROGRAM: return "muf_program";
-        default:           return "garbage";
-    }
+    return MUCK::typeName(MUCK::typeOf(i));
 }
 
 /* ------------------------------------------------------------------ */
@@ -482,7 +475,7 @@ objectToJson(dbref i)
 
     j["uuid"] = MUCK::database().UUIDOf(i).toString();
     j["dbref"] = (int) i;
-    j["type"] = typeName(o);
+    j["type"] = typeNameOf(i);
     j["modules"] = json::array();
 
     /* An UNSUPPORTED placeholder saves as what it would have been:
@@ -517,7 +510,7 @@ objectToJson(dbref i)
         (long) o->ts.dmodified, (long) o->ts.dlastused }));
 
     /* --- $type: the type module's fields --- */
-    switch (o->flags & TYPE_MASK) {
+    switch (MUCK::typeOf(i)) {
         case TYPE_ROOM:
             e["$type/dropto"] = entry("ref", refToJson(MUCK::roomDropToRef(i)));
             e["$type/contents"] = entry("list", listToJson(i, MUCK::contentsOf(i)));
@@ -673,7 +666,7 @@ objectFromJsonPhase1(const json &j, std::vector<PendingLinks> &later)
 
     /* type scalars now, refs later */
     const json &td = j["type_data"];
-    switch (o->flags & TYPE_MASK) {
+    switch (MUCK::typeOf(i)) {
         case TYPE_THING:
             MUCK::thingSetValue(i, td.value("value", 0));
             break;
@@ -795,7 +788,7 @@ objectFromJsonPhase2(const PendingLinks &pl)
     o->location = refFromJson(pl.core["location"]);
     o->owner = refFromJson(pl.core["owner"]);
 
-    switch (o->flags & TYPE_MASK) {
+    switch (MUCK::typeOf(pl.ref)) {
         case TYPE_ROOM:
             MUCK::roomSetDropToRef(pl.ref, refFromJson(pl.td["dropto"]));
             listFromJson(MUCK::contentsOf(pl.ref), pl.td["contents"]);
@@ -1400,7 +1393,7 @@ ObjectStore::resurrectObject(const MUCK::Database::Tombstone &t, long rev,
     dbref i = t.ref;
 
     if (i < 0 || i >= MUCK::database().top()
-        || (DBFETCH(i)->flags & TYPE_MASK) != TYPE_GARBAGE) {
+        || MUCK::typeOf(i) != ObjectType::Garbage) {
         if (err)
             *err = "the object's slot is not a dead shell";
         return false;
@@ -1510,7 +1503,7 @@ ObjectStore::saveAll(bool dirtyOnly)
     for (dbref i = 0; i < MUCK::database().top(); i++) {
         struct object *o = DBFETCH(i);
 
-        if ((o->flags & TYPE_MASK) == TYPE_GARBAGE)
+        if (MUCK::typeOf(i) == ObjectType::Garbage)
             continue;
         if (dirtyOnly && !(o->flags & OBJECT_CHANGED))
             continue;
@@ -1692,8 +1685,8 @@ ObjectStore::loadAll()
                         if (pref >= 0) {
                             struct object *po = DBFETCH(pref);
 
-                            po->flags =
-                                (po->flags & ~TYPE_MASK) | TYPE_UNSUPPORTED;
+                            MUCK::setType(pref, ObjectType::Unsupported);
+                            (void) po;
                         }
                     }
                     if (!later.empty() && later.back().ref == j.value("dbref", -1)) {
@@ -1725,7 +1718,7 @@ ObjectStore::loadAll()
     /* holes (deleted objects) stay dead shells; mark them so modern
      * code sees isDeleted() */
     for (dbref i = 0; i < top; i++)
-        if ((DBFETCH(i)->flags & TYPE_MASK) == TYPE_GARBAGE)
+        if (MUCK::typeOf(i) == ObjectType::Garbage)
             MUCK::database().noteHole(i);
 
     /* a fresh load is clean by definition: the module setters used

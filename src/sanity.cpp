@@ -657,7 +657,8 @@ create_lostandfound(dbref *player, dbref *room)
     MUCK::setName(*room, "lost+found");
     MUCK::setLocation(*room, GLOBAL_ENVIRONMENT);
     MUCK::roomSetDropToRef(*room, NOTHING);
-    FLAGS(*room) = TYPE_ROOM | SANEBIT;
+    MUCK::setType(*room, MUCK::ObjectType::Room);
+    MUCK::setFlags(*room, SANEBIT);
     MUCK::attachContent(GLOBAL_ENVIRONMENT, *room);
     SanFixed(*room, "Using %s to resolve unknown location");
 
@@ -672,7 +673,8 @@ create_lostandfound(dbref *player, dbref *room)
         *player = MUCK::database().newObject(1);
         MUCK::setName(*player, player_name);
         MUCK::setLocation(*player, *room);
-        FLAGS(*player) = TYPE_PLAYER | PCREATE_FLAGS | SANEBIT;
+        MUCK::setType(*player, MUCK::ObjectType::Player);
+        MUCK::setFlags(*player, PCREATE_FLAGS | SANEBIT);
         MUCK::setOwner(*player, *player);
         MUCK::playerSetHomeRef(*player, *room);
         MUCK::playerSetPennies(*player, tp_start_pennies);

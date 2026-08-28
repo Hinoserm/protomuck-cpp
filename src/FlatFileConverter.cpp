@@ -283,7 +283,7 @@ db_read_object_old(FILE * f, struct object *o, dbref objno)
         LOADLOCK(objno, negate_boolexp(copy_bool(GETLOCK(objno))))
             FLAGS(objno) &= ~ANTILOCK;
     }
-    switch (FLAGS(objno) & TYPE_MASK) {
+    switch (MUCK::typeOf(objno)) {
         case TYPE_THING:
             o->sp.thing.home = exits;
             o->sp.thing.value = pennies;
@@ -394,7 +394,7 @@ db_read_object_new(FILE * f, struct object *o, dbref objno)
         LOADLOCK(objno, negate_boolexp(copy_bool(GETLOCK(objno))))
             FLAGS(objno) &= ~ANTILOCK;
     }
-    switch (FLAGS(objno) & TYPE_MASK) {
+    switch (MUCK::typeOf(objno)) {
         case TYPE_THING:
             o->sp.thing.home = getref(f);
             o->exits = getref(f);
@@ -500,6 +500,13 @@ db_read_object_foxen(FILE * f, struct object *o, dbref objno, int dtype, int rea
         p2 &= ~POWER2_DUMP_MASK;
     }
 
+    /* The legacy flat format carries the object's type inside the
+     * flags word; that is the one place that encoding still has to be
+     * understood. Lift it into the type field, which is authoritative
+     * from here on. (setFlags/addFlags refuse the type bits, so the
+     * line below cannot smuggle a type in behind setType's back.) */
+    MUCK::setType(objno, (MUCK::ObjectType) (tmp & TYPE_MASK));
+
     FLAGS(objno) |= tmp;
     FLAG2(objno) |= f2;
     FLAG3(objno) |= f3;
@@ -578,7 +585,7 @@ db_read_object_foxen(FILE * f, struct object *o, dbref objno, int dtype, int rea
             FLAGS(objno) &= ~ANTILOCK;
     }
 
-    switch (FLAGS(objno) & TYPE_MASK) {
+    switch (MUCK::typeOf(objno)) {
         case TYPE_THING:
             if (verboseload)
                 fprintf(stderr, "[type: THING] ");

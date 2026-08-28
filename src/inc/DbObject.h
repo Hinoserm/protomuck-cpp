@@ -28,6 +28,7 @@
 #include <nlohmann/json_fwd.hpp>
 
 #include "UUID.h"
+#include "ObjectType.h"
 
 namespace MUCK {
 
@@ -70,6 +71,12 @@ class DbObject {
     /* --- identity (immutable once assigned) --- */
     const UUID &uuid() const { return uuid_; }
     dbref ref() const { return ref_; }
+
+    /* --- type: a real field, not bits in the flags word --- */
+    /* Reads never go through the ref lookup, so this is the cheap form;
+     * MUCK::typeOf(ref) is the sentinel-aware one (it knows HOME). */
+    ObjectType type() const { return type_; }
+    void setType(ObjectType t);
 
     /* --- core fields (views over the legacy payload for now) --- */
     const char *name() const;
@@ -170,10 +177,15 @@ class DbObject {
 
     dbref ref_;
     UUID uuid_;
+    /* The object's type: a real field, not bits inside the flags word.
+     * Reached through MUCK::typeOf/setType (ObjectAccess.h). */
+    ObjectType type_ = ObjectType::Garbage;
     std::vector<DbObject *> contents_;
     std::vector<DbObject *> exits_;
     bool deleted_ = false;
-    int moduleTypeBits_ = -1;   /* type bits modules were built for */
+    /* the type the attached modules were built for; Invalid forces a
+     * rebuild on first access */
+    ObjectType moduleType_ = ObjectType::Invalid;
     Module *typeModule_ = nullptr;
     Properties *propsCache_ = nullptr;
     std::vector<std::unique_ptr<Module> > modules_;

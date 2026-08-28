@@ -15,11 +15,9 @@ const char *
 unparse_flags(dbref thing, char buf[BUFFER_LEN])
 {
     char *p;
-    const char *type_codes = "R-EPFUG";
-
     p = buf;
     if (Typeof(thing) != TYPE_THING)
-        *p++ = type_codes[Typeof(thing)];
+        *p++ = MUCK::typeCode(Typeof(thing));
     if (FLAGS(thing) & ~TYPE_MASK) {
         /* print flags */
         if (FLAGS(thing) & BUILDER)

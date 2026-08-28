@@ -310,7 +310,7 @@ extern bool test_lock(int descr, dbref player, dbref thing,
                       const char *lockprop);
 extern bool test_lock_false_default(int descr, dbref player, 
                                   dbref thing, const char *lockprop);
-extern bool can_link_to(dbref who, object_flag_type what_type, dbref where);
+extern bool can_link_to(dbref who, MUCK::ObjectType what_type, dbref where);
 extern bool can_link(dbref who, dbref what);
 extern bool could_doit(int descr, dbref player, dbref thing);
 extern bool could_doit2(int descr, dbref player, dbref thing, char *prop,

@@ -715,7 +715,8 @@ do_frob(int descr, dbref player, const char *name, const char *recip)
     sprintf(buf, "The soul of %s", MUCK::getName(victim));
     MUCK::setName(victim, buf);
     DBDIRTY(victim);
-    FLAGS(victim) = TYPE_THING;
+    MUCK::setType(victim, MUCK::ObjectType::Thing);
+    MUCK::setFlags(victim, 0);
     FLAG2(victim) = 0;
     FLAG3(victim) = 0;
     FLAG4(victim) = 0;

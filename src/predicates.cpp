@@ -14,7 +14,7 @@
 #include "ObjectAccess.h"
 
 bool
-can_link_to(dbref who, object_flag_type what_type, dbref where)
+can_link_to(dbref who, MUCK::ObjectType what_type, dbref where)
 {
     if (where == HOME)
         return 1;
