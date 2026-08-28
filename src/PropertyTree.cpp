@@ -75,6 +75,56 @@ PropertyTree::foldKey(const char *name, uint8_t *out, size_t max)
     return n;
 }
 
+/* Streaming folded access to a leaf's stored name: no buffer is
+ * built, each byte is one table load. The byte at the name's end is
+ * FOLD_TERM, matching foldKey output. */
+static inline uint8_t
+leafFoldedByte(const PropNode *leaf, size_t i)
+{
+    const unsigned char *n = (const unsigned char *) leaf->name();
+    size_t j = 0;
+
+    while (j < i && n[j])
+        j++;
+    if (!n[j])                  /* at or past the name's end */
+        return PropertyTree::FOLD_TERM;
+    return PropertyTree::foldByte(n[i]);
+}
+
+/* Does the leaf's folded key equal key[0..len)? */
+static bool
+leafKeyEquals(const PropNode *leaf, const uint8_t *key, size_t len)
+{
+    const unsigned char *n = (const unsigned char *) leaf->name();
+    size_t i = 0;
+
+    for (; n[i]; i++) {
+        if (i + 1 >= len || PropertyTree::foldByte(n[i]) != key[i])
+            return false;
+    }
+    return (i + 1 == len) && key[i] == PropertyTree::FOLD_TERM;
+}
+
+/* memcmp-style three-way compare of the leaf's folded key against
+ * key[0..len). */
+static int
+leafKeyCompare(const PropNode *leaf, const uint8_t *key, size_t len)
+{
+    const unsigned char *n = (const unsigned char *) leaf->name();
+    size_t i = 0;
+
+    for (;; i++) {
+        uint8_t lb = n[i] ? PropertyTree::foldByte(n[i])
+                          : PropertyTree::FOLD_TERM;
+        uint8_t kb = (i < len) ? key[i] : 0;
+
+        if (lb != kb)
+            return (int) lb - (int) kb;
+        if (!n[i] || i >= len)
+            return 0;           /* both exhausted together */
+    }
+}
+
 /* A folded key with small-buffer optimization. */
 struct FoldedKey {
     uint8_t small[256];
@@ -329,9 +379,8 @@ prefixByte(ArtNode *n, uint32_t i, uint32_t depth)
         return n->prefix[i];
 
     PropNode *repr = minLeaf(minChild(n));
-    FoldedKey rk(repr->name());
 
-    return rk.data[depth + i];
+    return leafFoldedByte(repr, depth + i);
 }
 
 /* ------------------------------------------------------------------ */
@@ -472,16 +521,16 @@ struct ArtOps {
 
         if (isLeaf(p)) {
             PropNode *leaf = asLeaf(p);
-            FoldedKey lk(leaf->name());
 
-            if (lk.len == len && memcmp(lk.data, key, len) == 0)
+            if (leafKeyEquals(leaf, key, len))
                 return leaf; /* same identity; spelling preserved */
 
             /* split: common prefix from depth, then two leaves */
             uint32_t common = 0;
 
-            while (depth + common < len && depth + common < lk.len
-                   && key[depth + common] == lk.data[depth + common])
+            while (depth + common < len
+                   && key[depth + common] == leafFoldedByte(leaf,
+                                                            depth + common))
                 common++;
 
             Node4 *nw = (Node4 *) makeNode(N4);
@@ -492,7 +541,8 @@ struct ArtOps {
 
             PropNode *fresh = new PropNode(name);
 
-            addChild((void **) &nw, nw, lk.data[depth + common], p);
+            addChild((void **) &nw, nw, leafFoldedByte(leaf, depth + common),
+                     p);
             addChild((void **) &nw, nw, key[depth + common], tagLeaf(fresh));
             *slot = nw;
             (*count)++;
@@ -685,9 +735,8 @@ struct ArtOps {
 
         if (isLeaf(p)) {
             PropNode *leaf = asLeaf(p);
-            FoldedKey lk(leaf->name());
 
-            if (lk.len == len && memcmp(lk.data, key, len) == 0) {
+            if (leafKeyEquals(leaf, key, len)) {
                 delete leaf;
                 *slot = nullptr;
                 return true;
@@ -710,9 +759,8 @@ struct ArtOps {
 
         if (isLeaf(*childSlot)) {
             PropNode *leaf = asLeaf(*childSlot);
-            FoldedKey lk(leaf->name());
 
-            if (lk.len == len && memcmp(lk.data, key, len) == 0) {
+            if (leafKeyEquals(leaf, key, len)) {
                 delete leaf;
                 removeChild(slot, n, b, depth - n->prefixLen);
                 return true;
@@ -731,11 +779,8 @@ struct ArtOps {
 
         if (isLeaf(p)) {
             PropNode *leaf = asLeaf(p);
-            FoldedKey lk(leaf->name());
-            size_t n = lk.len < len ? lk.len : len;
-            int c = memcmp(lk.data, key, n);
 
-            if (c > 0 || (c == 0 && lk.len > len))
+            if (leafKeyCompare(leaf, key, len) > 0)
                 return leaf;
             return nullptr;
         }
@@ -892,9 +937,8 @@ PropertyTree::findFolded(const uint8_t *key, size_t len) const
     while (p) {
         if (isLeaf(p)) {
             PropNode *leaf = asLeaf(p);
-            FoldedKey lk(leaf->name());
 
-            if (lk.len == len && memcmp(lk.data, key, len) == 0)
+            if (leafKeyEquals(leaf, key, len))
                 return leaf;
             return nullptr;
         }

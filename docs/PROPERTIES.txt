@@ -133,12 +133,26 @@ there. Format rules per docs/CODING_RULES.txt: 7-bit ASCII.
    one property path. Two properties of the design serve this:
    a MISS costs only the bytes to the first divergence (an object
    without the prop usually rejects at the root), and the folded
-   path can be computed ONCE per scan and reused against every
-   object (PropertyTree::findFolded; the veneer's path walker folds
-   each component a single time). If measurement ever demands more,
-   the escalation path is a global inverted index (path to object
-   set), deliberately NOT built until a workload proves the write
-   amplification worthwhile.
+   path is computed ONCE per scan: get_property keeps a fold-once
+   path cache and probes each object with pre-folded components
+   through PropertyTree::findFolded. If measurement ever demands
+   more, the escalation path is a global inverted index (path to
+   object set), deliberately NOT built until a workload proves the
+   write amplification worthwhile.
+
+   Measured state (tests/prop_bench.muf, PREEMPT, 50000-op runs
+   against the retired AVL engine): sets 139-165 vs 107 ms, hits 87
+   vs 57, removals 150-161 vs 109, ordered 50000-entry walk 44 vs
+   28, deep paths 33 vs 28, misses tied at ~45. Leaf comparisons
+   stream through the fold table (no key buffer is materialized) and
+   DbObject caches its Properties module pointer, both of which the
+   first benchmark round motivated. Wide scans (10000 objects,
+   manual getpropstr loop or ARRAY_FILTER_PROP) run at interpreter
+   speed, about a microsecond per object, identical on both engines:
+   evidence for keeping the inverted index unbuilt. Studied and
+   deliberately deferred until a workload shows them: SIMD Node16
+   child search (SSE, per the ART paper), slab allocation for
+   internal nodes, and HOT-style adaptive-span nodes (SIGMOD 2018).
 
 
 4. VALUE RESIDENCY (THE DISKBASE CONCEPT, OPTIONAL)

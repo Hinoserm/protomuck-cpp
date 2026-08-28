@@ -51,6 +51,14 @@ splitPath(const char *path, char *comp)
     return n;
 }
 
+/* Exported component splitter so the fold-once path cache in
+ * property.cpp parses exactly the way these walkers do. */
+const char *
+propdir_split(const char *path, char *comp)
+{
+    return splitPath(path, comp);
+}
+
 PropPtr
 propdir_new_elem(PropDirPtr l, char *path)
 {

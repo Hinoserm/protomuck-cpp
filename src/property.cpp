@@ -275,17 +275,69 @@ remove_property(dbref player, const char *type)
 }
 
 
+/* Fold-once path cache (docs/PROPERTIES.txt 3a): a scan that probes
+ * the same path against thousands of objects parses and folds the
+ * path a single time; each object then costs only the pre-folded
+ * radix descents. Single-threaded by the same convention as the rest
+ * of the server. */
+static struct {
+    std::string src;
+    std::vector<std::pair<size_t, size_t> > comps; /* offset, len */
+    std::vector<uint8_t> folded;
+    bool valid = false;
+} pathCache;
+
 PropPtr
 get_property(dbref player, const char *type)
 {
-    PropPtr p;
-    char buf[BUFFER_LEN];
-    char *w;
+    PropDirPtr d = MUCK::propRoot(player);
 
-    w = strcpy(buf, type);
+    if (!d || !type)
+        return NULL;
 
-    p = propdir_get_elem(MUCK::propRoot(player), w);
-    return (p);
+    if (!pathCache.valid || pathCache.src != type) {
+        char comp[BUFFER_LEN];
+        const char *rest = type;
+
+        pathCache.valid = false;
+        pathCache.src = type;
+        pathCache.comps.clear();
+        pathCache.folded.clear();
+        while (rest) {
+            rest = propdir_split(rest, comp);
+            if (!*comp)
+                break;
+
+            size_t off = pathCache.folded.size();
+            size_t room = strlen(comp) + 1;
+
+            pathCache.folded.resize(off + room);
+            size_t l = MUCK::PropertyTree::foldKey(comp,
+                                                   &pathCache.folded[off],
+                                                   room);
+
+            pathCache.comps.push_back(std::make_pair(off, l));
+        }
+        pathCache.valid = true;
+    }
+
+    if (pathCache.comps.empty())
+        return NULL;
+
+    PropPtr p = NULL;
+
+    for (size_t i = 0; i < pathCache.comps.size(); i++) {
+        if (i > 0) {
+            if (!p->isDir())
+                return NULL;
+            d = &p->children();
+        }
+        p = d->findFolded(&pathCache.folded[pathCache.comps[i].first],
+                          pathCache.comps[i].second);
+        if (!p)
+            return NULL;
+    }
+    return p;
 }
 
 

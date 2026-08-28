@@ -183,6 +183,7 @@ extern void undirtyprops(dbref obj);
 extern int propfetch(dbref obj, PropPtr p);
 #endif /* DISKBASE */
 
+extern const char *propdir_split(const char *path, char *comp);
 extern PropPtr propdir_new_elem(PropDirPtr l, char *path);
 extern PropDirPtr propdir_delete_elem(PropDirPtr l, char *path);
 extern PropPtr propdir_get_elem(PropDirPtr l, char *path);
