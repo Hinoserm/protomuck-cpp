@@ -247,7 +247,7 @@ Debugging Prims:
 
 Ignore Support Prims:
  MAX_IGNORES            IGNORE_ADD	       IGNORE_DEL
- IGNORING?              ARRAY_GET_IGNORES
+ IGNORING?              ARRAY_GET_IGNORELIST
     
 ~~~~~
 PRIMSLIST|PRIMS LIST|LIST PRIMS
