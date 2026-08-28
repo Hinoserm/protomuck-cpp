@@ -127,6 +127,30 @@ amended.
    stamp a schema version inside their namespace so a newer module
    build can migrate older entries on first touch.
 
+   Type modules get the same durability.  It is acceptable to start
+   the MUCK with a type module missing (no PROGRAM module, or a
+   database containing a type this build has never heard of).  Such
+   objects load as placeholders: they keep their identity, appear in
+   find and match, and their properties stay readable when the
+   Properties module is present, but every type-specific function is
+   refused, and objects of an absent type cannot be created, run, or
+   edited.  The stored type name and the $type/ entries persist
+   verbatim through save, snapshot, and rollback, exactly like
+   dormant feature-module entries.
+
+   A placeholder always shows what it would have been and that it is
+   not currently supported:
+
+       #12345  TYPE: VEHICLE  STATUS: UNSUPPORTED
+
+   The UNSUPPORTED status is computed against the module registry at
+   load, never stored, so the same database booted with the module
+   present shows a normal VEHICLE.  Type identity remains encoded in
+   the legacy flag bits for now, for legacy purposes; an unsupported
+   type carries a placeholder bits value and its stored name is
+   authoritative.  A better encoding than the flag bits is a future
+   decision.
+
 
 5. IN-MEMORY MODEL
 
