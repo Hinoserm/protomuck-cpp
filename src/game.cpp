@@ -43,6 +43,7 @@ int dumper_pid;
 char dump_done;
 
 bool store_gc_flag = 0;
+bool store_verify_flag = 0;
 
 /* This is the command, @autoarchive. */
 void
@@ -551,6 +552,10 @@ init_game(const char *infile, const char *outfile)
     if (!from_store)
         tune_load_parmsfile(NOTHING);
 
+    if (store_verify_flag) {
+        log_status_nowall("VERIFY: entry serialization audit\n");
+        MUCK::store().verifyEntrySerialization();
+    }
     if (store_gc_flag) {
         log_status_nowall("STOREGC: starting maintenance pass\n");
         MUCK::store().gcStore();

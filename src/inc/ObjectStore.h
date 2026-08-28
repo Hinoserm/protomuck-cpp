@@ -122,6 +122,14 @@ class ObjectStore {
      * entries removed. */
     long gcStore();
 
+    /* Audit: for every object and every entry it has, check that the
+     * per-key materializer used to seal journal layers agrees exactly
+     * with the full serializer used to write the base. A disagreement
+     * would mean a journalled change persists differently from the
+     * same change captured in a full save, which is the one way this
+     * design can silently corrupt data. Returns the mismatch count. */
+    long verifyEntrySerialization();
+
   private:
     std::string objectPath(dbref i) const;
     std::string histPath(dbref i) const;

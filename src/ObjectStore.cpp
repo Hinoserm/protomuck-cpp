@@ -373,7 +373,8 @@ static std::unordered_set<int> chainClaimed;
 static bool bulkSaveActive = false;
 
 static json
-listToJson(dbref container, const std::vector<MUCK::DbObject *> &list)
+listToJson(dbref container, const std::vector<MUCK::DbObject *> &list,
+           bool claim = true)
 {
     json arr = json::array();
 
@@ -386,7 +387,12 @@ listToJson(dbref container, const std::vector<MUCK::DbObject *> &list)
                     i, container);
             continue;
         }
-        if (!chainClaimed.insert((int) i).second) {
+        /* The one-membership check is a whole-pass repair for legacy
+         * chain corruption: it can only mean something while every
+         * list is being written together. Materializing a single
+         * entry has no pass to be part of, so it keeps the per-object
+         * location check and skips the cross-object claim. */
+        if (claim && !chainClaimed.insert((int) i).second) {
             fprintf(stderr, "STORE: #%d already serialized in another list; dropping from #%d\n",
                     i, container);
             continue;
@@ -465,6 +471,145 @@ entry(const char *t, json v)
     e["type"] = t;
     e["value"] = std::move(v);
     return e;
+}
+
+/* ------------------------------------------------------------------ */
+/* One entry, by key.                                                 */
+/*                                                                    */
+/* Sealing a journal layer materializes only the entries that actually */
+/* changed, so an object carrying a hundred thousand properties costs  */
+/* one serialization when one of them ticks, not a hundred thousand.   */
+/* Returns a null json when the entry does not exist, which is how a   */
+/* removal is expressed. The shapes here MUST match objectToJson.      */
+/* ------------------------------------------------------------------ */
+
+static json
+entryValueOf(dbref i, const std::string &key)
+{
+    struct object *o = DBFETCH(i);
+
+    if (!o)
+        return json();
+
+    /* --- $core --- */
+    if (key == "$core/name")
+        return entry("string", jstr(o->name));
+    if (key == "$core/location")
+        return entry("ref", refToJson(o->location));
+    if (key == "$core/owner")
+        return entry("ref", refToJson(o->owner));
+    if (key == "$core/flags") {
+        int typeBitsOut = (int) MUCK::typeOf(i);
+
+        auto pt = dormantTypeInfo.find(MUCK::database().UUIDOf(i));
+
+        if (pt != dormantTypeInfo.end())
+            typeBitsOut = pt->second.value("bits", 0) & TYPE_MASK;
+        return entry("list", json::array({
+            (int) (((o->flags & ~DUMP_MASK) & ~TYPE_MASK) | typeBitsOut),
+            (int) (o->flag2 & ~DUM2_MASK),
+            (int) (o->flag3 & ~DUM3_MASK), (int) (o->flag4 & ~DUM4_MASK) }));
+    }
+    if (key == "$core/powers")
+        return entry("list", json::array({
+            (int) (o->powers & ~POWERS_DUMP_MASK),
+            (int) (o->power2 & ~POWER2_DUMP_MASK) }));
+    if (key == "$core/ts")
+        return entry("list", json::array({
+            (long) o->ts.created, (long) o->ts.modified, (long) o->ts.lastused,
+            (long) o->ts.usecount, (long) o->ts.dcreated,
+            (long) o->ts.dmodified, (long) o->ts.dlastused }));
+
+    /* --- $type --- */
+    if (key == "$type/contents")
+        return entry("list", listToJson(i, MUCK::contentsOf(i), false));
+    if (key == "$type/exits")
+        return entry("list", listToJson(i, MUCK::exitsOf(i), false));
+    if (key == "$type/dropto")
+        return entry("ref", refToJson(MUCK::roomDropToRef(i)));
+    if (key == "$type/home")
+        return entry("ref", refToJson(MUCK::typeOf(i) == TYPE_PLAYER
+                                      ? MUCK::playerHomeRef(i)
+                                      : MUCK::thingHomeRef(i)));
+    if (key == "$type/value")
+        return entry("int", MUCK::thingValue(i));
+    if (key == "$type/pennies")
+        return entry("int", MUCK::playerPennies(i));
+    if (key == "$type/password")
+        return entry("string", jstr(MUCK::playerPasswordSlot(i)));
+    if (key == "$type/dests") {
+        json dests = json::array();
+        int nd = MUCK::exitDestCount(i);
+
+        for (int k = 0; k < nd; k++)
+            dests.push_back(refToJson(MUCK::exitDestRef(i, k)));
+        return entry("list", dests);
+    }
+    if (key == "$type/source") {
+        json lv = json::array();
+        const std::vector<std::string> *lines = MUCK::programs().sourceLines(i);
+
+        if (lines)
+            for (const auto &ln : *lines)
+                lv.push_back(jstr(ln.c_str()));
+        return entry("list", lv);
+    }
+
+    /* --- a property, by its slash path --- */
+    if (!key.empty() && key[0] == '/') {
+        PropPtr p = get_property(i, key.c_str() + 1);
+
+        if (!p)
+            return json();          /* removed */
+
+        int flags = PropFlagsRaw(p) & ~PROP_ISUNLOADED;
+        json v;
+        const char *t = "string";
+
+        switch (flags & PROP_TYPMASK) {
+            case PROP_INTTYP:
+                if (!PropDataVal(p))
+                    return json();
+                v = (int64_t) PropDataVal(p);
+                t = "int";
+                break;
+            case PROP_FLTTYP:
+                if (!PropDataFVal(p))
+                    return json();
+                v = PropDataFVal(p);
+                t = "float";
+                break;
+            case PROP_REFTYP:
+                if (PropDataRef(p) == NOTHING)
+                    return json();
+                v = (int) PropDataRef(p);
+                t = "int";
+                break;
+            case PROP_STRTYP:
+                if (!PropDataStr(p) || !*PropDataStr(p))
+                    return json();
+                v = jstr(PropDataUNCStr(p));
+                break;
+            case PROP_LOKTYP: {
+                char ubuf[BUFFER_LEN];
+
+                if ((PropFlagsRaw(p) & PROP_ISUNLOADED)
+                    || PropDataLok(p) == TRUE_BOOLEXP)
+                    return json();
+                v = jstr(unparse_boolexp(ubuf, (dbref) 1, PropDataLok(p), 0));
+                break;
+            }
+            default:
+                return json();      /* a pure directory carries no value */
+        }
+
+        json ent = entry(t, v);
+
+        ent["flags"] = flags & ~PROP_COMPRESSED;
+        return ent;
+    }
+
+    return json();
 }
 
 static json
@@ -635,6 +780,12 @@ objectFromJsonPhase1(const json &j, std::vector<PendingLinks> &later)
 
     const json &fl = core["flags"];
     o->flags = fl[0].get<int>();
+    /* The stored flags word carries the type bits; lift them into the
+     * type field, which is what everything reads. Without this an
+     * object loaded from a store comes back as Garbage no matter what
+     * it was, and the failure is quiet: names and properties still
+     * look right, so only type-dependent behavior misbehaves. */
+    MUCK::setType(i, (MUCK::ObjectType) (o->flags & TYPE_MASK));
     o->flag2 = fl[1].get<int>();
     o->flag3 = fl[2].get<int>();
     o->flag4 = fl[3].get<int>();
@@ -1721,15 +1872,61 @@ ObjectStore::loadAll()
         if (MUCK::typeOf(i) == ObjectType::Garbage)
             MUCK::database().noteHole(i);
 
-    /* a fresh load is clean by definition: the module setters used
-     * during wiring raise dirty flags that would otherwise force a
-     * full rewrite (and revision churn) on the next dump */
-    for (dbref i = 0; i < top; i++)
+    /* A fresh load is clean by definition: the setters used during
+     * wiring record journal entries and raise dirty flags that would
+     * otherwise force a full rewrite, and revision churn, on the next
+     * dump. What was just read is not a change. */
+    for (dbref i = 0; i < top; i++) {
         DBFETCH(i)->flags &= ~OBJECT_CHANGED;
+        if (DbObject *o = MUCK::database().get(i))
+            o->journal().discardTop();
+    }
 
     return (dbref) top;
 }
 
+
+long
+ObjectStore::verifyEntrySerialization()
+{
+    long mismatches = 0;
+    long checked = 0;
+
+    for (dbref i = 0; i < MUCK::database().top(); i++) {
+        if (MUCK::typeOf(i) == ObjectType::Garbage)
+            continue;
+
+        json full = objectToJson(i);
+
+        if (!full.contains("entries"))
+            continue;
+
+        const json &e = full["entries"];
+
+        for (auto it = e.begin(); it != e.end(); ++it) {
+            json one = entryValueOf(i, it.key());
+
+            /* the base carries a rev stamp the per-key form does not */
+            json expect = it.value();
+
+            expect.erase("rev");
+            checked++;
+            if (one != expect) {
+                if (mismatches < 20)
+                    fprintf(stderr,
+                            "ENTRY MISMATCH #%d %s\n  full: %s\n  key : %s\n",
+                            i, it.key().c_str(), expect.dump().c_str(),
+                            one.dump().c_str());
+                mismatches++;
+            }
+        }
+    }
+    fprintf(stderr, "VERIFY: %ld entries checked, %ld mismatches\n",
+            checked, mismatches);
+    log_status("VERIFY: %ld entries checked, %ld mismatches\n",
+               checked, mismatches);
+    return mismatches;
+}
 
 long
 ObjectStore::gcStore()
