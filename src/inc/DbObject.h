@@ -33,6 +33,7 @@ namespace MUCK {
 
 class DbObject;
 class Database;
+class Properties;
 
 /* --------------------------------------------------------------- */
 /* Module: base of every attachable behavior.                      */
@@ -120,6 +121,10 @@ class DbObject {
     /* Attach a feature module; the object takes ownership. */
     Module *attach(std::unique_ptr<Module> m);
 
+    /* Cached Properties module, set at attach: property access is the
+     * hottest module lookup and skips the dynamic_cast scan. */
+    Properties *propsModule() { ensureModules(); return propsCache_; }
+
     /* Iterate attached modules (type module included). */
     template <class F> void eachModule(F f) {
         ensureModules();
@@ -170,6 +175,7 @@ class DbObject {
     bool deleted_ = false;
     int moduleTypeBits_ = -1;   /* type bits modules were built for */
     Module *typeModule_ = nullptr;
+    Properties *propsCache_ = nullptr;
     std::vector<std::unique_ptr<Module> > modules_;
 
     struct object legacy_;      /* TRANSITIONAL payload */

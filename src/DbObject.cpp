@@ -48,6 +48,7 @@ DbObject::rebuildModules()
 {
     modules_.clear();
     typeModule_ = nullptr;
+    propsCache_ = nullptr;
     moduleTypeBits_ = legacy_.flags & TYPE_MASK;
 
     switch (moduleTypeBits_) {
@@ -171,7 +172,13 @@ DbObject::attach(std::unique_ptr<Module> m)
 {
     m->owner_ = this;
     modules_.push_back(std::move(m));
-    return modules_.back().get();
+
+    Module *raw = modules_.back().get();
+
+    /* one dynamic_cast at attach instead of one per property access */
+    if (Properties *pp = dynamic_cast<Properties *>(raw))
+        propsCache_ = pp;
+    return raw;
 }
 
 /* --------------------------------------------------------------- */
@@ -596,7 +603,7 @@ PropertyTree *
 propRoot(dbref ref)
 {
     DbObject *o = database().get(ref);
-    Properties *p = o ? o->As<Properties>() : nullptr;
+    Properties *p = o ? o->propsModule() : nullptr;
 
     return p ? &p->root() : nullptr;
 }
