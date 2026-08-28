@@ -1,0 +1,77 @@
+PROTOMUCK CODING RULES
+======================
+
+These rules govern all new and modernized code in this repository.  Legacy
+code is brought into compliance as it is touched, not in mass sweeps.
+
+
+1. NAMING AND FILE LAYOUT
+
+   All new or modernized classes live in namespace muck with unprefixed
+   PascalCase names:
+
+       namespace muck { class Database; }     used as muck::Database
+
+   One class per file, file named after the class:
+
+       src/Database.cpp
+       src/inc/Database.h
+
+   Do not prefix class names with Muck; the namespace carries that.
+   Legacy free functions stay outside the namespace and are migrated
+   opportunistically.  Searching the tree for "muck::" shows migration
+   progress.
+
+2. FORMATTING
+
+   K&R brace style.  Function definitions put the opening brace on its
+   own line in column zero, with the return type on the line above the
+   function name.  Control flow (if, else, for, while, switch, do) puts
+   the opening brace on the same line.  else and the while of a do loop
+   cuddle against the closing brace.
+
+   Four spaces per indent level.  Never tabs.  No trailing whitespace.
+
+   One space after if, for, while, switch, and return before a
+   parenthesized expression.  No space between a function name and its
+   opening parenthesis.
+
+3. POINTERS AND DECLARATIONS
+
+   The asterisk binds to the identifier, not the type:
+
+       char *name;        correct
+       char* name;        wrong
+
+   One declarator per line when any declarator is a pointer.
+
+4. CHARACTER SET
+
+   All source code, comments, and string literals are 7-bit ASCII.
+   No unicode, no emoji, and no em dashes anywhere in the repository.
+
+5. DOCUMENTATION FORMAT
+
+   All documentation in this repository is preformatted 7-bit ASCII
+   plain text with no unicode, no markup, and no emoji.  This file is
+   the model.  The single exception is the top-level README.md, which
+   exists for GitHub display and may use Markdown.
+
+   This rule applies to this file too, which is why it is a .txt.
+
+6. COMMITS
+
+   Commit and push at every meaningful step, even when the code does
+   not compile or run yet; note the broken state in the commit message
+   instead of holding the commit back.  Unpushed work effectively does
+   not exist.
+
+   Commit messages are plain prose describing the change: no tool
+   names, no badges, no bylines, no trailers.
+
+7. BUILD
+
+   CMake and Ninja: cmake -B build -G Ninja && ninja -C build
+   The version build number auto-increments per build via the committed
+   buildnum file.  Build configuration is temporarily baked in
+   src/inc/autoconf.h until proper feature detection returns.
