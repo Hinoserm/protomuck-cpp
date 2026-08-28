@@ -917,6 +917,22 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
     sprintf(buf, SYSVIOLET "In Memory:" SYSPURPLE " %d bytes", size_object(thing, 0));
     anotify_nolisten(player, buf, 1);
 
+    if (MUCK::store().active()) {
+        long oldest = 0;
+        int snaps = MUCK::store().snapshotSummary(thing, &oldest);
+
+        if (snaps > 0) {
+            char when[64];
+            time_t ot = (time_t) oldest;
+            struct tm *otm = localtime(&ot);
+
+            format_time(when, sizeof(when), (char *) "%b %e %Y", otm);
+            sprintf(buf, SYSFOREST "Snapshots:" SYSGREEN
+                    " %d available (oldest %s)", snaps, when);
+            anotify_nolisten(player, buf, 1);
+        }
+    }
+
     anotify_nolisten(player, SYSYELLOW "[ Use 'examine <object>=/' to list root properties. ]", 1);
 
     /* show him the contents */

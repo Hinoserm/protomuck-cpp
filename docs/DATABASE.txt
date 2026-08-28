@@ -30,10 +30,20 @@ amended.
 
    The garbage object type is abolished.  Deleting an object removes it
    from both indexes and records a tombstone row: uuid, dbref, deleted
-   timestamp, deleting player uuid.  Tombstone retention is set by a
-   @tune parameter: from zero to forever, default on the order of 90
-   days.  Programs holding a deleted object receive an OBJECT_DELETED
-   mufevent.
+   timestamp, deleting player uuid, and the store revision era at
+   deletion.  Programs holding a deleted object receive an
+   OBJECT_DELETED mufevent.
+
+   Deletion does NOT remove the object's store file.  The final state
+   is flushed at delete time, and the file plus its history survive as
+   long as any retained snapshot marker predates the deletion; every
+   runtime function and primitive shows the object as deleted
+   immediately, but @rollback <deadref>=<rev> resurrects it into its
+   original (never reused) slot as of that revision.  The manifest
+   sweep reclaims the files once no covering marker remains (locked
+   snapshots pin them forever), and only then may the tombstone itself
+   age out per the @tune retention parameter, from zero to forever,
+   default on the order of 90 days.
 
 
 2. OBJECT MODEL: CORE PLUS MODULES
@@ -92,8 +102,11 @@ amended.
 
    The database defines one closed set of value types:
 
-       string, int, float, bool, ref (a uuid), ordered list,
-       and chunk-ref (a hash into a shared content-addressed pool).
+       string, int, float, bool, ref (a uuid), and ordered list.
+
+   There is no shared chunk pool.  Everything an object owns lives in
+   its own uuid.json (with history in the .hist sidecar); the file
+   pair is the complete, self-contained record of the object.
 
    A module's persistent state is a set of entries: namespaced key ->
    typed value.  Namespaces are reserved per module:
@@ -105,10 +118,9 @@ amended.
        ~vehicle/...   an individual feature module
 
    PROPERTIES declares one entry per prop, giving per-prop versioning.
-   MUFPROG stores source as a list of chunk-refs into the pool, giving
-   per-line dedup and versioning.  The chunk pool is a database-level
-   service any module may use; pruning garbage-collects unreferenced
-   chunks.
+   MUFPROG stores source inline as an ordered list of lines in its
+   $type/source entry; the whole-entry copy-on-write history covers
+   its versioning.
 
    The database versions, dedups, prunes, rolls back, and diffs
    entries WITHOUT understanding them.  Modules alone know what the
@@ -212,8 +224,8 @@ amended.
    The object file records: the type module name, the list of
    individually attached feature modules, and the entries grouped by
    namespace.  Object references serialize as UUIDs, including the
-   contents and exits vectors.  MUF source is stored inside the object
-   file (as chunk-refs), not in muf/<ref>.m.
+   contents and exits vectors.  MUF source is stored inline inside the
+   object file, not in muf/<ref>.m.
 
    A manifest file at the data root stores the format version, the
    global revision counter, the next dbref, the globally enabled
@@ -265,7 +277,9 @@ amended.
    Pruning: a history entry is droppable only when no retained marker
    falls in its lifetime, AND the newest entry below the oldest
    retained marker is kept per key, so aging out revs cannot orphan a
-   live value.  Pruning also garbage-collects unreferenced chunks.
+   live value.  The manifest sweep applies the same rule to whole
+   deleted objects: their file pair is reclaimed only when no retained
+   marker predates the deletion.
 
    Retention is time-based on markers via @tune (like 30 days).  A
    marker can be locked; locked markers never age out.  Use case: lock
@@ -291,8 +305,8 @@ amended.
         sections: write new methods, hunt down old call sites,
         modernize them.  Loop until the legacy struct and union are
         gone.  Recycling and garbage removal land here.
-     3. Versioning: revision stamps, markers, history files, the
-        chunk pool, pruning, @tune retention.
+     3. Versioning: revision stamps, markers, history files,
+        pruning, @tune retention.
      4. (with 3) Tombstone table and OBJECT_DELETED event.
      5. Integration passes discussed case by case: sessions onto the
         PLAYER module, MUF OBJECT type, tunables fully in manifest,
@@ -560,8 +574,7 @@ VERSIONING, IMPLEMENTED  (@snapshot, @rollback, -storegc)
     the snapshot_retention @tune parameter (days; -1 forever).
 
     protomuck -storegc <store> <store> walks the store at maintenance
-    time: drops history entries no retained marker can see and sweeps
-    unreferenced chunk files.
+    time and drops history entries no retained marker can see.
 
     Dormant module data: entries in namespaces no loaded module claims
     ride through load and save verbatim, so unloading a module can

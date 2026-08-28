@@ -256,15 +256,21 @@ Database::deleteObject(dbref victim, dbref deleter)
     if (!o)
         return;
 
-    /* the store file must go while the uuid still resolves */
+    /* Flush the final state while the uuid still resolves. The file
+     * and its history stay on disk as long as a retained snapshot
+     * marker covers the object's lifetime, so @rollback can restore
+     * it; the manifest sweep reclaims it once coverage ages out. */
+    long drev = 0;
+
     if (store().active())
-        store().removeObject(victim);
+        drev = store().retireObject(victim);
 
     Tombstone t;
     t.uuid = o->uuid();
     t.ref = victim;
     t.deletedAt = (long) current_systime;
     t.deletedBy = uuidOf(deleter);
+    t.deletedRev = drev < 0 ? 0 : drev;
 
     {
         std::unique_lock<std::shared_mutex> hold(indexMutex_);
@@ -292,21 +298,39 @@ Database::setTombstones(std::vector<Tombstone> list)
     tombstones_ = std::move(list);
 }
 
+bool
+Database::findTombstone(dbref ref, Tombstone *out) const
+{
+    std::shared_lock<std::shared_mutex> hold(indexMutex_);
+
+    /* newest first: a slot is never reused, but be explicit anyway */
+    for (auto it = tombstones_.rbegin(); it != tombstones_.rend(); ++it)
+        if (it->ref == ref) {
+            if (out)
+                *out = *it;
+            return true;
+        }
+    return false;
+}
+
 void
-Database::pruneTombstones(long cutoff)
+Database::removeTombstone(const Uuid &u)
 {
     std::unique_lock<std::shared_mutex> hold(indexMutex_);
-    size_t n = tombstones_.size();
 
     tombstones_.erase(
         std::remove_if(tombstones_.begin(), tombstones_.end(),
-                       [cutoff](const Tombstone &t) {
-                           return t.deletedAt < cutoff;
-                       }),
+                       [&u](const Tombstone &t) { return t.uuid == u; }),
         tombstones_.end());
-    if (tombstones_.size() != n)
-        log_status("TOMBSTONE: pruned %d aged entries\n",
-                   (int) (n - tombstones_.size()));
+}
+
+void
+Database::reviveHole(dbref ref)
+{
+    DbObject *o = get(ref);
+
+    if (o)
+        o->deleted_ = false;
 }
 
 dbref

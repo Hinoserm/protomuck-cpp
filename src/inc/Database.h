@@ -93,12 +93,17 @@ class Database {
         dbref ref;
         long deletedAt;
         Uuid deletedBy;
+        /* store revision era at deletion: a snapshot marker with
+         * rev < deletedRev was taken while the object was alive and
+         * pins its store file until the marker ages out */
+        long deletedRev = 0;
     };
     const std::vector<Tombstone> &tombstones() const { return tombstones_; }
     void setTombstones(std::vector<Tombstone> list);
-    /* Drop entries older than the cutoff (epoch seconds); retention
-     * policy lives in the tp_tombstone_retention tune parameter. */
-    void pruneTombstones(long cutoff);
+    bool findTombstone(dbref ref, Tombstone *out) const;
+    void removeTombstone(const Uuid &u);
+    /* Clear the deleted mark on a shell being resurrected. */
+    void reviveHole(dbref ref);
 
     /* ============================================================ */
     /* LEGACY BRIDGE. Everything below exists only while the old    */

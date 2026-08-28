@@ -1685,6 +1685,8 @@ do_fixw(dbref player, const char *msg)
  *   @snapshot obj=#list        list an object's markers
  *
  *   @rollback obj=rev          restore name, props, program source
+ *   @rollback #deadref=rev     resurrect a recycled object whose file
+ *                              a snapshot still covers
  * ------------------------------------------------------------------ */
 
 void
@@ -1801,6 +1803,29 @@ do_rollback(int descr, dbref player, const char *arg1, const char *arg2)
         return;
 
     long rev = atol(arg2);
+
+    /* a dead shell with a tombstone is a deleted object whose file is
+     * still covered by a snapshot: bring it back whole */
+    if (Typeof(thing) == TYPE_GARBAGE) {
+        MUCK::Database::Tombstone t;
+
+        if (!MUCK::database().findTombstone(thing, &t)) {
+            anotify_nolisten2(player, CFAIL
+                "That object is recycled and left no tombstone.");
+            return;
+        }
+
+        std::string rerr;
+
+        if (!MUCK::store().resurrectObject(t, rev, &rerr)) {
+            anotify_fmt(player, CFAIL "Resurrection failed: %s.",
+                        rerr.c_str());
+            return;
+        }
+        anotify_fmt(player, CSUCC "Resurrected %s as of rev %ld.",
+                    unparse_object(player, thing), rev);
+        return;
+    }
 
     if (!MUCK::store().rollbackObject(thing, rev)) {
         anotify_nolisten2(player, CFAIL "Rollback failed: no stored state for that object at that revision.");

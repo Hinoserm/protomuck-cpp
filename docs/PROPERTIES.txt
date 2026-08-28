@@ -169,8 +169,7 @@ there. Format rules per docs/CODING_RULES.txt: 7-bit ASCII.
      RESIDENT  - the value lives in the node (default, and the only
                  state in the default configuration).
      UNLOADED  - the value lives in the object store entry for this
-                 path (and, for large strings, in the chunk pool);
-                 the node holds nothing but its metadata.
+                 path; the node holds nothing but its metadata.
 
    Every read goes through the accessor veneers, so the fetch hook
    is natural: touching an UNLOADED value loads it from the store
@@ -198,8 +197,8 @@ there. Format rules per docs/CODING_RULES.txt: 7-bit ASCII.
    Exclusion: --db-exclude-module properties (the feature-module
    sibling of --db-exclude-type). When the module is absent, every
    "/..." entry in an object's file rides dormant exactly as
-   feature-module namespaces already do, chunk payloads included;
-   save, snapshot, and rollback carry them byte-identically. The
+   feature-module namespaces already do; save, snapshot, and
+   rollback carry them byte-identically. The
    legacy C API is blanket-safe: reads return empty/NULL/0, writes
    are refused no-ops, so no caller crashes.
 

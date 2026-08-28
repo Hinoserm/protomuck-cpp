@@ -2,13 +2,14 @@
 #define MUCK_OBJECTSTORE_H
 
 /* The sharded JSON object store: one file per object named by UUID,
- * plus a manifest at the data root. This is the only write path for
- * the database; the old flat-file format is import-only through
- * FlatFileConverter.
+ * an append-only JSONL history sidecar beside it, and a manifest at
+ * the data root. This is the only write path for the database; the
+ * old flat-file format is import-only through FlatFileConverter.
  *
  * Layout:
  *     <root>/manifest.json
  *     <root>/objects/aa/bb/<uuid>.json
+ *     <root>/objects/aa/bb/<uuid>.hist
  *
  * See docs/DATABASE.txt sections 6 and the API notes appended there.
  */
@@ -16,6 +17,8 @@
 #include <cstdio>
 #include <string>
 #include <vector>
+
+#include "Database.h"
 
 namespace MUCK {
 
@@ -62,9 +65,24 @@ class ObjectStore {
     /* Write or rewrite one object's file. */
     bool saveObject(dbref i);
 
-    /* Remove one object's file (deletion support; unused until the
-     * garbage type dies in step 2). */
+    /* Remove one object's file and history unconditionally. Deletion
+     * no longer calls this: retained files age out in the manifest
+     * sweep instead. */
     bool removeObject(dbref i);
+
+    /* Deletion support: flush the object's final state to its file
+     * (so the file plus history hold everything a rollback needs) and
+     * return the current revision era, which the caller records as
+     * the tombstone's deletedRev. Returns -1 if the save failed. */
+    long retireObject(dbref i);
+
+    /* Bring a deleted object back to life in its original (never
+     * reused) dbref slot, reconstructed as of the given revision.
+     * Contents and exits are not re-wired (children were evacuated or
+     * separately recycled); the object is placed at its rev-time
+     * location when that still exists, else at its fallback. */
+    bool resurrectObject(const MUCK::Database::Tombstone &t, long rev,
+                         std::string *err);
 
     /* --- versioning (docs/DATABASE.txt section 7) --- */
     struct Marker {
@@ -93,10 +111,15 @@ class ObjectStore {
     const std::vector<Marker> &globalMarkers() const { return markers_; }
     std::vector<Marker> objectMarkers(dbref i) const;
 
+    /* Rollback points available for one object (global markers plus
+     * its own), for the examine display. Returns the count and sets
+     * oldest to the earliest marker's timestamp (0 when none). */
+    int snapshotSummary(dbref i, long *oldest) const;
+
     /* Offline maintenance (the -storegc flag): drop history entries no
-     * retained marker can see and delete chunk files nothing
-     * references. Walks the whole store; run it at maintenance time,
-     * not from the dump path. Returns entries + chunks removed. */
+     * retained marker can see. Walks the whole store; run it at
+     * maintenance time, not from the dump path. Returns the number of
+     * entries removed. */
     long gcStore();
 
   private:

@@ -39,7 +39,11 @@ namespace MUCK {
 
 ObjectStore g_objectStore;
 
-static const int STORE_FORMAT = 2;
+/* The one and only store format: the entry model, with everything an
+ * object owns, program source included, inline in its uuid.json. A
+ * store stamped with any other format number does not load; rebuild
+ * it by re-importing the legacy flat database. */
+static const int STORE_FORMAT = 1;
 
 /* Dormant module data (docs section 4): entries in namespaces no
  * loaded module claims, plus unrecognized attached-module names, are
@@ -55,10 +59,6 @@ static std::unordered_map<std::string, json> dormantModules;
 static std::unordered_map<std::string, json> dormantTypeInfo;
 static std::set<std::string> excludedTypes;
 
-/* Chunk payloads referenced by dormant entries, captured at load so a
- * save into a fresh root can materialize them there. In-place saves
- * find the chunks already on disk either way. */
-static std::unordered_map<std::string, std::string> dormantChunks;
 
 static bool
 builtinTypeName(const std::string &n)
@@ -158,6 +158,9 @@ knownNamespace(const std::string &k)
  * save path below but used by the manifest writer above it */
 static std::vector<ObjectStore::Marker> markersFromJson(const json &arr);
 static json markersToJson(const std::vector<ObjectStore::Marker> &list);
+static bool markerInWindow(long from, long to,
+                           const std::vector<ObjectStore::Marker> &globals,
+                           const std::vector<ObjectStore::Marker> &own);
 
 /* ------------------------------------------------------------------ */
 /* String escaping. MUCK strings are raw 8-bit (latin-1 by long       */
@@ -449,54 +452,6 @@ ensureDirsFor(const std::string &path)
     return true;
 }
 
-static std::string
-chunkPath(const std::string &root, const std::string &hash)
-{
-    return root + "/chunks/" + hash.substr(0, 2) + "/" + hash;
-}
-
-static std::string
-chunkHash(const std::string &content)
-{
-    char hex[48];
-
-    SHA1hex(hex, content.c_str(), (int) content.size());
-    return std::string(hex);
-}
-
-static bool
-ensureChunk(const std::string &root, const std::string &hash,
-            const std::string &content)
-{
-    std::string path = chunkPath(root, hash);
-    struct stat st;
-
-    if (stat(path.c_str(), &st) == 0)
-        return true;            /* dedup: already stored */
-    ensureDirsFor(path);
-
-    std::ofstream f(path + ".tmp", std::ios::trunc | std::ios::binary);
-
-    if (!f)
-        return false;
-    f.write(content.data(), (std::streamsize) content.size());
-    f.close();
-    if (!f)
-        return false;
-    return rename((path + ".tmp").c_str(), path.c_str()) == 0;
-}
-
-static bool
-readChunk(const std::string &root, const std::string &hash, std::string &out)
-{
-    std::ifstream f(chunkPath(root, hash), std::ios::binary);
-
-    if (!f)
-        return false;
-    out.assign(std::istreambuf_iterator<char>(f),
-               std::istreambuf_iterator<char>());
-    return true;
-}
 
 /* ------------------------------------------------------------------ */
 /* Format 2: the value model. An object's persistent state is a set   */
@@ -588,20 +543,14 @@ objectToJson(dbref i)
             break;
         }
         case TYPE_PROGRAM: {
-            /* source lines live in the content-addressed chunk pool;
-             * the entry is a list of chunk-refs */
-            json refs = json::array();
+            /* source lines live inline in the object file */
+            json lv = json::array();
             const std::vector<std::string> *lines = MUCK::programs().sourceLines(i);
 
-            if (lines) {
-                for (const auto &ln : *lines) {
-                    std::string h = chunkHash(ln);
-
-                    ensureChunk(g_objectStore.root(), h, ln);
-                    refs.push_back(h);
-                }
-            }
-            e["$type/source"] = entry("c", refs);
+            if (lines)
+                for (const auto &ln : *lines)
+                    lv.push_back(jstr(ln.c_str()));
+            e["$type/source"] = entry("l", lv);
             break;
         }
         default:
@@ -630,19 +579,8 @@ objectToJson(dbref i)
         auto d = dormantEntries.find(j["uuid"].get<std::string>());
 
         if (d != dormantEntries.end())
-            for (auto it = d->second.begin(); it != d->second.end(); ++it) {
+            for (auto it = d->second.begin(); it != d->second.end(); ++it)
                 e[it.key()] = it.value();
-                /* materialize referenced chunks in this root */
-                if (it.value().value("t", "") == "c"
-                    && it.value()["v"].is_array())
-                    for (const auto &h : it.value()["v"]) {
-                        auto c = dormantChunks.find(h.get<std::string>());
-
-                        if (c != dormantChunks.end())
-                            ensureChunk(g_objectStore.root(),
-                                        h.get<std::string>(), c->second);
-                    }
-            }
         auto dm = dormantModules.find(j["uuid"].get<std::string>());
 
         if (dm != dormantModules.end())
@@ -761,11 +699,10 @@ objectFromJsonPhase1(const json &j, std::vector<PendingLinks> &later)
     later.push_back(pl);
 }
 
-/* Translate a format 2 (entry model) object file into the format 1
- * shape and feed it to the same phase machinery. One wiring
- * implementation, every format readable forever. */
+/* Translate an object file's entry model into the flat load shape
+ * the phase machinery consumes. */
 static json
-v2ToV1(const json &j, const std::string &root)
+fileToLoadShape(const json &j, const std::string &root)
 {
     json out;
     const json &e = j["entries"];
@@ -809,18 +746,8 @@ v2ToV1(const json &j, const std::string &root)
         if (it != e.end())
             td[k] = (*it)["v"];
     }
-    if (e.contains("$type/source")) {
-        json lines = json::array();
-        for (const auto &h : e["$type/source"]["v"]) {
-            std::string content;
-            if (readChunk(root, h.get<std::string>(), content))
-                lines.push_back(jstr(content.c_str()));
-            else
-                fprintf(stderr, "STORE: missing chunk %s for #%d\n",
-                        h.get<std::string>().c_str(), out["dbref"].get<int>());
-        }
-        td["source"] = lines;
-    }
+    if (e.contains("$type/source"))
+        td["source"] = e["$type/source"]["v"];
     out["type_data"] = td;
 
     json props = json::array();
@@ -912,19 +839,23 @@ ensureDir(const std::string &path)
     return false;
 }
 
+/* Shard on the LAST four hex digits: uuidv7 leads with a timestamp,
+ * so leading digits are identical for every object minted in the
+ * same era and would put the whole database in one directory. The
+ * tail is random. */
+static std::string
+uuidObjectPath(const std::string &root, const std::string &u)
+{
+    size_t n = u.size();
+
+    return root + "/objects/" + u.substr(n - 4, 2) + "/" + u.substr(n - 2, 2)
+        + "/" + u + ".json";
+}
+
 std::string
 ObjectStore::objectPath(dbref i) const
 {
-    std::string u = MUCK::database().uuidOf(i).toString();
-
-    /* Shard on the LAST four hex digits: uuidv7 leads with a timestamp,
-     * so leading digits are identical for every object minted in the
-     * same era and would put the whole database in one directory. The
-     * tail is random. */
-    size_t n = u.size();
-
-    return root_ + "/objects/" + u.substr(n - 4, 2) + "/" + u.substr(n - 2, 2)
-        + "/" + u + ".json";
+    return uuidObjectPath(root_, MUCK::database().uuidOf(i).toString());
 }
 
 static bool
@@ -977,10 +908,61 @@ ObjectStore::writeManifest()
     m["hash_passwords"] = (bool) MUCK::PasswordHash::enabled;
     m["hash_version"] = MUCK::PasswordHash::version;
 
-    /* tombstones: prune per @tune retention, then persist */
-    if (tp_tombstone_retention >= 0)
-        MUCK::database().pruneTombstones(
-            (long) current_systime - (long) tp_tombstone_retention * 86400L);
+    /* Deleted-object retention: a tombstoned object's file and hist
+     * survive while any retained snapshot marker, global or the
+     * object's own, predates the deletion; @rollback resurrects from
+     * them. Once no covering marker remains, the files are reclaimed,
+     * and the tombstone itself ages out per tp_tombstone_retention
+     * only after its files are gone. */
+    {
+        long snapCutoff = tp_snapshot_retention >= 0
+            ? (long) current_systime - (long) tp_snapshot_retention * 86400L
+            : -1;
+        long tombCutoff = tp_tombstone_retention >= 0
+            ? (long) current_systime - (long) tp_tombstone_retention * 86400L
+            : -1;
+        std::vector<Database::Tombstone> kept;
+        int reclaimed = 0, pruned = 0;
+
+        for (const auto &t : MUCK::database().tombstones()) {
+            std::string path = uuidObjectPath(root_, t.uuid.toString());
+            struct stat st;
+            bool haveFile = stat(path.c_str(), &st) == 0;
+
+            if (haveFile) {
+                std::vector<Marker> own;
+                std::ifstream pf(path);
+                json pj = pf ? json::parse(pf, nullptr, false) : json();
+
+                if (pj.is_object())
+                    own = markersFromJson(pj.value("markers", json::array()));
+                if (snapCutoff >= 0)
+                    own.erase(std::remove_if(own.begin(), own.end(),
+                                             [snapCutoff](const Marker &om) {
+                                                 return !om.locked
+                                                     && om.when < snapCutoff;
+                                             }),
+                              own.end());
+                if (!markerInWindow(0, t.deletedRev, markers_, own)) {
+                    unlink(path.c_str());
+                    unlink((path.substr(0, path.size() - 5) + ".hist").c_str());
+                    haveFile = false;
+                    reclaimed++;
+                }
+            }
+            if (!haveFile && tombCutoff >= 0 && t.deletedAt < tombCutoff) {
+                pruned++;
+                continue;
+            }
+            kept.push_back(t);
+        }
+        if (reclaimed || pruned)
+            log_status("STORE: reclaimed %d deleted object file%s, "
+                       "pruned %d tombstone%s\n",
+                       reclaimed, reclaimed == 1 ? "" : "s",
+                       pruned, pruned == 1 ? "" : "s");
+        MUCK::database().setTombstones(std::move(kept));
+    }
     json ts = json::array();
     for (const auto &t : MUCK::database().tombstones()) {
         json e;
@@ -988,6 +970,7 @@ ObjectStore::writeManifest()
         e["r"] = (int) t.ref;
         e["t"] = t.deletedAt;
         e["b"] = t.deletedBy.toString();
+        e["dr"] = t.deletedRev;
         ts.push_back(e);
     }
     m["tombstones"] = ts;
@@ -1097,7 +1080,8 @@ ObjectStore::saveObject(dbref i)
     /* Copy-on-write per entry: diff against the file being replaced.
      * An unchanged value keeps its rev untouched (a no-op write costs
      * nothing); a changed value whose old rev is visible at a retained
-     * marker pushes the old value into the history file first. */
+     * marker pushes the old value into the sidecar history file
+     * (<uuid>.hist, append-only) first. */
     std::ifstream pf(path);
     json prev = pf ? json::parse(pf, nullptr, false) : json();
     bool havePrev = prev.is_object() && prev.contains("entries");
@@ -1172,6 +1156,14 @@ ObjectStore::removeObject(dbref i)
 }
 
 long
+ObjectStore::retireObject(dbref i)
+{
+    if (!saveObject(i))
+        return -1;
+    return rev_;
+}
+
+long
 ObjectStore::snapshotGlobal(const char *label, bool locked)
 {
     Marker m;
@@ -1240,7 +1232,21 @@ ObjectStore::snapshotObject(dbref i, const char *label, bool locked)
 std::vector<ObjectStore::Marker>
 ObjectStore::objectMarkers(dbref i) const
 {
-    std::ifstream pf(objectPath(i));
+    std::string path;
+
+    /* a dead shell has no uuid of its own; its retained file is
+     * findable through the tombstone */
+    if (MUCK::database().uuidOf(i).isNil()) {
+        Database::Tombstone t;
+
+        if (!MUCK::database().findTombstone(i, &t))
+            return {};
+        path = uuidObjectPath(root_, t.uuid.toString());
+    } else {
+        path = objectPath(i);
+    }
+
+    std::ifstream pf(path);
 
     if (!pf)
         return {};
@@ -1349,12 +1355,8 @@ ObjectStore::rollbackObject(dbref i, long rev)
     if (Typeof(i) == TYPE_PROGRAM && e.contains("$type/source")) {
         std::vector<std::string> lines;
 
-        for (const auto &h : e["$type/source"]["v"]) {
-            std::string content;
-
-            if (readChunk(root_, h.get<std::string>(), content))
-                lines.push_back(content);
-        }
+        for (const auto &ln : e["$type/source"]["v"])
+            lines.push_back(junstr(ln.get<std::string>()));
         MUCK::programs().setSourceLines(i, std::move(lines));
         uncompile_program(i);
     }
@@ -1362,6 +1364,117 @@ ObjectStore::rollbackObject(dbref i, long rev)
     DBDIRTY(i);
     log_status("ROLLBACK: #%d to rev %ld\n", i, rev);
     return true;
+}
+
+bool
+ObjectStore::resurrectObject(const MUCK::Database::Tombstone &t, long rev,
+                             std::string *err)
+{
+    std::string path = uuidObjectPath(root_, t.uuid.toString());
+    std::ifstream pf(path);
+
+    if (!pf) {
+        if (err)
+            *err = "no retained file for that object; its snapshots aged out";
+        return false;
+    }
+    json j = json::parse(pf, nullptr, false);
+
+    if (j.is_discarded() || !j.contains("entries")) {
+        if (err)
+            *err = "the retained file is unreadable";
+        return false;
+    }
+
+    dbref i = t.ref;
+
+    if (i < 0 || i >= MUCK::database().top()
+        || (DBFETCH(i)->flags & TYPE_MASK) != TYPE_GARBAGE) {
+        if (err)
+            *err = "the object's slot is not a dead shell";
+        return false;
+    }
+
+    std::string hist;
+    std::ifstream hf(path.substr(0, path.size() - 5) + ".hist");
+
+    if (hf)
+        hist.assign(std::istreambuf_iterator<char>(hf),
+                    std::istreambuf_iterator<char>());
+
+    json e = entriesAtRev(j, hist, rev);
+
+    if (!e.contains("$core/flags") || !e.contains("$core/name")) {
+        if (err)
+            *err = "the object has no stored state at that revision";
+        return false;
+    }
+    j["entries"] = e;
+
+    /* the shell keeps its literal placeholder name, so phase one's
+     * overwrite leaks nothing; the boot machinery does the rest */
+    std::vector<PendingLinks> later;
+    json shape = fileToLoadShape(j, root_);
+
+    objectFromJsonPhase1(shape, later);
+    for (const auto &pl : later)
+        objectFromJsonPhase2(pl);
+
+    struct object *o = DBFETCH(i);
+
+    /* Containment is not resurrected: the children of record were
+     * evacuated or separately recycled before the deletion, so phase
+     * two's list wiring is dropped and the object re-enters the world
+     * cleanly at its rev-time location when that still stands. */
+    dbref loc = o->location;
+
+    MUCK::contentsOf(i).clear();
+    MUCK::exitsOf(i).clear();
+    o->location = NOTHING;
+    if (o->owner < 0 || !MUCK::database().valid(o->owner)
+        || Typeof(o->owner) != TYPE_PLAYER)
+        o->owner = GOD;
+
+    bool locValid = loc >= 0 && MUCK::database().valid(loc)
+        && Typeof(loc) != TYPE_GARBAGE;
+
+    if (Typeof(i) == TYPE_EXIT) {
+        if (!locValid)
+            loc = OWNER(i);
+        MUCK::attachExit(loc, i);
+        o->location = loc;
+        DBDIRTY(loc);
+    } else {
+        if (!locValid)
+            loc = Typeof(i) == TYPE_ROOM ? GLOBAL_ENVIRONMENT : OWNER(i);
+        moveto(i, loc);
+    }
+
+    MUCK::database().reviveHole(i);
+    MUCK::database().removeTombstone(t.uuid);
+    DBDIRTY(i);
+    log_status("RESURRECT: #%d (%s) at rev %ld\n", i, NAME(i), rev);
+    return true;
+}
+
+int
+ObjectStore::snapshotSummary(dbref i, long *oldest) const
+{
+    int n = 0;
+    long old = 0;
+    auto acc = [&n, &old](const Marker &m) {
+        n++;
+        if (!old || m.when < old)
+            old = m.when;
+    };
+
+    for (const auto &m : markers_)
+        acc(m);
+    for (const auto &m : objectMarkers(i))
+        acc(m);
+    if (oldest)
+        *oldest = old;
+    return n;
 }
 
 int
@@ -1415,6 +1528,17 @@ ObjectStore::loadAll()
     if (manifest.is_discarded())
         return -1;
 
+    if (manifest.value("format", 0) != STORE_FORMAT) {
+        fprintf(stderr,
+                "STORE: manifest format %d, this build wants %d. "
+                "Rebuild the store by re-importing the legacy flat "
+                "database.\n",
+                manifest.value("format", 0), STORE_FORMAT);
+        log_status("DIE: store format mismatch (%d, want %d)\n",
+                   manifest.value("format", 0), STORE_FORMAT);
+        return -1;
+    }
+
     int top = manifest.value("next_dbref", 0);
 
     /* password hashing state travels in the manifest; without it a
@@ -1452,10 +1576,18 @@ ObjectStore::loadAll()
             t.ref = (dbref) e.value("r", -1);
             t.deletedAt = e.value("t", 0L);
             t.deletedBy = Uuid::parse(e.value("b", "").c_str());
+            t.deletedRev = e.value("dr", 0L);
             list.push_back(t);
         }
         MUCK::database().setTombstones(std::move(list));
     }
+
+    /* deleted objects keep their files while snapshots cover them;
+     * they load as dead shells, not live objects */
+    std::unordered_set<std::string> deadUuids;
+
+    for (const auto &t : MUCK::database().tombstones())
+        deadUuids.insert(t.uuid.toString());
 
     MUCK::database().ensureTop(top);
 
@@ -1495,6 +1627,8 @@ ObjectStore::loadAll()
                     fprintf(stderr, "STORE: skipping unparsable %s\n", e2->d_name);
                     continue;
                 }
+                if (deadUuids.count(j.value("uuid", "")))
+                    continue;
                 if (j.contains("entries")) {
                     json unknown = json::object();
                     std::string tname = j.value("type", "garbage");
@@ -1504,22 +1638,8 @@ ObjectStore::loadAll()
                          eit != j["entries"].end(); ++eit)
                         if (!knownNamespace(eit.key())
                             || (unsupported
-                                && eit.key().rfind("$type/", 0) == 0)) {
+                                && eit.key().rfind("$type/", 0) == 0))
                             unknown[eit.key()] = eit.value();
-                            /* keep chunk payloads reachable for saves
-                             * into a fresh root */
-                            if (eit.value().value("t", "") == "c"
-                                && eit.value()["v"].is_array())
-                                for (const auto &h : eit.value()["v"]) {
-                                    std::string content;
-
-                                    if (readChunk(root_,
-                                                  h.get<std::string>(),
-                                                  content))
-                                        dormantChunks[h.get<std::string>()] =
-                                            content;
-                                }
-                        }
                     if (!unknown.empty())
                         dormantEntries[j.value("uuid", "")] = unknown;
                     if (!j.value("modules", json::array()).empty())
@@ -1548,10 +1668,10 @@ ObjectStore::loadAll()
                                 ++eit;
                     }
 
-                    json v2entries = j["entries"];
-                    json v2mods = j.value("modules", json::array());
+                    json fileEntries = j["entries"];
+                    json fileMods = j.value("modules", json::array());
 
-                    j = v2ToV1(j, root_);
+                    j = fileToLoadShape(j, root_);
                     objectFromJsonPhase1(j, later);
                     if (unsupported) {
                         dbref pref = (dbref) j.value("dbref", -1);
@@ -1564,28 +1684,21 @@ ObjectStore::loadAll()
                         }
                     }
                     if (!later.empty() && later.back().ref == j.value("dbref", -1)) {
-                        later.back().entries = v2entries;
-                        for (const auto &mn : v2mods)
+                        later.back().entries = fileEntries;
+                        for (const auto &mn : fileMods)
                             later.back().modules.push_back(mn.get<std::string>());
                     }
                     continue;
                 }
-                /* format 1 object file: readable forever, but the
-                 * type-dormancy machinery is entry-based, so exclusion
-                 * needs the file upgraded first (any full save). */
-                if (!storedTypeSupported(j.value("type", "garbage"))) {
-                    fprintf(stderr,
-                            "STORE: %s is a format 1 object of excluded "
-                            "type '%s'; run a full save to upgrade the "
-                            "store before using --db-exclude-type.\n",
-                            e2->d_name,
-                            j.value("type", "garbage").c_str());
-                    closedir(d2);
-                    closedir(d1);
-                    closedir(d0);
-                    return -1;
-                }
-                objectFromJsonPhase1(j, later);
+                fprintf(stderr,
+                        "STORE: %s has no entry model; this store "
+                        "predates the current format. Rebuild it by "
+                        "re-importing the legacy flat database.\n",
+                        e2->d_name);
+                closedir(d2);
+                closedir(d1);
+                closedir(d0);
+                return -1;
             }
             closedir(d2);
         }
@@ -1616,7 +1729,6 @@ long
 ObjectStore::gcStore()
 {
     long removed = 0;
-    std::unordered_set<std::string> liveChunks;
     std::string objroot = root_ + "/objects";
     DIR *d0 = opendir(objroot.c_str());
 
@@ -1653,17 +1765,8 @@ ObjectStore::gcStore()
                 std::string fn = e2->d_name;
                 std::string full = l2 + "/" + fn;
 
-                if (fn.size() > 5 && fn.compare(fn.size() - 5, 5, ".json") == 0) {
-                    /* collect live chunk refs */
-                    std::ifstream f(full);
-                    json j = f ? json::parse(f, nullptr, false) : json();
-
-                    if (j.is_object() && j.contains("entries")
-                        && j["entries"].contains("$type/source"))
-                        for (const auto &h : j["entries"]["$type/source"]["v"])
-                            liveChunks.insert(h.get<std::string>());
-                } else if (fn.size() > 5 && fn.compare(fn.size() - 5, 5, ".hist") == 0) {
-                    /* prune unseen history; keep chunk refs of kept lines */
+                if (fn.size() > 5 && fn.compare(fn.size() - 5, 5, ".hist") == 0) {
+                    /* prune history no retained marker can see */
                     std::ifstream f(full);
                     std::string kept, line;
                     std::vector<Marker> own;
@@ -1681,9 +1784,6 @@ ObjectStore::gcStore()
                         if (markerInWindow(h.value("from", 0L), h.value("to", 0L),
                                            markers_, own)) {
                             kept += line + "\n";
-                            if (h.value("k", "") == "$type/source")
-                                for (const auto &c : h["v"])
-                                    liveChunks.insert(c.get<std::string>());
                         } else {
                             removed++;
                         }
@@ -1701,39 +1801,7 @@ ObjectStore::gcStore()
     }
     closedir(d0);
 
-    /* sweep the chunk pool */
-    std::string chroot = root_ + "/chunks";
-    DIR *c0 = opendir(chroot.c_str());
-
-    if (c0) {
-        struct dirent *ce;
-
-        while ((ce = readdir(c0)) != NULL) {
-            if (ce->d_name[0] == '.')
-                continue;
-
-            std::string cl = chroot + "/" + ce->d_name;
-            DIR *c1 = opendir(cl.c_str());
-
-            if (!c1)
-                continue;
-
-            struct dirent *cf;
-
-            while ((cf = readdir(c1)) != NULL) {
-                if (cf->d_name[0] == '.')
-                    continue;
-                if (!liveChunks.count(cf->d_name)) {
-                    unlink((cl + "/" + cf->d_name).c_str());
-                    removed++;
-                }
-            }
-            closedir(c1);
-        }
-        closedir(c0);
-    }
-
-    log_status("STOREGC: removed %ld dead history entries and chunks\n", removed);
+    log_status("STOREGC: removed %ld dead history entries\n", removed);
     return removed;
 }
 
