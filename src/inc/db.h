@@ -114,6 +114,8 @@ typedef int dbref;		/* offset into db */
 namespace MUCK {
     ObjectType typeOf(dbref ref);
     ObjectType rawTypeOf(dbref ref);
+    int getFlags(dbref ref);
+    void setFlags(dbref ref, int v);
 }
 #include <cstdint>
 typedef int64_t MUFINT;	/* the MUF integer type: 64-bit as of 2026 */
@@ -451,7 +453,10 @@ extern int RawMWLevel(dbref thing, const char *file, int line);
 
 #define QLevel(x)	( (FLAGS(x) & QUELL) ? 0 : MLevel(x) )
 
-#define SetMLevel(x,y)	( FLAGS(x) =  ( FLAGS(x) & ~(W1|W2|W3|W4) ) | \
+/* Goes through the setter: a raw flags-word write records no journal
+ * entry, so the level change would be lost at restart. */
+#define SetMLevel(x,y)	MUCK::setFlags((x),                             \
+                          ( MUCK::getFlags(x) & ~(W1|W2|W3|W4) ) |      \
 					  ( ((y) &  8) ? W4 : 0 ) | \
 					  ( ((y) &  4) ? W3 : 0 ) | \
 					  ( ((y) &  2) ? W2 : 0 ) | \

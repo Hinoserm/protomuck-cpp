@@ -1493,18 +1493,19 @@ ObjectStore::rollbackObject(dbref i, long rev)
                     std::istreambuf_iterator<char>());
 
     json e = entriesAtRev(j, hist, rev);
-    struct object *o = DBFETCH(i);
+    /* Everything a rollback restores goes through the setters, so the
+     * restored state is journalled like any other change. Writing the
+     * fields directly would leave the rollback unrecorded, and the
+     * next restart would replay the pre-rollback state over it. */
+    if (e.contains("$core/name"))
+        MUCK::setName(i, junstr(e["$core/name"]["value"].get<std::string>()).c_str());
 
-    /* name */
-    if (e.contains("$core/name")) {
-        if (o->name && Typeof(i) != TYPE_GARBAGE)
-            delete[] o->name;
-        o->name = alloc_string(junstr(e["$core/name"]["value"].get<std::string>()).c_str());
-    }
-
-    /* properties: wipe and rebuild from the snapshot */
-    if (PropDirPtr pd_ = MUCK::propRoot(i))
+    /* properties: wipe and rebuild from the snapshot. The wipe has to
+     * be journalled too, or the properties it removed come back. */
+    if (PropDirPtr pd_ = MUCK::propRoot(i)) {
+        MUCK::journalRecordPropTree(i, "");
         pd_->clear();
+    }
     {
         json props = json::array();
 
@@ -1979,7 +1980,10 @@ ObjectStore::fireObject(dbref i)
             sealed.entries[key] = v.is_null() ? json() : v;
         }
     } else {
-        return set;             /* nothing to say about this object */
+        /* nothing to seal for this object, but the set still commits:
+         * an empty set with no manifest would fail persist outright */
+        set.manifest = buildManifest();
+        return set;
     }
     o->journal().discardTop();
     forgetDirty(i);
@@ -2057,6 +2061,9 @@ ObjectStore::persist(const CaptureSet &set)
     ensureDir(root_ + "/objects");
 
     for (const SealedLayer &layer : set.layers) {
+        if (layer.landed)
+            continue;
+
         std::string path = UUIDObjectPath(root_, layer.uuid);
 
         ensureDirsFor(path);
@@ -2068,6 +2075,7 @@ ObjectStore::persist(const CaptureSet &set)
             j["rev"] = set.rev;
             if (!atomicWrite(path, j.dump(1)))
                 return false;
+            layer.landed = true;
             continue;
         }
 
@@ -2086,6 +2094,7 @@ ObjectStore::persist(const CaptureSet &set)
         hf.flush();
         hf.close();
         syncFile(hist);
+        layer.landed = true;
     }
 
     /* The manifest commits the set. It was serialized on the game
@@ -2095,8 +2104,11 @@ ObjectStore::persist(const CaptureSet &set)
      * falling back to writeManifest() here would read live state from
      * the wrong thread. */
     if (set.manifest.empty()) {
-        log_status("DUMP: capture set for rev %ld carried no manifest\n",
-                   set.rev);
+        /* stderr only: log_status walls connected wizards, which walks
+         * the descriptor list and writes to sockets, and this runs on
+         * the dump thread */
+        fprintf(stderr, "DUMP: capture set for rev %ld carried no "
+                "manifest\n", set.rev);
         return false;
     }
     return atomicWrite(root_ + "/manifest.json", set.manifest);
@@ -2154,9 +2166,12 @@ ObjectStore::dumpThreadMain()
 
         for (int attempt = 0; attempt < 3 && !ok; attempt++) {
             if (attempt)
-                log_status("DUMP: retrying rev %ld (attempt %d)\n",
-                           set.rev, attempt + 1);
+                fprintf(stderr, "DUMP: retrying rev %ld (attempt %d)\n",
+                        set.rev, attempt + 1);
             ok = persist(set);
+            /* persist marks each layer as landed, so a retry appends
+             * only what did not make it: retrying wholesale would
+             * duplicate .hist records and replay them twice at load */
         }
 
         {
@@ -2164,10 +2179,11 @@ ObjectStore::dumpThreadMain()
 
             persisting_ = false;
             if (!ok) {
-                log_status("DUMP: PERSIST FAILED for rev %ld after 3 "
-                           "attempts; those changes are lost\n", set.rev);
-                fprintf(stderr, "DUMP: PERSIST FAILED for rev %ld; "
-                        "changes lost\n", set.rev);
+                /* stderr only: this is the dump thread, and
+                 * log_status walls wizards through the descriptor
+                 * list */
+                fprintf(stderr, "DUMP: PERSIST FAILED for rev %ld after "
+                        "3 attempts; those changes are lost\n", set.rev);
             }
             idleCv_.notify_all();
         }

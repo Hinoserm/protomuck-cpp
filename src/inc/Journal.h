@@ -47,6 +47,10 @@ struct SealedLayer {
     std::string uuid;
     /* entry key -> value, or null for a removal */
     nlohmann::json entries;
+    /* Set once this layer has been written. A retry after a partial
+     * failure skips what already landed; re-appending would duplicate
+     * the record and replay it twice at load. */
+    mutable bool landed = false;
     /* True when this is the object's whole state rather than a delta:
      * an object with no base file yet has nothing for a layer to sit
      * on, so its first persist writes the base. */
@@ -112,6 +116,12 @@ std::string propEntryKey(const char *path);
 
 /* Note that a property changed, by path. */
 void journalRecordProp(dbref ref, const char *path);
+
+/* Note that a property AND everything under it changed. Removing a
+ * propdir takes its whole subtree with it, and every one of those
+ * entries exists separately in the base on disk, so each needs its own
+ * removal record or the children come back at load. */
+void journalRecordPropTree(dbref ref, const char *path);
 
 /* True when the object has unsaved changes. This is what @stats
  * counts; it replaces the OBJECT_CHANGED dirty flag. */

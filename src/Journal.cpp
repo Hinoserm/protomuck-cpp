@@ -16,6 +16,10 @@
 #include "DbObject.h"
 #include "Database.h"
 #include "ObjectStore.h"
+#include "props.h"
+#include "PropertyTree.h"
+#include "PropNode.h"
+#include "Modules.h"
 
 namespace MUCK {
 
@@ -83,6 +87,50 @@ void
 journalRecordProp(dbref ref, const char *path)
 {
     journalRecord(ref, propEntryKey(path));
+}
+
+/* Walk the live prop tree under path and record every node, so a
+ * subtree removal leaves no child behind in the base. */
+static void
+recordSubtree(dbref ref, const std::string &prefix, PropertyTree *dir)
+{
+    if (!dir)
+        return;
+
+    for (PropNode *p = dir->first(); p; p = dir->nextAfter(p->name())) {
+        std::string child = prefix + p->name();
+
+        journalRecord(ref, propEntryKey(child.c_str()));
+        if (p->isDir())
+            recordSubtree(ref, child + "/", &p->children());
+    }
+}
+
+void
+journalRecordPropTree(dbref ref, const char *path)
+{
+    /* An empty path means the whole tree: used when a rollback wipes
+     * an object's properties before rebuilding them. */
+    if (!path || !*path) {
+        DbObject *o = database().get(ref);
+        Properties *pp = o ? o->propsModule() : nullptr;
+
+        if (pp)
+            recordSubtree(ref, "", &pp->root());
+        return;
+    }
+
+    journalRecordProp(ref, path);
+
+    PropPtr p = get_property(ref, path);
+
+    if (p && p->isDir()) {
+        std::string prefix = propEntryKey(path);
+
+        if (prefix.size() && prefix[prefix.size() - 1] != '/')
+            prefix += '/';
+        recordSubtree(ref, prefix.substr(1), &p->children());
+    }
 }
 
 bool

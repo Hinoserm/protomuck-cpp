@@ -389,6 +389,7 @@ void
 Room::setDropToRef(dbref d)
 {
     dropTo_ = d;
+    journalRecord(object()->ref(), "$type/dropto");
     DBDIRTY(object()->ref());
 }
 
@@ -408,6 +409,7 @@ void
 Thing::setHomeRef(dbref d)
 {
     home_ = d;
+    journalRecord(object()->ref(), "$type/home");
     DBDIRTY(object()->ref());
 }
 
@@ -421,6 +423,7 @@ void
 Thing::setValue(int v)
 {
     value_ = v;
+    journalRecord(object()->ref(), "$type/value");
     DBDIRTY(object()->ref());
 }
 
@@ -440,6 +443,7 @@ void
 Player::setHomeRef(dbref d)
 {
     home_ = d;
+    journalRecord(object()->ref(), "$type/home");
     DBDIRTY(object()->ref());
 }
 
@@ -690,6 +694,7 @@ Exit::setDestinations(const std::vector<DbObject *> &dests)
     dests_.clear();
     for (DbObject *o : dests)
         dests_.push_back(o->ref());
+    journalRecord(object()->ref(), "$type/dests");
     DBDIRTY(object()->ref());
 }
 

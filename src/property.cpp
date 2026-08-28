@@ -279,7 +279,11 @@ remove_property_nofetch(dbref player, const char *type)
     char buf[BUFFER_LEN];
     char *w;
 
-    MUCK::journalRecordProp(player, type);
+    /* Removing a propdir removes everything under it, and each of
+     * those entries exists in the base on disk: journalling only the
+     * directory key would leave the children there to come back at
+     * load. Record the whole subtree before it goes. */
+    MUCK::journalRecordPropTree(player, type);
 
     /* if( tp_db_readonly ) return; *//* Why did we remove this? */
 
