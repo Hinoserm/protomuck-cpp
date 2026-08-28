@@ -421,7 +421,7 @@ PNAME-OK?     NAME-OK?     ANSI_MIDSTR  PARSE_NEON   FLAG_2CHAR
 POWER_2CHAR   UNESCAPE_URL ESCAPE_URL   SHA1HASH     MD5HASH
 REGMATCH      REGSUB       REGEXP
 
-Note on ANSI compatability:
+Note on ANSI compatibility:
 ANSI_NOTIFY works only with Neon style ANSI tags, like ^BLUE^.
 NOTIFY will work with standard ANSI format, such as FB6 uses. To
 use MUSH or TILDE style ANSI, run the string with MUSH or TILDE ANSI
@@ -646,7 +646,7 @@ See: STANDARD ANSI, NEON ANSI, MUSH ANSI
 STANDARDANSI|STANDARD ANSI|STANDARD COLORS
 
 STANDARD ANSI color tags are created by: 
-\[[ followed by a series of number instructions seperated by ;
+\[[ followed by a series of number instructions separated by ;
 followed by an 'm'.
 
 \[[0 resets the color to normal.
@@ -872,7 +872,7 @@ s2 = Contents of prop if storing a string.
 i  = Contents of prop if storing an integer.
 *Note* This prim is pretty much outdated, the 'setprop' prim is far
 easier to use and accomplishes the same thing with more data types.
-Addprop has been left in for backwards compatability, more than anything.
+Addprop has been left in for backwards compatibility, more than anything.
 
 Sets property associated with s1 in object d.  Note that if s2 is null
 "", then i will be used.  Otherwise, s2 is always used.  All four
@@ -1112,7 +1112,7 @@ i = 1 if true, 0 if false.
 
 Reads the flag of object d, specified by s, and returns its state: 1 =
 on; 0 = off.  Different flags may be supported in different
-installations.  The program will abort if given unsupport, or unknown
+installations.  The program will abort if given unsupported, or unknown
 flags.
 
 See: FLAGLIST for a list of the flags that can be checked for.
@@ -1203,7 +1203,7 @@ getpropfval ( d s -- f )
 ------------------------
 Level: M1 Apprentice
 d = Any valid dbref.
-s = string represeting the name of the prop to retrieve.
+s = string representing the name of the prop to retrieve.
 f = float representing the value of that prop.
 
 Retrieves the float value f associated with property s in object d. 
@@ -1239,7 +1239,7 @@ MUF arrays with nothing in them. ( empty arrays )
 Locks that always pass. ( True bools )
 All other data types and conditions are TRUE.
 
-See: IF2 for a summary. See CASES for a similiar structure.
+See: IF2 for a summary. See CASES for a similar structure.
 ~
 IF2|ELSE2|THEN2
 
@@ -1320,7 +1320,7 @@ s1 = string to be scanned.
 s2 = string to check for in s1.
 i  = integer representing the result.
 
-Returns the first occurrence of string s1 in string s, or 0 if s1 is
+Returns the first position of string s2 in string s1, or 0 if s2 is
 not found.
 
 See also RINSTR, INSTRING, RINSTRING.
@@ -1506,7 +1506,7 @@ for.
 
 See: NOTIFY_EXCLUDE, NOTIFY_HTML_EXCLUDE, DIRECTIVES
 ~
-NOTIFY_HTML|NOTIFY_HTML_EXCLUDE|NOTIFY_HTML_NOCR|NOTIFY_HTML_EXCLUDE_NOCR
+NOTIFY_HTML|NOTIFY_HTML_EXCLUDE|HTML_NOCR|HTML_EXCLUDE_NOCR
 
 notify_html         ( d s -- )
 notify_html_exclude ( d dn ... d1 n s -- )
@@ -1742,7 +1742,7 @@ s1 = string to scan for the last location of s2.
 s2 = string to find in s1.
 i  = integer indicating true or false result.
 
-Returns the last occurrence of string s1 in string s, or 0 if s1 is
+Returns the last position of string s2 in string s1, or 0 if s2 is
 not found.  '"abcbcba" "bc" rinstr' returns 4.
 
 See also INSTR.
@@ -1881,7 +1881,7 @@ s = string to set on the appropriate prop.
 Takes object d, and sets the string field specified to s. A program
 may only set string fields of objects that are owned by the effective
 user of the program, or any object if the program is Wizard.  These are
-all actually $defines to addprop with the apporpriate property name.
+all actually $defines to addprop with the appropriate property name.
 They are effectively defined as:
 $define setdesc      "_/de"  swap 0 addprop $enddef
 $define setidesc     "_/ide" swap 0 addprop $enddef
@@ -2071,14 +2071,14 @@ var <name>
 Level: M1 Apprentice
 
 When used outside of a MUF word, the var declares a variable as being
-useable in all words sequentially defined after teh var declaration. In
+useable in all words sequentially defined after the var declaration. In
 otherwords, placing a variable declaration at the top of the program code
 essentially makes it a true global for the course of the program.
 
 When used within a MUF word, the variable is declared as a variable that's
-local to that MUF proceedure only. This, in affect, creates scoped variables
-that last for only as long as the proceedure does, and are not usable by
-any other proceedures during the course of the program. For example:
+local to that MUF procedure only. This, in affect, creates scoped variables
+that last for only as long as the procedure does, and are not usable by
+any other procedures during the course of the program. For example:
 : part-two 
   var test 2 test ! test @ ( 'test' is declared again, given a value of 2 )
 ; ( part-two exits, this 'test' variable is destroyed )
@@ -2161,7 +2161,7 @@ online ( -- d ... i )
 ---------------------
 Level: M3 Master
 d = dbref# of players connected
-i = integer represending the number of current connections
+i = integer representing the number of current connections
 
 Returns a dbref for every connection to the game, and lastly the number
 of connections. Note that a single character may have more than one 
@@ -2479,7 +2479,7 @@ i1 = integer representing a connection number.
 i2 = integer representing numbers of seconds.
 
 Given a connection number, it returns how many seconds that 
-connetion has been idle. Note that a player may have more than
+connection has been idle. Note that a player may have more than
 one connection open to the MUCK and may be idle with one 
 connection and not with another.
 ~
@@ -2608,7 +2608,7 @@ stack, with the total for the MUCK on the top of the stack.
 
 Descriptors are numbers assigned to a player when they connect and do
 not change for the life of that connection. A connection number is the
-relative possition of a connection in the WHO list.
+relative position of a connection in the WHO list.
 
 As of Proto1.5 and newer, this prim will also include descriptors that
 are not yet connected to a character when given #-1. This would be 
@@ -2641,7 +2641,7 @@ NEXTPROP
 
 nextprop (d s1 -- s2)
 -------------------
-Level: M2 Journeyman
+Level: M1 Apprentice
 d  = Any valid dbref.
 s1 = string representing a prop on d.
 s2 = string representing the next prop on d.
@@ -2666,7 +2666,7 @@ propdir? (d s -- i)
 Level: M2 Journeyman
 d = Any valid dbref.
 s = string representing a prop to check.
-i = integer represeting true or false result.
+i = integer representing true or false result.
 
 Takes a dbref and a property name, and returns a boolean integer that
 tells if that property is a propdir that contains other props.
@@ -2785,7 +2785,7 @@ queue (i1 d s -- i2)
 Level: M3 Master
 i1 = integer representing a time in seconds.
 d  = dbref of a program.
-s  = string representing the initial arguement to be given to the program.
+s  = string representing the initial argument to be given to the program.
 i2 = int representing either the pid of new program, or 0.
 
 Takes a time in seconds, a program's dbref, and a parameter string.  It
@@ -2802,7 +2802,7 @@ d1 = dbref of a player or thing.
 i1 = integer representing a time in seconds. OR
 s1 = string indicating an argument for command @
 d2 = dbref of a program.
-s  = string representing the initial arguement to be given to the program.
+s  = string representing the initial argument to be given to the program.
 i2 = int representing either the pid of new program, or 0.
 
 Takes a player or thing's dbref to be the target of the queued program,
@@ -3270,7 +3270,7 @@ s1 = string to check for s2 in.
 s2 = string to find within s1.
 i  = integer representing first location of s2 in s1.
 
-Returns the first occurrence of string s2 in string s1, or 0 if s1 is
+Returns the first occurrence of string s2 in string s1, or 0 if s2 is
 not found. Non-case sensitive.  This is an inserver define to
 'tolower swap tolower swap instr'
 
@@ -3345,7 +3345,7 @@ restrictions with other prims as well, such as moveto. Refer to the
 documentation on individual prims to see what M3's are able to do
 that an M1 or M2 cannot. Their instruction count limit is roughly
 twelve times the @tuned PREEMPT limit, typically around 320k.
-M3's do have quite a bit of flexability and power with their use of MUF.
+M3's do have quite a bit of flexibility and power with their use of MUF.
 It is important to only give M3s to non-staff members who are highly
 trusted.
 
@@ -3360,7 +3360,7 @@ such as the building prims. They still cannot write to restricted props
 on objects they do not own, nor use setown to change ownership of objects
 to other players. W1s have no instruction count limit. W1s can also 
 delete macro definitions, set their programs to run AUTOSTART, 
-and set programs = S & H to run with caller privleges.
+and set programs = S & H to run with caller privileges.
 It is recommended that W1 bits be given to coders of a MUCK's staff. 
 They should not be generally given to non-staff members.
 
@@ -3397,7 +3397,7 @@ W4|WIZARD4|W4 BIT|BOY
 WIZARD4-Boy
 
   W4 is almost the same as W3 in terms of permissions, the only 
-noteable difference being the access to the file prims that W3's
+notable difference being the access to the file prims that W3's
 do not have.
 Under most conditions, there is little need for any coder to have
 a W4, unless the file prims are specifically required.
@@ -3415,13 +3415,12 @@ newroom             (d1 s -- d2)
 newobject           (d1 s -- d2)
 contime             (i1 -- i2)
 conidle             (i1 -- i2)
-nextprop            (d s1 -- s2)
 propdir?            (d s -- i)
 descridle           ( i -- i )
 descrtime           ( i -- i )
 findnext            ( d1 d2 s1 s2 -- d3 )
 
-See: M2, MUCKER LEVELS, invididual prim entries for more details
+See: M2, MUCKER LEVELS, individual prim entries for more details
 ~
 M3PRIMS|M3 PRIMS|M3_PRIMS|M3-PRIMS
 The following prims become available at the level of M3, though
@@ -3842,7 +3841,7 @@ $ifndef    $ifnalpha   $ifnbeta   $ifnver      $ifnlibver
 $ifauthor  $iflib      $ifcancall
 $ifnauthor $ifnlib     $ifncancall
 
-See 'man dirs' for more infomation on directives.
+See 'man dirs' for more information on directives.
 ~~~~
 LIBRARIES|LIBS|LIB1|LIBS1|LIBRARIES1
 
@@ -3918,9 +3917,9 @@ See: LOOP3 for a summary of loop instructions
 LOOP3|LOOPS3
 
 To start a loop:
-BEGIN - Takes no arguements, mostly just a marker.
-FOR   - Takes 3 integer arguements, ideal for counter loops.
-FOREACH - Takes an array as an arguement, returns each element contents.
+BEGIN - Takes no arguments, mostly just a marker.
+FOR   - Takes 3 integer arguments, ideal for counter loops.
+FOREACH - Takes an array as an argument, returns each element contents.
 
 To repeat a loop:
 UNTIL - If top of stack is false, repeats the loop. (end of loop)
@@ -4056,7 +4055,7 @@ FLAGS2|FLAG2|AUTOSTART|ABODE|BOUND|BUILDER|EXPANDED_DEBUG|XFORCIBLE
 
 AUTOSTART (A) = On dbload, if a program is set AUTOSTART *AND* is
             owned by a wizard, then it will be placed in the timequeue
-            with a delay of 0 and a string arguement of "Startup".
+            with a delay of 0 and a string argument of "Startup".
             Autostart programs run with the location NOTHING (#-1). They
             will also run automatically after a successful compile.
 
@@ -4221,7 +4220,7 @@ _connect/ = Connect props are called when a player connects.
        is #-1.
 
 _disconnect/ = Works just like the connect props, except is run
-       when a player disconnects. The starting arguement is
+       when a player disconnects. The starting argument is
        "Disconnect", the rest is the same.
 
 See PROPQUEUES3 for additional queues.
@@ -4230,7 +4229,7 @@ PROPQUEUES3|PROPQUEUE3|ARRIVE|DEPART|_ARRIVE|_DEPART
 
 _arrive/ = Runs programs whenever something arrives in a 
         room. The object that triggers it can be a player or a
-        thing. The arguement on the stack is "Arrive", the
+        thing. The argument on the stack is "Arrive", the
         command @ is "Queued event.", and the loc @ is the location 
         where the player is when the program is called. The trigger
         is the MUF that used moveto to get the player there, the
@@ -4240,7 +4239,7 @@ _arrive/ = Runs programs whenever something arrives in a
 
 _depart/ = Runs programs whenever something departs from a room. The
         object that triggers it can be a player or a thing. The
-        arguement on the stack is "Depart", the command @ is
+        argument on the stack is "Depart", the command @ is
         "Queued event.", the loc @ is the room that was left. The
         trigger varies just like with the arrive prop calls, even
         when 'home' is used, the dbref given is the room that was left.
@@ -4251,14 +4250,14 @@ PROPQUEUES4|PROPQUEUE4|IDLE|UNIDLE|LOOK
 
 _idle/  = This propqueue is called when a player reaches a certain
         amount of time idle. The idle time is determined by the
-        idletime @tuneable option. The starting arguement is "Idle",
+        idletime @tuneable option. The starting argument is "Idle",
         the me @ is the player that became idle, the trig will be #-1,
         the loc @ will be the location of the player, and command @
         will be "Queued event."
 
 _unidle/ = This propqueue is called when a player unidles after reaching
         the idletime @tuneable option. All of the information will be the
-        same as the _idle/ propqueue, except the starting arguement will
+        same as the _idle/ propqueue, except the starting argument will
         be "Unidle".
 
 _look/  = This propqueue tends to be handled by MUF look front ends, and
@@ -4276,7 +4275,7 @@ PROPQUEUES5|PROPQUEUE5|LOGIN|DISCLOGIN|DUMPWARN|@DUMPWARN|DUMP|@DUMP|@SHUTDOWN
 
 @disclogin = Called when a connection is dropped from the login screen.
         The initial conditions are the same as _login/, except that the initial
-        arguement is 'Disclogin'.
+        argument is 'Disclogin'.
 
 @dumpwarn = Called right before the periodic Save warning message would be
         shown. The trigger is #-1, the player triggering is #1, the loc @ 
@@ -4798,7 +4797,7 @@ interp ( d1 d2 s -- ? )
 Level: M1 Apprentice
 d1 = dbref of program to run.
 d2 = dbref of trigger to use to run the program.
-s  = string to pass to the program as the arguement.
+s  = string to pass to the program as the argument.
 
 Takes a program dbref to run d1, the trigger to use d2, and the top stack
 item string and calls the program with the given string on the stack.
@@ -4942,7 +4941,7 @@ s2 = string containing the text to be displayed in-MUCK.
 s3 = string containing the formatted HTML instruction.
 
 Checks if d is a player with a PUEBLO flag set. If so, returns the
-hotlink to perform action S1, with the MUCK displayed in the MUCK
+hotlink to perform action S1, with the text displayed in the MUCK
 being the contents of S2. S3 is the formatted string that could then
 be notified to be used.
 ~
@@ -4971,7 +4970,7 @@ When a program aborts or ends with any sockets still open, all open
 sockets are closed. 
 
 NOTE: Socket prims are a compile time option and may not be present.
-SOCKOPEN is included strictly for backwards compatability, though now
+SOCKOPEN is included strictly for backwards compatibility, though now
 returns a non-blocking socket as well.
 
 If IPv6 is enabled, UDPOPEN opens a listener on both ipv4 and ipv6.
@@ -5068,10 +5067,10 @@ i = integer representing connection status.
 s = string representing what was received, or an empty string if nothing.
 
 Given a socket descriptor, will attempt to receive an incoming string.
-If a string is recieved, it puts the string out onto the stack. If there
+If a string is received, it puts the string out onto the stack. If there
 is nothing that has come in on that socket since the last check, an 
 empty string is pushed. This prim needs to be used in some kind of loop
-to be particularlly useful, otherwise it may always seem to just return
+to be particularly useful, otherwise it may always seem to just return
 empty strings.
 
 The integer returned will be 0 if the connection has been dropped.
@@ -5251,7 +5250,7 @@ s2 = string containing a 'key' to encrypt by.
 s3 = Encrypted version of s1.
 
 Given a string, and another string to act as the encoding key, 
-will return an encoded string of jibberish.
+will return an encoded string of gibberish.
 
 See: STRDECRYPT
 ~
@@ -5275,7 +5274,7 @@ See: STRENCRYPT
 FILE PRIMS|FILE_PRIMS|FILEPRIMS
 
 ProtoMUCK includes several MUF prims for working with files on the 
-server. Due to the inherint risks associated with having this access
+server. Due to the inherent risks associated with having this access
 to the server, they should only be used with W4 level permissions.
 In addition, by default, files may only be written to/read from the
 directory set in config.h, or to certain files for which there are
@@ -5363,7 +5362,7 @@ i  = integer representing the offset from which to read in the character.
 s2 = string containing a single character read in from the file.
 
   Reads in a single character from the file name pointed to by s1 at
-an offset from the begining of the file of i. If the file does not exist, 
+an offset from the beginning of the file of i. If the file does not exist, 
 or the offset is out of range of the file, an empty string is returned
 to the stack.
 
@@ -5379,7 +5378,7 @@ i1 = integer representing offset to start the read-in from.
 i2 = integer representing the number of characters to read-in.
 s2 = string containing the characters read in from s1.
 
-Given a file in s1, an offset to start from i1, and a possitive
+Given a file in s1, an offset to start from i1, and a positive
 number of characters to read in from the file, i2, returns those
 characters to the stack. If the file does not exist, or there is
 a permissions error to read from it, it returns an empty string.
@@ -5421,7 +5420,7 @@ bread ( s1 i1 -- i2 )
 Level: W4 Boy
 s1 = string representing name of file to read from.
 i1 = integer representing the offset to read from.
-i2 = integer represeting result.
+i2 = integer representing result.
 
 Given a filename in s1, and an offset in i1, returns the integer
 value of the ASCII character at that location in the file. If the
@@ -5549,7 +5548,7 @@ Given a filename on the server, removes that file. If the file was
 removed fine, then a 0 is returned to the stack. If the file did 
 not exist, or there was some other error, then -1 is returned to the
 stack. If there is another link to that file, then the file will still 
-exist and be accesible through that link. If no other link exists to 
+exist and be accessible through that link. If no other link exists to 
 the file, then the file will be removed as well. In addition, if another 
 program or process is accessing the file, then deletion is postponed
 until that other process stops working with the file. 
@@ -5629,10 +5628,10 @@ SQRT
 sqrt ( n -- f )
 ---------------
 Level: M1 Apprentice
-n = Any possitive, non-zero integer or float.
+n = Any positive, non-zero integer or float.
 f = The square root of n2 returned as a float.
 
-Given a possitive number, returns that number's square root.
+Given a positive number, returns that number's square root.
 
 See: FLOAT PRIMS
 ~
@@ -5795,7 +5794,7 @@ LOG
 log ( n -- f )
 --------------
 Level: M1 Apprentice
-n = A possitive number.
+n = A positive number.
 f = float representing result.
 
 Returns the natural log of number n.  Requires a value greater than
@@ -5808,7 +5807,7 @@ LOG10
 log10 ( n -- f )
 ----------------
 Level: M1 Apprentice
-n = A possitve number.
+n = A positive number.
 f = float representing the result.
 
 Returns the log base 10 of number n.  Requires a value greater than
@@ -5954,7 +5953,7 @@ allows programs to handle numbers that may not be whole integers.
 The math prims, + - * etc., have been modified to work with float
 numbers just as well as the integers they have always worked with. Also,
 the float prims have been modified to accept, where appropriate, integers
-as arguements. 
+as arguments. 
 
 Below is a list of float prims supported by ProtoMUCK:
 
@@ -6130,7 +6129,7 @@ Level: M1 Apprentice
 x1 ... xn = A range of items on the stack.
 dict = A dictionary array.
 array = A list array.
-s4 = A string of the concated values s1 through sn
+s4 = A string of the concatenated values s1 through sn
 
 These are all in-server $defines for:
 } array_make
@@ -6201,7 +6200,7 @@ array_keys ( a -- {@} )
 -----------------------
 Level: M1 Apprentice
 a   = Any array.
-{@} = strackrange representing the index values of the array.
+{@} = stackrange representing the index values of the array.
 
 Returns the keys of an array in a stackrange.
     Example:  "idx0" "idx1" 2 
@@ -6366,7 +6365,7 @@ Given an array, and two valid index markers for the array, returns
 an array consisting of the elements of array a that were between
 @ and @2, as well as elements @ and @2 themselves. 
 
-array_getrange can be shorcutted to [..]
+array_getrange can be shortcutted to [..]
 
 See: ARRAY PRIMS
 ~
@@ -6381,7 +6380,7 @@ a3 = Array a1 with changed contents.
 
 Given an array, a1, a valid index marker for a1, and a second array, a2,
 copies the contents of a2 into a1, starting at the element pointed to
-by the index marker, overwritting the existing values of the items in
+by the index marker, overwriting the existing values of the items in
 a1. If a2 extends past the end boundary of a1, then array_setrange will 
 append the rest of a2 to the end of a1.
 
@@ -6443,7 +6442,7 @@ a   = An array containing a union of all the arrays in the stackrange.
 
 Given a stackrange of strictly arrays, it returns an array that 
 contains a union of all of the arrays. A union is a set of data where
-every element in any of the seperate arrays can appear once, and only
+every element in any of the separate arrays can appear once, and only
 once. For example:
 {"a" "b" } { "b" "c" "d" } { "d" "e" "f" } -> { "a" "b" "c" "d" "e" "f" }
 
@@ -6639,7 +6638,7 @@ objmem ( d -- i )
 -----------------
 Level: M1 Apprentice
 d = Any dbref between #0 and dbtop.
-i = integer represeting size of that object in the data base.
+i = integer representing size of that object in the data base.
 
 Used to return how much memory a dbref entry is taking up.
 ~~
@@ -6907,13 +6906,13 @@ Level: W3 ArchWizard
 d1 = The trigger dbref.
 s1 = string containing the property name for the propqueue.
 d2 = dbref of object to find the propqueue on.
-s2 = string representing initial arguements for programs called.
+s2 = string representing initial arguments for programs called.
 
 Runs the contents of a propqueue just like the normal inserver 
 propqueues. d1 is the value to be placed in the trigger variable,
 s1 is the name of the propqueue, d2 is the dbref object that 
 holds the propqueue, and s2 is the string that will be the initial
-arguement of each MUF program called in the propqueue.
+argument of each MUF program called in the propqueue.
 Given this information, the program will run down the contents
 of the propqueue, running any MUF programs or parsing any MPI
 as appropriate, just like the in-server propqueues such as 
@@ -6930,13 +6929,13 @@ Level: W3 ArchWizard
 d1 = Trigger dbref.
 s2 = string containing propqueue name.
 d2 = dbref of object to start searching up the environment tree from.
-s2 = string containing initial arguement for any MUFs called.
+s2 = string containing initial argument for any MUFs called.
 
 Runs the contents of a propqueue just like the normal inserver 
 propqueues. d1 is the value to be placed in the trigger variable,
 s1 is the name of the propqueue, d2 is the dbref of where the 
 program should start searching up the environment tree from, and 
-s2 is the string that will be the initial arguement of each MUF 
+s2 is the string that will be the initial argument of each MUF 
 program called in the propqueue. Given this information, the program 
 will run down the contents of the propqueue, running any MUF programs 
 or parsing any MPI as appropriate, just like the in-server propqueues 
@@ -7006,7 +7005,7 @@ input dictionary.
   Unlike FMTSTRING, the format string needs to have key markers to
 specify which key of each input dictionary to use to get the data for
 each format field.  You specify the key markers in each format
-subsititution by adding a '[KEY]' before the substitution type letter.
+substitution by adding a '[KEY]' before the substitution type letter.
 For example, the code:
 
     {
@@ -7033,7 +7032,7 @@ For example, the code:
 
   Note that if a key does not exist in an input dictionary, then that
 format field will be assumed to either be 0, #-1, or a null string,
-as apropriate for the format type.
+as appropriate for the format type.
 
   Numeric keys can be referred to as well as string keys.  This also
 means that you may use a list of list arrays as input, instead of a
@@ -7213,7 +7212,7 @@ convention, without having to explicitly make the function callable by outside
 programs using PUBLIC or one of the WIZCALL related functions.  This permits
 you to call a function by string at runtime.
 
-SAFECALL is equivalient to SELFCALL, and means essentially the same thing.
+SAFECALL is equivalent to SELFCALL, and means essentially the same thing.
 
 See: PUBLIC
 ~~~
@@ -7306,7 +7305,7 @@ FOR creates an iterator variable, adds or subtracts from it, and exits
 the loop once the variable has reached a certain point. These are ideal
 for creating loops that are to be run a certain number of times.
 
-i1 indicates the starting value for the interator. 
+i1 indicates the starting value for the iterator. 
 i2 is the maximum or minimum that the iterator should reach. For example,
   if the iterator starts out higher than i2 and goes down, the LOOP will
   exit once the iterator is lower than i2. If the iterator is lower than
@@ -7377,13 +7376,13 @@ event_send( i s x -- )
 Level: M3 Master
 i = integer representing process ID to send the event to.
 s = string representing the event ID string.
-x = The event data arguement. Can be any data type.
+x = The event data argument. Can be any data type.
 
 Sends a "USER." event to the process indicated by integer i.
 The target process will receive an event that can be read with
 EVENT_WAIT. The event type will be "USER." with the given id string
 in string s appended to it. The event id string can be no longer than
-32 characters. The event data arguement will be passed to the process
+32 characters. The event data argument will be passed to the process
 as the data element read by event_wait.
 As of Proto1.6, in keeping in line with FB6 changes, EVENT_SEND now sends
 a dictionary instead of just a value. The array will contain 'data' with
@@ -7610,9 +7609,9 @@ s1 = Text string.
 s2 = string containing attribute format.
 s3 = Finished string with ANSI codes included.
 
-Given a plain text string in s1 it adds the neccesary codes to create s3
+Given a plain text string in s1 it adds the necessary codes to create s3
 that will display with the attributes listed in s2, given the appropriate
-client support.  The attributes are given in s2 as comma seperated 
+client support.  The attributes are given in s2 as comma separated 
 attribute names. The coded text can then be used with the NOTIFY prim to
 display to the user.
 The recognized format commands are:
@@ -7678,7 +7677,7 @@ s1 = Original string.
 s2 = Contents of s1 except any standard ANSI tags.
 
 Strips all of the standard ANSI tags from string s1. Included in Proto
-mostly for compatability issues with FB6 MUF, otherwise UNPARSE_ANSI is 
+mostly for compatibility issues with FB6 MUF, otherwise UNPARSE_ANSI is 
 likely to be more useful.
 
 See: UNPARSE_ANSI
@@ -7791,6 +7790,52 @@ point to values matching the given value x. In other words:
 would return a list array of the non-matching keys: { "2" }
 
 See: ARRAY PRIMS, ARRAY_FINDVAL
+~~~~
+NDUP
+
+ndup ( xn ... x1 i -- xn ... x1 xn ... x1 )
+-------------------------------------------
+Level: M1 Apprentice
+xn ... x1 = A range of items on the stack.
+i = How many copies of the top item chain to make in total.
+
+Duplicates the top item of the stack so that i copies of it are on
+the stack in total. 1 ndup leaves the stack unchanged, 2 ndup is the
+same as DUP, 3 ndup the same as DUP DUP, and so on.
+
+See: DUP, DUPN, LDUP
+~~~~
+ISFLAG?
+
+isflag? ( s -- i )
+------------------
+Level: M1 Apprentice
+s = A string that may name a flag.
+i = 1 if s names a valid flag, otherwise 0.
+
+Given a string, returns 1 if it names a flag this server recognizes,
+including local flags, mucker level names, and flag aliases, and 0 if
+it does not. Use it to validate input before handing a flag name to
+SET or FLAG?.
+
+See: FLAG?, SET, FLAGLIST, ISPOWER?
+~~~~
+ARRAY_FILTER_FLAGS
+
+array_filter_flags ( a1 s -- a2 )
+---------------------------------
+Level: M1 Apprentice
+a1 = A list array of dbrefs.
+s  = A non-empty string of flag criteria.
+a2 = A list array of the dbrefs that matched.
+
+Given a list array of dbrefs and a flag pattern string, returns a
+new list containing only the valid objects whose flags match. The
+pattern uses the same syntax as the in-server @find command and the
+FINDNEXT prim, so "F3!D" matches MUF programs set mucker level 3
+that are not set DEBUG.
+
+See: FINDNEXT, FIND_ARRAY, FLAG?, ARRAY PRIMS
 ~~~~
 MARK?
 
@@ -8086,14 +8131,14 @@ See: NBSOCKOPEN, SOCKET PRIMS
 FUNCTION HEADERS|HEADERS|FUNCTIONHEADERS|FUNCTION_HEADERS
 
 New in FB6 and Proto is the ability to write function headers that will
-create the scoped variables and place the correct arguements into them
+create the scoped variables and place the correct arguments into them
 before actually beginning the function itself. Function headers are
-created by ending a function name with a '[' mark. This tells the compilier
+created by ending a function name with a '[' mark. This tells the compiler
 that you are declaring a set of variables with initial values pulled from
 the stack. The function header is closed with a ']'. Each variable can also
 be preceeded by a type name and a colon that represents the type of data
 that the variable should be initialized with. Anything after a '--' in the
-function header will be ignored. The idea is to put what the proceedure will
+function header will be ignored. The idea is to put what the procedure will
 be returning there. For example:
 : demo[ str:strVar int:intVar -- arr:arrVar ]
 
@@ -8268,7 +8313,7 @@ s = string containing the ID of the event found.
 This will wait for an event to occur that matches one of the eventid 
 strings in the given string list array.  The first event in the event 
 queue that matches will be removed from the event queue, and will be 
-returned, with the apropriate context data.  If there is no matching 
+returned, with the appropriate context data.  If there is no matching 
 event, then this process will pause until a matching event becomes 
 available.  The eventIDs are case sensitive.
 
@@ -8352,7 +8397,7 @@ individual prim entries, and other information.
 
 For a list of MUF topics see: TOPICS LIST
 For a list of the topics on MUF prims see: PRIMS LIST
-For a list of condensed list of the MUF prims avalable see:
+For a list of condensed list of the MUF prims available see:
    PRIMS1 PRIMS2 PRIMS3 PRIMS4 PRIMS5 PRIMS6
 
 The MUF manual is intended to be a reference to someone who already has  
@@ -8488,10 +8533,10 @@ array_join ( a s1 -- s2 )
 Level: M1 Apprentice
 a  = List array.
 s1 = Delimiter string.
-s2 = String containing the contents of the array seperated by s1.
+s2 = String containing the contents of the array separated by s1.
 
-Given a list array, will return a string that is the contatenation of
-all the items in the array, with each item seperated by the string in 
+Given a list array, will return a string that is the concatenation of
+all the items in the array, with each item separated by the string in 
 s1. For example:
 { "one" 2 "three" 3.14159 } array_make "... " array_join
 would return:
@@ -8549,7 +8594,7 @@ a2 = dictionary array with containing key-value pairs.
 
 Takes a dictionary array of all strings and a string representing a smatch pattern.
 It returns a dictionary array that contains all the key-value pairs where
-the the key was a string that matches the smatch wild card pattern.
+the key was a string that matches the smatch wild card pattern.
 
 See: SMATCH, ARRAY_REGMATCHKEY, ARRAY_MATCHVAL
 ~~~~
@@ -8565,7 +8610,7 @@ a2 = dictionary array with containing key-value pairs.
 
 Takes a dictionary array of all strings and a string representing a PCRE
 regular expression, and an integer containing PCRE options. It returns a
-dictionary array that contains all the key-value pairs where the the key was a
+dictionary array that contains all the key-value pairs where the key was a
 string that matches the given regular expression pattern.
 
 If the array contains at least three items, additional optimizations are
@@ -8618,10 +8663,10 @@ If s2 is an empty string, then flag checks will not be done.
 The s1 checks for patterns using the smatch method.
 The s2 is checked for the same sorts of flags used with the 
 in-server @find command. Eg: "F3!D" will match all MUF programs
-in the data base that are set mucker lefvel 3, and are not debug.
+in the data base that are set mucker level 3, and are not debug.
 
 If there are no matches remaining in the data base after d1, then #-1
-is returned. Otherwise d3 is the next matching objec that fits the 
+is returned. Otherwise d3 is the next matching object that fits the 
 parameters.
 
 See: NEXT, NEXTOWNED, SMATCH, HELP @FIND, FIND_ARRAY, REGFINDNEXT
@@ -8656,11 +8701,11 @@ If s2 is an empty string, then flag checks will not be done.
 The s1 checks for patterns using PCRE regular expressions.
 The s2 is checked for the same sorts of flags used with the 
 in-server @find command. Eg: "F3!D" will match all MUF programs
-in the data base that are set mucker lefvel 3, and are not debug.
+in the data base that are set mucker level 3, and are not debug.
 The i contains the PCRE option flags.
 
 If there are no matches remaining in the data base after d1, then #-1
-is returned. Otherwise d3 is the next matching objec that fits the 
+is returned. Otherwise d3 is the next matching object that fits the 
 parameters.
 
 Supported PCRE option flags:
@@ -8798,13 +8843,13 @@ compile ( d i1 -- i2 )
 ----------------------
 Level: W4 Boy
 d  = Program dbref.
-i1 = Indicates if compilier messages should be shown or not.
+i1 = Indicates if compiler messages should be shown or not.
 i2 = Indicates if compiling was successful or not.
 
 Given a valid dbref program, it runs that program through the
-compilier. If i1 is 0, then no message is shown to the player that
-the program is being compilied, or if it is successful or not. If 
-1 is passed, then the compilier messages are displayed. If the 
+compiler. If i1 is 0, then no message is shown to the player that
+the program is being compiled, or if it is successful or not. If 
+1 is passed, then the compiler messages are displayed. If the 
 program does not compile, then 0 is returned to the stack, otherwise
 the number of instructions in the compiled program are returned.
 
@@ -9030,7 +9075,7 @@ s2 = string containing a flag list.
 arr = An array containing all the matches according to the parameters.
 
 This prim works exactly like the FINDNEXT prim, except that it returns
-all matches to the stack in a list array all at once. It is comperable to
+all matches to the stack in a list array all at once. It is comparable to
 the in-game @find command, except all matches are returned to the stack
 in a single array.
   
@@ -9048,7 +9093,7 @@ i  = integer containing PCRE option flags.
 arr = An array containing all the matches according to the parameters.
 
 This prim works exactly like the REGFINDNEXT prim, except that it returns
-all matches to the stack in a list array all at once. It is comperable to
+all matches to the stack in a list array all at once. It is comparable to
 the in-game @find command, except all matches are returned to the stack
 in a single array.
   
@@ -9088,7 +9133,7 @@ i1 = integer representing a descriptor
 s  = string representing the flag to check for
 i2 = integer representing result
 
-Used to check for checking for the presense of descriptor flags on
+Used to check for checking for the presence of descriptor flags on
 descriptors.
 
 See: 'HELP DESCRIPTOR FLAGS' for a list of descriptor flags.
@@ -9142,7 +9187,7 @@ a2 = Contents of a1 before the index of @
 a3 = Contents of a1 after the index of @
 
 Given an array and an index in the array, it cuts the array into
-two arrays at that possition. The 2 arrays remain the same type
+two arrays at that position. The 2 arrays remain the same type
 of array as the original array was. The first array will contain
 all of the items that were before the index, and the second array
 will contain all the items that were after the index. 
@@ -9158,7 +9203,7 @@ i  = Indicates the result.
 
 Compares the two arrays and returns 0 if they are exactly the same, otherwise
 it returns a negative value if the second array is greater than the first, and
-a possitive value if the first array is greater than the second. It is case
+a positive value if the first array is greater than the second. It is case
 sensitive.
 ~~~~
 REFLIST_FIND
@@ -9324,7 +9369,7 @@ sockaccept (lsocket -- socket or 0 )
 ------------------------------------
 Level: W4 Boy
 lsocket = A listening socket as created by lsockopen
-socket = A traditional send/recieve MUF socket.
+socket = A traditional send/receive MUF socket.
 
 Given an open listening socket, checks for any incoming
 connections waiting to be accepted. If there are no waiting
@@ -9332,7 +9377,7 @@ connections, it returns a 0 to the stack.
 
 If there is a waiting connection, a normal MUF socket is
 created and pushed onto the stack. One can then interact
-with the connection via SOCKSEND and NBSOCKRECIEVE like 
+with the connection via SOCKSEND and NBSOCKRECV like 
 normal.
 
 See: LSOCKOPEN, SOCKET PRIMS
@@ -9459,7 +9504,7 @@ read_wants_blanks ( -- )
 Level: M1 Apprentice
 
 When used, it will toggle whether or not blank entries from the user
-will be caught by the READ prim or not. Initally, READ will ignore
+will be caught by the READ prim or not. Initially, READ will ignore
 blank strings sent by the user, but after this prim is used once, it
 will make it so that empty input from the user will be caught by 
 READ, causing a empty string to be pushed onto the stack.
@@ -9477,8 +9522,8 @@ get_read_wants_blanks read_wants_blanks? ( -- i )
 ------------------------
 Level: M1 Apprentice
 
-When used, it will return wether or not blank entries from the user
-will be caught by the READ prim (1) or not (0). Initally, READ will
+When used, it will return whether or not blank entries from the user
+will be caught by the READ prim (1) or not (0). Initially, READ will
 ignore blank strings sent by the user, but after READ_WANTS_BLANKS
 is used once, it will make it so that empty input from the user
 will be caught by READ, causing a empty string to be pushed onto
@@ -9498,7 +9543,7 @@ read_wants_blanks_on ( -- )
 Level: M1 Apprentice
 
 When used, it will set it so that blank entries from the user will
-be caught by the READ prim. Initally, READ will ignore blank
+be caught by the READ prim. Initially, READ will ignore blank
 strings sent by the user, but after this prim is used, it
 will make it so that empty input from the user will be caught by 
 READ, causing a empty string to be pushed onto the stack.
@@ -9517,7 +9562,7 @@ read_wants_blanks_off ( -- )
 Level: M1 Apprentice
 
 When used, it will set is so that blank entries from the user
-will not be caught by the READ prim. Initally, READ will ignore
+will not be caught by the READ prim. Initially, READ will ignore
 blank strings sent by the user and this prim will have no effect,
 but if it has been switched to the mode where it captures empty
 input from the user, this prim will reset it back to where it
@@ -9547,7 +9592,7 @@ Level: M1 Apprentice
 
 When used, it will toggle whether or not blank entries from the user
 will be caught by the READ prim (1) or not (0) and will return the
-value. Initally, READ will ignore blank strings sent by the user,
+value. Initially, READ will ignore blank strings sent by the user,
 but after this prim is used once, it will make it so that empty
 input from the user will be caught by READ, causing a empty string
 to be pushed onto the stack.
@@ -9807,13 +9852,13 @@ follows:
 DESCR        = The socket's descriptor number. (int)
 CONNECTED    = Indicates the socket established a connection. (int)
 LISTENING    = Indicates it is a listening socket. (int)
-HOST         = The hexidecimal host address. Only means anything
+HOST         = The hexadecimal host address. Only means anything
                    when used with SOCKACCEPT sockets. (str)
 CONNECTED_AT = Systime the socket was connected. (int)
 LAST_TIME    = Systime that the last input came on that socket.
                With Listening Sockets, it is the time that the last
                    connection was accepted. (int)
-COMMANDS     = The number of times a message has been recieved on that
+COMMANDS     = The number of times a message has been received on that
                    socket. (int)
                With Listening Sockets, it is the number of sockets
                    that it has accepted.
@@ -9823,8 +9868,8 @@ PORT         = The port that the socket is on. (int)
                    listening to.
                With sockets made with SOCKACCEPT it is the port that 
                    the socket connected to.
-SOCKQUEUE    = Indicates if the recieve buffer is turned on or not. (int)
-SMARTQUEUE   = Indicates if the recieve buffer is telent compliant. (int)
+SOCKQUEUE    = Indicates if the receive buffer is turned on or not. (int)
+SMARTQUEUE   = Indicates if the receive buffer is telent compliant. (int)
 READWAITING  = Indicates that the socket is ready for reading. (int)
 HOSTNAME     = Hostname for the socket's connection.
                With NBSOCKOPEN sockets, it is the host it is connecting to.
@@ -9882,7 +9927,7 @@ This prim is used to configure a variety of SOCKET options.
 These are the following options options for i1:
 NOQUEUE =      Traditional NBSOCKRECV behavior. This is also the default behavior,
                so there is little reason to send 0, unless you are turning off
-               the recieve buffer after having turned it on.
+               the receive buffer after having turned it on.
 SIMPLEQUEUE  = Buffers all valid ASCII input until it hits an end-of-line, or
                the buffer fills up, in which case, it pushes the string onto 
                the stack. With most client connections, this won't make any
@@ -9934,7 +9979,7 @@ SOCKET EVENTS 2|SOCKETEVENTS 2 |SOCKET EVENTS2|SOCKETEVENTS2
 Socket Events - Continued
 -------------------------
 
-Only one PID can recieve events for one socket at a time. This
+Only one PID can receive events for one socket at a time. This
 PID is called the 'Home Instance' for the socket. By default,
 this is always the PID that the socket was created in. However,
 by using:
@@ -9946,12 +9991,12 @@ For example, if a socket is accepted via SOCKACCEPT in one
 program instance, and then a process is forked off to handle
 reading input from that socket in another instance, simply 
 use HOMEINSTANCE SET_SOCKOPT on that socket once it is in 
-its new PID to make it so that Socket events will be recieved
+its new PID to make it so that Socket events will be received
 to that new PID instead of the PID where the socket was made
 via SOCKACCEPT. 
 
 Correct use of Socket Events can greatly increase the efficiency
-of MUF socket programs, elimiating wasteful checking loops.
+of MUF socket programs, eliminating wasteful checking loops.
 ~~~
 COPYPROPS
 
@@ -10068,7 +10113,7 @@ dict = Dictionary of variables.
 i  = Private/public bool.
 s2 = Result after MPI parsing. 
 
-Similiar to PARSEPROP, except that it allows the programmer to
+Similar to PARSEPROP, except that it allows the programmer to
 pass a dictionary of variables to go with the MPI parsing. 
 The dict has the syntax of:
 { <var name>:<var value> }
@@ -10101,7 +10146,7 @@ New in Proto 1.80 is the byte-code optimizer as implemented in FB6.
 optimize_muf must be @tuned to yes for it to work. If a program is
 set = N, then that program will not be optimized during compile time.
 
-The MUF optimizer removes redundent steps from the MUF code and also
+The MUF optimizer removes redundant steps from the MUF code and also
 combines certain instructions into single steps, all to reduce the
 number of instructions ran during run time. The actual number of 
 instructions reduced will be reported during compile time.
@@ -10114,7 +10159,7 @@ The other things that are currently optimized are as follows:
 # # +                ------> <sum of the two ints>
 # # -                ------> <difference of the two ints>
 # # *                ------> <product of the two ints>
-# # /                ------> <quotent of the two ints>
+# # /                ------> <quotient of the two ints>
 # # %                ------> <result of MOD on the two ints>
 0 =                  ------> not
 1 +                  ------> ++
@@ -10182,8 +10227,8 @@ HTOI
 htoi ( s -- i )
 -----------------
 Level: M1 Apprentice
-s = Hexidecimal string to convert into integer.
-i = Integer value of hexidecimal string.
+s = Hexadecimal string to convert into integer.
+i = Integer value of hexadecimal string.
  
 Converts a hexadecimal string into an integer.
  
@@ -10347,11 +10392,11 @@ array_interpret ( a -- s )
 ---------------
 Level: M1 Apprentice
 a = array of nearly any datatypes
-s = concated string of converted datatypes
+s = concatenated string of converted datatypes
 
 This primitive takes the array given, converts all floats to strings with
 the least significant zeros truncated, converts all integers to strings, 
-converts all locks to strings, converts all dbrefs to names, and contencates
+converts all locks to strings, converts all dbrefs to names, and concatenates
 all strings into one, returning the string.
 
 Example: 
@@ -10407,7 +10452,7 @@ IGNORE_ADD ( d1 d2 -- )
 ----------
 Level: W3 Archwizard
 
-d1 = playing wanting to ignore someone
+d1 = player wanting to ignore someone
 d2 = player to be ignored
 
 Adds d2 to d1's ignore list.
@@ -10571,7 +10616,7 @@ ssl_sockaccept ( lsocket -- socket or 0 or errorstring )
 --------------
 Level: W4 Boy
 lsocket = A listening socket as created by lsockopen
-socket = A traditional send/recieve MUF socket.
+socket = A traditional send/receive MUF socket.
 
 Works just like sockaccept, except it will immediately try to negotiate
 SSL with the client connecting.
@@ -10791,7 +10836,7 @@ Based on the integer value passed to ONEVENT, the triggering event may or may
  if EVENT_WAITFOR is used within interrupt-called functions.
 
 When an interrupt is thrown, the function it calls is passed the following set
- of arguements:
+ of arguments:
 
    ( ???:Data strEvent strID )
 
@@ -11234,7 +11279,7 @@ that matched the entire pattern, followed by the captured substrings that
 matched the various parenthesized subexpressions of the pattern.  The second
 contains, as element 0, a sublist containing the starting position and length
 of the substring that matched the entire pattern, followed by similar sublists
-for each captured parenthesized subexpression.  These indices are apropriate
+for each captured parenthesized subexpression.  These indices are appropriate
 for use with the MIDSTR primitive, and consider the first character of the
 string to be position 1.
  
