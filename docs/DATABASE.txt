@@ -500,6 +500,53 @@ superseded mechanisms are deleted, not kept alongside.
    are retired when this lands.
 
 
+   HOW THIS IS CHECKED
+
+   The journal fails quietly when it fails: an unrecorded change looks
+   exactly like a change that was never made, and a test that does not
+   truly restart the server looks exactly like one that does.  So the
+   checks below are part of the design, not an afterthought.
+
+   --verify-entries  compares the per-key materializer used to seal a
+       layer against the full serializer used to write a base, for
+       every entry of every object.  They must agree exactly; if they
+       ever diverge, a change persisted through the journal would
+       differ from the same change captured in a full save.  Run it
+       against the real database, not a toy one.
+
+   tests/run_persist_tests.py  changes one object in every way that
+       has to reach disk (name, flags, owner, location, home, value, a
+       nested property, a property removal) and insists all of it
+       survives a restart.  Every field it does not cover is a field
+       that can silently stop persisting.
+
+   tests/run_type_tests.py  boots from the STORE rather than the flat
+       file, which is the only way to catch the loader losing state
+       that the importer sets correctly.
+
+   tests/run_crash_tests.py  SIGKILLs the server mid-write and insists
+       the store still loads with every committed object intact.
+
+   ThreadSanitizer over a workload that overlaps mutation with dump
+       writing checks the claim that the dump thread shares nothing
+       mutable.  A filesystem race is invisible to it, so temp files
+       are named uniquely per writer rather than per target.
+
+   TWO TRAPS, both of which have already produced tests that passed
+   while proving nothing:
+
+     - The server DETACHES.  A spawned process exits immediately and
+       its handle refers to a corpse, so killing it kills nothing.
+       The pid in protomuck.pid is the only real handle.
+     - "@shutdown muck=muck" does not shut anything down; do_shutdown
+       compares against tp_muckname.  A refused shutdown plus a dead
+       handle leaves the original server holding the port, and the
+       next connection silently talks to it.
+
+   tests/muckharness.py exists to make both impossible: it stops by
+   pid and refuses to start while the port is still held.
+
+
 8. MIGRATION AND OPERATIONS
 
    Development happens on main; GinkoMUCK runs it as the live test.
