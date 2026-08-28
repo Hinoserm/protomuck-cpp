@@ -325,20 +325,83 @@ amended.
    Serialization today (saveObject) reads live object state and the
    previous file, diffs, appends history, renames.  It splits in two:
 
-   Phase 1, CAPTURE (game thread, atomic wrt mutation): serialize
-   each dirty object to an in-memory buffer (objectToJson output),
-   plus the manifest payload (tune parms, tombstone table, markers,
-   next dbref).  CPU-only, no disk I/O.  The result is a capture set:
+   Phase 1, CAPTURE (game thread, atomic wrt mutation): assemble the
+   pending changes into an in-memory capture set, plus the manifest
+   payload (tune parms, tombstone table, markers, next dbref) and the
+   revision and retained-marker list AS OF FIRE TIME (the persist
+   phase must stamp and historicize against these, never against the
+   live counters, which may advance before it runs).  CPU-only, no
+   disk I/O.  The result is a capture set:
 
-       { epoch, [ (uuid, dbref, serialized object) ... ],
+       { epoch, rev, markers, per-object deltas and buffers,
          manifest payload, optional marker }
 
-   Phase 2, PERSIST (dump thread): for each buffered object, read the
-   previous file, run the existing per-entry diff (rev stamping, the
-   history push for values a retained marker saw), append .hist,
-   atomic-rename the .json; then write the manifest LAST.  The
-   manifest is the commit point for the whole set.  The diff needs
-   only the buffer and the old file, never the live object.
+   THE CAPTURE JOURNAL (why firing is cheap when everything ticks)
+
+   On a busy MUCK, programs tick values into properties on nearly
+   every object between dumps, so "the dirty set" IS the database and
+   serializing whole dirty objects at fire time would cost O(database)
+   in time and memory.  Capture therefore happens at MUTATION time,
+   entry-granular, through the chokepoints that already exist:
+
+       - Property writes and removals (the property.cpp funnel) and
+         timestamp updates record an entry delta in the open journal:
+         (object, entry key) -> latest normalized value, or a removal
+         mark.  Latest value wins: a prop ticked ten thousand times
+         between dumps occupies ONE slot, serialized once per tick at
+         nanosecond scale.  The normalization (zero ints, empty
+         strings, NOTHING refs are entry removals) is shared with the
+         full serializer so both paths emit identical entries.
+       - Mutations not yet behind a chokepoint (raw FLAGS/NAME pokes
+         and other legacy core writes) fall back to object-level
+         dirty; fire serializes THOSE objects whole.  This set is
+         small (core fields change rarely) and shrinks to nothing as
+         setters convert.  An object captured whole drops its entry
+         deltas for that set: the whole buffer already contains them.
+
+   Firing then costs: seal the journal (a pointer swap), serialize
+   the core-dirty stragglers, snapshot the manifest payload.  O(1)
+   plus O(core-dirty), regardless of how many properties ticked.
+   Journal memory is bounded by DISTINCT entries changed since the
+   last dump, not by tick count and not by database size.
+
+   Phase 2, PERSIST (dump thread): for each captured object, read the
+   previous file and build the new state: a whole buffer replaces it
+   outright, entry deltas are applied over the file's own entries.
+   Then the one per-entry diff engine runs (rev stamping and the
+   history push, against the SET's rev and markers), .hist appends,
+   the .json atomic-renames, and the manifest for the set is written
+   LAST.  The manifest is the commit point.  The diff needs only the
+   captured data and the old file, never the live object.  Since a
+   dump has the whole dump interval to finish, the thread may pace
+   its I/O instead of bursting.
+
+   DURABILITY (fsync)
+
+   Torn files after a power cut have been a real problem historically,
+   so the write discipline is: write the temp file, fsync IT, then
+   rename, then fsync the directory; the .hist append is fsynced
+   before its object's .json renames; the manifest is fsynced the
+   same way and commits the set.  A reader can then never see a
+   renamed file whose bytes did not make it to disk.  All of this
+   cost lands on the dump thread, where latency is free.  Offline
+   full saves (-convert, -storegc) pay it synchronously, which is
+   acceptable at maintenance time.
+
+   BARRIERS AND EDGES
+
+   @rollback and resurrection read store files, so they first drain
+   the persist queue (a barrier): rolling back to a marker whose set
+   has not landed yet would otherwise find no stored state.  These
+   are rare admin operations; blocking them briefly is fine.  The
+   player-visible "dump complete" message fires when the manifest
+   commits, posted back to the game thread, so operators still learn
+   when the disk is actually caught up; the command itself returns at
+   capture.  Shutdown and @restart drain the queue before exec/exit.
+   panic() bypasses the queue and writes synchronously: the crashed
+   world cannot wait on a thread that may itself be the casualty.
+   @stats counts an object unsaved if it is core-dirty OR has journal
+   deltas pending, preserving the traditional meaning.
 
    Because phase 1 runs on the game thread between commands (where
    the dump runs today), cross-object invariants are captured
