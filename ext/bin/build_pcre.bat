@@ -45,4 +45,4 @@ del PACKAGE\include\config.h
 copy LICENSE PACKAGE
 copy COPYING PACKAGE
 echo Built from official 8.33 source for the Windows VC++ x64 platform. > PACKAGE\README
-type README >> PACKAGE\README
+type README >> PACKAGE\README

@@ -3,3 +3,7 @@
 # uses explicit \r\n in output strings and is unaffected by source
 # file line endings. Binary files are detected and left alone.
 * text=auto eol=lf
+
+# Windows batch files are the one legitimate CRLF consumer: cmd.exe
+# mishandles LF files, notably around labels and goto.
+*.bat text eol=crlf
