@@ -77,6 +77,24 @@ superseded mechanisms are deleted, not kept alongside.
        individual  attached to specific objects (a THING that is a
                    vehicle).  Recorded in the object's file.
 
+   NO DIRECT ACCESS TO PERSISTENT STATE.  This is absolute.  Every
+   read and every write of anything that reaches disk goes through an
+   accessor: a getter, a setter, or a function that does the same
+   job.  A setter records a journal entry (section 7); that is how a
+   change becomes persistent at all.
+
+   There is no fallback for a write that skips its setter.  Under the
+   journal the top layer IS the unsaved set, so a raw field poke is
+   not merely undirty, it is invisible to the dump and lost at
+   restart.  DBDIRTY does not save it, because nothing walks objects
+   looking for changes any more.
+
+   Consequently the legacy write macros (FLAGS(x) |= ..., NAME(x) =
+   ..., direct DBFETCH(x)->field assignment, SETDESC and friends) are
+   abolished as writes.  Read facades may remain where they read
+   through an accessor, exactly as CONTENTS, EXITS, and NEXTOBJ
+   already do for containment.
+
    Module state is divided in two, and the divide is structural:
 
        persistent  what the module hands the database for storage,
@@ -313,6 +331,11 @@ superseded mechanisms are deleted, not kept alongside.
    The top layer is therefore also the unsaved set: it replaces the
    OBJECT_CHANGED dirty flag entirely.  @stats counts an object as
    unsaved when its top layer is non-empty.
+
+   This is why section 2's no-direct-access rule is absolute: a write
+   that does not pass through a setter records no layer entry, and a
+   change with no layer entry is never written to disk.  There is no
+   sweep to catch it.
 
    History grows with eras x entries-actually-changed, never with
    write volume.
@@ -875,7 +898,41 @@ WHAT IS LEFT OF struct object
 
 REMAINING WORK
 
-    The journal and threaded persistence (sections 7 and 7.1).
+    THE JOURNAL AND THREADED PERSISTENCE (sections 7 and 7.1).  What
+    has to change:
+
+      1. Accessors for every core field: name, location, owner,
+         flags, powers, timestamps, and the description.  Every raw
+         write site in the tree converts to them (section 2's rule).
+         The write macros go; read facades may stay.
+      2. A Journal on DbObject: an ordered stack of layers, each a
+         map from entry key to value or removal mark, with only the
+         top one mutable.  Every setter, in core, type modules,
+         Properties, and containment, records into it.
+      3. Fire: seal top layers, swap in fresh ones, bump the era,
+         capture the manifest payload, queue the set.  @dump and
+         @snapshot both become this and return immediately.
+      4. The dump thread: one worker draining the queue in FIFO
+         order, appending layers to .hist, committing the manifest
+         last, with fsync-before-rename and a directory fsync.  It
+         touches no live object.
+      5. Load applies layers over the base; rollback reads the base
+         and applies layers forward to the target revision.
+      6. Compaction merges layers no retained marker needs into a
+         fresh base, purely from files; -storegc is its offline form.
+      7. Deletions: retire enqueues, reclaim moves into compaction.
+      8. Barriers: rollback, resurrection, and marker reads drain the
+         queue first; shutdown and @restart drain before exec.
+         panic() writes synchronously outside the queue.
+      9. Delete what the journal replaces: OBJECT_CHANGED, the
+         save-time diff in saveObject, the forked dump
+         (tp_dump_forking), and the THREADED_DB_DUMP ifdefs.
+     10. @stats counts unsaved objects from their layers.
+
+    The .json/.hist semantics invert (base plus forward layers, where
+    today the .json is current state and the .hist holds undo records),
+    so the store schema changes: Ginko is deleted and re-imported from
+    the flat file when this lands.
 
     Editor text off struct line.  The MUF editor and compiler work
     on std::vector<std::string> directly; the hand-managed struct
