@@ -455,6 +455,9 @@ do_link(int descr, dbref player, const char *thing_name, const char *dest_name)
         case TYPE_PROGRAM:
             anotify_nolisten2(player, CFAIL "You can't link programs to things!");
             break;
+        case TYPE_UNSUPPORTED:
+            anotify_nolisten2(player, CFAIL "That object's type module is not loaded.");
+            break;
         default:
             anotify_nolisten2(player, CFAIL "Weird object type.");
             log_status("*BUG: weird object: Typeof(%d) = %d\n", thing, Typeof(thing));

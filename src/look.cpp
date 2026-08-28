@@ -33,6 +33,7 @@ print_owner(dbref player, dbref thing)
         case TYPE_ROOM:
         case TYPE_THING:
         case TYPE_PROGRAM:
+        case TYPE_UNSUPPORTED:
             anotify_fmt(player, SYSYELLOW "Owner: %s", NAME(OWNER(thing)));
             break;
         case TYPE_EXIT:
@@ -773,9 +774,11 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
             break;
         case TYPE_EXIT:
         case TYPE_PROGRAM:
+        case TYPE_UNSUPPORTED:
             sprintf(buf, "%.*s" SYSNORMAL "  Owner: %s", (int) (BUFFER_LEN - strlen(NAME(OWNER(thing))) - 35), ansi_unparse_object(OWNER(player), thing), NAME(OWNER(thing)));
             break;
         case TYPE_GARBAGE:
+        default:
             strcpy(buf, ansi_unparse_object(OWNER(player), thing));
             break;
     }
@@ -2037,6 +2040,7 @@ do_contents(int descr, dbref player, const char *name, const char *flags)
         case TYPE_EXIT:
         case TYPE_PROGRAM:
         case TYPE_GARBAGE:
+        case TYPE_UNSUPPORTED:
             i = NOTHING;
             break;
         case TYPE_ROOM:

@@ -468,6 +468,7 @@ prim_moveto(PRIM_PROTOTYPE)
                     abort_interp("Invalid destination for an exit (1)");
                     break;
                 case TYPE_PROGRAM:
+                case TYPE_UNSUPPORTED:
                     dest = OWNER(victim);
                     break;
             }
@@ -487,6 +488,9 @@ prim_moveto(PRIM_PROTOTYPE)
             }
         interp_set_depth(fr);
         switch (Typeof(victim)) {
+            case TYPE_UNSUPPORTED:
+                abort_interp("Object's type module is not loaded (1)");
+                break;
             case TYPE_PLAYER:
                 if (Typeof(dest) != TYPE_ROOM && Typeof(dest) != TYPE_PLAYER && Typeof(dest) != TYPE_THING)
                     abort_interp("Bad destination");
@@ -1460,6 +1464,9 @@ prim_setlink(PRIM_PROTOTYPE)
         if (!prog_can_link_to(mlev, ProgUID, Typeof(ref), oper[0].data.objref))
             abort_interp("Can't link source to destination");
         switch (Typeof(ref)) {
+            case TYPE_UNSUPPORTED:
+                abort_interp("Object's type module is not loaded (1)");
+                break;
             case TYPE_EXIT:
                 if (MUCK::exitDestCount(ref) != 0) {
                     if (!permissions(mlev, ProgUID, ref))
@@ -2026,6 +2033,7 @@ prim_toadplayer(PRIM_PROTOTYPE)
         if (OWNER(stuff) == victim) {
             switch (Typeof(stuff)) {
                 case TYPE_PROGRAM:
+                case TYPE_UNSUPPORTED:
                     dequeue_prog(stuff, 0); /* dequeue player's progs */
                     FLAGS(stuff) &= ~(ABODE | W1 | W2 | W3 | W4);
                     SetMLevel(stuff, 0);

@@ -1048,6 +1048,9 @@ do_relink(int descr, dbref player, const char *thing_name, const char *dest_name
             anotify(player, CFAIL "You can't link programs to things.");
             return;
             break;
+        case TYPE_UNSUPPORTED:
+            anotify(player, CFAIL "That object's type module is not loaded.");
+            return;
         default:
             init_match(descr, player, dest_name, NOTYPE, &md);
             match_null(&md);
@@ -1134,6 +1137,7 @@ do_chown(int descr, dbref player, const char *name, const char *newowner)
             return;
         case TYPE_EXIT:
         case TYPE_PROGRAM:
+        case TYPE_UNSUPPORTED:
             ts_modifyobject(player, thing);
             OWNER(thing) = OWNER(owner);
             break;

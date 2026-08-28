@@ -507,6 +507,10 @@ do_stats(dbref player, const char *name)
                     tosize += size_object(i, 0);
                     break;
 
+                case TYPE_UNSUPPORTED:
+                    total++;
+                    break;
+
                 case TYPE_PROGRAM:
                     total++, programs++;
 
@@ -674,6 +678,7 @@ do_frob(int descr, dbref player, const char *name, const char *recip)
         if (OWNER(stuff) == victim) {
             switch (Typeof(stuff)) {
                 case TYPE_PROGRAM:
+                case TYPE_UNSUPPORTED:
                     dequeue_prog(stuff, 0); /* dequeue player's progs */
                     FLAGS(stuff) &= ~(ABODE | W1 | W2 | W3);
                     SetMLevel(stuff, 0);

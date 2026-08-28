@@ -45,6 +45,7 @@ moveto(dbref what, dbref where)
                     where = GLOBAL_ENVIRONMENT;
                     break;
                 case TYPE_PROGRAM:
+                case TYPE_UNSUPPORTED:
                     where = OWNER(what);
                     break;
             }
@@ -61,6 +62,7 @@ moveto(dbref what, dbref where)
                     where = tp_default_parent;
                     break;
                 case TYPE_PROGRAM:
+                case TYPE_UNSUPPORTED:
                     where = OWNER(what);
                     break;
             }
@@ -515,6 +517,10 @@ trigger(int descr, dbref player, dbref exit, int pflag)
                         interp_loop(player, dest, tmpfr, 0);
                     }
                     return;
+                default:
+                    /* an UNSUPPORTED placeholder destination */
+                    anotify_nolisten2(player, CINFO "Nothing happens.");
+                    break;
             }
         }
     }
@@ -737,6 +743,7 @@ do_drop(int descr, dbref player, const char *name, const char *obj)
         case TYPE_THING:
             ts_useobject(player, thing);
         case TYPE_PROGRAM:
+        case TYPE_UNSUPPORTED:
             if (DBFETCH(thing)->location != player) {
                 /* Shouldn't ever happen. */
                 anotify_nolisten2(player, CFAIL "You can't drop that.");
@@ -829,6 +836,9 @@ do_recycle(int descr, dbref player, const char *name)
             anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
         } else {
             switch (Typeof(thing)) {
+                case TYPE_UNSUPPORTED:
+                    anotify_nolisten2(player, CFAIL "That object's type module is not loaded; it can't be recycled right now.");
+                    return;
                 case TYPE_ROOM:
                     if (OWNER(thing) != OWNER(player)) {
                         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
@@ -1018,6 +1028,7 @@ recycle(int descr, dbref player, dbref thing)
                     MUCK::playerSession(rest).currProg = 0;
                 break;
             case TYPE_PROGRAM:
+            case TYPE_UNSUPPORTED:
                 if (OWNER(rest) == thing) {
                     OWNER(rest) = MAN;
                     DBDIRTY(rest);
