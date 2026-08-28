@@ -115,7 +115,7 @@ insttotext(struct frame *fr, int lev, struct inst *theinst, char *buffer, int bu
             }
             break;
         case PROG_INTEGER:
-            sprintf(buffer, "%d", theinst->data.number);
+            sprintf(buffer, "%lld", (long long) theinst->data.number);
             break;
         case PROG_FLOAT:
             sprintf(buffer, "%#.15g", theinst->data.fnumber);
@@ -164,42 +164,42 @@ insttotext(struct frame *fr, int lev, struct inst *theinst, char *buffer, int bu
             sprintf(buffer, "#%d", theinst->data.objref);
             break;
         case PROG_VAR:
-            sprintf(buffer, "V%d", theinst->data.number);
+            sprintf(buffer, "V%d", (int) theinst->data.number);
             break;
         case PROG_SVAR:
             if (fr) {
-                length = snprintf(buffer, buflen, "SV%d:%s", theinst->data.number, scopedvar_getname(fr, lev, theinst->data.number));
+                length = snprintf(buffer, buflen, "SV%d:%s", (int) theinst->data.number, scopedvar_getname(fr, lev, theinst->data.number));
             } else {
-                sprintf(buffer, "SV%d", theinst->data.number);
+                sprintf(buffer, "SV%d", (int) theinst->data.number);
             }
             break;
         case PROG_SVAR_AT:
         case PROG_SVAR_AT_CLEAR:
             if (fr) {
-                length = snprintf(buffer, buflen, "SV%d:%s @", theinst->data.number, scopedvar_getname(fr, lev, theinst->data.number));
+                length = snprintf(buffer, buflen, "SV%d:%s @", (int) theinst->data.number, scopedvar_getname(fr, lev, theinst->data.number));
             } else {
-                sprintf(buffer, "SV%d @", theinst->data.number);
+                sprintf(buffer, "SV%d @", (int) theinst->data.number);
             }
             break;
         case PROG_SVAR_BANG:
             if (fr) {
-                length = snprintf(buffer, buflen, "SV%d:%s !", theinst->data.number, scopedvar_getname(fr, lev, theinst->data.number));
+                length = snprintf(buffer, buflen, "SV%d:%s !", (int) theinst->data.number, scopedvar_getname(fr, lev, theinst->data.number));
             } else {
-                sprintf(buffer, "SV%d !", theinst->data.number);
+                sprintf(buffer, "SV%d !", (int) theinst->data.number);
             }
             break;
         case PROG_LVAR:
-            sprintf(buffer, "LV%d", theinst->data.number);
+            sprintf(buffer, "LV%d", (int) theinst->data.number);
             break;
         case PROG_STVAR:
-            sprintf(buffer, "STV%d", theinst->data.number);
+            sprintf(buffer, "STV%d", (int) theinst->data.number);
             break;
         case PROG_LVAR_AT:
         case PROG_LVAR_AT_CLEAR:
-            sprintf(buffer, "LV%d @", theinst->data.number);
+            sprintf(buffer, "LV%d @", (int) theinst->data.number);
             break;
         case PROG_LVAR_BANG:
-            sprintf(buffer, "LV%d !", theinst->data.number);
+            sprintf(buffer, "LV%d !", (int) theinst->data.number);
             break;
 #ifdef MUF_SOCKETS
         case PROG_SOCKET:

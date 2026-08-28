@@ -86,3 +86,16 @@ std::string conversion notes (2026-08-28)
   forever. Fixed by trimming \r in the loader. Note this affected
   EVERY string tune loaded from a CRLF parmfile, not just proplists.
   game/data/parmfile.cfg still has CRLF endings; consider normalizing.
+
+64-bit MUF integers (2026-08-28)
+--------------------------------
+
+* MUF stack integers are int64 (MUFINT in db.h). Deliberate
+  boundaries that remain 32-bit: dbrefs, MPI arithmetic (atoi-based,
+  a separate language), lock-expression integer compares (boolexp
+  atoi), object pennies (C-side int field), and @tune values. RANDOM
+  keeps its documented 0..2^31-1 range on purpose; the fs-muf corpus
+  divides by 2147483647 to normalize rolls.
+
+* Array KEYS remain int; a key above 2^31 narrows. Values are full
+  width.

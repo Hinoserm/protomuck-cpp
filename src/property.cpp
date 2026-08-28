@@ -347,7 +347,7 @@ get_property_class(dbref player, const char *type)
 }
 
 /* return value of property */
-int
+MUFINT
 get_property_value(dbref player, const char *type)
 {
     PropPtr p;
@@ -721,7 +721,7 @@ displayprop(dbref player, dbref obj, const char *name, char *buf)
             sprintf(buf, SYSBROWN "ref " SYSGREEN "%s" SYSRED ":%s", mybuf, ansi_unparse_object(player, PropDataRef(p)));
             break;
         case PROP_INTTYP:
-            sprintf(buf, SYSFOREST "int " SYSGREEN "%s" SYSRED ":" SYSYELLOW "%d", mybuf, PropDataVal(p));
+            sprintf(buf, SYSFOREST "int " SYSGREEN "%s" SYSRED ":" SYSYELLOW "%lld", mybuf, (long long) PropDataVal(p));
             break;
         case PROP_FLTTYP:
             sprintf(buf, SYSNAVY "flt " SYSGREEN "%s" SYSRED ":" SYSBROWN "%.15g", mybuf, PropDataFVal(p));
@@ -830,7 +830,7 @@ db_get_single_prop(FILE * f, dbref obj, int pos)
                 fprintf(stderr, "PANIC: INT prop had non-int value in db.\n");
                 abort();
             }
-            pdat.data.val = atoi(value);
+            pdat.data.val = (MUFINT) strtoll(value, NULL, 10);
             break;
         case PROP_FLTTYP:
             if (!number(value) && !ifloat(value)) {

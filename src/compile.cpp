@@ -3554,7 +3554,7 @@ number_word(COMPSTATE *cstat, const char *token)
     nw->no = cstat->nowords++;
     nw->in.type = PROG_INTEGER;
     nw->in.line = cstat->lineno;
-    nw->in.data.number = atoi(token);
+    nw->in.data.number = (MUFINT) strtoll(token, NULL, 10);
     return nw;
 }
 

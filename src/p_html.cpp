@@ -75,7 +75,7 @@ prim_playmidi(PRIM_PROTOTYPE)
         abort_interp("Invalid object argument (1)");
     CHECKOFLOW(1);
     strcpy(buf2, oper[1].data.string->data.c_str());
-    sprintf(buf3, "%d", oper[0].data.number);
+    sprintf(buf3, "%lld", (long long) oper[0].data.number);
     strcpy(buf, p_playmidi(oper[2].data.objref, buf2, buf3));
 
     PushString(buf);

@@ -1486,7 +1486,7 @@ mfn_muf(MFUNARGS)
             }
             break;
         case PROG_INTEGER:
-            sprintf(buf, "%d", rv->data.number);
+            sprintf(buf, "%lld", (long long) rv->data.number);
             CLEAR(rv);
             return buf;
             break;

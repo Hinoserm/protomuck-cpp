@@ -379,7 +379,7 @@ push_arg(dbref player, struct frame *fr, const char *arg)
     if (number(arg)) {
         /* push a number */
         num = atoi(arg);
-        push(fr->argument.st, &fr->argument.top, PROG_INTEGER, MIPSCAST & num);
+        push_mufint(fr->argument.st, &fr->argument.top, (MUFINT) num);
         anotify_nolisten(player, CSUCC "Integer pushed.", 1);
     } else if (ifloat(arg)) {
         /* push a float */

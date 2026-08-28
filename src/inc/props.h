@@ -6,7 +6,7 @@
 union pdata_u {
     const char *str;
     struct boolexp *lok;
-    int val;
+    MUFINT val;
     double fval;
     dbref ref;
     long pos;
@@ -159,7 +159,7 @@ extern PropPtr get_property(dbref player, const char *type);
 
 extern const char *get_property_class(dbref player, const char *type);
 extern double get_property_fvalue(dbref player, const char *type);
-extern int get_property_value(dbref player, const char *type);
+extern MUFINT get_property_value(dbref player, const char *type);
 extern dbref get_property_dbref(dbref player, const char *pclass);
 extern struct boolexp *get_property_lock(dbref player, const char *type);
 extern int genderof(int descr, dbref player);

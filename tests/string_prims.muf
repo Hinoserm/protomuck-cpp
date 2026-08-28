@@ -58,4 +58,18 @@
   "AB" str2hex "S2H:" t
   "4142" hex2str "H2S:" t
   "4142" hex2base64str "H2B:" t
+  2147483647 1 + intostr "I64ADD:" t
+  4000000000 2 * intostr "I64MUL:" t
+  "9000000000000000000" atoi intostr "I64ATOI:" t
+  -5000000000 abs intostr "I64ABS:" t
+  9000000000 intostr atoi 9000000000 = intostr "I64RT:" t
+  5000000000 dup 1 - < intostr "I64CMP:" t
+  1 40 bitshift intostr "I64SHL:" t
+  1099511627776 -40 bitshift intostr "I64SHR:" t
+  me @ "_big" 5000000000 setprop
+  me @ "_big" getpropval intostr "I64PROP:" t
+  6000000000 "x%i" fmtstring "I64FMT:" t
+  { 3000000000 3000000000 }list array_sum intostr "I64ASUM:" t
+  8000000000 intostr strlen intostr "I64LEN:" t
+  random 0 < not random 2147483648 < and intostr "RNDRANGE:" t
 ;

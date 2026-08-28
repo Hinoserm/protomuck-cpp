@@ -542,7 +542,9 @@ DATA TYPES|OBJECT TYPES|DATATYPES
 
 These are the fundamental data types in MUF:
 
-integers (i)       - Whole numbers.
+integers (i)       - Whole numbers. 64-bit signed as of 2.1a0: the
+                     range is +/- 9223372036854775807. RANDOM still
+                     returns 0 to 2147483647 for compatibility.
 floats   (f)       - Decimal numbers.
 strings  (s)       - ASCII Character strings.
 dbrefs   (d)       - Database reference numbers.
@@ -1694,8 +1696,9 @@ random ( -- i )
 Level: M1 Apprentice
 i = Any random integer.
 
-Returns a random integer from 0 to the MAXINT of the system running the MUCK.
-In general this number is (2^31)-1 or 2,147,483,647 (2.1 billion).
+Returns a random integer from 0 to 2147483647, or (2^31)-1. This range
+is kept even though MUF integers are 64-bit, because existing programs
+scale rolls by dividing by 2147483647.
 ~
 READ
 

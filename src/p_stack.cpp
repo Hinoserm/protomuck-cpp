@@ -45,7 +45,7 @@ prim_pdup(PRIM_PROTOTYPE)
 void
 prim_ndup(PRIM_PROTOTYPE)
 {
-    int result;
+    MUFINT result;
 
     if (oper[0].type != PROG_INTEGER)
         abort_interp("Non-integer argument. (1)");
@@ -63,7 +63,8 @@ prim_ndup(PRIM_PROTOTYPE)
 void
 prim_dupn(PRIM_PROTOTYPE)
 {
-    int i, result;
+    int i;
+    MUFINT result;
 
     if (oper[0].type != PROG_INTEGER)
         abort_interp("Operand is not an integer.");
@@ -83,7 +84,8 @@ prim_dupn(PRIM_PROTOTYPE)
 void
 prim_ldup(PRIM_PROTOTYPE)
 {
-    int i, result;
+    int i;
+    MUFINT result;
 
     CHECKOP_READONLY(1);
 

@@ -104,6 +104,8 @@ extern char match_args[BUFFER_LEN];
 extern char match_cmdname[BUFFER_LEN];
 
 typedef int dbref;		/* offset into db */
+#include <cstdint>
+typedef int64_t MUFINT;	/* the MUF integer type: 64-bit as of 2026 */
 #ifndef __cplusplus
 typedef char bool;      /* for eventual C++ convert */
 #endif
@@ -736,7 +738,7 @@ struct inst {			/* instruction */
     union {
         struct shared_string *string;   /* strings                          */
         struct boolexp *lock;           /* boolean lock expression          */
-        int     number;	                /* used for both primitives and integers */
+        MUFINT  number;	                /* used for both primitives and integers */
         double  fnumber;                /* used for float storage           */
         dbref   objref;	                /* object reference                 */
         struct stk_array_t *array;      /* FB6 style array                  */
