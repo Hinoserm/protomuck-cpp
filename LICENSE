@@ -1,0 +1,130 @@
+ProtoMUCK License
+=================
+
+ProtoMUCK is distributed under a custom license, not an OSI-approved open
+source license. The terms below are reproduced without alteration from the
+files that ship with the source: COPYRIGHT in the repository root, and
+src/inc/oldcopyright.h. Those files remain in the tree and are authoritative.
+
+Read the terms in full before redistributing. Restriction IV in particular
+forbids selling this software, or charging for access to it, without written
+permission from the authors and from the authors of its various components.
+
+
+ProtoMUCK, from COPYRIGHT
+-------------------------
+
+ ProtoMuck
+ Copyright (c) 2000 by Chris Brine, and Richard Taylor
+ All rights reserved
+
+ Contact addresses
+    Chris Brine      - Moose/Van - ashitaka@home.com
+    Richard Taylor   - Akari     - Nakoruru08@hotmail.com
+
+ This code is based loosely on the following code
+    TinyMUD
+    Copyright (c) 1989, 1990 by David Applegate, James Aspnes, Timothy
+                                Freeman, Bennet Yee, and Na Choon Piaw
+    TinyMUCK FB
+    authored by Foxen/Revar (real name undisclosed)
+
+    NeonMUCK
+    Copyright (c) 1996 by Jeremy Blackman, Andrew Nelson, and Joseph L. Traub
+
+ This code supports the Pueblo multimedia protocol
+ Copyright (c) 1995, 1996 by Chaco Communications
+
+ This code contains the MCP programming language
+ Copyright (c) 1996 by Joseph L. Traub and Jeremy Blackman
+
+ This code contains a dictionary-based compression scheme
+ Copyright (c) 1995 Dragon's Eye Productions and Dr. Cat
+
+ Permission is hereby granted to copy, redistribute or use this software
+ subject to the following restrictions and understandings
+
+   I)  Any copy or redistrubtion of this software must include this
+       copyright notice in full
+
+  II)  Users of this software agree to make a good faith attempt to return
+       any improvements or extensions made to this software or it's
+       component parts to the authors of this software.
+
+ III)  All materials developed as a consequence of the use of this software
+       shall duly acknowledge such use in accordance with the standards of
+       acknowledging credit in academic research.
+
+  IV)  This software may not be sold, nor may access to this software be
+       charged for without the express written permission of the authors
+       and the written permission of the authors of the various components.
+
+   V)  The authors make no warrantee or representation about the fitness
+       of this software for any task, nor do they warrantee or represent
+       this software as error-free.   The authors further will not be held
+       responsible for any problems or damages incurred through the use of
+       this software.
+
+  VI)  The authors make no promises or commitments to provide any services
+       or support for this software, either by way of maintainance or by
+       upgrades to this software.
+
+ VII)  In conjunction with product arising from the use of this software,
+       there shall be no use of the name of the authors, of Carnegie-Mellon
+       University, Bell Communications Research, Cat and Dragon Enterprises
+       Ltd, Dragon's Eye Productions, Blackman and Ross, CyberSoft or
+       Noderunner, nor any adaptation thereof in any advertising,
+       promotional, or sales literature without prior written consent from
+       the authors, Carnegie-Mellon University, Bell Communications
+       Research, Cat and Dragon Enterprises Ltd, Dragon's Eye Productions,
+       Blackman and Ross, CyberSoft and Noderunner in each case
+
+
+Legacy notices, from src/inc/oldcopyright.h
+-------------------------------------------
+
+These cover the earlier code that ProtoMUCK is derived from, and apply in
+addition to the terms above.
+
+Legacy code copyright notice:
+Copyright (c) 1989, 1990 by David Applegate, James Aspnes, Timothy Freeman,
+			    Bennet Yee, and Na Choon Piaw (lachesis).
+
+NeonMuck Specific Copyright notice:
+Copyright (c) 1996 by Jeremy Blackman, Andrew Nelson, and Joseph Traub
+
+ProtoMuck Specific Copyright notice:
+Copyright (c) 2000 by Chris Brine, Richard Taylor
+
+Copyright text for MUCK:
+This material was developed by the above-mentioned authors.
+Permission to copy this software, to redistribute it, and to use it
+for any purpose is granted, subject to the following restrictions and
+understandings.
+
+1. Any copy made of this software must include this copyright notice
+in full.
+
+2. Users of this software agree to make their best efforts (a) to
+return to the above-mentioned authors any improvements or extensions
+that they make, so that these may be included in future releases; and
+(b) to inform the authors of noteworthy uses of this software.
+
+3. All materials developed as a consequence of the use of this
+software shall duly acknowledge such use, in accordance with the usual
+standards of acknowledging credit in academic research.
+
+4. The authors have made no warrantee or representation that the
+operation of this software will be error-free, and the authors are
+under no obligation to provide any services, by way of maintenance,
+update, or otherwise.
+
+5. In conjunction with products arising from the use of this material,
+there shall be no use of the names of the authors, of Carnegie-Mellon
+University, nor of any adaptation thereof in any advertising,
+promotional, or sales literature without prior written consent from
+the authors, Carnegie-Mellon University and Bell Communications Research
+in each case.
+
+Copyright notice for the Pueblo multimedia protocol:
+Pueblo is (C) 1995-96 by Chaco Communications
