@@ -196,6 +196,15 @@
 
 #define MUF_EDIT_PRIMS
 
+/* Define MUF_INT64 when the MUF interpreter's integer type is
+ * 64-bit. The property engine, its C API, and the object store
+ * already carry 64-bit integers regardless; this flag says the
+ * INTERPRETER does too, so the int64 conversion branch flips it on
+ * merge. Shown in the @ver compile options as MUF:INT64 and
+ * readable from MUF as sysparm "muf_int64" (yes/no, truthful
+ * either way). */
+#undef MUF_INT64
+
 /* Define this to enable support for pre-Foxen5 (FB5) database
  * formats or if you need to build the "olddecompress" utility. 
  * This adds to ProtoMUCK's memory requirements, and should only
