@@ -3021,7 +3021,7 @@ flag string after the name, even if the player doesn't control the object.
 For example: "One(#1PW5)"
 If d is #-1, will return "*NOTHING*" to the stack. If d is #-3, will return "*HOME*" to the stack. If d is #-4, will return "*NIL*" to the stack. If d is any other negative dbref, or any dbref higher than DBTOP, will return "*INVALID(#???)*" with the question marks replaced by the dbref in question.
 
-See: ANSI_UNPARSEOJB
+See: ANSI_UNPARSEOBJ
 ~
 ANSI_UNPARSEOBJ
 
@@ -6054,7 +6054,7 @@ They are inserver shortcuts for:
         over @ swap array_delitem swap !
 
 See: ->[], []<-, [^], [x]
-     (array_setitem, array_appenditem, array_inseritem, array_delitem)
+     (array_setitem, array_appenditem, array_insertitem, array_delitem)
 ~~~~~~
 STACKRANGE|STACKCOUNT
 
@@ -6097,7 +6097,7 @@ Where the strings are the values assigned to the index values, and
 the floats would be assigned to the element values. Again, the index
 values and element values can be of any data type. 
 
-See: STACKRANGES3, ARRAY PRIMS
+See: STACKRANGE3, ARRAY PRIMS
 ~
 STACKRANGE3|MARK|}|{
 
@@ -6782,7 +6782,7 @@ i = integer representing total float math error types.
 
 Returns the total number of floating point error flag types.
 
-See: FLOAT PRIMS, FLOAT ERRORS4
+See: FLOAT PRIMS, FLOAT ERRORS
 ~~
 CLEAR_ERROR
 
@@ -7430,7 +7430,7 @@ ARE case sensitive.
 
 See: EVENTS
 ~~
-EVENTS
+EVENTS|MUF EVENTS|MUFEVENTS
 
 Events:
 Introduced into MUF with FB6, MUF events are a powerful tool in taking
@@ -9235,7 +9235,9 @@ Example:
 
 See: POWER_2CHAR
 ~~~~
-POWER_2CHAR ( s1 -- s2 )
+POWER_2CHAR
+
+power_2char ( s1 -- s2 )
 ------------------------
 Level: M1 Apprentice
 s1 = string containing a power name.
@@ -10971,6 +10973,24 @@ a pair of null strings.
 ~~~
 
 
+~~~~
+HTTPDATA
+
+httpdata ( i -- dict )
+----------------------
+Level: W1 Mage
+i = a valid descriptor number on an HTTP connection
+dict = a dictionary describing the HTTP request
+
+Returns a dictionary describing the HTTP request being served on the
+given descriptor, including the method, the requested path, and the
+request headers. Aborts if the descriptor is not an HTTP connection.
+
+Use this from programs called by the built in web server to inspect
+the request; use the BODY_ prims to read the raw request body.
+
+See: BODY_GETCHAR, BODY_NEXTCHAR, BODY_PREVCHAR, DESCR_SENDFILE,
+DESCRTYPE, WEBSERVER
 ~~~
 REGSUB
 
