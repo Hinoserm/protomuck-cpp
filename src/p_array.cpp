@@ -1788,20 +1788,16 @@ prim_array_interpret(PRIM_PROTOTYPE)
 {
     struct inst *in;
     stk_array *arr;
-    char outbuf[BUFFER_LEN];
-    char *ptr;
     const char *text;
     struct inst temp1;
     char buf[BUFFER_LEN];
-    int tmplen;
     int done;
 
     if (oper[0].type != PROG_ARRAY)
         abort_interp("Argument not an array. (1)");
 
     arr = oper[0].data.array;
-    ptr = outbuf;
-    *outbuf = '\0';
+    std::string out;
     done = !array_first(arr, &temp1);
     while (!done) {
         in = array_getitem(arr, &temp1);
@@ -1855,19 +1851,17 @@ prim_array_interpret(PRIM_PROTOTYPE)
                 break;
         }
 
-        tmplen = strlen(text);
-        if (tmplen > BUFFER_LEN - (ptr - outbuf) - 1) {
-            strncpy(ptr, text, BUFFER_LEN - (ptr - outbuf) - 1);
-            outbuf[BUFFER_LEN - 1] = '\0';
+        size_t tlen = strlen(text);
+        size_t room = (size_t) BUFFER_LEN - 1 - out.size();
+        if (tlen > room) {
+            out.append(text, room);
             break;
-        } else {
-            strcpy(ptr, text);
-            ptr += tmplen;
         }
+        out.append(text, tlen);
         done = !array_next(arr, &temp1);
     }
 
-    PushString(outbuf);
+    push(arg, top, std::move(out));
 }
 
 void
