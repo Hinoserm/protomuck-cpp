@@ -14,6 +14,7 @@
 #include "props.h"
 #include "interface.h"
 #include "externs.h"
+#include "Modules.h"
 #include "mufevent.h"
 
 /*
@@ -98,7 +99,7 @@ free_timenode(timequeue ptr)
         if (ptr->typ != TQ_MUF_TYP || ptr->subtyp != TQ_MUF_TIMER) {
             if (ptr->fr->multitask != BACKGROUND) {
                 if (OkObj(ptr->uid)) {
-                    DBFETCH(ptr->uid)->sp.player.block = 0;
+                    MUCK::playerSession(ptr->uid).block = 0;
                 } else {
                     if ((curdescr = get_descr(ptr->fr->descr, NOTHING)))
                         curdescr->block = 0;
@@ -194,7 +195,7 @@ add_event(int event_typ, int subtyp, int dtime, int descr, dbref player,
             if (fr) {
                 if (fr->multitask != BACKGROUND) {
                     if (OkObj(player)) {
-                        DBFETCH(player)->sp.player.block = 0;
+                        MUCK::playerSession(player).block = 0;
                     } else {
                         if ((curdescr = get_descr(fr->descr, NOTHING)))
                             curdescr->block = 0;
@@ -576,8 +577,8 @@ next_timequeue_event(void)
                     short tmpbl = 0;
 
                     if (OkObj(event->uid)) {
-                        /* tmpcp = DBFETCH(event->uid)->sp.player.curr_prog; */
-                        tmpbl = DBFETCH(event->uid)->sp.player.block;
+                        /* tmpcp = MUCK::playerSession(event->uid).currProg; */
+                        tmpbl = MUCK::playerSession(event->uid).block;
                     } else {
                         if ((curdescr = get_descr(event->descr, NOTHING)))
                             tmpbl = curdescr->block;
@@ -586,7 +587,7 @@ next_timequeue_event(void)
                     interp_loop(event->uid, event->called_prog, event->fr, 0);
                     if (!tmpfg) {
                         if (OkObj(event->uid)) {
-                            DBFETCH(event->uid)->sp.player.block = tmpbl;
+                            MUCK::playerSession(event->uid).block = tmpbl;
                         } else {
                             if ((curdescr = get_descr(event->descr, NOTHING)))
                                 curdescr->block = tmpbl;

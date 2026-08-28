@@ -5,6 +5,7 @@
 #include "props.h"
 #include "interface.h"
 #include "externs.h"
+#include "Modules.h"
 #include "params.h"
 #include "tune.h"
 #include "match.h"
@@ -66,10 +67,10 @@ editor(int descr, dbref player, const char *command)
     const char *word[MAX_ARG + 1];
     int i, j;                   /* loop variables */
 
-    program = DBFETCH(player)->sp.player.curr_prog;
+    program = MUCK::playerSession(player).currProg;
 
     /* check to see if we are insert mode */
-    if (DBFETCH(player)->sp.player.insert_mode) {
+    if (MUCK::playerSession(player).insertMode) {
         insert(player, command); /* insert it! */
         return;
     }
@@ -190,7 +191,7 @@ editor(int descr, dbref player, const char *command)
 void
 do_insert(dbref player, dbref program, int arg[], int argc)
 {
-    DBFETCH(player)->sp.player.insert_mode++;
+    MUCK::playerSession(player).insertMode++;
     /* DBDIRTY(player); */
     if (argc)
         DBSTORE(program, sp.program.curr_line, arg[0] - 1);
@@ -266,7 +267,7 @@ do_quit(dbref player, dbref program)
     DBFETCH(program)->sp.program.first = NULL;
     FLAGS(program) &= ~INTERNAL;
     FLAGS(player) &= ~INTERACTIVE;
-    DBFETCH(player)->sp.player.curr_prog = NOTHING;
+    MUCK::playerSession(player).currProg = NOTHING;
     DBDIRTY(player);
     DBDIRTY(program);
 }
@@ -280,7 +281,7 @@ do_cancel(dbref player, dbref program)
     DBFETCH(program)->sp.program.first = NULL;
     FLAGS(program) &= ~INTERNAL;
     FLAGS(player) &= ~INTERACTIVE;
-    DBFETCH(player)->sp.player.curr_prog = NOTHING;
+    MUCK::playerSession(player).currProg = NOTHING;
     DBDIRTY(player);
 
 }
@@ -497,7 +498,7 @@ list_publics(int descr, dbref player, int arg[], int argc)
         anotify_nolisten(player, CINFO "I don't understand which program you want to list PUBLIC functions for.", 1);
         return;
     }
-    program = (argc == 0) ? DBFETCH(player)->sp.player.curr_prog : arg[0];
+    program = (argc == 0) ? MUCK::playerSession(player).currProg : arg[0];
     if (Typeof(program) != TYPE_PROGRAM) {
         anotify_nolisten(player, CINFO "That isn't a program.", 1);
         return;
@@ -507,7 +508,7 @@ list_publics(int descr, dbref player, int arg[], int argc)
         return;
     }
     if (!(DBFETCH(program)->sp.program.code)) {
-        if (program == DBFETCH(player)->sp.player.curr_prog) {
+        if (program == MUCK::playerSession(player).currProg) {
             do_compile(descr, OWNER(program), program, 0);
         } else {
             struct line *tmpline;
@@ -571,9 +572,9 @@ insert(dbref player, const char *line)
     struct line *curr;
     struct line *new_line;
 
-    program = DBFETCH(player)->sp.player.curr_prog;
+    program = MUCK::playerSession(player).currProg;
     if (!string_compare(line, EXIT_INSERT)) {
-        DBSTORE(player, sp.player.insert_mode, 0); /* turn off insert mode */
+        MUCK::playerSession(player).insertMode = 0; /* turn off insert mode */
 #ifndef NO_EXITMSG
         anotify_nolisten(player, CSUCC "Exiting insert mode.", 1);
 #endif

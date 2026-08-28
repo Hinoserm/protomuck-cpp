@@ -619,10 +619,6 @@ objectFromJsonPhase1(const json &j, std::vector<PendingLinks> &later)
         case TYPE_PLAYER:
             o->sp.player.pennies = td.value("pennies", 0);
             o->sp.player.password = alloc_string(junstr(td.value("password", "")).c_str());
-            o->sp.player.curr_prog = NOTHING;
-            o->sp.player.insert_mode = 0;
-            o->sp.player.descrs = NULL;
-            o->sp.player.descr_count = 0;
             break;
         case TYPE_PROGRAM:
             memset(&o->sp.program, 0, sizeof(o->sp.program));

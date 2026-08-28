@@ -1003,17 +1003,9 @@ union specific {      /* I've been railroaded! */
     struct {			/* PLAYER-specific fields */
 	dbref   home;
 	int     pennies;
-	dbref   curr_prog;	/* program I'm currently editing */
-	short   insert_mode;	/* in insert mode? */
-	short   block;
 	const char *password;
-        int*    descrs;
-        short   descr_count;
-        int     last_descr;
-#ifdef IGNORE_SUPPORT
-        dbref	ignore[MAX_IGNORES];
-        time_t  ignoretime;
-#endif
+	/* Session state (descriptors, editor, ignore cache) lives on the
+	 * PLAYER module now; see PlayerSession in Modules.h. */
     }       player;
     struct {			      /* PROGRAM-specific fields */
 	short   curr_line;	      /* current-line */

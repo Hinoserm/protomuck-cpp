@@ -1,5 +1,8 @@
 /* ProtoMUCK's main interface.c */
 /*  int main() is in this file  */
+#include <algorithm>
+#include <vector>
+
 #include "copyright.h"
 #include "config.h"
 
@@ -15,6 +18,7 @@
 #include "mpi.h"
 #include "reg.h"
 #include "externs.h"
+#include "Modules.h"
 #include "MacroTable.h"
 #include "mufevent.h"
 #include "strutils.h"
@@ -2260,7 +2264,7 @@ shovechars(void)
                                 announce_unidle(d); /* really idle */
                             if (FLAG2(d->player) & F2IDLE)
                                 FLAG2(d->player) &= ~F2IDLE; /*remove idle */
-                            DBFETCH(d->player)->sp.player.last_descr = d->descriptor; /* least idle */
+                            MUCK::playerSession(d->player).lastDescr = d->descriptor; /* least idle */
                         } else { /* not a player */
                             if (DR_RAW_FLAGS(d, DF_TRUEIDLE))
                                 announce_unidle(d);
@@ -2305,7 +2309,7 @@ shovechars(void)
                         if (!(DR_RAW_FLAGS(d, DF_IDLE)))
                             DR_RAW_ADD_FLAGS(d, DF_IDLE);
                     }
-                    if (DBFETCH(d->player)->sp.player.last_descr == d->descriptor) { /* check for idling */
+                    if (MUCK::playerSession(d->player).lastDescr == d->descriptor) { /* check for idling */
                         int idx_idletime = get_property_value(d->player,
                                                               "/_Prefs/IdleTime")
                             * 60;
@@ -3514,7 +3518,7 @@ save_command(struct descriptor_data *d, const char *command, int len, int wclen)
         ((MLevel(d->player) >= tp_min_progbreak_lev) || (Wiz(d->player)))) {
         if (dequeue_prog(d->player, 2))
             anotify(d->player, CINFO "Foreground program aborted.");
-        DBFETCH(d->player)->sp.player.block = 0;
+        MUCK::playerSession(d->player).block = 0;
         if (d->player == NOTHING)
             d->block = 0;
         if (!(FLAGS(d->player) & INTERACTIVE))
@@ -4086,7 +4090,7 @@ process_commands(void)
                 /* Added in the is_interface_command to seperate out checking
                  * for things like @q, WHO, QUIT, etc. -Akari */
 
-                if ((d->connected && DBFETCH(d->player)->sp.player.block && !is_interface_command(t->start))
+                if ((d->connected && MUCK::playerSession(d->player).block && !is_interface_command(t->start))
                     || (!d->connected && d->block)) {
                     char *tmp = t->start;
 
@@ -4201,7 +4205,7 @@ do_command(struct descriptor_data *d, struct text_block *t)
                 if ((FLAGS(d->player) & INTERACTIVE))
                     if ((FLAGS(d->player) & READMODE))
                         process_command(d->descriptor, d->player, command, len, wclen);
-                DBFETCH(d->player)->sp.player.block = 0;
+                MUCK::playerSession(d->player).block = 0;
             }
         }
     } else if (!strcmp(command, QUIT_COMMAND)) {
@@ -4273,7 +4277,7 @@ interact_warn(dbref player)
         sprintf(buf, CINFO "***  %s  ***",
                 (FLAGS(player) & READMODE) ?
                 "You are currently using a program.  Use \"@Q\" to return to a more reasonable state of control."
-                : (DBFETCH(player)->sp.player.insert_mode ?
+                : (MUCK::playerSession(player).insertMode ?
                    "You are currently inserting MUF program text.  Use \".\" to return to the editor, then \"quit\" if you wish to return to your regularly scheduled Muck universe."
                    : "You are currently using the MUF program editor."));
         anotify(player, buf);
@@ -4419,7 +4423,7 @@ check_connect(struct descriptor_data *d, const char *msg)
                 }
 
                 /* cks: someone has to initialize this somewhere. */
-                DBFETCH(d->player)->sp.player.block = 0;
+                MUCK::playerSession(d->player).block = 0;
                 if (d->player == NOTHING)
                     d->block = 0;
                 spit_file(player, MOTD_FILE);
@@ -5222,7 +5226,7 @@ announce_connect(int descr, dbref player)
         FLAGS(player) &= ~CHOWN_OK;
     }
 
-    DBFETCH(player)->sp.player.last_descr = descr;
+    MUCK::playerSession(player).lastDescr = descr;
 
     /*
      * See if there's a connect action.  If so, and the player is the first to
@@ -5402,7 +5406,7 @@ announce_unidle(struct descriptor_data *d)
     }
 
     if (OkObj(d->player) ? (Typeof(d->player) & TYPE_PLAYER) : 0) {
-        DBFETCH(d->player)->sp.player.last_descr = d->descriptor;
+        MUCK::playerSession(d->player).lastDescr = d->descriptor;
     }
 
     /* queue up all _unidle programs referred to by properties */
@@ -5556,83 +5560,37 @@ descr_index(int descr)
 int *
 get_player_descrs(dbref player, int *count)
 {
-    int *darr;
-
     if (Typeof(player) == TYPE_PLAYER) {
-        *count = DBFETCH(player)->sp.player.descr_count;
-        darr = DBFETCH(player)->sp.player.descrs;
-        if (!darr) {
-            *count = 0;
-        }
-        return darr;
-    } else {
-        *count = 0;
-        return NULL;
+        MUCK::PlayerSession &s = MUCK::playerSession(player);
+
+        *count = (int) s.descrs.size();
+        return s.descrs.empty() ? NULL : s.descrs.data();
     }
+    *count = 0;
+    return NULL;
 }
 
 void
 remember_player_descr(dbref player, int descr)
 {
-    int count = DBFETCH(player)->sp.player.descr_count;
-    int *arr = DBFETCH(player)->sp.player.descrs;
-    int index;
-
-    index = descr_index(descr);
+    int index = descr_index(descr);
 
     if ((index < 0) || (index >= MAX_SOCKETS))
         return;
-
-    if (!arr) {
-        arr = new int[MAX_SOCKETS];
-
-        arr[0] = index;
-        count = 1;
-    } else {
-        //arr = (int *) realloc(arr, sizeof(int) * (count + 1));
-        arr[count] = index;
-        count++;
-    }
-    DBFETCH(player)->sp.player.descr_count = count;
-    DBFETCH(player)->sp.player.descrs = arr;
+    MUCK::playerSession(player).descrs.push_back(index);
 }
 
 void
 forget_player_descr(dbref player, int descr)
 {
-    int count = DBFETCH(player)->sp.player.descr_count;
-    int *arr = DBFETCH(player)->sp.player.descrs;
-    int index;
-
-    index = descr_index(descr);
+    int index = descr_index(descr);
 
     if ((index < 0) || (index >= MAX_SOCKETS))
         return;
 
-    if (!arr) {
-        count = 0;
-    } else if (count > 1) {
-        int src, dest;
+    std::vector<int> &v = MUCK::playerSession(player).descrs;
 
-        for (src = dest = 0; src < count; src++) {
-            if (arr[src] != index) {
-                if (src != dest) {
-                    arr[dest] = arr[src];
-                }
-                dest++;
-            }
-        }
-        if (dest != count) {
-            count = dest;
-            //arr = (int *) realloc(arr, sizeof(int) * count);
-        }
-    } else {
-        delete[]arr;
-        arr = NULL;
-        count = 0;
-    }
-    DBFETCH(player)->sp.player.descr_count = count;
-    DBFETCH(player)->sp.player.descrs = arr;
+    v.erase(std::remove(v.begin(), v.end(), index), v.end());
 }
 
 int
@@ -5693,7 +5651,7 @@ descrdata_by_descr(int descr)
 int
 online(dbref player)
 {
-    return DBFETCH(player)->sp.player.descr_count;
+    return ((int) MUCK::playerSession(player).descrs.size());
 }
 
 int
@@ -6122,7 +6080,7 @@ silent_connect(int descr, dbref player)
     if (Guest(player)) {
         FLAGS(player) &= ~CHOWN_OK;
     }
-    DBFETCH(player)->sp.player.last_descr = descr;
+    MUCK::playerSession(player).lastDescr = descr;
     if (!tp_quiet_connects) {
         if ((!Dark(player)) && (!Dark(loc)) && (!Hidden(player))) {
             if (online(player) == 1)
@@ -6168,54 +6126,15 @@ silent_disconnect(struct descriptor_data *d)
 void
 transfer_descr_to_player(int descr, dbref source, dbref target)
 {
-    int count = DBFETCH(target)->sp.player.descr_count;
-    int *arr = DBFETCH(target)->sp.player.descrs;
-    int index;
-
-    index = descr_index(descr);
+    int index = descr_index(descr);
 
     if ((index < 0) || (index >= MAX_SOCKETS))
         return;
 
-    if (!arr) {
-        arr = (int *) malloc(sizeof(int));
-        arr[0] = index;
-        count = 1;
-    } else {
-        arr = (int *) realloc(arr, sizeof(int) * (count + 1));
-        arr[count] = index;
-        count++;
-    }
+    MUCK::playerSession(target).descrs.push_back(index);
 
-    DBFETCH(target)->sp.player.descr_count = count;
-    DBFETCH(target)->sp.player.descrs = arr;
-    count = DBFETCH(source)->sp.player.descr_count;
-    arr = DBFETCH(source)->sp.player.descrs;
-
-    if (!arr) {
-        count = 0;
-    } else if (count > 1) {
-        int src, dest;
-
-        for (src = dest = 0; src < count; src++) {
-            if (arr[src] != index) {
-                if (src != dest) {
-                    arr[dest] = arr[src];
-                }
-                dest++;
-            }
-        }
-        if (dest != count) {
-            count = dest;
-            arr = (int *) realloc(arr, sizeof(int) * count);
-        }
-    } else {
-        free((void *) arr);
-        arr = NULL;
-        count = 0;
-    }
-    DBFETCH(source)->sp.player.descr_count = count;
-    DBFETCH(source)->sp.player.descrs = arr;
+    std::vector<int> &src = MUCK::playerSession(source).descrs;
+    src.erase(std::remove(src.begin(), src.end(), index), src.end());
 }
 
 int
@@ -6540,23 +6459,22 @@ propagate_descr_flag(dbref player, object_flag_type flag, int set)
 void
 init_ignore(dbref tgt)
 {
-    struct object *pobj = DBFETCH(tgt);
+    MUCK::PlayerSession &s = MUCK::playerSession(tgt);
     const char *rawstr;
-    int i = 0;
 
+    s.ignore.clear();
     if ((rawstr = get_property_class(tgt, "/@/ignore"))) {
         for (; *rawstr && isspace(*rawstr); rawstr++) ;
 
         /* extract dbrefs from the prop */
-        for (; *rawstr && i < MAX_IGNORES; rawstr++) {
+        for (; *rawstr && (int) s.ignore.size() < MAX_IGNORES; rawstr++) {
             if (*rawstr == '#')
                 continue;
 
             if (!isdigit(*rawstr))
                 break;
 
-            pobj->sp.player.ignore[i] = atoi(rawstr);
-            i++;
+            s.ignore.push_back(atoi(rawstr));
 
             for (; *rawstr && !isspace(*rawstr); rawstr++) ;
             for (; *rawstr && isspace(*rawstr); rawstr++) ;
@@ -6566,22 +6484,14 @@ init_ignore(dbref tgt)
         }
     }
 
-    /* terminate the array */
-    if (i <= (MAX_IGNORES - 1))
-        pobj->sp.player.ignore[i] = NOTHING;
-
     /* and set the timestamp */
-    pobj->sp.player.ignoretime = current_systime;
-    return;
+    s.ignoreTime = current_systime;
 }
 
 char                            /* char, for when you only need a byte's worth. */
 ignorance(dbref src, dbref tgt)
 {
-    struct object *tobj = DBFETCH(tgt);
-    int i;
-
-    /* We leave ignorance negatively if the dbref is invalid or the source is a wizard or theirselves. 
+    /* We leave ignorance negatively if the dbref is invalid or the source is a wizard or theirselves.
        This catches 99.999% of the cases where the system calls something through a standard player
        notify routine (with the src and target equal or the src being a random number), and wastes
        little time returning in that case.  We catch this case first so we can back out fast.
@@ -6592,21 +6502,19 @@ ignorance(dbref src, dbref tgt)
     if (src == tgt || !OkObj(src) || Wizard(src))
         return 0;
 
-    /* Ignorance cache and initialization 
+    /* Ignorance cache and initialization
      * Save time, only do the target, and only if it's been 10 secs from the last check or its not initialized.
      */
-    if (tobj->sp.player.ignoretime + 10 <= current_systime)
+    MUCK::PlayerSession &s = MUCK::playerSession(tgt);
+
+    if (s.ignoreTime + 10 <= current_systime)
         init_ignore(tgt);
 
-    /* If ignore[0] is -1, its not even worth doing an ignore scan. */
-    if (tobj->sp.player.ignore[0] == NOTHING)
-        return 0;
-
     /* if we got this far, lets check it out, get out ASAP, BTW. */
-    for (i = 0; i < MAX_IGNORES; i++) {
-        if (!OkObj(tobj->sp.player.ignore[i]))
+    for (dbref ig : s.ignore) {
+        if (!OkObj(ig))
             return 0;
-        if (OWNER(tobj->sp.player.ignore[i]) == OWNER(src))
+        if (OWNER(ig) == OWNER(src))
             return 1;
     }
 

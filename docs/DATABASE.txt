@@ -535,29 +535,35 @@ STEP 2 BURNDOWN STATE  (updated as the loop advances)
         sp.thing    DONE   (MUCK::Thing: home, value)
         sp.exit     DONE   (MUCK::Exit: destCount, destRef,
                             setDestRefs, destinations)
-        sp.player   DATA FIELDS DONE (home, pennies via MUCK::Player;
-                            password already through PasswordHash).
-                            Remaining fields are session and editor
-                            state: descrs, descr_count, last_descr,
-                            curr_prog, insert_mode, block, ignore.
-                            These belong to the step 5 SESSIONS pass,
-                            which the migration plan gates on
-                            case-by-case discussion.
+        sp.player   DONE   Data fields (home, pennies) via MUCK::Player;
+                           password through PasswordHash. Session and
+                           editor state (descriptors, last descriptor,
+                           editor program, insert mode, read block,
+                           ignore cache) lives in PlayerSession on the
+                           PLAYER module, reached with
+                           MUCK::playerSession(ref). The union fields
+                           for session state are deleted; sp.player
+                           holds only home, pennies, password until the
+                           storage flip. Session state is memory-only
+                           and never serialized.
 
     Remaining:
 
         sp.program  275    interpreter internals (code, pubs, curr_line,
                            instances, profiling); source is already
                            modularized. This is the step 5 MUF
-                           integration, also discussion-gated.
+                           integration.
 
-    Step 2 passes still open (no discussion needed):
-        - Create<T> absorbs the legacy construction sequences,
-          retiring the mid-construction raw tags.
+    Step 2 passes still open:
         - Wizard-level checks (RawMWLevel, WLevel) into a permissions
           home.
         - After the step 5 passes: chains to vectors, storage flip,
           struct and garbage-type death, DBFETCH deleted.
+
+    Create<T> absorption is DONE: create_player, @create, @dig, @open,
+    @action, @program, and the MUF creation prims all construct through
+    Database::Create<T>, and typeInit() is the one sanctioned place
+    that touches a raw union mid-construction.
 
     After the last cluster: containment chains become the Container
     vectors for real, storage flips inside DbObject, the legacy struct

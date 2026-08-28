@@ -331,11 +331,6 @@ create_player(dbref creator, const char *name, const char *password)
     newp->exits = NOTHING;
     newp->sp.player.pennies = tp_start_pennies;    /* raw: mid-construction */
     newp->sp.player.password = NULL; /* this has to stay here. -hinoserm */
-    newp->sp.player.curr_prog = NOTHING;
-    newp->sp.player.insert_mode = 0;
-#ifdef IGNORE_SUPPORT
-    newp->sp.player.ignoretime = 0;
-#endif /* IGNORE_SUPPORT */
 
     /* set password */
     set_password(player, password);

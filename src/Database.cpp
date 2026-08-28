@@ -204,11 +204,6 @@ Database::freeObject(dbref i)
         if (o->sp.player.password) {
             delete[]o->sp.player.password;
         }
-        if (o->sp.player.descrs) {
-            delete[]o->sp.player.descrs;
-            o->sp.player.descrs = NULL;
-            o->sp.player.descr_count = 0;
-        }
     }
 #ifndef SANITY
     if (Typeof(i) == TYPE_PROGRAM) {
@@ -371,12 +366,6 @@ typeInit(dbref r)
             o->sp.player.home = NOTHING;
             o->sp.player.pennies = 0;
             o->sp.player.password = NULL;
-            o->sp.player.curr_prog = NOTHING;
-            o->sp.player.insert_mode = 0;
-            o->sp.player.block = 0;
-            o->sp.player.descrs = NULL;
-            o->sp.player.descr_count = 0;
-            o->sp.player.last_descr = NOTHING;
             break;
         case TYPE_EXIT:
             o->sp.exit.ndest = 0;

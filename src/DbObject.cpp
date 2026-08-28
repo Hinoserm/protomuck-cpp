@@ -290,6 +290,20 @@ playerAddPennies(dbref ref, int delta)
         p->setPennies(p->pennies() + delta);
 }
 
+PlayerSession &
+playerSession(dbref ref)
+{
+    static PlayerSession dummy;
+    DbObject *o = database().get(ref);
+    Player *p = o ? o->As<Player>() : nullptr;
+
+    if (!p) {
+        dummy = PlayerSession();
+        return dummy;
+    }
+    return p->session();
+}
+
 void
 Exit::setDestRefs(const dbref *refs, int n)
 {

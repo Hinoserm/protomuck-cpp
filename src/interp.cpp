@@ -1220,7 +1220,7 @@ do_abort_loop(dbref player, dbref program, const char *msg, struct frame *fr, st
         fr->aborted = 1;
         prog_clean(fr);
         if (OkObj(player)) {
-            DBSTORE(player, sp.player.block, 0);
+            MUCK::playerSession(player).block = 0;
         } else {
             if ((curdescr = get_descr(fr->descr, NOTHING))) {
                 curdescr->block = 0;
@@ -1360,7 +1360,7 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
                 fr->pc = pc;
                 reload(fr, atop, stop);
                 if (OkObj(player)) {
-                    DBSTORE(player, sp.player.block, (!fr->been_background));
+                    MUCK::playerSession(player).block = (!fr->been_background);
                 } else {
                     if ((curdescr = get_descr(fr->descr, NOTHING)))
                         curdescr->block = !(fr->been_background);
@@ -1435,8 +1435,8 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
                             fr->brkpt.bypass = 0;
                             fr->brkpt.dosyspop = 0;
                             if (OkObj(player)) {
-                                DBSTORE(player, sp.player.curr_prog, program);
-                                DBSTORE(player, sp.player.block, 0);
+                                MUCK::playerSession(player).currProg = program;
+                                MUCK::playerSession(player).block = 0;
                             } else {
                                 if ((curdescr = get_descr(fr->descr, NOTHING))) {
                                     curdescr->block = 0;
@@ -1944,7 +1944,7 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
                     delete[]events;
                 }
                 if (OkObj(player)) {
-                    DBSTORE(player, sp.player.block, (!fr->been_background));
+                    MUCK::playerSession(player).block = (!fr->been_background);
                 } else {
                     if ((curdescr = get_descr(fr->descr, NOTHING))) {
                         curdescr->block = 1;
@@ -1966,8 +1966,8 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
                 fr->brkpt.isread = 1;
                 fr->pc = pc + 1;
                 if (OkObj(fr->player)) {
-                    DBSTORE(player, sp.player.curr_prog, program);
-                    DBSTORE(player, sp.player.block, 0);
+                    MUCK::playerSession(player).currProg = program;
+                    MUCK::playerSession(player).block = 0;
                 } else {
                     if ((curdescr = get_descr(fr->descr, NOTHING))) {
                         DR_RAW_ADD_FLAGS(curdescr, DF_INTERACTIVE);
@@ -1999,8 +1999,8 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
                 fr->brkpt.isread = 1;
                 fr->pc = pc + 1;
                 if (OkObj(fr->player)) {
-                    DBSTORE(player, sp.player.curr_prog, program);
-                    DBSTORE(player, sp.player.block, 0);
+                    MUCK::playerSession(player).currProg = program;
+                    MUCK::playerSession(player).block = 0;
                 } else {
                     if ((curdescr = get_descr(fr->descr, NOTHING))) {
                         curdescr->block = 0;
@@ -2028,7 +2028,7 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
                     abort_loop("Timetravel beyond scope of muf.", temp1, NULL);
                 add_muf_delay_event(temp1->data.number, fr->descr, player, NOTHING, NOTHING, program, fr, "SLEEPING");
                 if (OkObj(player)) {
-                    DBSTORE(player, sp.player.block, (!fr->been_background));
+                    MUCK::playerSession(player).block = (!fr->been_background);
                 } else {
                     if ((curdescr = get_descr(fr->descr, NOTHING)))
                         curdescr->block = !(fr->been_background);
@@ -2106,7 +2106,7 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
                 reload(fr, atop, stop);
                 prog_clean(fr);
                 if (OkObj(player)) {
-                    DBSTORE(player, sp.player.block, 0);
+                    MUCK::playerSession(player).block = 0;
                 } else {
                     if ((curdescr = get_descr(fr->descr, NOTHING)))
                         curdescr->block = 0;
@@ -2122,7 +2122,7 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
  *       that might be waiting for input from this user.
  */
     if (OkObj(player)) {
-        DBSTORE(player, sp.player.block, 0);
+        MUCK::playerSession(player).block = 0;
     } else {
         if ((curdescr = get_descr(fr->descr, NOTHING)))
             curdescr->block = 0;

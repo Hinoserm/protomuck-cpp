@@ -1963,8 +1963,6 @@ prim_copyplayer(PRIM_PROTOTYPE)
     newp->sp.player.home = MUCK::playerHomeRef(ref);       /* raw: mid-construction */
     newp->sp.player.pennies = MUCK::playerPennies(ref);    /* raw: mid-construction */
     newp->sp.player.password = NULL;
-    newp->sp.player.curr_prog = NOTHING;
-    DBFETCH(newplayer)->sp.player.insert_mode = 0;
 
     /* Yet again, set_password */
     set_password(newplayer, password);
@@ -2050,11 +2048,7 @@ prim_toadplayer(PRIM_PROTOTYPE)
 
     boot_player_off(victim);
 
-    if (DBFETCH(victim)->sp.player.descrs) {
-        free(DBFETCH(victim)->sp.player.descrs); //TODO: Fix later when C++ support is better. -hinoserm
-        DBFETCH(victim)->sp.player.descrs = NULL;
-        DBFETCH(victim)->sp.player.descr_count = 0;
-    }
+    MUCK::playerSession(victim).descrs.clear();
     delete_player(victim);
     /* reset name */
     sprintf(buf, "The soul of %s", PNAME(victim));
@@ -2641,21 +2635,21 @@ prim_getobjinfo(PRIM_PROTOTYPE)
             temp1.type = PROG_STRING;
             temp1.data.string = alloc_prog_string("CURR_PROG");
             temp2.type = PROG_OBJECT;
-            temp2.data.objref = DBFETCH(ref)->sp.player.curr_prog;
+            temp2.data.objref = MUCK::playerSession(ref).currProg;
             array_setitem(&nw, &temp1, &temp2);
             CLEAR(&temp1);
             CLEAR(&temp2);
             temp1.type = PROG_STRING;
             temp1.data.string = alloc_prog_string("INSERT_MODE");
             temp2.type = PROG_INTEGER;
-            temp2.data.number = (int) (DBFETCH(ref)->sp.player.insert_mode);
+            temp2.data.number = (int) (MUCK::playerSession(ref).insertMode);
             array_setitem(&nw, &temp1, &temp2);
             CLEAR(&temp1);
             CLEAR(&temp2);
             temp1.type = PROG_STRING;
             temp1.data.string = alloc_prog_string("BLOCK");
             temp2.type = PROG_INTEGER;
-            temp2.data.number = (int) (DBFETCH(ref)->sp.player.block);
+            temp2.data.number = (int) (MUCK::playerSession(ref).block);
             array_setitem(&nw, &temp1, &temp2);
             CLEAR(&temp1);
             CLEAR(&temp2);

@@ -603,7 +603,7 @@ do_prog(int descr, dbref player, const char *name)
     if ((i = match_result(&md)) == NOTHING) {
         i = MUCK::database().newProgram(OWNER(player), name);
         FLAGS(i) |= INTERNAL;
-        DBFETCH(player)->sp.player.curr_prog = i;
+        MUCK::playerSession(player).currProg = i;
 
         anotify_fmt(player, CSUCC "Program %s created with number %d.", name, i);
         anotify_nolisten2(player, CINFO "Entering editor.");
@@ -621,7 +621,7 @@ do_prog(int descr, dbref player, const char *name)
 
         DBFETCH(i)->sp.program.first = MUCK::programs().read(i);
         FLAGS(i) |= INTERNAL;
-        DBFETCH(player)->sp.player.curr_prog = i;
+        MUCK::playerSession(player).currProg = i;
         anotify_fmt(player, CINFO "Entering editor for %s.", unparse_object(player, i));
         /* list current line */
         do_list(player, i, 0, 0, 0);
@@ -671,7 +671,7 @@ do_edit(int descr, dbref player, const char *name)
 
     FLAGS(i) |= INTERNAL;
     DBFETCH(i)->sp.program.first = MUCK::programs().read(i);
-    DBFETCH(player)->sp.player.curr_prog = i;
+    MUCK::playerSession(player).currProg = i;
     anotify_fmt(player, CINFO "Entering editor for %s.", unparse_object(player, i));
     /* list current line */
     do_list(player, i, 0, 0, 0);

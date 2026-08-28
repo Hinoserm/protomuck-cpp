@@ -46,6 +46,19 @@ class Thing : public Container {
     void setValue(int v);
 };
 
+/* Per-player transient state: everything about the LIVE presence of a
+ * player. Lives on the Player module, structurally unserializable, gone
+ * at restart. docs/DATABASE.txt section 2. */
+struct PlayerSession {
+    std::vector<int> descrs;    /* descriptor table indexes */
+    int lastDescr = -1;
+    dbref currProg = -1;        /* NOTHING; editor target */
+    short insertMode = 0;
+    short block = 0;
+    std::vector<dbref> ignore;  /* ignore-list cache */
+    long ignoreTime = 0;
+};
+
 class Player : public Container {
   public:
     const char *moduleName() const override { return "player"; }
@@ -58,8 +71,10 @@ class Player : public Container {
     bool checkPassword(const char *plaintext) const;
     bool setPassword(const char *plaintext);
 
-    /* Transient session state (descriptors) migrates here from the
-     * sp union and interface.cpp in a later integration pass. */
+    PlayerSession &session() { return session_; }
+
+  private:
+    PlayerSession session_;
 };
 
 class Exit : public Module {
@@ -88,6 +103,10 @@ dbref exitDestRef(dbref ref, int i);
 dbref playerHomeRef(dbref ref);
 int playerPennies(dbref ref);
 void playerAddPennies(dbref ref, int delta);
+
+/* Session of a player ref; a shared inert dummy for non-players so
+ * blanket conversions stay safe. Do not hold across type changes. */
+PlayerSession &playerSession(dbref ref);
 
 class MufProgram : public Module {
   public:

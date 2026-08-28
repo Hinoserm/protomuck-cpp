@@ -297,10 +297,6 @@ db_read_object_old(FILE * f, struct object *o, dbref objno)
             o->exits = NOTHING;
             o->sp.player.pennies = pennies;
             o->sp.player.password = password;
-            o->sp.player.curr_prog = NOTHING;
-            o->sp.player.insert_mode = 0;
-            o->sp.player.descrs = NULL;
-            o->sp.player.descr_count = 0;
             break;
         case TYPE_GARBAGE:
             OWNER(objno) = NOTHING;
@@ -418,10 +414,6 @@ db_read_object_new(FILE * f, struct object *o, dbref objno)
             o->exits = getref(f);
             o->sp.player.pennies = getref(f);
             o->sp.player.password = getstring(f);
-            o->sp.player.curr_prog = NOTHING;
-            o->sp.player.insert_mode = 0;
-            o->sp.player.descrs = NULL;
-            o->sp.player.descr_count = 0;
             break;
     }
 }
@@ -679,13 +671,6 @@ db_read_object_foxen(FILE * f, struct object *o, dbref objno, int dtype, int rea
                     o->sp.player.password = getstring(f);
                 }
             }
-            o->sp.player.curr_prog = NOTHING;
-            o->sp.player.insert_mode = 0;
-            o->sp.player.descrs = NULL;
-            o->sp.player.descr_count = 0;
-#ifdef IGNORE_SUPPORT
-            o->sp.player.ignoretime = 0;
-#endif /* IGNORE_SUPPORT */
             break;
         case TYPE_PROGRAM:
             if (verboseload)

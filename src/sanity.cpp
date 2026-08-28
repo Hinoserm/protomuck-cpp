@@ -7,6 +7,7 @@
 #include "interface.h"
 #include "tune.h"
 #include "externs.h"
+#include "Modules.h"
 
 #include "params.h"
 #include "props.h"
@@ -687,11 +688,7 @@ create_lostandfound(dbref *player, dbref *room)
         DBFETCH(*player)->sp.player.pennies = tp_start_pennies;
         DBFETCH(*player)->sp.player.password = NULL;
         set_password(*player, rand_password());
-        DBFETCH(*player)->sp.player.curr_prog = NOTHING;
-        DBFETCH(*player)->sp.player.insert_mode = 0;
-#ifdef IGNORE_SUPPORT
-        DBFETCH(*player)->sp.player.ignoretime = 0;
-#endif /* IGNORE_SUPPORT */
+        MUCK::playerSession(*player) = MUCK::PlayerSession();
 
         PUSH(*player, DBFETCH(*room)->contents);
         add_player(*player);

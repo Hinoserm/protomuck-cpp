@@ -993,16 +993,16 @@ recycle(int descr, dbref player, dbref thing)
                 break;
             case TYPE_PLAYER:
                 if (Typeof(thing) == TYPE_PROGRAM && (FLAGS(rest) & INTERACTIVE)
-                    && (DBFETCH(rest)->sp.player.curr_prog == thing)) {
+                    && (MUCK::playerSession(rest).currProg == thing)) {
                     if (FLAGS(rest) & READMODE) {
                         anotify_nolisten2(rest, CINFO "The program you were running has been recycled.  Aborting program.");
                     } else {
                         free_prog_text(DBFETCH(thing)->sp.program.first);
                         DBFETCH(thing)->sp.program.first = NULL;
-                        DBFETCH(rest)->sp.player.insert_mode = 0;
+                        MUCK::playerSession(rest).insertMode = 0;
                         FLAGS(thing) &= ~INTERNAL;
                         FLAGS(rest) &= ~INTERACTIVE;
-                        DBFETCH(rest)->sp.player.curr_prog = NOTHING;
+                        MUCK::playerSession(rest).currProg = NOTHING;
                         anotify_nolisten2(rest, CINFO "The program you were editing has been recycled.  Exiting Editor.");
                     }
                 }
@@ -1014,8 +1014,8 @@ recycle(int descr, dbref player, dbref thing)
                     DBFETCH(rest)->exits = DBFETCH(thing)->next;
                     DBDIRTY(rest);
                 }
-                if (DBFETCH(rest)->sp.player.curr_prog == thing)
-                    DBFETCH(rest)->sp.player.curr_prog = 0;
+                if (MUCK::playerSession(rest).currProg == thing)
+                    MUCK::playerSession(rest).currProg = 0;
                 break;
             case TYPE_PROGRAM:
                 if (OWNER(rest) == thing) {
