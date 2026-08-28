@@ -1,10 +1,10 @@
 PROTOMUCK DATABASE REDESIGN
 ===========================
 
-Design agreed 2026-08-27.  This document is the authority for the
-new-database branch.  Implementation lands in the steps listed at the
-bottom; where code and this document disagree during development, this
-document wins until amended.
+Design agreed 2026-08-27, revised same day to the module architecture.
+This document is the authority for the new-database branch.  Where code
+and this document disagree during development, this document wins until
+amended.
 
 
 1. IDENTITY
@@ -36,54 +36,124 @@ document wins until amended.
    mufevent.
 
 
-2. IN-MEMORY MODEL
+2. OBJECT MODEL: CORE PLUS MODULES
 
-   Two hash maps own lookup: uuid -> object and dbref -> object.
+   There is one concrete object class, DbObject.  What an object IS is
+   determined by the modules attached to it, not by a class hierarchy.
+
+   DbObject core (present on every object, versioned, not modular):
+       uuid, dbref, name, location, flags, timestamps.
+
+   TYPE modules: PLAYER, THING, ROOM, EXIT, MUFPROG.
+       Exactly one per object, attached at creation by
+       Database.Create<T>(), immutable for the object's life.
+       Exclusivity is enforced by construction, not by runtime checks.
+       Typeof() reports the type module.  Containment state (contents
+       and exits vectors) lives on the type modules that can contain:
+       ROOM, THING, PLAYER.
+
+   FEATURE modules: PROPERTIES is the first; VEHICLE is the canonical
+       future example.  Zero or more per object.  Two scopes:
+
+       global      enabled for the whole game and auto-attached to
+                   every object (PROPERTIES).  Recorded in the
+                   manifest.
+       individual  attached to specific objects (a THING that is a
+                   vehicle).  Recorded in the object's file.
+
+   Module state is divided in two, and the divide is structural:
+
+       persistent  what the module hands the database for storage,
+                   expressed ONLY in the standard value model below.
+       transient   ordinary members on the module object that are
+                   never handed over and can never reach disk.  The
+                   PLAYER module's session data, descriptors, and
+                   output queues live here: on the object, found
+                   through the same lookups, gone at restart.
+
+   Creation:
+
+       Player *who = database().Create<Player>(name, where);
+       DbObject *obj = database().GetByRef(ref);      // boundary only
+       if (Player *p = obj->As<Player>()) { ... }     // null if absent
+
+   Objects cannot be constructed outside Create<T>, so nothing can
+   exist without identity or indexing, and Create is the single
+   gatekeeper where quota enforcement can land later.
+
+   Modules are designed to be dynamically loadable eventually (the
+   contract does not care whether a module is compiled in or loaded
+   from a shared object).  Compiled-in modules come first; dlopen
+   delivery is a later step.  Unloading a module makes its data
+   dormant, never lost: see section 4.
+
+
+3. THE VALUE MODEL: HOW MODULES PERSIST STATE
+
+   The database defines one closed set of value types:
+
+       string, int, float, bool, ref (a uuid), ordered list,
+       and chunk-ref (a hash into a shared content-addressed pool).
+
+   A module's persistent state is a set of entries: namespaced key ->
+   typed value.  Namespaces are reserved per module:
+
+       $core/...      DbObject core fields
+       $type/...      the type module's fields
+       /...           PROPERTIES (player-visible props keep their
+                      traditional paths)
+       ~vehicle/...   an individual feature module
+
+   PROPERTIES declares one entry per prop, giving per-prop versioning.
+   MUFPROG stores source as a list of chunk-refs into the pool, giving
+   per-line dedup and versioning.  The chunk pool is a database-level
+   service any module may use; pruning garbage-collects unreferenced
+   chunks.
+
+   The database versions, dedups, prunes, rolls back, and diffs
+   entries WITHOUT understanding them.  Modules alone know what the
+   keys mean, and rebuild their in-memory state from their entry slice
+   on load or rollback.  No module may define its own file format;
+   this rule is what makes central versioning and module-absent
+   durability possible.
+
+
+4. MODULE DURABILITY
+
+   Entries belonging to a module that is not currently loaded are
+   dormant: the database continues to load, carry, version-freeze, and
+   re-save them untouched.  The object keeps its attachment record.
+   When the module returns, its data is exactly where it was.  Modules
+   stamp a schema version inside their namespace so a newer module
+   build can migrate older entries on first touch.
+
+
+5. IN-MEMORY MODEL
+
+   Two hash maps own lookup: uuid -> DbObject and dbref -> DbObject.
    There is NO dense array and NO db_top.  A mass-grief incident
    creates no million-entry hole because there is nothing to hole.
 
-   Code holds typed pointers to objects, not dbrefs.  Resolution
-   through the maps happens at boundaries only: MUF primitive
-   arguments, player input, disk load.  Once resolved, the pointer is
-   used directly.  Eventually MUF gains an OBJECT type alongside DBREF
-   and the interpreter resolves stack values straight to pointers.
+   Code holds pointers (to DbObject or to a specific module), not
+   dbrefs.  Resolution through the maps happens at boundaries only:
+   MUF primitive arguments, player input, disk load.  Eventually MUF
+   gains an OBJECT type alongside DBREF and the interpreter resolves
+   stack values straight to pointers.
 
    Deleted objects are unlinked from both maps but their memory is
    never freed while the server runs, so no held pointer can dangle.
    Holders can check IsDeleted().  Memory is reclaimed at restart.
 
-   Paging: the design must allow objects to be paged in from disk in
-   the future, though today everything stays in RAM.  Two rules follow:
-   all field access goes through accessor methods, never raw member
-   reads, and identity is always resident even when payload is not
-   (the maps hold a stub for every object from open).
+   Paging: the design must allow payload to be paged in from disk in
+   the future, though today everything stays in RAM.  Two rules
+   follow: all field access goes through accessor methods, and
+   identity is always resident even when payload is not.
 
-
-3. CLASS HIERARCHY
-
-   DatabaseObject          uuid, dbref, name, location, owner, flags,
-                           properties, timestamps.  Abstract base.
-   Container : DatabaseObject
-                           adds contents and exits vectors.
-   Room, Thing, Player : Container
-   Exit : DatabaseObject   adds destination list.  Holds nothing.
-   Program : DatabaseObject
-                           adds source text.  Holds nothing.
-
-   Types that cannot contain things do not have contents; calling
-   exit->Contents() is a compile error, not an empty list.
-
-   Player carries transient Session objects (connection descriptors,
-   output queues, telnet state).  Session is structurally separate and
-   can never serialize; a socket fd cannot be persisted by accident.
-   Persistent connection facts (last host, last connect time) are
-   ordinary versioned fields on Player.
-
-   Contents/exits are std::vector<T *>.  The old intrusive
+   Contents and exits are std::vector<DbObject *>.  The old intrusive
    location/contents/exits/next dbref chains are abolished.
 
 
-4. ON-DISK FORMAT
+6. ON-DISK FORMAT
 
    One JSON file per object, named by UUID, git-sharded two levels
    deep to keep directories small:
@@ -91,14 +161,17 @@ document wins until amended.
        data/objects/01/8f/018f3a2b-....json      current state
        data/objects/01/8f/018f3a2b-....hist      append-only history
 
-   A manifest file at the data root stores the format version, the
-   global revision counter, the next dbref, the tombstone table, and
-   the @tune parameters (parmfile.cfg contents move into the manifest;
-   help files and logs explicitly do NOT move into the database).
+   The object file records: the type module name, the list of
+   individually attached feature modules, and the entries grouped by
+   namespace.  Object references serialize as UUIDs, including the
+   contents and exits vectors.  MUF source is stored inside the object
+   file (as chunk-refs), not in muf/<ref>.m.
 
-   Object references serialize as UUIDs, including the contents and
-   exits vectors.  Program source is stored inside the object file,
-   not in muf/<ref>.m.
+   A manifest file at the data root stores the format version, the
+   global revision counter, the next dbref, the globally enabled
+   feature modules, the tombstone table, and the @tune parameters
+   (parmfile.cfg moves into the manifest; help files and logs
+   explicitly do NOT move into the database).
 
    Startup reads only the .json files; boot time is independent of
    retained history.  .hist is read only for rollback or historical
@@ -113,7 +186,7 @@ document wins until amended.
    the old NeonMuck V2 format, minting UUIDs during load.
 
 
-5. VERSIONING (copy on write)
+7. VERSIONING (copy on write)
 
    One global 64-bit revision counter, incremented by one per
    snapshot, shared by whole-database snapshots and single-object
@@ -122,42 +195,39 @@ document wins until amended.
    single-object snapshot records a marker only in that object's
    file.  Nothing ever walks the database to snapshot.
 
-   Every persistent value (props, name, flags, program lines, all of
-   it) is stamped with the revision at which it took effect.  Writing
-   a value:
+   Every entry is stamped with the revision at which its value took
+   effect.  Writing an entry:
 
        - identical to current value: write nothing at all.  A program
          rewriting 10,000 unchanged props inflates nothing.
-       - changed, and no snapshot has seen the old value: overwrite in
-         place.
+       - changed, and no retained snapshot has seen the old value:
+         overwrite in place.
        - changed, and a retained snapshot references the old value:
          move the old value to history, stamp the new one.
 
-   History therefore grows with snapshots x values-actually-changed,
+   History therefore grows with snapshots x entries-actually-changed,
    never with write volume.
 
-   Deleting a prop writes a tombstone entry at the current rev, so a
+   Deleting an entry writes a tombstone entry at the current rev, so a
    historical read below that rev still sees it and a current read
    does not.
 
    Reading at revision R: newest entry per key with rev <= R.
 
    Pruning: a history entry is droppable only when no retained marker
-   falls in its lifetime, AND it keeps the newest-below-oldest-marker
-   entry per key so aged-out revs cannot orphan a live value.
+   falls in its lifetime, AND the newest entry below the oldest
+   retained marker is kept per key, so aging out revs cannot orphan a
+   live value.  Pruning also garbage-collects unreferenced chunks.
 
    Retention is time-based on markers via @tune (like 30 days).  A
    marker can be locked; locked markers never age out.  Use case: lock
    a snapshot of one program before a risky edit, roll back if needed.
 
-   Program source lines are content-addressed within the object file
-   so a new version stores only changed lines.
-
-   Only state that serializes is versioned.  Memory-only state
-   (sessions, interpreter frames) has no COW and no revs.
+   Only entries are versioned.  Transient module state has no COW and
+   no revs.
 
 
-6. MIGRATION AND OPERATIONS
+8. MIGRATION AND OPERATIONS
 
    Development happens on the new-database branch; GinkoMUCK runs that
    branch as the live test.  The importer converts data/neon.db once;
@@ -166,15 +236,17 @@ document wins until amended.
    Steps:
      1. New format working end to end: converter class absorbs the
         flat-file reader, server loads old format, writes new format,
-        loads and runs from new format thereafter.  In-memory model
-        may temporarily remain the legacy struct during this step.
-     2. Rebuild the class skeleton to the hierarchy above, in small
+        loads and runs from new format thereafter.  The in-memory
+        model temporarily remains the legacy struct; the FILE format
+        is module-shaped from day one so step 2 does not change it.
+     2. Rebuild the in-memory model to DbObject plus modules, in small
         sections: write new methods, hunt down old call sites,
         modernize them.  Loop until the legacy struct and union are
         gone.  Recycling and garbage removal land here.
-     3. Versioning: revision stamps, markers, history files, pruning,
-        @tune retention.
+     3. Versioning: revision stamps, markers, history files, the
+        chunk pool, pruning, @tune retention.
      4. (with 3) Tombstone table and OBJECT_DELETED event.
-     5. Integration passes discussed case by case: player sessions
-        onto Player, MUF OBJECT type, tunables fully in manifest,
-        further consolidation of side files.
+     5. Integration passes discussed case by case: sessions onto the
+        PLAYER module, MUF OBJECT type, tunables fully in manifest,
+        dlopen module delivery, further feature modules (VEHICLE as
+        the model case).
