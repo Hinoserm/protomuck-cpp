@@ -302,9 +302,9 @@ propsToJson(json &arr, const char *dir, PropDirPtr d)
 
         if (keep) {
             json entry;
-            entry["n"] = jstr((std::string(dir + 1) + PropName(p)).c_str());
-            entry["f"] = flags;
-            entry["v"] = v;
+            entry["name"] = jstr((std::string(dir + 1) + PropName(p)).c_str());
+            entry["flags"] = flags;
+            entry["value"] = v;
             arr.push_back(entry);
         }
 
@@ -319,14 +319,14 @@ static void
 propsFromJson(dbref obj, const json &arr)
 {
     for (const auto &entry : arr) {
-        std::string name = junstr(entry.value("n", ""));
-        int flags = entry.value("f", 0);
+        std::string name = junstr(entry.value("name", ""));
+        int flags = entry.value("flags", 0);
         PData pdat;
 
-        if (name.empty() || !entry.contains("v"))
+        if (name.empty() || !entry.contains("value"))
             continue;
         pdat.flags = (unsigned short) (flags & ~PROP_COMPRESSED);
-        const json &v = entry["v"];
+        const json &v = entry["value"];
         std::string sval;
 
         switch (pdat.flags & PROP_TYPMASK) {
@@ -454,11 +454,13 @@ ensureDirsFor(const std::string &path)
 
 
 /* ------------------------------------------------------------------ */
-/* Format 2: the value model. An object's persistent state is a set   */
-/* of namespaced entries, each a typed value stamped with the rev at  */
+/* The value model. An object's persistent state is a set of          */
+/* namespaced entries, each a typed value stamped with the rev at     */
 /* which it took effect. The closed type set (docs section 3):        */
-/*   s string, i int, f float, b bool, r ref, l list, c chunk-ref     */
-/* Prop entries carry the legacy prop flag word as "m".               */
+/*   string, int, float, bool, ref, list                              */
+/* Prop entries carry the legacy prop flag word as "flags". All keys  */
+/* are spelled out: the store sits on compressed filesystems, so      */
+/* abbreviations would save nothing and cost readability.             */
 /* ------------------------------------------------------------------ */
 
 static json
@@ -466,8 +468,8 @@ entry(const char *t, json v)
 {
     json e;
 
-    e["t"] = t;
-    e["v"] = std::move(v);
+    e["type"] = t;
+    e["value"] = std::move(v);
     return e;
 }
 
@@ -498,17 +500,17 @@ objectToJson(dbref i)
     json e;
 
     /* --- $core: what every object has --- */
-    e["$core/name"] = entry("s", jstr(o->name));
-    e["$core/location"] = entry("r", refToJson(o->location));
-    e["$core/owner"] = entry("r", refToJson(o->owner));
-    e["$core/flags"] = entry("l", json::array({
+    e["$core/name"] = entry("string", jstr(o->name));
+    e["$core/location"] = entry("ref", refToJson(o->location));
+    e["$core/owner"] = entry("ref", refToJson(o->owner));
+    e["$core/flags"] = entry("list", json::array({
         (int) (((o->flags & ~DUMP_MASK) & ~TYPE_MASK) | typeBitsOut),
         (int) (o->flag2 & ~DUM2_MASK),
         (int) (o->flag3 & ~DUM3_MASK), (int) (o->flag4 & ~DUM4_MASK) }));
-    e["$core/powers"] = entry("l", json::array({
+    e["$core/powers"] = entry("list", json::array({
         (int) (o->powers & ~POWERS_DUMP_MASK),
         (int) (o->power2 & ~POWER2_DUMP_MASK) }));
-    e["$core/ts"] = entry("l", json::array({
+    e["$core/ts"] = entry("list", json::array({
         (long) o->ts.created, (long) o->ts.modified, (long) o->ts.lastused,
         (long) o->ts.usecount, (long) o->ts.dcreated,
         (long) o->ts.dmodified, (long) o->ts.dlastused }));
@@ -516,22 +518,22 @@ objectToJson(dbref i)
     /* --- $type: the type module's fields --- */
     switch (o->flags & TYPE_MASK) {
         case TYPE_ROOM:
-            e["$type/dropto"] = entry("r", refToJson(MUCK::roomDropToRef(i)));
-            e["$type/contents"] = entry("l", listToJson(i, MUCK::contentsOf(i)));
-            e["$type/exits"] = entry("l", listToJson(i, MUCK::exitsOf(i)));
+            e["$type/dropto"] = entry("ref", refToJson(MUCK::roomDropToRef(i)));
+            e["$type/contents"] = entry("list", listToJson(i, MUCK::contentsOf(i)));
+            e["$type/exits"] = entry("list", listToJson(i, MUCK::exitsOf(i)));
             break;
         case TYPE_THING:
-            e["$type/home"] = entry("r", refToJson(MUCK::thingHomeRef(i)));
-            e["$type/value"] = entry("i", MUCK::thingValue(i));
-            e["$type/contents"] = entry("l", listToJson(i, MUCK::contentsOf(i)));
-            e["$type/exits"] = entry("l", listToJson(i, MUCK::exitsOf(i)));
+            e["$type/home"] = entry("ref", refToJson(MUCK::thingHomeRef(i)));
+            e["$type/value"] = entry("int", MUCK::thingValue(i));
+            e["$type/contents"] = entry("list", listToJson(i, MUCK::contentsOf(i)));
+            e["$type/exits"] = entry("list", listToJson(i, MUCK::exitsOf(i)));
             break;
         case TYPE_PLAYER:
-            e["$type/home"] = entry("r", refToJson(MUCK::playerHomeRef(i)));
-            e["$type/pennies"] = entry("i", MUCK::playerPennies(i));
-            e["$type/password"] = entry("s", jstr(MUCK::playerPasswordSlot(i)));
-            e["$type/contents"] = entry("l", listToJson(i, MUCK::contentsOf(i)));
-            e["$type/exits"] = entry("l", listToJson(i, MUCK::exitsOf(i)));
+            e["$type/home"] = entry("ref", refToJson(MUCK::playerHomeRef(i)));
+            e["$type/pennies"] = entry("int", MUCK::playerPennies(i));
+            e["$type/password"] = entry("string", jstr(MUCK::playerPasswordSlot(i)));
+            e["$type/contents"] = entry("list", listToJson(i, MUCK::contentsOf(i)));
+            e["$type/exits"] = entry("list", listToJson(i, MUCK::exitsOf(i)));
             break;
         case TYPE_EXIT: {
             json dests = json::array();
@@ -539,7 +541,7 @@ objectToJson(dbref i)
 
             for (int k = 0; k < nd; k++)
                 dests.push_back(refToJson(MUCK::exitDestRef(i, k)));
-            e["$type/dests"] = entry("l", dests);
+            e["$type/dests"] = entry("list", dests);
             break;
         }
         case TYPE_PROGRAM: {
@@ -550,7 +552,7 @@ objectToJson(dbref i)
             if (lines)
                 for (const auto &ln : *lines)
                     lv.push_back(jstr(ln.c_str()));
-            e["$type/source"] = entry("l", lv);
+            e["$type/source"] = entry("list", lv);
             break;
         }
         default:
@@ -563,13 +565,13 @@ objectToJson(dbref i)
 
         propsToJson(props, "/", MUCK::propRoot(i));
         for (const auto &pe : props) {
-            std::string key = "/" + pe["n"].get<std::string>();
-            const json &v = pe["v"];
-            const char *t = v.is_string() ? "s"
-                : v.is_number_float() ? "f" : "i";
+            std::string key = "/" + pe["name"].get<std::string>();
+            const json &v = pe["value"];
+            const char *t = v.is_string() ? "string"
+                : v.is_number_float() ? "float" : "int";
             json ent = entry(t, v);
 
-            ent["m"] = pe["f"];
+            ent["flags"] = pe["flags"];
             e[key] = std::move(ent);
         }
     }
@@ -714,7 +716,7 @@ fileToLoadShape(const json &j, const std::string &root)
 
     auto val = [&e](const char *k) -> json {
         auto it = e.find(k);
-        return it == e.end() ? json() : (*it)["v"];
+        return it == e.end() ? json() : (*it)["value"];
     };
 
     json core;
@@ -744,10 +746,10 @@ fileToLoadShape(const json &j, const std::string &root)
         std::string key = std::string("$type/") + k;
         auto it = e.find(key);
         if (it != e.end())
-            td[k] = (*it)["v"];
+            td[k] = (*it)["value"];
     }
     if (e.contains("$type/source"))
-        td["source"] = e["$type/source"]["v"];
+        td["source"] = e["$type/source"]["value"];
     out["type_data"] = td;
 
     json props = json::array();
@@ -755,9 +757,9 @@ fileToLoadShape(const json &j, const std::string &root)
         if (it.key().empty() || it.key()[0] != '/')
             continue;
         json pe;
-        pe["n"] = it.key().substr(1);
-        pe["f"] = it.value().value("m", 0);
-        pe["v"] = it.value()["v"];
+        pe["name"] = it.key().substr(1);
+        pe["flags"] = it.value().value("flags", 0);
+        pe["value"] = it.value()["value"];
         props.push_back(pe);
     }
     out["props"] = props;
@@ -968,11 +970,11 @@ ObjectStore::writeManifest()
     json ts = json::array();
     for (const auto &t : MUCK::database().tombstones()) {
         json e;
-        e["u"] = t.uuid.toString();
-        e["r"] = (int) t.ref;
-        e["t"] = t.deletedAt;
-        e["b"] = t.deletedBy.toString();
-        e["dr"] = t.deletedRev;
+        e["uuid"] = t.uuid.toString();
+        e["dbref"] = (int) t.ref;
+        e["deleted_at"] = t.deletedAt;
+        e["deleted_by"] = t.deletedBy.toString();
+        e["deleted_rev"] = t.deletedRev;
         ts.push_back(e);
     }
     m["tombstones"] = ts;
@@ -1100,9 +1102,9 @@ ObjectStore::saveObject(dbref i)
             if (pit != prev["entries"].end())
                 old = &*pit;
         }
-        if (old && (*old)["t"] == it.value()["t"]
-            && (*old)["v"] == it.value()["v"]
-            && old->value("m", 0) == it.value().value("m", 0)) {
+        if (old && (*old)["type"] == it.value()["type"]
+            && (*old)["value"] == it.value()["value"]
+            && old->value("flags", 0) == it.value().value("flags", 0)) {
             it.value()["rev"] = old->value("rev", 0L);   /* unchanged */
             continue;
         }
@@ -1113,7 +1115,7 @@ ObjectStore::saveObject(dbref i)
             if (markerInWindow(oldRev, rev_, markers_, own)) {
                 json h = *old;
 
-                h["k"] = it.key();
+                h["key"] = it.key();
                 h["from"] = oldRev;
                 h["to"] = rev_;
                 histLines += h.dump() + "\n";
@@ -1131,7 +1133,7 @@ ObjectStore::saveObject(dbref i)
             if (markerInWindow(oldRev, rev_, markers_, own)) {
                 json h = pit.value();
 
-                h["k"] = pit.key();
+                h["key"] = pit.key();
                 h["from"] = oldRev;
                 h["to"] = rev_;
                 histLines += h.dump() + "\n";
@@ -1293,7 +1295,7 @@ entriesAtRev(const json &file, const std::string &hist, long rev)
 
         if (!(from <= rev && rev < to))
             continue;
-        std::string k = h.value("k", "");
+        std::string k = h.value("key", "");
         auto bit = bestFrom.find(k);
 
         if (bit != bestFrom.end() && bit->second >= from)
@@ -1301,7 +1303,7 @@ entriesAtRev(const json &file, const std::string &hist, long rev)
         bestFrom[k] = from;
         json v = h;
 
-        v.erase("k");
+        v.erase("key");
         v.erase("from");
         v.erase("to");
         out[k] = v;
@@ -1335,7 +1337,7 @@ ObjectStore::rollbackObject(dbref i, long rev)
     if (e.contains("$core/name")) {
         if (o->name && Typeof(i) != TYPE_GARBAGE)
             delete[] o->name;
-        o->name = alloc_string(junstr(e["$core/name"]["v"].get<std::string>()).c_str());
+        o->name = alloc_string(junstr(e["$core/name"]["value"].get<std::string>()).c_str());
     }
 
     /* properties: wipe and rebuild from the snapshot */
@@ -1349,9 +1351,9 @@ ObjectStore::rollbackObject(dbref i, long rev)
                 continue;
             json pe;
 
-            pe["n"] = it.key().substr(1);
-            pe["f"] = it.value().value("m", 0);
-            pe["v"] = it.value()["v"];
+            pe["name"] = it.key().substr(1);
+            pe["flags"] = it.value().value("flags", 0);
+            pe["value"] = it.value()["value"];
             props.push_back(pe);
         }
         propsFromJson(i, props);
@@ -1361,7 +1363,7 @@ ObjectStore::rollbackObject(dbref i, long rev)
     if (Typeof(i) == TYPE_PROGRAM && e.contains("$type/source")) {
         std::vector<std::string> lines;
 
-        for (const auto &ln : e["$type/source"]["v"])
+        for (const auto &ln : e["$type/source"]["value"])
             lines.push_back(junstr(ln.get<std::string>()));
         MUCK::programs().setSourceLines(i, std::move(lines));
         uncompile_program(i);
@@ -1578,11 +1580,11 @@ ObjectStore::loadAll()
         for (const auto &e : manifest["tombstones"]) {
             Database::Tombstone t;
 
-            t.uuid = Uuid::parse(e.value("u", "").c_str());
-            t.ref = (dbref) e.value("r", -1);
-            t.deletedAt = e.value("t", 0L);
-            t.deletedBy = Uuid::parse(e.value("b", "").c_str());
-            t.deletedRev = e.value("dr", 0L);
+            t.uuid = Uuid::parse(e.value("uuid", "").c_str());
+            t.ref = (dbref) e.value("dbref", -1);
+            t.deletedAt = e.value("deleted_at", 0L);
+            t.deletedBy = Uuid::parse(e.value("deleted_by", "").c_str());
+            t.deletedRev = e.value("deleted_rev", 0L);
             list.push_back(t);
         }
         MUCK::database().setTombstones(std::move(list));
@@ -1660,8 +1662,8 @@ ObjectStore::loadAll()
                         const json &ents = j["entries"];
                         auto fl = ents.find("$core/flags");
 
-                        if (fl != ents.end() && (*fl)["v"].is_array())
-                            bits = (*fl)["v"][0].get<int>() & TYPE_MASK;
+                        if (fl != ents.end() && (*fl)["value"].is_array())
+                            bits = (*fl)["value"][0].get<int>() & TYPE_MASK;
                         info["name"] = tname;
                         info["bits"] = bits;
                         dormantTypeInfo[j.value("uuid", "")] = info;
