@@ -547,12 +547,20 @@ STEP 2 BURNDOWN STATE  (updated as the loop advances)
                            storage flip. Session state is memory-only
                            and never serialized.
 
-    Remaining:
+        sp.program  DONE   Interpreter and editor state (compiled code,
+                           entry point, editor working text, publics,
+                           instance count, static vars, profiling)
+                           lives in ProgramRuntime on the MUF_PROGRAM
+                           module, reached with
+                           MUCK::programRuntime(ref). The union block
+                           is deleted; the persisted source itself was
+                           already going through the program text
+                           store. Runtime state is memory-only and
+                           never serialized.
 
-        sp.program  275    interpreter internals (code, pubs, curr_line,
-                           instances, profiling); source is already
-                           modularized. This is the step 5 MUF
-                           integration.
+    The sp union now carries only: room.dropto, thing.home/value,
+    exit.ndest/dest, player.home/pennies/password. Those die with the
+    storage flip.
 
     Step 2 passes still open:
         - Wizard-level checks (RawMWLevel, WLevel) into a permissions

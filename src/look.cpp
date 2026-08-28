@@ -890,7 +890,7 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
     sprintf(buf, "%s by %s", buf2, ref_tm < 0 ? "*NOTHING*" : ansi_unparse_object(OWNER(player), ref_tm));
     anotify_nolisten(player, buf, 1);
     if (Typeof(thing) == TYPE_PROGRAM) {
-        sprintf(buf, SYSFOREST "Usecount:" SYSGREEN " %d     " SYSFOREST "Instances:" SYSGREEN " %d", DBFETCH(thing)->ts.usecount, DBFETCH(thing)->sp.program.instances);
+        sprintf(buf, SYSFOREST "Usecount:" SYSGREEN " %d     " SYSFOREST "Instances:" SYSGREEN " %d", DBFETCH(thing)->ts.usecount, MUCK::programRuntime(thing).instances);
     } else
         sprintf(buf, SYSFOREST "Usecount:" SYSGREEN " %d", DBFETCH(thing)->ts.usecount);
     anotify_nolisten(player, buf, 1);
@@ -1003,10 +1003,10 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
             }
             break;
         case TYPE_PROGRAM:
-            if (DBFETCH(thing)->sp.program.siz) {
-                struct timeval tv = DBFETCH(thing)->sp.program.proftime;
+            if (MUCK::programRuntime(thing).codeSize) {
+                struct timeval tv = MUCK::programRuntime(thing).profTime;
 
-                sprintf(buf, SYSVIOLET "Program compiled size: " SYSPURPLE "%d instructions", DBFETCH(thing)->sp.program.siz);
+                sprintf(buf, SYSVIOLET "Program compiled size: " SYSPURPLE "%d instructions", MUCK::programRuntime(thing).codeSize);
                 anotify_nolisten(player, buf, 1);
                 sprintf(buf, SYSVIOLET "Cumulative runtime: " SYSPURPLE "%ld.%06ld seconds", tv.tv_sec, (long int) tv.tv_usec);
                 anotify_nolisten(player, buf, 1);

@@ -1007,21 +1007,9 @@ union specific {      /* I've been railroaded! */
 	/* Session state (descriptors, editor, ignore cache) lives on the
 	 * PLAYER module now; see PlayerSession in Modules.h. */
     }       player;
-    struct {			      /* PROGRAM-specific fields */
-	short   curr_line;	      /* current-line */
-	unsigned short instances;     /* #instances of this prog running */
-	int     siz;		      /* size of code */
-	struct inst *code;	      /* byte-compiled code */
-	struct inst *start;	      /* place to start executing */
-	struct line *first;	      /* first line */
-	struct publics *pubs;	      /* public subroutine addresses */
-      struct timeval proftime;      /* Profiling time spent in this program */
-      time_t profstart;             /* Time when profiling started for this prog */
-      unsigned int profuses;        /* # calls to this program while profiling */
-      struct funcprof *fprofile;
-      struct inst *staticvars;
-      int staticvarcnt;
-    }       program;
+    /* PROGRAM-specific fields (compiled code, editor text, publics,
+     * profiling) live in ProgramRuntime on the MUF_PROGRAM module now;
+     * see Modules.h. */
 };
 
 /* timestamps record */

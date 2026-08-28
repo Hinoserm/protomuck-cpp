@@ -8,6 +8,7 @@
 #include "interface.h"
 #include "inst.h"
 #include "externs.h"
+#include "Modules.h"
 #include "params.h"
 #include "tune.h"
 #include "match.h"
@@ -36,8 +37,8 @@ list_proglines(dbref player, dbref program, struct frame *fr, int start, int end
         fr->brkpt.proglines = MUCK::programs().read(program);
         fr->brkpt.lastproglisted = program;
     }
-    tmpline = DBFETCH(program)->sp.program.first;
-    DBSTORE(program, sp.program.first, fr->brkpt.proglines);
+    tmpline = MUCK::programRuntime(program).first;
+    MUCK::programRuntime(program).first = fr->brkpt.proglines;
     {
         int tmpflg = (FLAGS(player) & INTERNAL);
 
@@ -49,7 +50,7 @@ list_proglines(dbref player, dbref program, struct frame *fr, int start, int end
             FLAGS(player) &= ~INTERNAL;
         }
     }
-    DBSTORE(program, sp.program.first, tmpline);
+    MUCK::programRuntime(program).first = tmpline;
     return;
 }
 
@@ -63,8 +64,8 @@ show_line_prims(struct frame *fr, dbref program, struct inst *pc, int maxprims, 
     int thisline = pc->line;
     struct inst *code, *end, *linestart, *lineend;
 
-    code = DBFETCH(program)->sp.program.code;
-    end = code + DBFETCH(program)->sp.program.siz;
+    code = MUCK::programRuntime(program).code;
+    end = code + MUCK::programRuntime(program).codeSize;
     buf[0] = '\0';
 
     for (linestart = pc, maxback = maxprims; linestart > code && linestart->line == thisline && linestart->type != PROG_FUNCTION && --maxback; --linestart) ;
@@ -113,8 +114,8 @@ funcname_to_pc(dbref program, const char *name)
     int i, siz;
     struct inst *code;
 
-    code = DBFETCH(program)->sp.program.code;
-    siz = DBFETCH(program)->sp.program.siz;
+    code = MUCK::programRuntime(program).code;
+    siz = MUCK::programRuntime(program).codeSize;
     for (i = 0; i < siz; i++) {
         if ((code[i].type == PROG_FUNCTION) && !string_compare(name, code[i].data.mufproc->procname)) {
             return (code + i);
@@ -130,8 +131,8 @@ linenum_to_pc(dbref program, int whatline)
     int i, siz;
     struct inst *code;
 
-    code = DBFETCH(program)->sp.program.code;
-    siz = DBFETCH(program)->sp.program.siz;
+    code = MUCK::programRuntime(program).code;
+    siz = MUCK::programRuntime(program).codeSize;
     for (i = 0; i < siz; i++) {
         if (code[i].line == whatline) {
             return (code + i);
@@ -149,7 +150,7 @@ unparse_sysreturn(dbref *program, struct inst *pc)
     char *fname;
 
     buf[0] = '\0';
-    for (ptr = pc - 1; ptr >= DBFETCH(*program)->sp.program.code; ptr--) {
+    for (ptr = pc - 1; ptr >= MUCK::programRuntime(*program).code; ptr--) {
         if (ptr->type == PROG_FUNCTION) {
             break;
         }
@@ -285,8 +286,8 @@ list_program_functions(dbref player, dbref program, char *arg)
     struct inst *ptr;
     int count;
 
-    ptr = DBFETCH(program)->sp.program.code;
-    count = DBFETCH(program)->sp.program.siz;
+    ptr = MUCK::programRuntime(program).code;
+    count = MUCK::programRuntime(program).codeSize;
     anotify_nolisten(player, CINFO "*function words*", 1);
     while (count-- > 0) {
         if (ptr->type == PROG_FUNCTION) {
@@ -819,7 +820,7 @@ muf_debugger(int descr, dbref player, dbref program, const char *text, struct fr
                 endline = atoi(ptr2);
             }
         }
-        i = (DBFETCH(program)->sp.program.code + DBFETCH(program)->sp.program.siz - 1)->line;
+        i = (MUCK::programRuntime(program).code + MUCK::programRuntime(program).codeSize - 1)->line;
         if (startline > i) {
             anotify_nolisten(player, CFAIL "Starting line is beyond end of program.", 1);
             return 0;

@@ -2177,7 +2177,7 @@ prim_instances(PRIM_PROTOTYPE)
     if (Typeof(ref) != TYPE_PROGRAM)
         abort_interp("Object must be a program.");
 
-    a = DBFETCH(ref)->sp.program.instances;
+    a = MUCK::programRuntime(ref).instances;
     b = a;
     PushInt(b);
 }
@@ -2194,7 +2194,7 @@ prim_compiledp(PRIM_PROTOTYPE)
     if (Typeof(ref) != TYPE_PROGRAM)
         abort_interp("Object must be a program.");
 
-    PushInt(DBFETCH(ref)->sp.program.siz);
+    PushInt(MUCK::programRuntime(ref).codeSize);
 }
 
 
@@ -2343,13 +2343,14 @@ prim_compile(PRIM_PROTOTYPE)
     if (oper[0].type != PROG_INTEGER)
         abort_interp("No boolean integer given.");
 
-    tmpline = DBFETCH(ref)->sp.program.first;
-    DBFETCH(ref)->sp.program.first = (struct line *) MUCK::programs().read(ref);
+    MUCK::ProgramRuntime &rt = MUCK::programRuntime(ref);
+    tmpline = rt.first;
+    rt.first = (struct line *) MUCK::programs().read(ref);
     do_compile(fr->descr, PSafe, ref, oper[0].data.number);
-    free_prog_text(DBFETCH(ref)->sp.program.first);
-    DBFETCH(ref)->sp.program.first = tmpline;
+    free_prog_text(rt.first);
+    rt.first = tmpline;
 
-    PushInt(DBFETCH(ref)->sp.program.siz);
+    PushInt(rt.codeSize);
 }
 
 
@@ -2659,35 +2660,35 @@ prim_getobjinfo(PRIM_PROTOTYPE)
             temp1.type = PROG_STRING;
             temp1.data.string = alloc_prog_string("INSTANCES");
             temp2.type = PROG_INTEGER;
-            temp2.data.number = (int) (DBFETCH(ref)->sp.program.instances);
+            temp2.data.number = (int) (MUCK::programRuntime(ref).instances);
             array_setitem(&nw, &temp1, &temp2);
             CLEAR(&temp1);
             CLEAR(&temp2);
             temp1.type = PROG_STRING;
             temp1.data.string = alloc_prog_string("SIZ");
             temp2.type = PROG_INTEGER;
-            temp2.data.number = (int) (DBFETCH(ref)->sp.program.siz);
+            temp2.data.number = (int) (MUCK::programRuntime(ref).codeSize);
             array_setitem(&nw, &temp1, &temp2);
             CLEAR(&temp1);
             CLEAR(&temp2);
             temp1.type = PROG_STRING;
             temp1.data.string = alloc_prog_string("PROFSTART");
             temp2.type = PROG_INTEGER;
-            temp2.data.number = (int) (DBFETCH(ref)->sp.program.profstart);
+            temp2.data.number = (int) (MUCK::programRuntime(ref).profStart);
             array_setitem(&nw, &temp1, &temp2);
             CLEAR(&temp1);
             CLEAR(&temp2);
             temp1.type = PROG_STRING;
             temp1.data.string = alloc_prog_string("PROFUSES");
             temp2.type = PROG_INTEGER;
-            temp2.data.number = (int) (DBFETCH(ref)->sp.program.profuses);
+            temp2.data.number = (int) (MUCK::programRuntime(ref).profUses);
             array_setitem(&nw, &temp1, &temp2);
             CLEAR(&temp1);
             CLEAR(&temp2);
             temp1.type = PROG_STRING;
             temp1.data.string = alloc_prog_string("PROFTIME");
             temp2.type = PROG_FLOAT;
-            sprintf(buf, "%ld.%06ld", (long) DBFETCH(ref)->sp.program.proftime.tv_sec, (long) DBFETCH(ref)->sp.program.proftime.tv_usec);
+            sprintf(buf, "%ld.%06ld", (long) MUCK::programRuntime(ref).profTime.tv_sec, (long) MUCK::programRuntime(ref).profTime.tv_usec);
             fresult = atof(buf);
             temp2.data.fnumber = fresult;
             array_setitem(&nw, &temp1, &temp2);

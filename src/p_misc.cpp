@@ -4,6 +4,7 @@
 #include "db.h"
 #include "inst.h"
 #include "externs.h"
+#include "Modules.h"
 #include "match.h"
 #include "mufevent.h"
 #include "interface.h"
@@ -323,7 +324,7 @@ prim_fork(PRIM_PROTOTYPE)
     for (i = 0; i <= fr->caller.top; i++) {
         tmpfr->caller.st[i] = fr->caller.st[i];
         if (i > 0)
-            DBFETCH(fr->caller.st[i])->sp.program.instances++;
+            MUCK::programRuntime(fr->caller.st[i]).instances++;
     }
     tmpfr->trys.top = fr->trys.top;
     tmpfr->trys.st = copy_trys(fr->trys.st);
@@ -752,21 +753,21 @@ prim_cancallp(PRIM_PROTOTYPE)
         abort_interp("Expected string argument. (2)");
     if (!oper[0].data.string)
         abort_interp("Invalid Null string argument. (2)");
-    if (!(DBFETCH(oper[1].data.objref)->sp.program.code)) {
+    if (!(MUCK::programRuntime(oper[1].data.objref).code)) {
         struct line *tmpline;
 
-        tmpline = DBFETCH(oper[1].data.objref)->sp.program.first;
-        DBFETCH(oper[1].data.objref)->sp.program.first = ((struct line *) MUCK::programs().read(oper[1].data.objref));
+        tmpline = MUCK::programRuntime(oper[1].data.objref).first;
+        MUCK::programRuntime(oper[1].data.objref).first = ((struct line *) MUCK::programs().read(oper[1].data.objref));
         do_compile(fr->descr, OWNER(oper[1].data.objref), oper[1].data.objref, 0);
-        free_prog_text(DBFETCH(oper[1].data.objref)->sp.program.first);
-        DBFETCH(oper[1].data.objref)->sp.program.first = tmpline;
+        free_prog_text(MUCK::programRuntime(oper[1].data.objref).first);
+        MUCK::programRuntime(oper[1].data.objref).first = tmpline;
     }
     result = 0;
     if (ProgMLevel(oper[1].data.objref) > 0 && (mlev >= 4 || OWNER(oper[1].data.objref) == ProgUID || Linkable(oper[1].data.objref))
         ) {
         struct publics *pbs;
 
-        pbs = DBFETCH(oper[1].data.objref)->sp.program.pubs;
+        pbs = MUCK::programRuntime(oper[1].data.objref).pubs;
         while (pbs) {
             if (!string_compare(oper[0].data.string->data, pbs->subname))
                 break;
@@ -1167,8 +1168,8 @@ prim_funcprof_array(PRIM_PROTOTYPE)
         nw = new_array_dictionary();
 
         for (i = MUCK::database().top(); i-- > 0;) {
-            if (i == oper[0].data.objref && Typeof(i) == TYPE_PROGRAM && DBFETCH(i)->sp.program.code && DBFETCH(i)->sp.program.fprofile) {
-                struct funcprof *fpe = DBFETCH(i)->sp.program.fprofile;
+            if (i == oper[0].data.objref && Typeof(i) == TYPE_PROGRAM && MUCK::programRuntime(i).code && MUCK::programRuntime(i).fprofile) {
+                struct funcprof *fpe = MUCK::programRuntime(i).fprofile;
 
                 while (fpe) {
                     stk_array *nw2 = new_array_dictionary();

@@ -4,6 +4,7 @@
 #include "db.h"
 #include "props.h"
 #include "externs.h"
+#include "Modules.h"
 #include "interface.h"
 #include "interp.h"
 #include "inst.h"
@@ -16,12 +17,12 @@ disassemble(dbref player, dbref program)
     int i;
     char buf[BUFFER_LEN];
 
-    codestart = curr = DBFETCH(program)->sp.program.code;
-    if (!DBFETCH(program)->sp.program.siz) {
+    codestart = curr = MUCK::programRuntime(program).code;
+    if (!MUCK::programRuntime(program).codeSize) {
         notify(player, "Nothing to disassemble!");
         return;
     }
-    for (i = 0; i < DBFETCH(program)->sp.program.siz; i++, curr++) {
+    for (i = 0; i < MUCK::programRuntime(program).codeSize; i++, curr++) {
         switch (curr->type) {
             case PROG_PRIMITIVE:
                 if (curr->data.number >= BASE_MIN && curr->data.number <= BASE_MAX)

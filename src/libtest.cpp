@@ -17,6 +17,7 @@
 #include "mpi.h"
 #include "reg.h"
 #include "externs.h"
+#include "Modules.h"
 #include "mufevent.h"
 #include "interp.h"
 #include "newhttp.h"            /* hinoserm */
@@ -218,8 +219,8 @@ __prim_funcprof_array(PRIM_PROTOTYPE)
         nw = new_array_dictionary();
 
         for (i = MUCK::database().top(); i-- > 0;) {
-            if (i == oper1->data.objref && Typeof(i) == TYPE_PROGRAM && DBFETCH(i)->sp.program.code && DBFETCH(i)->sp.program.fprofile) {
-                struct funcprof *fpe = DBFETCH(i)->sp.program.fprofile;
+            if (i == oper1->data.objref && Typeof(i) == TYPE_PROGRAM && MUCK::programRuntime(i).code && MUCK::programRuntime(i).fprofile) {
+                struct funcprof *fpe = MUCK::programRuntime(i).fprofile;
 
                 while (fpe) {
                     stk_array *nw2 = new_array_dictionary();

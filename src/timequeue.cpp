@@ -1295,7 +1295,7 @@ has_refs(dbref program, timequeue ptr)
 {
     int loop;
 
-    if (ptr->typ != TQ_MUF_TYP || !(ptr->fr) || Typeof(program) != TYPE_PROGRAM || !(DBFETCH(program)->sp.program.instances)) {
+    if (ptr->typ != TQ_MUF_TYP || !(ptr->fr) || Typeof(program) != TYPE_PROGRAM || !(MUCK::programRuntime(program).instances)) {
         /*
            fprintf(stderr, "Program %s no references, terminating.\n",
            NAME(program));

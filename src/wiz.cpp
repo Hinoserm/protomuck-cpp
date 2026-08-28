@@ -510,7 +510,7 @@ do_stats(dbref player, const char *name)
                 case TYPE_PROGRAM:
                     total++, programs++;
 
-                    if (DBFETCH(i)->sp.program.siz > 0) {
+                    if (MUCK::programRuntime(i).codeSize > 0) {
                         tpcnt++;
                         tpsize += size_object(i, 0);
                     } else {
@@ -1171,8 +1171,8 @@ do_muf_funcprofs(dbref player, char *arg1)
        } */
     for (i = MUCK::database().top(); i-- > 0;) {
         if (!count || i == count) {
-            if (Typeof(i) == TYPE_PROGRAM && DBFETCH(i)->sp.program.code && DBFETCH(i)->sp.program.fprofile) {
-                fpr = DBFETCH(i)->sp.program.fprofile;
+            if (Typeof(i) == TYPE_PROGRAM && MUCK::programRuntime(i).code && MUCK::programRuntime(i).fprofile) {
+                fpr = MUCK::programRuntime(i).fprofile;
                 while (fpr) {
                     sprintf(buf, "%30s %30s %f, %ld", unparse_object(player, i), fpr->funcname, fpr->totaltime, fpr->usecount);
                     anotify_nolisten2(player, buf);
@@ -1215,10 +1215,10 @@ do_muf_topprofs(dbref player, char *arg1)
     if (!string_compare(arg1, "reset")) {
         for (i = MUCK::database().top(); i-- > 0;) {
             if (Typeof(i) == TYPE_PROGRAM) {
-                DBFETCH(i)->sp.program.proftime.tv_sec = 0;
-                DBFETCH(i)->sp.program.proftime.tv_usec = 0;
-                DBFETCH(i)->sp.program.profstart = current_systime;
-                DBFETCH(i)->sp.program.profuses = 0;
+                MUCK::programRuntime(i).profTime.tv_sec = 0;
+                MUCK::programRuntime(i).profTime.tv_usec = 0;
+                MUCK::programRuntime(i).profStart = current_systime;
+                MUCK::programRuntime(i).profUses = 0;
             }
         }
         anotify_nolisten2(player, CSUCC "MUF profiling statistics cleared.");
@@ -1232,16 +1232,16 @@ do_muf_topprofs(dbref player, char *arg1)
     }
 
     for (i = MUCK::database().top(); i-- > 0;) {
-        if (Typeof(i) == TYPE_PROGRAM && DBFETCH(i)->sp.program.code) {
+        if (Typeof(i) == TYPE_PROGRAM && MUCK::programRuntime(i).code) {
             struct profnode *newnode = new profnode;
-            struct timeval tmpt = DBFETCH(i)->sp.program.proftime;
+            struct timeval tmpt = MUCK::programRuntime(i).profTime;
 
             newnode->next = NULL;
             newnode->prog = i;
             newnode->proftime = tmpt.tv_sec;
             newnode->proftime += (tmpt.tv_usec / 1000000.0);
-            newnode->comptime = current_systime - DBFETCH(i)->sp.program.profstart;
-            newnode->usecount = DBFETCH(i)->sp.program.profuses;
+            newnode->comptime = current_systime - MUCK::programRuntime(i).profStart;
+            newnode->usecount = MUCK::programRuntime(i).profUses;
             if (newnode->comptime > 0) {
                 newnode->pcnt = 100.0 * newnode->proftime / newnode->comptime;
             } else {
@@ -1446,10 +1446,10 @@ do_all_topprofs(dbref player, char *arg1)
                 DBFETCH(i)->mpi_proftime.tv_sec = 0;
             }
             if (Typeof(i) == TYPE_PROGRAM) {
-                DBFETCH(i)->sp.program.proftime.tv_sec = 0;
-                DBFETCH(i)->sp.program.proftime.tv_usec = 0;
-                DBFETCH(i)->sp.program.profstart = current_systime;
-                DBFETCH(i)->sp.program.profuses = 0;
+                MUCK::programRuntime(i).profTime.tv_sec = 0;
+                MUCK::programRuntime(i).profTime.tv_usec = 0;
+                MUCK::programRuntime(i).profStart = current_systime;
+                MUCK::programRuntime(i).profUses = 0;
             }
         }
         sel_prof_idle_sec = 0;
@@ -1518,16 +1518,16 @@ do_all_topprofs(dbref player, char *arg1)
                 }
             }
         }
-        if (Typeof(i) == TYPE_PROGRAM && DBFETCH(i)->sp.program.code) {
+        if (Typeof(i) == TYPE_PROGRAM && MUCK::programRuntime(i).code) {
             struct profnode *newnode = new profnode;
-            struct timeval tmpt = DBFETCH(i)->sp.program.proftime;
+            struct timeval tmpt = MUCK::programRuntime(i).profTime;
 
             newnode->next = NULL;
             newnode->prog = i;
             newnode->proftime = tmpt.tv_sec;
             newnode->proftime += (tmpt.tv_usec / 1000000.0);
-            newnode->comptime = current_systime - DBFETCH(i)->sp.program.profstart;
-            newnode->usecount = DBFETCH(i)->sp.program.profuses;
+            newnode->comptime = current_systime - MUCK::programRuntime(i).profStart;
+            newnode->usecount = MUCK::programRuntime(i).profUses;
             newnode->type = 1;
             if (newnode->comptime > 0) {
                 newnode->pcnt = 100.0 * newnode->proftime / newnode->comptime;

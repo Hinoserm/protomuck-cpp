@@ -619,7 +619,7 @@ do_prog(int descr, dbref player, const char *name)
             return;
         }
 
-        DBFETCH(i)->sp.program.first = MUCK::programs().read(i);
+        MUCK::programRuntime(i).first = MUCK::programs().read(i);
         FLAGS(i) |= INTERNAL;
         MUCK::playerSession(player).currProg = i;
         anotify_fmt(player, CINFO "Entering editor for %s.", unparse_object(player, i));
@@ -670,7 +670,7 @@ do_edit(int descr, dbref player, const char *name)
     }
 
     FLAGS(i) |= INTERNAL;
-    DBFETCH(i)->sp.program.first = MUCK::programs().read(i);
+    MUCK::programRuntime(i).first = MUCK::programs().read(i);
     MUCK::playerSession(player).currProg = i;
     anotify_fmt(player, CINFO "Entering editor for %s.", unparse_object(player, i));
     /* list current line */

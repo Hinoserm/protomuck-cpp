@@ -339,7 +339,7 @@ RCLEAR(struct inst *oper, const char *file, int line)
         return;
     }
     case PROG_ADD:
-        DBFETCH(oper->data.addr->progref)->sp.program.instances--;
+        MUCK::programRuntime(oper->data.addr->progref).instances--;
         oper->data.addr->links--;
         break;
     case PROG_STRING:
@@ -550,8 +550,8 @@ muf_funcprof_exit(struct frame *fr)
         if (fr->fprofile)
             fr->fprofile->totaltime -= fpr->totaltime;
 
-        if (DBFETCH(prog)->sp.program.fprofile) {
-            struct funcprof *fpe = DBFETCH(prog)->sp.program.fprofile;
+        if (MUCK::programRuntime(prog).fprofile) {
+            struct funcprof *fpe = MUCK::programRuntime(prog).fprofile;
 
             while (fpe) {
                 if (!string_compare(fpe->funcname, fpr->funcname))
@@ -566,11 +566,11 @@ muf_funcprof_exit(struct frame *fr)
                 delete[]fpr->funcname;
                 delete fpr;
             } else {
-                fpr->next = DBFETCH(prog)->sp.program.fprofile;
-                DBFETCH(prog)->sp.program.fprofile = fpr;
+                fpr->next = MUCK::programRuntime(prog).fprofile;
+                MUCK::programRuntime(prog).fprofile = fpr;
             }
         } else
-            DBFETCH(prog)->sp.program.fprofile = fpr;
+            MUCK::programRuntime(prog).fprofile = fpr;
     }
 }
 
@@ -649,7 +649,7 @@ interp(int descr, dbref player, dbref location, dbref program, dbref source, int
     fr->waiters = NULL;
     fr->dlogids = NULL;
     fr->argument.top = 0;
-    fr->pc = DBFETCH(program)->sp.program.start; /* TYPEROOM taken out for command props. */
+    fr->pc = MUCK::programRuntime(program).start; /* TYPEROOM taken out for command props. */
     fr->writeonly = ((OkObj(source) && (Typeof(source) == TYPE_PLAYER)
                       && (!online(source)))
                      || (OkObj(player)
@@ -713,10 +713,10 @@ interp(int descr, dbref player, dbref location, dbref program, dbref source, int
     fr->variables[2].data.objref = source;
     fr->variables[3].type = PROG_STRING;
     fr->variables[3].data.string = (!*match_cmdname) ? 0 : alloc_prog_string(match_cmdname);
-    if (DBFETCH(program)->sp.program.code) {
-        DBFETCH(program)->sp.program.profuses++;
+    if (MUCK::programRuntime(program).code) {
+        MUCK::programRuntime(program).profUses++;
     }
-    DBFETCH(program)->sp.program.instances++;
+    MUCK::programRuntime(program).instances++;
     push(fr->argument.st, &(fr->argument.top), PROG_STRING, *match_args ? MIPSCAST alloc_prog_string(match_args) : 0);
     return fr;
 }
@@ -982,7 +982,7 @@ prog_clean(struct frame *fr)
     for (i = 0; i < fr->argument.top; i++)
         CLEAR(&fr->argument.st[i]);
     for (i = 1; i <= fr->caller.top; i++)
-        DBFETCH(fr->caller.st[i])->sp.program.instances--;
+        MUCK::programRuntime(fr->caller.st[i]).instances--;
     for (i = 0; i < MAX_VAR; i++)
         CLEAR(&fr->variables[i]);
     localvar_freeall(fr);
@@ -1098,7 +1098,7 @@ copyinst(struct inst *from, struct inst *to)
         break;
     case PROG_ADD:
         from->data.addr->links++;
-        DBFETCH(from->data.addr->progref)->sp.program.instances++;
+        MUCK::programRuntime(from->data.addr->progref).instances++;
         break;
     case PROG_LOCK:
         if (from->data.lock != TRUE_BOOLEXP) {
@@ -1150,15 +1150,15 @@ calc_profile_timing(dbref prog, struct frame *fr)
     }
     tv.tv_usec -= fr->proftime.tv_usec;
     tv.tv_sec -= fr->proftime.tv_sec;
-    tv2 = DBFETCH(prog)->sp.program.proftime;
+    tv2 = MUCK::programRuntime(prog).profTime;
     tv2.tv_sec += tv.tv_sec;
     tv2.tv_usec += tv.tv_usec;
     if (tv2.tv_usec >= 1000000) {
         tv2.tv_usec -= 1000000;
         tv2.tv_sec += 1;
     }
-    DBFETCH(prog)->sp.program.proftime.tv_sec = tv2.tv_sec;
-    DBFETCH(prog)->sp.program.proftime.tv_usec = tv2.tv_usec;
+    MUCK::programRuntime(prog).profTime.tv_sec = tv2.tv_sec;
+    MUCK::programRuntime(prog).profTime.tv_usec = tv2.tv_usec;
     fr->totaltime.tv_sec += tv.tv_sec;
     fr->totaltime.tv_usec += tv.tv_usec;
     if (fr->totaltime.tv_usec > 1000000) {
@@ -1274,20 +1274,20 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
     if (!pc) {
         struct line *tmpline;
 
-        tmpline = DBFETCH(program)->sp.program.first;
-        DBFETCH(program)->sp.program.first = MUCK::programs().read(program);
+        tmpline = MUCK::programRuntime(program).first;
+        MUCK::programRuntime(program).first = MUCK::programs().read(program);
         do_compile(-1, OWNER(program), program, 0);
-        free_prog_text(DBFETCH(program)->sp.program.first);
-        DBSTORE(program, sp.program.first, tmpline);
-        pc = fr->pc = DBFETCH(program)->sp.program.start;
+        free_prog_text(MUCK::programRuntime(program).first);
+        MUCK::programRuntime(program).first = tmpline;
+        pc = fr->pc = MUCK::programRuntime(program).start;
         if (!pc) {
             char smallBuf[50];
 
             sprintf(smallBuf, "Program %d not compilable. Cannot run.", program);
             abort_loop_hard(smallBuf, NULL, NULL);
         }
-        DBFETCH(program)->sp.program.profuses++;
-        DBFETCH(program)->sp.program.instances++;
+        MUCK::programRuntime(program).profUses++;
+        MUCK::programRuntime(program).instances++;
     }
     ts_useobject(player, program);
     fr->err = 0;
@@ -1448,7 +1448,7 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
                                 m = debug_inst(fr, 0, pc, fr->pid, arg, dbuf, sizeof(dbuf), atop, program);
                                 notify_nolisten(player, m, 1);
                             }
-                            if (pc <= DBFETCH(program)->sp.program.code || (pc - 1)->line != pc->line) {
+                            if (pc <= MUCK::programRuntime(program).code || (pc - 1)->line != pc->line) {
                                 list_proglines(player, program, fr, pc->line, 0);
                             } else {
                                 m = show_line_prims(fr, program, pc, 15, 1);
@@ -1696,7 +1696,7 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
                     program = temp1->data.addr->progref;
                     fr->caller.st[++fr->caller.top] = program;
                     mlev = ProgMLevel(program);
-                    DBFETCH(program)->sp.program.instances++;
+                    MUCK::programRuntime(program).instances++;
                 }
                 pc = temp1->data.addr->data;
                 CLEAR(temp1);
@@ -1725,15 +1725,15 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
                 if (!valid_object(temp1)
                     || Typeof(temp1->data.objref) != TYPE_PROGRAM)
                     abort_loop("invalid object.", temp1, temp2);
-                if (!(DBFETCH(temp1->data.objref)->sp.program.code)) {
+                if (!(MUCK::programRuntime(temp1->data.objref).code)) {
                     struct line *tmpline;
 
-                    tmpline = DBFETCH(temp1->data.objref)->sp.program.first;
-                    DBFETCH(temp1->data.objref)->sp.program.first = MUCK::programs().read(temp1->data.objref);
+                    tmpline = MUCK::programRuntime(temp1->data.objref).first;
+                    MUCK::programRuntime(temp1->data.objref).first = MUCK::programs().read(temp1->data.objref);
                     do_compile(-1, OWNER(temp1->data.objref), temp1->data.objref, 0);
-                    free_prog_text(DBFETCH(temp1->data.objref)->sp.program.first);
-                    DBSTORE(temp1->data.objref, sp.program.first, tmpline);
-                    if (!(DBFETCH(temp1->data.objref)->sp.program.code))
+                    free_prog_text(MUCK::programRuntime(temp1->data.objref).first);
+                    MUCK::programRuntime(temp1->data.objref).first = tmpline;
+                    if (!(MUCK::programRuntime(temp1->data.objref).code))
                         abort_loop("Program not compilable.", temp1, temp2);
                 }
                 if (ProgMLevel(temp1->data.objref) == 0)
@@ -1745,12 +1745,12 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
                 sys[stop].progref = program;
                 sys[stop].offset = pc + 1;
                 if (!temp2) {
-                    pc = DBFETCH(temp1->data.objref)->sp.program.start;
+                    pc = MUCK::programRuntime(temp1->data.objref).start;
                 } else {
                     struct publics *pbs;
                     int tmpint;
 
-                    pbs = DBFETCH(temp1->data.objref)->sp.program.pubs;
+                    pbs = MUCK::programRuntime(temp1->data.objref).pubs;
                     while (pbs) {
                         tmpint = string_compare(temp2->data.string->data, pbs->subname);
                         if (!tmpint)
@@ -1772,10 +1772,10 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
                     gettimeofday(&fr->proftime, NULL);
                     program = temp1->data.objref;
                     fr->caller.st[++fr->caller.top] = program;
-                    DBFETCH(program)->sp.program.instances++;
+                    MUCK::programRuntime(program).instances++;
                     mlev = ProgMLevel(program);
                 }
-                DBFETCH(program)->sp.program.profuses++;
+                MUCK::programRuntime(program).profUses++;
                 ts_useobject(player, program);
                 CLEAR(temp1);
                 if (temp2)
@@ -1788,7 +1788,7 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
                         abort_loop_hard("Internal error.  Invalid address.", NULL, NULL);
                     calc_profile_timing(program, fr);
                     gettimeofday(&fr->proftime, NULL);
-                    DBFETCH(program)->sp.program.instances--;
+                    MUCK::programRuntime(program).instances--;
                     program = sys[stop - 1].progref;
                     mlev = ProgMLevel(program);
                     fr->caller.top--;
@@ -2092,7 +2092,7 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
                             abort_loop_hard("Internal error.  Invalid address.", NULL, NULL);
                         calc_profile_timing(program, fr);
                         gettimeofday(&fr->proftime, NULL);
-                        DBFETCH(program)->sp.program.instances--;
+                        MUCK::programRuntime(program).instances--;
                         program = sys[stop - 1].progref;
                         mlev = ProgMLevel(program);
                         fr->caller.top--;

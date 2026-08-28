@@ -37,6 +37,7 @@
 #include "interface.h"
 #include "mufevent.h"
 #include "externs.h"
+#include "Modules.h"
 #include "newhttp.h"
 #include "strutils.h"
 #include "params.h"
@@ -731,17 +732,17 @@ int
         this->senderror(403, "Permission denied. (Program not set LINK_OK.)");
         return 1;
     } else {
-        if (!DBFETCH(ref)->sp.program.start) {
+        if (!MUCK::programRuntime(ref).start) {
             struct line *
-                tmpline = DBFETCH(ref)->sp.program.first;
+                tmpline = MUCK::programRuntime(ref).first;
 
-            DBFETCH(ref)->sp.program.first = MUCK::programs().read(ref);
+            MUCK::programRuntime(ref).first = MUCK::programs().read(ref);
             do_compile(d->descriptor, player, ref, 0);
-            free_prog_text(DBFETCH(ref)->sp.program.first);
-            DBSTORE(ref, sp.program.first, tmpline);
+            free_prog_text(MUCK::programRuntime(ref).first);
+            MUCK::programRuntime(ref).first = tmpline;
         }
 
-        if (!DBFETCH(ref)->sp.program.siz) {
+        if (!MUCK::programRuntime(ref).codeSize) {
             this->senderror(500, "Program not compilable.");
             return 1;
         }

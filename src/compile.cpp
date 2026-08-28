@@ -11,6 +11,7 @@
 #include "interface.h"
 #include "inst.h"
 #include "externs.h"
+#include "Modules.h"
 #include "params.h"
 #include "tune.h"
 #include "match.h"
@@ -261,10 +262,11 @@ do_abort_compile(COMPSTATE *cstat, const char *c)
     cleanpubs(cstat->currpubs);
     cstat->currpubs = NULL;
     free_prog(cstat->program);
-    cleanpubs(DBFETCH(cstat->program)->sp.program.pubs);
-    DBFETCH(cstat->program)->sp.program.pubs = NULL;
-    DBFETCH(cstat->program)->sp.program.proftime.tv_sec = 0;
-    DBFETCH(cstat->program)->sp.program.proftime.tv_usec = 0;
+    MUCK::ProgramRuntime &rt = MUCK::programRuntime(cstat->program);
+    cleanpubs(rt.pubs);
+    rt.pubs = NULL;
+    rt.profTime.tv_sec = 0;
+    rt.profTime.tv_usec = 0;
 }
 
 /* abort compile macro */
@@ -811,13 +813,14 @@ uncompile_program(dbref i)
     /* free program */
     (void) dequeue_prog(i, 0);
     free_prog(i);
-    cleanpubs(DBFETCH(i)->sp.program.pubs);
-    DBFETCH(i)->sp.program.pubs = NULL;
-    DBFETCH(i)->sp.program.proftime.tv_sec = 0;
-    DBFETCH(i)->sp.program.proftime.tv_usec = 0;
-    DBFETCH(i)->sp.program.code = NULL;
-    DBFETCH(i)->sp.program.siz = 0;
-    DBFETCH(i)->sp.program.start = NULL;
+    MUCK::ProgramRuntime &rt = MUCK::programRuntime(i);
+    cleanpubs(rt.pubs);
+    rt.pubs = NULL;
+    rt.profTime.tv_sec = 0;
+    rt.profTime.tv_usec = 0;
+    rt.code = NULL;
+    rt.codeSize = 0;
+    rt.start = NULL;
 }
 
 
@@ -851,11 +854,11 @@ do_proginfo(dbref player, const char *arg)
         if (Mage(OWNER(player))) {
             anotify_nolisten(player, SYSAQUA "Inst Object ProgSz Insts " SYSBROWN "Name", 1);
             for (i = 0; i < MUCK::database().top(); i++) {
-                if (Typeof(i) == TYPE_PROGRAM && DBFETCH(i)->sp.program.siz) {
-                    tcnt += ccnt = DBFETCH(i)->sp.program.instances;
+                if (Typeof(i) == TYPE_PROGRAM && MUCK::programRuntime(i).codeSize) {
+                    tcnt += ccnt = MUCK::programRuntime(i).instances;
                     tsize += csize = size_object(i, 0);
                     timem += cimem = size_prog(i);
-                    tinst += cinst = DBFETCH(i)->sp.program.siz;
+                    tinst += cinst = MUCK::programRuntime(i).codeSize;
                     sprintf(buf, SYSCYAN "%4d %6d %6d %5d %s " SYSRED "by " SYSGREEN "%s", ccnt, csize, cimem, cinst, ansi_unparse_object(player, i), NAME(OWNER(i))
                         );
                     anotify_nolisten(player, buf, 1);
@@ -875,7 +878,7 @@ do_proginfo(dbref player, const char *arg)
 
     anotify_nolisten(player, SYSYELLOW "Age: 1 = cleanable, 0 = used recently", 1);
     sprintf(buf, "AI: %d Age: %d Instances: %d",
-            (FLAGS(thing) & (ABODE | INTERNAL)), (now - DBFETCH(thing)->ts.lastused) > tp_clean_interval, DBFETCH(thing)->sp.program.instances);
+            (FLAGS(thing) & (ABODE | INTERNAL)), (now - DBFETCH(thing)->ts.lastused) > tp_clean_interval, MUCK::programRuntime(thing).instances);
     notify(player, buf);
 }
 
@@ -888,7 +891,7 @@ free_unused_programs()
 
     for (i = 0; i < MUCK::database().top(); i++) {
         if ((Typeof(i) == TYPE_PROGRAM) && !(FLAGS(i) & (ABODE | INTERNAL)) && (now - DBFETCH(i)->ts.lastused > tp_clean_interval)
-            && (DBFETCH(i)->sp.program.instances == 0)) {
+            && (MUCK::programRuntime(i).instances == 0)) {
             uncompile_program(i);
         }
     }
@@ -1552,7 +1555,7 @@ do_compile(int descr, dbref player_in, dbref program_in, int force_err_display)
         cstat.staticvartypes[i] = 0;
     }
     cstat.staticvarcnt = 0;
-    cstat.curr_line = DBFETCH(program_in)->sp.program.first;
+    cstat.curr_line = MUCK::programRuntime(program_in).first;
     cstat.lineno = 1;
     cstat.next_char = NULL;
     if (cstat.curr_line)
@@ -1578,16 +1581,17 @@ do_compile(int descr, dbref player_in, dbref program_in, int force_err_display)
     cstat.variabletypes[3] = PROG_STRING;
 
     /* free old stuff */
-    if (DBFETCH(cstat.program)->sp.program.siz)
+    MUCK::ProgramRuntime &rt = MUCK::programRuntime(cstat.program);
+    if (rt.codeSize)
         /* only dequeue if compiled */
         (void) dequeue_prog(cstat.program, 0);
     free_prog(cstat.program);
-    cleanpubs(DBFETCH(cstat.program)->sp.program.pubs);
-    DBFETCH(cstat.program)->sp.program.pubs = NULL;
-    DBFETCH(cstat.program)->sp.program.proftime.tv_sec = 0;
-    DBFETCH(cstat.program)->sp.program.proftime.tv_usec = 0;
-    DBFETCH(cstat.program)->sp.program.profstart = current_systime;
-    DBFETCH(cstat.program)->sp.program.profuses = 0;
+    cleanpubs(rt.pubs);
+    rt.pubs = NULL;
+    rt.profTime.tv_sec = 0;
+    rt.profTime.tv_usec = 0;
+    rt.profStart = current_systime;
+    rt.profUses = 0;
 
     if (!cstat.curr_line)
         v_abort_compile(&cstat, "Missing program text.");
@@ -1656,8 +1660,8 @@ do_compile(int descr, dbref player_in, dbref program_in, int force_err_display)
     /* do copying over */
     fix_addresses(&cstat);
     copy_program(&cstat);
-    fixpubs(cstat.currpubs, DBFETCH(cstat.program)->sp.program.code);
-    DBFETCH(cstat.program)->sp.program.pubs = cstat.currpubs;
+    fixpubs(cstat.currpubs, rt.code);
+    rt.pubs = cstat.currpubs;
 
     if (cstat.nextinst) {
         struct INTERMEDIATE *ptr;
@@ -1673,21 +1677,21 @@ do_compile(int descr, dbref player_in, dbref program_in, int force_err_display)
         return;
 
     if (cstat.staticvarcnt) {
-        //DBFETCH(cstat.program)->sp.program.staticvars = (struct inst *) calloc(cstat.staticvarcnt, sizeof(struct inst));
-        DBFETCH(cstat.program)->sp.program.staticvars = new inst[cstat.staticvarcnt];
+        //rt.staticVars = (struct inst *) calloc(cstat.staticvarcnt, sizeof(struct inst));
+        rt.staticVars = new inst[cstat.staticvarcnt];
         for (i = 0; i < cstat.staticvarcnt; i++) {
-            DBFETCH(cstat.program)->sp.program.staticvars[i].type = PROG_INTEGER;
-            DBFETCH(cstat.program)->sp.program.staticvars[i].data.number = 0;
+            rt.staticVars[i].type = PROG_INTEGER;
+            rt.staticVars[i].data.number = 0;
         }
-        DBFETCH(cstat.program)->sp.program.staticvarcnt = cstat.staticvarcnt;
+        rt.staticVarCnt = cstat.staticvarcnt;
     }
 #ifdef MODULAR_SUPPORT
-    for (i = 0; i < DBFETCH(cstat.program)->sp.program.siz; i++) {
-        if (DBFETCH(cstat.program)->sp.program.code[i].type == PROG_MODPRIM) {
-            struct module *m = DBFETCH(cstat.program)->sp.program.code[i].data.modprim->mod;
+    for (i = 0; i < rt.codeSize; i++) {
+        if (rt.code[i].type == PROG_MODPRIM) {
+            struct module *m = rt.code[i].data.modprim->mod;
             struct mod_proglist *prm = m->progs;
 
-            DBFETCH(cstat.program)->sp.program.code[i].data.modprim->links++;
+            rt.code[i].data.modprim->links++;
 
             while (prm) {
                 if (prm->prog == cstat.program)
@@ -1704,7 +1708,7 @@ do_compile(int descr, dbref player_in, dbref program_in, int force_err_display)
                 if (m->progs)
                     m->progs->prev = prm;
                 m->progs = prm;
-                log_status("MODULE: Added prog %d to module %s because of %s.\r\n", prm->prog, m->info->name, DBFETCH(cstat.program)->sp.program.code[i].data.modprim->name);
+                log_status("MODULE: Added prog %d to module %s because of %s.\r\n", prm->prog, m->info->name, rt.code[i].data.modprim->name);
             }
         }
     }
@@ -1712,7 +1716,7 @@ do_compile(int descr, dbref player_in, dbref program_in, int force_err_display)
 
     set_start(&cstat);
     cleanup(&cstat);
-    DBFETCH(cstat.program)->sp.program.instances = 0;
+    rt.instances = 0;
 
     /* restart AUTOSTART program. */
     if ((FLAGS(cstat.program) & ABODE) && TMage(OWNER(cstat.program)))
@@ -2219,21 +2223,21 @@ do_directive(COMPSTATE *cstat, char *direct)
         while (*cstat->next_char)
             cstat->next_char++;
         advance_line(cstat);
-        if (!(DBFETCH(i)->sp.program.code)) {
+        if (!(MUCK::programRuntime(i).code)) {
             struct line *tmpline;
 
-            tmpline = DBFETCH(i)->sp.program.first;
-            DBFETCH(i)->sp.program.first = ((struct line *) MUCK::programs().read(i));
+            tmpline = MUCK::programRuntime(i).first;
+            MUCK::programRuntime(i).first = ((struct line *) MUCK::programs().read(i));
             do_compile(cstat->descr, OWNER(i), i, 0);
-            free_prog_text(DBFETCH(i)->sp.program.first);
-            DBFETCH(i)->sp.program.first = tmpline;
+            free_prog_text(MUCK::programRuntime(i).first);
+            MUCK::programRuntime(i).first = tmpline;
         }
         j = 0;
         if (MLevel(OWNER(i)) > 0 && (MLevel(OWNER(cstat->program)) >= 4 || OWNER(i) == OWNER(cstat->program) || Linkable(i))
             ) {
             struct publics *pbs;
 
-            pbs = DBFETCH(i)->sp.program.pubs;
+            pbs = MUCK::programRuntime(i).pubs;
             while (pbs) {
                 if (!string_compare(tmpname, pbs->subname))
                     break;
@@ -4546,16 +4550,17 @@ copy_program(COMPSTATE *cstat)
         }
         i++;
     }
-    DBFETCH(cstat->program)->sp.program.code = code;
+    MUCK::programRuntime(cstat->program).code = code;
 }
 
 void
 set_start(COMPSTATE *cstat)
 {
-    DBFETCH(cstat->program)->sp.program.siz = cstat->nowords;
+    MUCK::ProgramRuntime &rt = MUCK::programRuntime(cstat->program);
+    rt.codeSize = cstat->nowords;
 
     /* address instr no is resolved before this gets called. */
-    DBFETCH(cstat->program)->sp.program.start = (DBFETCH(cstat->program)->sp.program.code + cstat->procs->code->no);
+    rt.start = (rt.code + cstat->procs->code->no);
 }
 
 /* allocate and initialize data linked structure. */ struct INTERMEDIATE *
@@ -4634,12 +4639,13 @@ free_prog(dbref prog)
 {
     int i;
     struct funcprof *fpr;
-    struct inst *c = DBFETCH(prog)->sp.program.code;
-    int siz = DBFETCH(prog)->sp.program.siz;
+    MUCK::ProgramRuntime &rt = MUCK::programRuntime(prog);
+    struct inst *c = rt.code;
+    int siz = rt.codeSize;
 
     if (c) {
-        if (DBFETCH(prog)->sp.program.instances) {
-            fprintf(stderr, "Freeing program %s with %d instances reported\n", unparse_object(MAN, prog), DBFETCH(prog)->sp.program.instances);
+        if (rt.instances) {
+            fprintf(stderr, "Freeing program %s with %d instances reported\n", unparse_object(MAN, prog), rt.instances);
         }
         i = scan_instances(prog);
 
@@ -4683,24 +4689,24 @@ free_prog(dbref prog)
         }
         delete[]c;
     }
-    DBFETCH(prog)->sp.program.code = 0;
-    DBFETCH(prog)->sp.program.siz = 0;
-    DBFETCH(prog)->sp.program.start = 0;
+    rt.code = 0;
+    rt.codeSize = 0;
+    rt.start = 0;
 
-    while (DBFETCH(prog)->sp.program.fprofile) {
-        fpr = DBFETCH(prog)->sp.program.fprofile->next;
-        delete[]DBFETCH(prog)->sp.program.fprofile->funcname;
-        delete DBFETCH(prog)->sp.program.fprofile;
+    while (rt.fprofile) {
+        fpr = rt.fprofile->next;
+        delete[]rt.fprofile->funcname;
+        delete rt.fprofile;
 
-        DBFETCH(prog)->sp.program.fprofile = fpr;
+        rt.fprofile = fpr;
     }
 
-    if (DBFETCH(prog)->sp.program.staticvarcnt) {
-        for (i = 0; i < DBFETCH(prog)->sp.program.staticvarcnt; i++)
-            CLEAR(&DBFETCH(prog)->sp.program.staticvars[i]);
+    if (rt.staticVarCnt) {
+        for (i = 0; i < rt.staticVarCnt; i++)
+            CLEAR(&rt.staticVars[i]);
 
-        delete[]DBFETCH(prog)->sp.program.staticvars;
-        DBFETCH(prog)->sp.program.staticvarcnt = 0;
+        delete[]rt.staticVars;
+        rt.staticVarCnt = 0;
     }
 }
 
@@ -4710,10 +4716,10 @@ size_prog(dbref prog)
     struct inst *c;
     long i, j, varcnt, siz, byts = 0;
 
-    c = DBFETCH(prog)->sp.program.code;
+    c = MUCK::programRuntime(prog).code;
     if (!c)
         return 0;
-    siz = DBFETCH(prog)->sp.program.siz;
+    siz = MUCK::programRuntime(prog).codeSize;
     for (i = 0L; i < siz; i++) {
         byts += sizeof(*c);
         if (c[i].type == PROG_FUNCTION) {
@@ -4733,7 +4739,7 @@ size_prog(dbref prog)
         } else if (c[i].type == PROG_ADD)
             byts += sizeof(struct prog_addr);
     }
-    byts += size_pubs(DBFETCH(prog)->sp.program.pubs);
+    byts += size_pubs(MUCK::programRuntime(prog).pubs);
     return byts;
 }
 

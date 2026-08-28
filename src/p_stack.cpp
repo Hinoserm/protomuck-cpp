@@ -6,6 +6,7 @@
 #include "db.h"
 #include "inst.h"
 #include "externs.h"
+#include "Modules.h"
 #include "match.h"
 #include "interface.h"
 #include "params.h"
@@ -140,7 +141,7 @@ prim_at(PRIM_PROTOTYPE)
         copyinst(&(fr->variables[temp1.data.number]), &arg[(*top)++]);
     } else if (temp1.type == PROG_STVAR) {
         /* STATICVAR */
-        copyinst(&(DBFETCH(program)->sp.program.staticvars[temp1.data.number]), &arg[(*top)++]);
+        copyinst(&(MUCK::programRuntime(program).staticVars[temp1.data.number]), &arg[(*top)++]);
     } else {
         /* SCOPEDVAR */
         struct inst *tmp;
@@ -172,8 +173,8 @@ prim_bang(PRIM_PROTOTYPE)
         copyinst(&oper[1], &(fr->variables[oper[0].data.number]));
     } else if (oper[0].type == PROG_STVAR) {
         /* STATICVAR */
-        CLEAR(&(DBFETCH(program)->sp.program.staticvars[oper[0].data.number]));
-        copyinst(&oper[1], &(DBFETCH(program)->sp.program.staticvars[oper[0].data.number]));
+        CLEAR(&(MUCK::programRuntime(program).staticVars[oper[0].data.number]));
+        copyinst(&oper[1], &(MUCK::programRuntime(program).staticVars[oper[0].data.number]));
     } else {
         /* SCOPEDVAR */
         struct inst *tmp;

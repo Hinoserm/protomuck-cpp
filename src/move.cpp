@@ -997,8 +997,8 @@ recycle(int descr, dbref player, dbref thing)
                     if (FLAGS(rest) & READMODE) {
                         anotify_nolisten2(rest, CINFO "The program you were running has been recycled.  Aborting program.");
                     } else {
-                        free_prog_text(DBFETCH(thing)->sp.program.first);
-                        DBFETCH(thing)->sp.program.first = NULL;
+                        free_prog_text(MUCK::programRuntime(thing).first);
+                        MUCK::programRuntime(thing).first = NULL;
                         MUCK::playerSession(rest).insertMode = 0;
                         FLAGS(thing) &= ~INTERNAL;
                         FLAGS(rest) &= ~INTERACTIVE;

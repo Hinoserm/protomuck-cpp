@@ -5,6 +5,7 @@
 #include "db.h"
 #include "inst.h"
 #include "externs.h"
+#include "Modules.h"
 #include "match.h"
 #include "mufevent.h"
 #include "interface.h"
@@ -124,15 +125,15 @@ prim_program_linecount(PRIM_PROTOTYPE)
     if (mlev < LWIZ && (!controls(player, ref) && !Viewable(ref)))
         abort_interp("Permission denied.");
     if (!(FLAGS(ref) & INTERNAL)) /* no one's editing it */
-        DBSTORE(ref, sp.program.first, MUCK::programs().read(ref));
-    curr = DBFETCH(ref)->sp.program.first;
+        MUCK::programRuntime(ref).first = MUCK::programs().read(ref);
+    curr = MUCK::programRuntime(ref).first;
     result = 0;
     while (curr) {
         result++;
         curr = curr->next;
     }
     if (!(FLAGS(ref) & INTERNAL))
-        free_prog_text(DBFETCH(ref)->sp.program.first);
+        free_prog_text(MUCK::programRuntime(ref).first);
 
     PushInt(result);
 }
@@ -231,13 +232,13 @@ prim_program_deletelines(PRIM_PROTOTYPE)
         abort_interp("Range to delete doesn't make sense. (2) (3)");
     if (FLAGS(theprog) & INTERNAL)
         abort_interp("That program is currently being edited.");
-    DBSTORE(theprog, sp.program.first, MUCK::programs().read(theprog));
+    MUCK::programRuntime(theprog).first = MUCK::programs().read(theprog);
     i = start - 1;              /* array offset for first line to delete */
-    for (curr = DBFETCH(theprog)->sp.program.first; curr && i; --i)
+    for (curr = MUCK::programRuntime(theprog).first; curr && i; --i)
         curr = curr->next;      /* move to the first line to delete */
     if (!curr) {                /* line doesn't exist, free code and return 0 */
         count = 0;
-        free_prog_text(DBFETCH(theprog)->sp.program.first);
+        free_prog_text(MUCK::programRuntime(theprog).first);
         PushInt(count);
         return;
     }
@@ -247,7 +248,7 @@ prim_program_deletelines(PRIM_PROTOTYPE)
         if (curr->prev)
             curr->prev->next = curr->next; /* relink prev line */
         else                    /* or relink start of program */
-            DBFETCH(theprog)->sp.program.first = curr->next;
+            MUCK::programRuntime(theprog).first = curr->next;
         if (curr->next)
             curr->next->prev = curr->prev;
         curr = curr->next;      /* move curr to next line */
@@ -255,9 +256,9 @@ prim_program_deletelines(PRIM_PROTOTYPE)
         --i;
         ++count;
     }                           /* Write and free program, push result */
-    MUCK::programs().write(DBFETCH(theprog)->sp.program.first, theprog);
-    free_prog_text(DBFETCH(theprog)->sp.program.first);
-    DBFETCH(theprog)->sp.program.first = NULL;
+    MUCK::programs().write(MUCK::programRuntime(theprog).first, theprog);
+    free_prog_text(MUCK::programRuntime(theprog).first);
+    MUCK::programRuntime(theprog).first = NULL;
     PushInt(count);
 }
 
@@ -302,12 +303,12 @@ prim_program_insertlines(PRIM_PROTOTYPE)
         abort_interp("This program is already being edited. (1)");
     if (start < 1)
         abort_interp("Start line must be greater than 0. (2)");
-    DBSTORE(theprog, sp.program.first, MUCK::programs().read(theprog));
+    MUCK::programRuntime(theprog).first = MUCK::programs().read(theprog);
     i = start - 1;              /*offset in array to insert lines */
-    DBFETCH(theprog)->sp.program.curr_line = 1;
-    for (curr = DBFETCH(theprog)->sp.program.first; curr && i; --i) {
+    MUCK::programRuntime(theprog).currLine = 1;
+    for (curr = MUCK::programRuntime(theprog).first; curr && i; --i) {
         prev = curr;
-        DBFETCH(theprog)->sp.program.curr_line++;
+        MUCK::programRuntime(theprog).currLine++;
         curr = curr->next;      /* move to the insert point */
     }
     if (array_first(lines, &temp1)) {
@@ -321,15 +322,15 @@ prim_program_insertlines(PRIM_PROTOTYPE)
             else
                 new_line->this_line = alloc_string(" ");
             oper4 = NULL;
-            if (!DBFETCH(theprog)->sp.program.first) { /* no code yet */
-                DBFETCH(theprog)->sp.program.curr_line = 1;
-                DBFETCH(theprog)->sp.program.first = new_line;
-                prev = DBFETCH(theprog)->sp.program.first;
+            if (!MUCK::programRuntime(theprog).first) { /* no code yet */
+                MUCK::programRuntime(theprog).currLine = 1;
+                MUCK::programRuntime(theprog).first = new_line;
+                prev = MUCK::programRuntime(theprog).first;
                 curr = NULL;    /* curr = NULL so we keep inserting at the end */
                 continue;
             }
             if (!curr) {        /* insert at the end */
-                DBFETCH(theprog)->sp.program.curr_line++;
+                MUCK::programRuntime(theprog).currLine++;
                 new_line->prev = prev;
                 prev->next = new_line;
                 prev = new_line;
@@ -337,16 +338,16 @@ prim_program_insertlines(PRIM_PROTOTYPE)
                 continue;
             }
             if (!curr->prev && !replacedFirst) { /*inserting at the beginning */
-                DBFETCH(theprog)->sp.program.curr_line = 1;
+                MUCK::programRuntime(theprog).currLine = 1;
                 curr->prev = new_line;
                 new_line->next = curr;
-                DBFETCH(theprog)->sp.program.first = new_line;
+                MUCK::programRuntime(theprog).first = new_line;
                 curr = new_line; /* move curr to insert after it next */
                 replacedFirst = 1;
                 continue;
             }
             /* inserting in the middle */
-            DBFETCH(theprog)->sp.program.curr_line++;
+            MUCK::programRuntime(theprog).currLine++;
             new_line->prev = curr;
             new_line->next = curr->next;
             if (new_line->next)
@@ -357,12 +358,12 @@ prim_program_insertlines(PRIM_PROTOTYPE)
     }
     log_status("PROGRAM EDITED: %s by %s(%d)\n", unparse_object(PSafe, theprog), OkObj(player) ? NAME(player) : "(login)", player);
     if (tp_log_programs)
-        MUCK::programs().logText(DBFETCH(theprog)->sp.program.first, player, oper[2].data.objref);
-    endline = DBFETCH(theprog)->sp.program.curr_line;
+        MUCK::programs().logText(MUCK::programRuntime(theprog).first, player, oper[2].data.objref);
+    endline = MUCK::programRuntime(theprog).currLine;
 
-    MUCK::programs().write(DBFETCH(theprog)->sp.program.first, theprog);
-    free_prog_text(DBFETCH(theprog)->sp.program.first);
-    DBFETCH(theprog)->sp.program.first = NULL;
+    MUCK::programs().write(MUCK::programRuntime(theprog).first, theprog);
+    free_prog_text(MUCK::programRuntime(theprog).first);
+    MUCK::programRuntime(theprog).first = NULL;
     DBDIRTY(program);
     PushInt(endline);
 }

@@ -194,7 +194,7 @@ do_insert(dbref player, dbref program, int arg[], int argc)
     MUCK::playerSession(player).insertMode++;
     /* DBDIRTY(player); */
     if (argc)
-        DBSTORE(program, sp.program.curr_line, arg[0] - 1);
+        MUCK::programRuntime(program).currLine = arg[0] - 1;
     /* set current line to something else */
 }
 
@@ -210,7 +210,7 @@ do_delete(dbref player, dbref program, int arg[], int argc)
 
     switch (argc) {
         case 0:
-            arg[0] = DBFETCH(program)->sp.program.curr_line;
+            arg[0] = MUCK::programRuntime(program).currLine;
         case 1:
             arg[1] = arg[0];
         case 2:
@@ -221,10 +221,10 @@ do_delete(dbref player, dbref program, int arg[], int argc)
                 return;
             }
             i = arg[0] - 1;
-            for (curr = DBFETCH(program)->sp.program.first; curr && i; i--)
+            for (curr = MUCK::programRuntime(program).first; curr && i; i--)
                 curr = curr->next;
             if (curr) {
-                DBFETCH(program)->sp.program.curr_line = arg[0];
+                MUCK::programRuntime(program).currLine = arg[0];
                 i = arg[1] - arg[0] + 1;
                 /* delete n lines */
                 while (i && curr) {
@@ -232,7 +232,7 @@ do_delete(dbref player, dbref program, int arg[], int argc)
                     if (curr->prev)
                         curr->prev->next = curr->next;
                     else
-                        DBFETCH(program)->sp.program.first = curr->next;
+                        MUCK::programRuntime(program).first = curr->next;
                     if (curr->next)
                         curr->next->prev = curr->prev;
                     curr = curr->next;
@@ -258,13 +258,13 @@ void
 do_quit(dbref player, dbref program)
 {
     log_status("PROGRAM SAVED: %s by %s(%d)\n", unparse_object(player, program), NAME(player), player);
-    MUCK::programs().write(DBFETCH(program)->sp.program.first, program);
+    MUCK::programs().write(MUCK::programRuntime(program).first, program);
 
     if (tp_log_programs)
-        MUCK::programs().logText(DBFETCH(program)->sp.program.first, player, program);
+        MUCK::programs().logText(MUCK::programRuntime(program).first, player, program);
 
-    free_prog_text(DBFETCH(program)->sp.program.first);
-    DBFETCH(program)->sp.program.first = NULL;
+    free_prog_text(MUCK::programRuntime(program).first);
+    MUCK::programRuntime(program).first = NULL;
     FLAGS(program) &= ~INTERNAL;
     FLAGS(player) &= ~INTERACTIVE;
     MUCK::playerSession(player).currProg = NOTHING;
@@ -277,8 +277,8 @@ void
 do_cancel(dbref player, dbref program)
 {
     uncompile_program(program);
-    free_prog_text(DBFETCH(program)->sp.program.first);
-    DBFETCH(program)->sp.program.first = NULL;
+    free_prog_text(MUCK::programRuntime(program).first);
+    MUCK::programRuntime(program).first = NULL;
     FLAGS(program) &= ~INTERNAL;
     FLAGS(player) &= ~INTERACTIVE;
     MUCK::playerSession(player).currProg = NOTHING;
@@ -369,11 +369,11 @@ match_and_list(int descr, dbref player, const char *name, char *linespec, int ed
                 range[1] = -1;
         }
     }
-    tmpline = DBFETCH(thing)->sp.program.first;
-    DBSTORE(thing, sp.program.first, MUCK::programs().read(thing));
+    tmpline = MUCK::programRuntime(thing).first;
+    MUCK::programRuntime(thing).first = MUCK::programs().read(thing);
     do_list(player, thing, range, argc, commentit);
-    free_prog_text(DBFETCH(thing)->sp.program.first);
-    DBSTORE(thing, sp.program.first, tmpline);
+    free_prog_text(MUCK::programRuntime(thing).first);
+    MUCK::programRuntime(thing).first = tmpline;
     if (haveNumbers)
         FLAGS(player) = tempFlags;
     return;
@@ -398,7 +398,7 @@ do_list(dbref player, dbref program, int oarg[], int argc, int commentit)
         arg[0] = arg[1] = 0;
     switch (argc) {
         case 0:
-            arg[0] = DBFETCH(program)->sp.program.curr_line;
+            arg[0] = MUCK::programRuntime(program).currLine;
         case 1:
             arg[1] = arg[0];
         case 2:
@@ -411,7 +411,7 @@ do_list(dbref player, dbref program, int oarg[], int argc, int commentit)
                 return;
             }
             i = arg[0] - 1;
-            for (curr = DBFETCH(program)->sp.program.first; i && curr; i--)
+            for (curr = MUCK::programRuntime(program).first; i && curr; i--)
                 curr = curr->next;
             if (curr) {
                 i = arg[1] - arg[0] + 1;
@@ -507,19 +507,19 @@ list_publics(int descr, dbref player, int arg[], int argc)
         anotify_nolisten(player, CFAIL "That's not a public program.", 1);
         return;
     }
-    if (!(DBFETCH(program)->sp.program.code)) {
+    if (!(MUCK::programRuntime(program).code)) {
         if (program == MUCK::playerSession(player).currProg) {
             do_compile(descr, OWNER(program), program, 0);
         } else {
             struct line *tmpline;
 
-            tmpline = DBFETCH(program)->sp.program.first;
-            DBFETCH(program)->sp.program.first = (struct line *) MUCK::programs().read(program);
+            tmpline = MUCK::programRuntime(program).first;
+            MUCK::programRuntime(program).first = (struct line *) MUCK::programs().read(program);
             do_compile(descr, OWNER(program), program, 0);
-            free_prog_text(DBFETCH(program)->sp.program.first);
-            DBSTORE(program, sp.program.first, tmpline);
+            free_prog_text(MUCK::programRuntime(program).first);
+            MUCK::programRuntime(program).first = tmpline;
         }
-        if (!(DBFETCH(program)->sp.program.code)) {
+        if (!(MUCK::programRuntime(program).code)) {
             anotify_nolisten(player, CFAIL "Program not compilable.", 1);
             return;
         }
@@ -533,7 +533,7 @@ do_list_publics(dbref player, dbref program)
     struct publics *ptr;
 
     anotify_nolisten(player, CINFO "PUBLIC functions:", 1);
-    for (ptr = DBFETCH(program)->sp.program.pubs; ptr; ptr = ptr->next)
+    for (ptr = MUCK::programRuntime(program).pubs; ptr; ptr = ptr->next)
         notify(player, ptr->subname);
 }
 
@@ -580,8 +580,8 @@ insert(dbref player, const char *line)
 #endif
         return;
     }
-    i = DBFETCH(program)->sp.program.curr_line - 1;
-    for (curr = DBFETCH(program)->sp.program.first; curr && i && i + 1; i--)
+    i = MUCK::programRuntime(program).currLine - 1;
+    for (curr = MUCK::programRuntime(program).first; curr && i && i + 1; i--)
         curr = curr->next;
     new_line = MUCK::programs().newLine();  /* initialize line */
     if (!*line) {
@@ -589,33 +589,33 @@ insert(dbref player, const char *line)
     } else {
         new_line->this_line = alloc_string(line);
     }
-    if (!DBFETCH(program)->sp.program.first) { /* nothing --- insert in front */
-        DBFETCH(program)->sp.program.first = new_line;
-        DBFETCH(program)->sp.program.curr_line = 2; /* insert at the end */
+    if (!MUCK::programRuntime(program).first) { /* nothing --- insert in front */
+        MUCK::programRuntime(program).first = new_line;
+        MUCK::programRuntime(program).currLine = 2; /* insert at the end */
         /* DBDIRTY(program); */
         return;
     }
     if (!curr) {                /* insert at the end */
         i = 1;
-        for (curr = DBFETCH(program)->sp.program.first; curr->next; curr = curr->next)
+        for (curr = MUCK::programRuntime(program).first; curr->next; curr = curr->next)
             i++;                /* count lines */
-        DBFETCH(program)->sp.program.curr_line = i + 2;
+        MUCK::programRuntime(program).currLine = i + 2;
         new_line->prev = curr;
         curr->next = new_line;
         /* DBDIRTY(program); */
         return;
     }
-    if (!DBFETCH(program)->sp.program.curr_line) { /* insert at the
+    if (!MUCK::programRuntime(program).currLine) { /* insert at the
                                                     * beginning */
-        DBFETCH(program)->sp.program.curr_line = 1; /* insert after this new
+        MUCK::programRuntime(program).currLine = 1; /* insert after this new
                                                      * line */
-        new_line->next = DBFETCH(program)->sp.program.first;
-        DBFETCH(program)->sp.program.first = new_line;
+        new_line->next = MUCK::programRuntime(program).first;
+        MUCK::programRuntime(program).first = new_line;
         /* DBDIRTY(program); */
         return;
     }
     /* inserting in the middle */
-    DBFETCH(program)->sp.program.curr_line++;
+    MUCK::programRuntime(program).currLine++;
     new_line->prev = curr;
     new_line->next = curr->next;
     if (new_line->next)
