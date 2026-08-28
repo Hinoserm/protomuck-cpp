@@ -11,6 +11,7 @@
 #include "interface.h"
 #include "match.h"
 #include "externs.h"
+#include "Modules.h"
 
 #define UPCASE(x) (toupper(x))
 #define DOWNCASE(x) (tolower(x))
@@ -923,9 +924,12 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
             }
 
             /* print dropto if present */
-            if (DBFETCH(thing)->sp.room.dropto != NOTHING) {
-                sprintf(buf, SYSAQUA "Dropped objects go to: %s", ansi_unparse_object(OWNER(player), DBFETCH(thing)->sp.room.dropto));
-                anotify_nolisten(player, buf, 1);
+            if (MUCK::Room *r = MUCK::database().get(thing)->As<MUCK::Room>()) {
+                if (r->dropTo()) {
+                    sprintf(buf, SYSAQUA "Dropped objects go to: %s",
+                            ansi_unparse_object(OWNER(player), r->dropTo()->ref()));
+                    anotify_nolisten(player, buf, 1);
+                }
             }
             break;
         case TYPE_THING:

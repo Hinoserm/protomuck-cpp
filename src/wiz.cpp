@@ -8,6 +8,7 @@
 #include "tune.h"
 #include "match.h"
 #include "externs.h"
+#include "Modules.h"
 #include "ObjectStore.h"
 #include "reg.h"
 #include "maillib.h"
@@ -264,8 +265,9 @@ do_teleport(int descr, dbref player, const char *arg1, const char *arg2)
                         }
                     }
                     /* check for non-sticky dropto */
-                    if (Typeof(destination) == TYPE_ROOM && DBFETCH(destination)->sp.room.dropto != NOTHING && !(FLAGS(destination) & STICKY))
-                        destination = DBFETCH(destination)->sp.room.dropto;
+                    if (MUCK::Room *dr = MUCK::database().get(destination)->As<MUCK::Room>())
+                        if (dr->dropTo() && !(FLAGS(destination) & STICKY))
+                            destination = dr->dropTo()->ref();
                     /* Bugfix: treat THINGs more like PLAYERs. */
                     if (Typeof(victim) == TYPE_THING) {
                         if (FLAGS(victim) & ZOMBIE) {

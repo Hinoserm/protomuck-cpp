@@ -6,6 +6,7 @@
 #include "tune.h"
 #include "mpi.h"
 #include "externs.h"
+#include "Modules.h"
 #include "props.h"
 #include "match.h"
 #include "interp.h"
@@ -133,9 +134,13 @@ mfn_links(MFUNARGS)
     if (obj == PERMDENIED)
         ABORT_MPI("LINKS", tp_noperm_mesg);
     switch (Typeof(obj)) {
-        case TYPE_ROOM:
-            obj = DBFETCH(obj)->sp.room.dropto;
+        case TYPE_ROOM: {
+            MUCK::Room *r = MUCK::database().get(obj)->As<MUCK::Room>();
+            MUCK::DbObject *d = r ? r->dropTo() : nullptr;
+
+            obj = d ? d->ref() : NOTHING;
             break;
+        }
         case TYPE_PLAYER:
             obj = DBFETCH(obj)->sp.player.home;
             break;

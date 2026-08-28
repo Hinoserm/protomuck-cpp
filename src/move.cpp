@@ -8,6 +8,7 @@
 #include "interface.h"
 #include "match.h"
 #include "externs.h"
+#include "Modules.h"
 
 #define anotify_nolisten2(x, y) anotify_nolisten(x, y, 1);
 
@@ -194,7 +195,11 @@ enter_room(int descr, dbref player, dbref loc, dbref exit)
         }
 
         /* if old location has STICKY dropto, send stuff through it */
-        if (old != NOTHING && Typeof(old) == TYPE_ROOM && (dropto = DBFETCH(old)->sp.room.dropto) != NOTHING && (FLAGS(old) & STICKY)) {
+        MUCK::Room *oldroom = (old != NOTHING)
+            ? MUCK::database().get(old)->As<MUCK::Room>() : nullptr;
+
+        if (oldroom && oldroom->dropTo() && (FLAGS(old) & STICKY)
+            && (dropto = oldroom->dropTo()->ref()) != NOTHING) {
             maybe_dropto(descr, old, dropto);
         }
 
