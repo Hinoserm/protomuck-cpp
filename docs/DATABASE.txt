@@ -298,175 +298,173 @@ amended.
    no revs.
 
 
-7.1 THREADED PERSISTENCE: FIRE, THEN WRITE BEHIND THE GAME
+7.1 THE JOURNAL: LAYERED VERSIONS AND THREADED PERSISTENCE
 
    STATUS: DESIGNED, NOT IMPLEMENTED.  This subsection is the agreed
    design; amend it before deviating.
 
-   The point of the snapshot engine is that firing a snapshot is
-   cheap and persisting it is somebody else's problem: the game
-   records the moment, and the PREVIOUS version of the world is
-   written to disk behind the game's back.  Fork-based dumping
-   approximated this by letting the kernel copy-on-write the address
-   space; it dies here, because forking a multithreaded process
-   freezes foreign locks in the child.  This design replaces it.
+   Firing a snapshot must be cheap and persisting it must happen
+   behind the game.  Fork-based dumping approximated that by letting
+   the kernel copy-on-write the address space; it cannot survive
+   threads, because forking a multithreaded process freezes foreign
+   locks in the child.  This design replaces it, and replaces the
+   synchronous flush that @dump and @snapshot perform today.
 
-   ROLES
 
-   Game thread    the only mutator of in-memory objects.  Fires
-                  captures.  NEVER writes the store.
+   THE MODEL: BASE PLUS LAYERS
+
+   An object's stored state is a base plus a stack of journal layers:
+
+       base       the object's full state as of some revision, held
+                  in its .json file on disk.  NOT resident in memory.
+       layer N    every change made during era N: key -> new value,
+                  or a removal mark.  Layers stack in era order.
+       cache      base with every layer applied: the current state.
+                  This is the live in-memory object, exactly the
+                  structure the server uses today.
+
+   Reading is unchanged.  The cache IS the object the game sees, so
+   property reads, propdir walks, and every legacy accessor keep
+   working at present speed with no layer traversal and no
+   indirection.  The journal is invisible to readers.
+
+   Writing goes to two places: the cache is mutated as it is today,
+   and the change is recorded in the TOP layer.  Recording is a hash
+   insert keyed by entry name; a value written ten thousand times in
+   one era occupies one slot, because the layer holds the latest
+   value per key, not a log of writes.  A write that does not change
+   the value records nothing.
+
+   The top layer is therefore also the unsaved set: it replaces the
+   OBJECT_CHANGED dirty flag entirely.  @stats counts an object as
+   unsaved when its top layer is non-empty.
+
+   One revision number per object, covering every field.  Properties
+   are not special: core fields, type-module fields, feature-module
+   entries and properties all live in the same layer, keyed by their
+   namespaced entry name, and all move together with one rev.
+
+
+   WHY THIS IS THREAD SAFE WITHOUT LOCKS
+
+   Only the top layer is mutable, and only the game thread touches
+   it.  Everything else is frozen: the base is a file, and a sealed
+   layer is never modified again by anyone.  The dump thread reads
+   nothing that can change under it, so there are no object locks, no
+   torn strings, no copy of the world, and no pause while a dump
+   runs.
+
+   Roles:
+
+   Game thread    the only mutator.  Owns the cache and the top
+                  layer.  Fires captures.  NEVER writes the store.
    Dump thread    one long-lived worker; the ONLY writer to the store
-                  on disk.  Consumes capture sets.  NEVER touches a
-                  DbObject: it works purely from immutable buffers,
-                  so it needs no object locks at all.
+                  during normal operation.  Consumes sealed layers.
+                  NEVER touches a live object.
 
-   THE SPLIT
 
-   Serialization today (saveObject) reads live object state and the
-   previous file, diffs, appends history, renames.  It splits in two:
+   FIRING
 
-   Phase 1, CAPTURE (game thread, atomic wrt mutation): assemble the
-   pending changes into an in-memory capture set, plus the manifest
-   payload (tune parms, tombstone table, markers, next dbref) and the
-   revision and retained-marker list AS OF FIRE TIME (the persist
-   phase must stamp and historicize against these, never against the
-   live counters, which may advance before it runs).  CPU-only, no
-   disk I/O.  The result is a capture set:
+   @snapshot and @dump both fire.  Firing is:
 
-       { epoch, rev, markers, per-object deltas and buffers,
-         manifest payload, optional marker }
+       1. Seal the top layer on every object that has one.
+       2. Start a fresh empty top layer.
+       3. Bump the era; record the marker if this was a snapshot.
+       4. Snapshot the manifest payload (tune parms, tombstone
+          table, marker list, next dbref) and the revision as of
+          this instant.
+       5. Hand the sealed set to the persist queue and return.
 
-   THE CAPTURE JOURNAL (why firing is cheap when everything ticks)
+   No serialization, no disk I/O, no walk of the database: the sealed
+   layers already hold exactly the changes, in memory, ready to
+   write.  The cost is proportional to the number of objects touched
+   since the last fire, and per object it is a pointer swap.  The
+   command returns immediately.
 
-   On a busy MUCK, programs tick values into properties on nearly
-   every object between dumps, so "the dirty set" IS the database and
-   serializing whole dirty objects at fire time would cost O(database)
-   in time and memory.  Capture therefore happens at MUTATION time,
-   entry-granular, through the chokepoints that already exist:
 
-       - Property writes and removals (the property.cpp funnel) and
-         timestamp updates record an entry delta in the open journal:
-         (object, entry key) -> latest normalized value, or a removal
-         mark.  Latest value wins: a prop ticked ten thousand times
-         between dumps occupies ONE slot, serialized once per tick at
-         nanosecond scale.  The normalization (zero ints, empty
-         strings, NOTHING refs are entry removals) is shared with the
-         full serializer so both paths emit identical entries.
-       - Mutations not yet behind a chokepoint (raw FLAGS/NAME pokes
-         and other legacy core writes) fall back to object-level
-         dirty; fire serializes THOSE objects whole.  This set is
-         small (core fields change rarely) and shrinks to nothing as
-         setters convert.  An object captured whole drops its entry
-         deltas for that set: the whole buffer already contains them.
+   PERSISTING
 
-   Firing then costs: seal the journal (a pointer swap), serialize
-   the core-dirty stragglers, snapshot the manifest payload.  O(1)
-   plus O(core-dirty), regardless of how many properties ticked.
-   Journal memory is bounded by DISTINCT entries changed since the
-   last dump, not by tick count and not by database size.
+   The dump thread drains the queue in FIFO order and, for each
+   sealed set, appends each object's layer to that object's .hist
+   file, then writes the manifest LAST.  The manifest is the commit
+   point for the set.
 
-   Phase 2, PERSIST (dump thread): for each captured object, read the
-   previous file and build the new state: a whole buffer replaces it
-   outright, entry deltas are applied over the file's own entries.
-   Then the one per-entry diff engine runs (rev stamping and the
-   history push, against the SET's rev and markers), .hist appends,
-   the .json atomic-renames, and the manifest for the set is written
-   LAST.  The manifest is the commit point.  The diff needs only the
-   captured data and the old file, never the live object.  Since a
-   dump has the whole dump interval to finish, the thread may pace
-   its I/O instead of bursting.
+   Nothing is read back, diffed, or reconstructed at save time: the
+   layer is already the delta, so a dump writes only what changed.
+   An object with three ticked properties costs a few hundred bytes
+   of append, not a rewritten file.  A sealed layer is dropped from
+   memory once written, since the disk now holds it.
 
-   DURABILITY (fsync)
+   Sets never coalesce across a marker: history lifetimes are only
+   correct if sets land in fire order.  Coalescing two markerless
+   sets is permitted as an optimization.
 
-   Torn files after a power cut have been a real problem historically,
-   so the write discipline is: write the temp file, fsync IT, then
-   rename, then fsync the directory; the .hist append is fsynced
-   before its object's .json renames; the manifest is fsynced the
-   same way and commits the set.  A reader can then never see a
-   renamed file whose bytes did not make it to disk.  All of this
-   cost lands on the dump thread, where latency is free.  Offline
-   full saves (-convert, -storegc) pay it synchronously, which is
-   acceptable at maintenance time.
+   Deletion enqueues like anything else: retiring an object seals its
+   layer immediately, and FIFO guarantees the retained file is on
+   disk before the manifest carrying its tombstone commits.  A
+   single-object snapshot enqueues a one-object set whose marker
+   lands in that object's file.
 
-   BARRIERS AND EDGES
+   Backpressure is by memory, not count: if a fire would exceed the
+   bound, the game thread blocks at the next fire, never mid
+   mutation, until the queue drains.
 
-   @rollback and resurrection read store files, so they first drain
-   the persist queue (a barrier): rolling back to a marker whose set
-   has not landed yet would otherwise find no stored state.  These
-   are rare admin operations; blocking them briefly is fine.  The
-   player-visible "dump complete" message fires when the manifest
-   commits, posted back to the game thread, so operators still learn
-   when the disk is actually caught up; the command itself returns at
-   capture.  Shutdown and @restart drain the queue before exec/exit.
-   panic() bypasses the queue and writes synchronously: the crashed
+
+   DURABILITY
+
+   Torn files after power loss have been a real problem historically.
+   The write discipline is therefore: write, fsync the file, then
+   rename, then fsync the containing directory.  A .hist append is
+   fsynced before the manifest that covers it commits, and the
+   manifest itself is fsynced the same way.  A reader can never see a
+   committed state whose bytes did not reach the platter.  All of
+   this cost lands on the dump thread, where latency is free.
+
+
+   COMPACTION
+
+   Layers accumulate until the snapshot that needs them ages out.
+   Compaction is a background pass that works purely from files:
+   read an object's .json and .hist, merge every layer no retained
+   marker still requires into the base, write a fresh .json, rewrite
+   the .hist with the layers that remain.  It never touches a live
+   object and never blocks the game.  Object load applies remaining
+   layers over the base, so a compacted and an uncompacted object are
+   indistinguishable to the loader.
+
+   Compaction also reclaims deleted objects: a tombstoned object's
+   files disappear once no retained marker predates its deletion, and
+   only then may the tombstone age out of the manifest.
+
+
+   READS OF STORED STATE
+
+   @rollback, resurrection, marker listings, and the examine snapshot
+   summary read files.  They first drain the persist queue, because
+   rolling back to a marker whose set has not landed yet would find
+   no stored state.  These are rare admin operations and the barrier
+   is brief.  Rollback then reads the base and applies layers up to
+   the target revision.
+
+   The player-visible "dump complete" message is posted back from the
+   dump thread when the manifest commits, so operators still learn
+   when the disk is caught up; the command itself returned at fire.
+
+
+   EDGES
+
+   Shutdown and in-game @restart drain the queue before exec or exit.
+   That drain is the only remaining pause, and it is where a pause is
+   already expected; normal dumps no longer pause the game at all.
+
+   panic() bypasses the queue and writes synchronously: a crashing
    world cannot wait on a thread that may itself be the casualty.
-   @stats counts an object unsaved if it is core-dirty OR has journal
-   deltas pending, preserving the traditional meaning.
 
-   Because phase 1 runs on the game thread between commands (where
-   the dump runs today), cross-object invariants are captured
-   coherently: nothing mutates between serializing object A and
-   object B.  The observable cost of firing is O(dirty set),
-   serialize-only; @snapshot and @dump return when capture ends.
+   -convert and -storegc remain offline and single-threaded, and pay
+   fsync synchronously, which is acceptable at maintenance time.
 
-   ORDERING AND THE QUEUE
-
-   Capture sets form a FIFO.  The dump thread drains them in order
-   and never coalesces across a marker: history [from, to) windows
-   are only correct if sets land in fire order.  Coalescing two
-   markerless sets that both carry the same object is permitted (the
-   later buffer supersedes) but is an optimization, not required.
-
-   Deletion enqueues too: retireObject becomes a single-object
-   capture appended to the open set (or a set of its own), and FIFO
-   guarantees the retained file is on disk before the manifest that
-   carries its tombstone commits.  Single-object snapshots enqueue a
-   one-object set whose marker lands in that object's file, written
-   by the dump thread.
-
-   Backpressure: the queue is bounded by memory, not count; if a fire
-   would exceed the bound the GAME THREAD blocks at the next fire
-   (never mid-mutation) until the dump thread drains.  In practice
-   dumps are minutes apart and sets are megabytes.
-
-   WHO MUTATES WHAT
-
-   The retention sweep (deleted-file reclaim, tombstone aging, marker
-   aging) needs stat() and unlink(), so it moves wholly to the dump
-   thread as part of manifest commit.  Its in-memory side effects
-   (the pruned tombstone list, aged marker list) are posted back to
-   the game thread and applied at the next tick; a tombstone
-   lingering in RAM one cycle is harmless.
-
-   Game-thread READS of store files (rollback, resurrection, marker
-   listings, examine's snapshot summary) stay where they are: the
-   single-writer plus atomic-rename discipline means a reader always
-   sees a complete old or complete new file, never a torn one.
-
-   Shutdown and in-game @restart drain the queue (join the dump
-   thread) before exec or exit; the final manifest is the clean
-   commit.  Crash semantics are unchanged from today: sets that had
-   not committed their manifest are simply lost, exactly like any
-   other change since the last dump; committed sets are whole.
-
-   -convert and -storegc remain offline and single-threaded.  The
-   forked dump (tp_dump_forking) and THREADED_DB_DUMP ifdefs are
-   retired when this lands.
-
-   EVOLUTION TO O(1) FIRE (in-memory COW)
-
-   The phase 1 pause shrinks to nothing as the legacy bridge dies.
-   Target contract: every mutation goes through a module or core
-   setter that begins with captureIfPreEpoch(obj): if the object has
-   not been captured since the current epoch, serialize it into the
-   open capture set BEFORE mutating.  Firing then becomes: open a
-   set, bump the epoch, record the marker, return: O(1), regardless
-   of dirty-set size.  Until every raw-field call site (FLAGS(x) |=,
-   NAME(x) =, direct struct pokes) is behind a setter, phase 1 keeps
-   serializing the dirty set as the fallback; each subsystem that
-   converts shrinks the pause.  Properties, containment, and type
-   data are already chokepointed and can hook immediately.  New
-   setters MUST follow capture-before-mutate from day one.
+   The forked dump (tp_dump_forking) and the THREADED_DB_DUMP ifdefs
+   are retired when this lands.
 
 
 8. MIGRATION AND OPERATIONS
