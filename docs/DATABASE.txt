@@ -298,6 +298,114 @@ amended.
    no revs.
 
 
+7.1 THREADED PERSISTENCE: FIRE, THEN WRITE BEHIND THE GAME
+
+   STATUS: DESIGNED, NOT IMPLEMENTED.  This subsection is the agreed
+   design; amend it before deviating.
+
+   The point of the snapshot engine is that firing a snapshot is
+   cheap and persisting it is somebody else's problem: the game
+   records the moment, and the PREVIOUS version of the world is
+   written to disk behind the game's back.  Fork-based dumping
+   approximated this by letting the kernel copy-on-write the address
+   space; it dies here, because forking a multithreaded process
+   freezes foreign locks in the child.  This design replaces it.
+
+   ROLES
+
+   Game thread    the only mutator of in-memory objects.  Fires
+                  captures.  NEVER writes the store.
+   Dump thread    one long-lived worker; the ONLY writer to the store
+                  on disk.  Consumes capture sets.  NEVER touches a
+                  DbObject: it works purely from immutable buffers,
+                  so it needs no object locks at all.
+
+   THE SPLIT
+
+   Serialization today (saveObject) reads live object state and the
+   previous file, diffs, appends history, renames.  It splits in two:
+
+   Phase 1, CAPTURE (game thread, atomic wrt mutation): serialize
+   each dirty object to an in-memory buffer (objectToJson output),
+   plus the manifest payload (tune parms, tombstone table, markers,
+   next dbref).  CPU-only, no disk I/O.  The result is a capture set:
+
+       { epoch, [ (uuid, dbref, serialized object) ... ],
+         manifest payload, optional marker }
+
+   Phase 2, PERSIST (dump thread): for each buffered object, read the
+   previous file, run the existing per-entry diff (rev stamping, the
+   history push for values a retained marker saw), append .hist,
+   atomic-rename the .json; then write the manifest LAST.  The
+   manifest is the commit point for the whole set.  The diff needs
+   only the buffer and the old file, never the live object.
+
+   Because phase 1 runs on the game thread between commands (where
+   the dump runs today), cross-object invariants are captured
+   coherently: nothing mutates between serializing object A and
+   object B.  The observable cost of firing is O(dirty set),
+   serialize-only; @snapshot and @dump return when capture ends.
+
+   ORDERING AND THE QUEUE
+
+   Capture sets form a FIFO.  The dump thread drains them in order
+   and never coalesces across a marker: history [from, to) windows
+   are only correct if sets land in fire order.  Coalescing two
+   markerless sets that both carry the same object is permitted (the
+   later buffer supersedes) but is an optimization, not required.
+
+   Deletion enqueues too: retireObject becomes a single-object
+   capture appended to the open set (or a set of its own), and FIFO
+   guarantees the retained file is on disk before the manifest that
+   carries its tombstone commits.  Single-object snapshots enqueue a
+   one-object set whose marker lands in that object's file, written
+   by the dump thread.
+
+   Backpressure: the queue is bounded by memory, not count; if a fire
+   would exceed the bound the GAME THREAD blocks at the next fire
+   (never mid-mutation) until the dump thread drains.  In practice
+   dumps are minutes apart and sets are megabytes.
+
+   WHO MUTATES WHAT
+
+   The retention sweep (deleted-file reclaim, tombstone aging, marker
+   aging) needs stat() and unlink(), so it moves wholly to the dump
+   thread as part of manifest commit.  Its in-memory side effects
+   (the pruned tombstone list, aged marker list) are posted back to
+   the game thread and applied at the next tick; a tombstone
+   lingering in RAM one cycle is harmless.
+
+   Game-thread READS of store files (rollback, resurrection, marker
+   listings, examine's snapshot summary) stay where they are: the
+   single-writer plus atomic-rename discipline means a reader always
+   sees a complete old or complete new file, never a torn one.
+
+   Shutdown and in-game @restart drain the queue (join the dump
+   thread) before exec or exit; the final manifest is the clean
+   commit.  Crash semantics are unchanged from today: sets that had
+   not committed their manifest are simply lost, exactly like any
+   other change since the last dump; committed sets are whole.
+
+   -convert and -storegc remain offline and single-threaded.  The
+   forked dump (tp_dump_forking) and THREADED_DB_DUMP ifdefs are
+   retired when this lands.
+
+   EVOLUTION TO O(1) FIRE (in-memory COW)
+
+   The phase 1 pause shrinks to nothing as the legacy bridge dies.
+   Target contract: every mutation goes through a module or core
+   setter that begins with captureIfPreEpoch(obj): if the object has
+   not been captured since the current epoch, serialize it into the
+   open capture set BEFORE mutating.  Firing then becomes: open a
+   set, bump the epoch, record the marker, return: O(1), regardless
+   of dirty-set size.  Until every raw-field call site (FLAGS(x) |=,
+   NAME(x) =, direct struct pokes) is behind a setter, phase 1 keeps
+   serializing the dirty set as the fallback; each subsystem that
+   converts shrinks the pause.  Properties, containment, and type
+   data are already chokepointed and can hook immediately.  New
+   setters MUST follow capture-before-mutate from day one.
+
+
 8. MIGRATION AND OPERATIONS
 
    Development happens on the new-database branch; GinkoMUCK runs that
