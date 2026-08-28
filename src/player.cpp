@@ -297,12 +297,9 @@ create_player(dbref creator, const char *name, const char *password)
     clear_alias(0, name);
 
     /* else he doesn't already exist, create him */
-    player = MUCK::database().newObject(creator);
+    player = MUCK::database().Create<MUCK::Player>(name, NOTHING)
+        ->object()->ref();
     newp = DBFETCH(player);
-
-    /* initialize everything */
-    NAME(player) = alloc_string(name);
-    FLAGS(player) = TYPE_PLAYER;
 
     if (OkObj(tp_player_prototype)
         && (Typeof(tp_player_prototype) == TYPE_PLAYER)) {

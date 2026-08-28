@@ -161,17 +161,15 @@ dbref
 Database::newProgram(dbref player, const char *name)
 {
     unsigned char mlvl;
-    dbref newprog;
     char buf[BUFFER_LEN];
 
-    newprog = newObject(player);
     player = OWNER(player);
 
-    NAME(newprog) = alloc_string(name);
+    dbref newprog = Create<MufProgram>(name, player)->object()->ref();
+
     sprintf(buf, "A scroll containing a spell called %s", name);
     SETDESC(newprog, buf);
-    DBFETCH(newprog)->location = player;
-    FLAGS(newprog) = TYPE_PROGRAM;
+    DBFETCH(newprog)->location = player;   /* chain wiring flips later */
 
     mlvl = MLevel(player);
     if (mlvl < 1)
@@ -180,19 +178,6 @@ Database::newProgram(dbref player, const char *name)
         mlvl = 3;
     SetMLevel(newprog, mlvl);
 
-    OWNER(newprog) = player;
-    DBFETCH(newprog)->sp.program.first = 0;
-    DBFETCH(newprog)->sp.program.curr_line = 0;
-    DBFETCH(newprog)->sp.program.siz = 0;
-    DBFETCH(newprog)->sp.program.code = 0;
-    DBFETCH(newprog)->sp.program.start = 0;
-    DBFETCH(newprog)->sp.program.pubs = 0;
-    DBFETCH(newprog)->sp.program.fprofile = NULL;
-    DBFETCH(newprog)->sp.program.proftime.tv_sec = 0;
-    DBFETCH(newprog)->sp.program.proftime.tv_usec = 0;
-    DBFETCH(newprog)->sp.program.profstart = 0;
-    DBFETCH(newprog)->sp.program.profuses = 0;
-    DBFETCH(newprog)->sp.program.instances = 0;
     PUSH(newprog, DBFETCH(player)->contents);
     DBDIRTY(newprog);
     DBDIRTY(player);
@@ -365,6 +350,46 @@ static int moduleTypeBits(Player *) { return TYPE_PLAYER; }
 static int moduleTypeBits(Exit *) { return TYPE_EXIT; }
 static int moduleTypeBits(MufProgram *) { return TYPE_PROGRAM; }
 
+/* The one sanctioned home for raw type-payload initialization: the
+ * creation gatekeeper. Every field that is a sentinel rather than a
+ * zero gets it here, so no construction sequence outside this file
+ * ever touches the union again. */
+static void
+typeInit(dbref r)
+{
+    struct object *o = DBFETCH(r);
+
+    switch (FLAGS(r) & TYPE_MASK) {
+        case TYPE_ROOM:
+            o->sp.room.dropto = NOTHING;
+            break;
+        case TYPE_THING:
+            o->sp.thing.home = NOTHING;
+            o->sp.thing.value = 0;
+            break;
+        case TYPE_PLAYER:
+            o->sp.player.home = NOTHING;
+            o->sp.player.pennies = 0;
+            o->sp.player.password = NULL;
+            o->sp.player.curr_prog = NOTHING;
+            o->sp.player.insert_mode = 0;
+            o->sp.player.block = 0;
+            o->sp.player.descrs = NULL;
+            o->sp.player.descr_count = 0;
+            o->sp.player.last_descr = NOTHING;
+            break;
+        case TYPE_EXIT:
+            o->sp.exit.ndest = 0;
+            o->sp.exit.dest = NULL;
+            break;
+        case TYPE_PROGRAM:
+            memset(&o->sp.program, 0, sizeof(o->sp.program));
+            break;
+        default:
+            break;
+    }
+}
+
 template <class T>
 T *
 Database::Create(const char *name, dbref owner)
@@ -374,6 +399,7 @@ Database::Create(const char *name, dbref owner)
     FLAGS(r) = moduleTypeBits((T *) nullptr);
     NAME(r) = alloc_string(name);
     OWNER(r) = owner;
+    typeInit(r);
     DBDIRTY(r);
     return get(r)->template As<T>();
 }

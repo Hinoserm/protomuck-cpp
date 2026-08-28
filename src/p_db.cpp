@@ -1563,15 +1563,10 @@ prim_newobject(PRIM_PROTOTYPE)
         if (!ok_name(b))
             abort_interp("Invalid name (2)");
 
-        ref = MUCK::database().newObject(ProgUID);
-
-        /* initialize everything */
-        NAME(ref) = alloc_string(b);
-        DBFETCH(ref)->location = oper[1].data.objref;
-        OWNER(ref) = OWNER(ProgUID);
+        ref = MUCK::database().Create<MUCK::Thing>(b, OWNER(ProgUID))
+            ->object()->ref();
+        DBFETCH(ref)->location = oper[1].data.objref;  /* chain wiring flips later */
         MUCK::database().get(ref)->As<MUCK::Thing>()->setValue(1);
-        DBFETCH(ref)->exits = NOTHING;
-        FLAGS(ref) = TYPE_THING;
 
         if ((loc = DBFETCH(PSafe)->location) != NOTHING && controls(PSafe, loc)) {
             MUCK::database().get(ref)->As<MUCK::Thing>()->setHome(MUCK::database().get(loc)); /* home */
@@ -1611,13 +1606,10 @@ prim_newroom(PRIM_PROTOTYPE)
         if (!ok_name(b))
             abort_interp("Invalid name (2)");
 
-        ref = MUCK::database().newObject(ProgUID);
-
-        /* Initialize everything */
-        FLAGS(ref) = TYPE_ROOM | (FLAGS(PSafe) & JUMP_OK);
-        NAME(ref) = alloc_string(b);
-        DBFETCH(ref)->location = oper[1].data.objref;
-        OWNER(ref) = OWNER(ProgUID);
+        ref = MUCK::database().Create<MUCK::Room>(b, OWNER(ProgUID))
+            ->object()->ref();
+        FLAGS(ref) |= (FLAGS(PSafe) & JUMP_OK);
+        DBFETCH(ref)->location = oper[1].data.objref;  /* chain wiring flips later */
         DBFETCH(ref)->exits = NOTHING;
         MUCK::database().get(ref)->As<MUCK::Room>()->setDropTo(nullptr);
         PUSH(ref, DBFETCH(oper[1].data.objref)->contents);
@@ -1652,12 +1644,10 @@ prim_newexit(PRIM_PROTOTYPE)
         if (!ok_name(b))
             abort_interp("Invalid name (2)");
 
-        ref = MUCK::database().newObject(ProgUID);
-
-        /* initialize everything */
-        NAME(ref) = alloc_string(oper[0].data.string->data);
-        DBFETCH(ref)->location = oper[1].data.objref;
-        OWNER(ref) = OWNER(ProgUID);
+        ref = MUCK::database().Create<MUCK::Exit>(oper[0].data.string->data,
+                                                  OWNER(ProgUID))
+            ->object()->ref();
+        DBFETCH(ref)->location = oper[1].data.objref;  /* chain wiring flips later */
         FLAGS(ref) = TYPE_EXIT;
         DBFETCH(ref)->sp.exit.ndest = 0;   /* raw: mid-construction */
         DBFETCH(ref)->sp.exit.dest = NULL; /* raw: mid-construction */
@@ -1951,12 +1941,9 @@ prim_copyplayer(PRIM_PROTOTYPE)
         abort_interp("The MUCK is read only.");
 
     /* else he doesn't already exist, create him */
-    newplayer = MUCK::database().newObject(ProgUID);
+    newplayer = MUCK::database().Create<MUCK::Player>(name, NOTHING)
+        ->object()->ref();
     newp = DBFETCH(newplayer);
-
-    /* initialize everything */
-    NAME(newplayer) = alloc_string(name);
-    FLAGS(newplayer) = TYPE_PLAYER;
 
     FLAGS(newplayer) = FLAGS(ref);
     FLAG2(newplayer) = FLAG2(ref);

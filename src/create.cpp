@@ -149,16 +149,10 @@ do_open(int descr, dbref player, const char *direction, const char *linkto)
     } else {
         char buf[BUFFER_LEN];
 
-        /* create the exit */
-        exit = MUCK::database().newObject(player);
-
-        /* initialize everything */
-        NAME(exit) = alloc_string(direction);
-        DBFETCH(exit)->location = loc;
-        OWNER(exit) = OWNER(player);
-        FLAGS(exit) = TYPE_EXIT;
-        DBFETCH(exit)->sp.exit.ndest = 0;      /* raw: mid-construction */
-        DBFETCH(exit)->sp.exit.dest = NULL;    /* raw: mid-construction */
+        /* create the exit through the gatekeeper */
+        exit = MUCK::database().Create<MUCK::Exit>(direction, OWNER(player))
+            ->object()->ref();
+        DBFETCH(exit)->location = loc;         /* chain wiring flips later */
 
         /* link it in */
         PUSH(exit, DBFETCH(loc)->exits);
@@ -505,7 +499,8 @@ do_dig(int descr, dbref player, const char *name, const char *pname)
         anotify_fmt(player, CFAIL "You don't have enough %s to dig a room.", tp_pennies);
         return;
     }
-    room = MUCK::database().newObject(player);
+    room = MUCK::database().Create<MUCK::Room>("", OWNER(player))
+        ->object()->ref();
 
     /* Initialize everything */
     newparent = DBFETCH(DBFETCH(player)->location)->location;
@@ -519,12 +514,9 @@ do_dig(int descr, dbref player, const char *name, const char *pname)
             newparent = GLOBAL_ENVIRONMENT;
     }
 
-    NAME(room) = alloc_string(name);
-    DBFETCH(room)->location = newparent;
-    OWNER(room) = OWNER(player);
-    DBFETCH(room)->exits = NOTHING;
-    DBFETCH(room)->sp.room.dropto = NOTHING;   /* raw: object still mid-construction */
-    FLAGS(room) = TYPE_ROOM | (FLAGS(player) & JUMP_OK);
+    MUCK::database().get(room)->setName(name);
+    DBFETCH(room)->location = newparent;       /* chain wiring flips later */
+    FLAGS(room) |= (FLAGS(player) & JUMP_OK);
     PUSH(room, DBFETCH(newparent)->contents);
     DBDIRTY(room);
     DBDIRTY(newparent);
@@ -742,25 +734,24 @@ do_create(dbref player, char *name, char *acost)
         return;
     } else {
         /* create the object */
-        thing = MUCK::database().newObject(player);
+        thing = MUCK::database().Create<MUCK::Thing>("", OWNER(player))
+            ->object()->ref();
 
-        /* initialize everything */
-        NAME(thing) = alloc_string(name);
-        DBFETCH(thing)->location = player;
-        OWNER(thing) = OWNER(player);
-        DBFETCH(thing)->sp.thing.value = OBJECT_ENDOWMENT(cost);   /* raw: mid-construction */
-        DBFETCH(thing)->exits = NOTHING;
-        FLAGS(thing) = TYPE_THING;
+        /* initialize through the gatekeeper and the module */
+        {
+            MUCK::Thing *t = MUCK::database().get(thing)->As<MUCK::Thing>();
+            int endow = OBJECT_ENDOWMENT(cost);
 
-        /* endow the object */
-        if (DBFETCH(thing)->sp.thing.value > tp_max_object_endowment) {   /* raw: mid-construction */
-            DBFETCH(thing)->sp.thing.value = tp_max_object_endowment;   /* raw: mid-construction */
-        }
-        if ((loc = DBFETCH(player)->location) != NOTHING && controls(player, loc)) {
-            DBFETCH(thing)->sp.thing.home = loc; /* raw: mid-construction */
-        } else {
-            DBFETCH(thing)->sp.thing.home = player;    /* raw: mid-construction */
-            /* set thing's home to player instead */
+            MUCK::database().get(thing)->setName(name);
+            DBFETCH(thing)->location = player;   /* chain wiring flips later */
+            t->setValue(endow > tp_max_object_endowment
+                        ? tp_max_object_endowment : endow);
+            if ((loc = DBFETCH(player)->location) != NOTHING
+                && controls(player, loc)) {
+                t->setHome(MUCK::database().get(loc));
+            } else {
+                t->setHome(MUCK::database().get(player));
+            }
         }
 
         /* link it in */
@@ -937,14 +928,8 @@ do_action(int descr, dbref player, const char *action_name, const char *source_n
         return;
     }
 
-    action = MUCK::database().newObject(player);
-
-    NAME(action) = alloc_string(action_name);
-    DBFETCH(action)->location = NOTHING;
-    OWNER(action) = OWNER(player);
-    DBFETCH(action)->sp.exit.ndest = 0;        /* raw: mid-construction */
-    DBFETCH(action)->sp.exit.dest = NULL;      /* raw: mid-construction */
-    FLAGS(action) = TYPE_EXIT;
+    action = MUCK::database().Create<MUCK::Exit>(action_name, OWNER(player))
+        ->object()->ref();
 
     set_source(player, action, source);
     sprintf(buf, CSUCC "Action %s created and attached to %s.", unparse_object(player, action), NAME(source));
