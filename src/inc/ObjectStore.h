@@ -33,6 +33,12 @@ class ObjectStore {
     static bool excludeType(const char *name, std::string *err);
     static bool typeExcluded(const std::string &name);
 
+    /* --db-exclude-module: boot without a FEATURE module (properties
+     * included). Its namespace entries ride dormant; the module's
+     * API surface goes blanket-inert. docs/PROPERTIES.txt 5. */
+    static bool excludeModule(const char *name, std::string *err);
+    static bool moduleExcluded(const std::string &name);
+
     /* Stored type name of an UNSUPPORTED placeholder, empty string
      * for normal objects. */
     static std::string placeholderTypeName(dbref ref);

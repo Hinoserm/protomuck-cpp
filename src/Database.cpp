@@ -134,9 +134,11 @@ Database::clearObject(dbref player, dbref i)
     NAME(i) = 0;
     ts_newobject(player, o);
     o->location = NOTHING;
-    o->properties = 0;
     contentsOf(i).clear();
     exitsOf(i).clear();
+    if (DbObject *sh = get(i))
+        if (Properties *pp = sh->As<Properties>())
+            pp->root().clear();
 
     /* flags and type-specific fields are the caller's to initialize */
 }
@@ -198,12 +200,8 @@ Database::freeObject(dbref i)
     if (NAME(i) && Typeof(i) != TYPE_GARBAGE)
         delete[]NAME(i);
 
-    if (o->properties) {
-        delete_proplist(o->properties);
-    }
-
-    /* exit destinations and the player password hash are owned by
-     * their modules now and freed with the module objects */
+    /* properties, exit destinations, and the player password hash are
+     * owned by their modules now and freed with the module objects */
 #ifndef SANITY
     if (Typeof(i) == TYPE_PROGRAM) {
         uncompile_program(i);

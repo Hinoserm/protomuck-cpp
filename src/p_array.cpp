@@ -1007,7 +1007,8 @@ prim_array_get_propdirs(PRIM_PROTOTYPE)
     stk_array *nw;
     char propname[BUFFER_LEN];
     char dir[BUFFER_LEN];
-    PropPtr propadr, pptr;
+    PropPtr propadr;
+    PropDirPtr pptr;
     PropPtr prptr;
     int count = 0;
     int len = 0;
@@ -1066,7 +1067,8 @@ prim_array_get_propvals(PRIM_PROTOTYPE)
     stk_array *nw;
     char propname[BUFFER_LEN];
     char dir[BUFFER_LEN];
-    PropPtr propadr, pptr;
+    PropPtr propadr;
+    PropDirPtr pptr;
     PropPtr prptr;
     dbref ref;
     struct inst temp1, temp2;
@@ -2350,7 +2352,8 @@ array_props_wildcard(stk_array *arr, dbref player, dbref thing, const char *dir,
     char propname[BUFFER_LEN];
     char wld[BUFFER_LEN];
     char buf[BUFFER_LEN];
-    PropPtr propadr, pptr;
+    PropPtr propadr;
+    PropDirPtr pptr;
     char *ptr, *wldcrd = wld;
     int i;
     bool recurse = 0;

@@ -97,6 +97,30 @@ ObjectStore::typeExcluded(const std::string &name)
     return excludedTypes.count(name) != 0;
 }
 
+static std::set<std::string> excludedModules;
+
+bool
+ObjectStore::excludeModule(const char *name, std::string *err)
+{
+    std::string n = name ? name : "";
+
+    for (auto &c : n)
+        c = (char) tolower(c);
+    if (n.empty()) {
+        if (err)
+            *err = "empty module name";
+        return false;
+    }
+    excludedModules.insert(n);
+    return true;
+}
+
+bool
+ObjectStore::moduleExcluded(const std::string &name)
+{
+    return excludedModules.count(name) != 0;
+}
+
 /* A stored type name is supported when it is one of the built-ins and
  * has not been excluded for this boot. "garbage" passes through the
  * legacy path untouched. */
@@ -123,8 +147,8 @@ knownNamespace(const std::string &k)
 {
     if (k.empty())
         return false;
-    if (k[0] == '/')
-        return true;            /* properties */
+    if (k[0] == '/')            /* properties: dormant when excluded */
+        return !ObjectStore::moduleExcluded("properties");
     if (k.rfind("$core/", 0) == 0 || k.rfind("$type/", 0) == 0)
         return true;
     return false;
@@ -224,70 +248,68 @@ refFromJson(const json &v)
 /* ------------------------------------------------------------------ */
 
 static void
-propsToJson(struct object *o, json &arr, const char *dir, PropPtr p)
+propsToJson(json &arr, const char *dir, PropDirPtr d)
 {
     char buf[BUFFER_LEN];
     char ubuf[BUFFER_LEN];
-    char fbuf[BUFFER_LEN];
 
-    if (!p)
+    if (!d)
         return;
-    propsToJson(o, arr, dir, AVL_LF(p));
+    for (PropPtr p = d->first(); p; p = d->nextAfter(p->name())) {
+        int type = PropType(p);
+        int flags = PropFlagsRaw(p) & ~(PROP_TOUCHED | PROP_ISUNLOADED | PROP_NOASCIICHK | PROP_COMPRESSED);
+        bool keep = true;
+        json v;
 
-    int type = PropType(p);
-    int flags = PropFlagsRaw(p) & ~(PROP_TOUCHED | PROP_ISUNLOADED | PROP_NOASCIICHK | PROP_COMPRESSED);
-    bool keep = true;
-    json v;
+        switch (type) {
+            case PROP_INTTYP:
+                if (!PropDataVal(p))
+                    keep = false;
+                else
+                    v = PropDataVal(p);
+                break;
+            case PROP_FLTTYP:
+                if (!PropDataFVal(p))
+                    keep = false;
+                else
+                    v = PropDataFVal(p);
+                break;
+            case PROP_REFTYP:
+                if (PropDataRef(p) == NOTHING)
+                    keep = false;
+                else
+                    v = (int) PropDataRef(p);
+                break;
+            case PROP_STRTYP:
+                if (!PropDataStr(p) || !*PropDataStr(p))
+                    keep = false;
+                else
+                    v = jstr(PropDataUNCStr(p));
+                break;
+            case PROP_LOKTYP:
+                if ((PropFlagsRaw(p) & PROP_ISUNLOADED) || PropDataLok(p) == TRUE_BOOLEXP)
+                    keep = false;
+                else
+                    v = jstr(unparse_boolexp(ubuf, (dbref) 1, PropDataLok(p), 0));
+                break;
+            default:           /* PROP_DIRTYP carries no value */
+                keep = false;
+                break;
+        }
 
-    switch (type) {
-        case PROP_INTTYP:
-            if (!PropDataVal(p))
-                keep = false;
-            else
-                v = PropDataVal(p);
-            break;
-        case PROP_FLTTYP:
-            if (!PropDataFVal(p))
-                keep = false;
-            else
-                v = PropDataFVal(p);
-            break;
-        case PROP_REFTYP:
-            if (PropDataRef(p) == NOTHING)
-                keep = false;
-            else
-                v = (int) PropDataRef(p);
-            break;
-        case PROP_STRTYP:
-            if (!PropDataStr(p) || !*PropDataStr(p))
-                keep = false;
-            else
-                v = jstr(PropDataUNCStr(p));
-            break;
-        case PROP_LOKTYP:
-            if ((PropFlagsRaw(p) & PROP_ISUNLOADED) || PropDataLok(p) == TRUE_BOOLEXP)
-                keep = false;
-            else
-                v = jstr(unparse_boolexp(ubuf, (dbref) 1, PropDataLok(p), 0));
-            break;
-        default:               /* PROP_DIRTYP carries no value */
-            keep = false;
-            break;
+        if (keep) {
+            json entry;
+            entry["n"] = jstr((std::string(dir + 1) + PropName(p)).c_str());
+            entry["f"] = flags;
+            entry["v"] = v;
+            arr.push_back(entry);
+        }
+
+        if (PropDir(p)) {
+            snprintf(buf, sizeof(buf), "%s%s%c", dir, PropName(p), PROPDIR_DELIMITER);
+            propsToJson(arr, buf, PropDir(p));
+        }
     }
-
-    if (keep) {
-        json entry;
-        entry["n"] = jstr((std::string(dir + 1) + PropName(p)).c_str());
-        entry["f"] = flags;
-        entry["v"] = v;
-        arr.push_back(entry);
-    }
-
-    if (PropDir(p)) {
-        snprintf(buf, sizeof(buf), "%s%s%c", dir, PropName(p), PROPDIR_DELIMITER);
-        propsToJson(o, arr, buf, PropDir(p));
-    }
-    propsToJson(o, arr, dir, AVL_RT(p));
 }
 
 static void
@@ -590,7 +612,7 @@ objectToJson(dbref i)
     {
         json props = json::array();
 
-        propsToJson(o, props, "/", o->properties);
+        propsToJson(props, "/", MUCK::propRoot(i));
         for (const auto &pe : props) {
             std::string key = "/" + pe["n"].get<std::string>();
             const json &v = pe["v"];
@@ -696,7 +718,8 @@ objectFromJsonPhase1(const json &j, std::vector<PendingLinks> &later)
 
     /* props load in phase two: lock props reference other objects by
      * dbref, and the parser rejects targets that have not loaded yet */
-    o->properties = NULL;
+    if (PropDirPtr pd_ = MUCK::propRoot(i))
+        pd_->clear();
 
     /* links start empty NOW; phase two only wires. Resetting these any
      * later would tear down chain wiring already done by containers
@@ -825,9 +848,11 @@ objectFromJsonPhase2(const PendingLinks &pl)
         propsFromJson(pl.ref, pl.props);
 
     /* re-attach registered feature modules and hand each its entry
-     * slice; unregistered names stay dormant */
+     * slice; unregistered and excluded names stay dormant */
     for (const auto &name : pl.modules) {
         if (!moduleRegistry().knows(name))
+            continue;
+        if (ObjectStore::moduleExcluded(name))
             continue;
 
         DbObject *obj = MUCK::database().get(pl.ref);
@@ -1302,10 +1327,8 @@ ObjectStore::rollbackObject(dbref i, long rev)
     }
 
     /* properties: wipe and rebuild from the snapshot */
-    if (o->properties) {
-        delete_proplist(o->properties);
-        o->properties = NULL;
-    }
+    if (PropDirPtr pd_ = MUCK::propRoot(i))
+        pd_->clear();
     {
         json props = json::array();
 

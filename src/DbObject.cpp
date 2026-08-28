@@ -11,6 +11,7 @@
 #include "Modules.h"
 #include "ProgramStore.h"
 #include "PasswordHash.h"
+#include "ObjectStore.h"
 
 /* Views over the legacy storage: every accessor resolves through the
  * classic macros so the two worlds stay coherent during migration. */
@@ -31,7 +32,6 @@ DbObject::DbObject(dbref ref) : ref_(ref)
     legacy_.flags = TYPE_GARBAGE;
     legacy_.location = NOTHING;
     legacy_.owner = NOTHING;
-    legacy_.properties = NULL;
 }
 
 void
@@ -69,8 +69,10 @@ DbObject::rebuildModules()
         default:               /* garbage: no type module */
             break;
     }
-    /* PROPERTIES is a global feature module: every object has it */
-    attach(std::make_unique<Properties>());
+    /* PROPERTIES is a global feature module: every object has it,
+     * unless this boot excluded it (its entries then ride dormant) */
+    if (!ObjectStore::moduleExcluded(Properties::staticName()))
+        attach(std::make_unique<Properties>());
 }
 
 const char *
@@ -588,6 +590,15 @@ thingSetValue(dbref ref, int v)
 
     if (t)
         t->setValue(v);
+}
+
+PropertyTree *
+propRoot(dbref ref)
+{
+    DbObject *o = database().get(ref);
+    Properties *p = o ? o->As<Properties>() : nullptr;
+
+    return p ? &p->root() : nullptr;
 }
 
 const char *&

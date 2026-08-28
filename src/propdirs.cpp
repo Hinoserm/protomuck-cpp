@@ -1,3 +1,13 @@
+/* Path walking over the modern property trees. The path-parsing
+ * rules (leading delimiters skipped, empty components collapsed,
+ * a trailing delimiter naming the directory itself) are the legacy
+ * ones, byte for byte. docs/PROPERTIES.txt.
+ *
+ * These take a PropDirPtr (a PropertyTree) where the legacy code
+ * took a chain head, and mutate in place instead of returning a new
+ * root, which is why the legacy "returns the updated root" contract
+ * collapses to returning the same directory.
+ */
 
 #include "copyright.h"
 #include "config.h"
@@ -9,176 +19,151 @@
 #include "externs.h"
 #include "interface.h"
 
-PropPtr
-propdir_new_elem(PropPtr *l, char *path)
+/* Split a path at the first delimiter run. Returns the head
+ * component in comp (up to BUFFER_LEN) and the remainder, or null
+ * when this was the last component. */
+static const char *
+splitPath(const char *path, char *comp)
 {
-    PropPtr p;
-    char *n;
+    const char *n;
+    size_t len;
 
     while (*path && *path == PROPDIR_DELIMITER)
         path++;
-    if (!*path)
-        return (NULL);
-    n = index(path, PROPDIR_DELIMITER);
-    while (n && *n == PROPDIR_DELIMITER)
-        *(n++) = '\0';
-    if (n && *n) {
-        /* just another propdir in the path */
-        p = locate_prop(*l, path);
-        if (!p) {
-            /* propdir didn't exist */
-            p = new_prop(l, path);
-        }
-        return (propdir_new_elem(&PropDir(p), n));
-    } else {
-        /* aha, we are finally to the property itself. */
-        p = locate_prop(*l, path);
-        if (!p) {
-            /* property didn't exist */
-            p = new_prop(l, path);
-        }
-        return (p);
+    if (!*path) {
+        *comp = '\0';
+        return NULL;
     }
+    n = index(path, PROPDIR_DELIMITER);
+    if (n) {
+        len = (size_t) (n - path);
+        while (*n == PROPDIR_DELIMITER)
+            n++;
+        if (!*n)
+            n = NULL;           /* trailing delimiters only */
+    } else {
+        len = strlen(path);
+    }
+    if (len >= BUFFER_LEN)
+        len = BUFFER_LEN - 1;
+    memcpy(comp, path, len);
+    comp[len] = '\0';
+    return n;
 }
 
-
-/* returns pointer to the updated propdir structure's root node */
-/* l is the pointer to the root propdir node */
-/* path is the name of the property to delete */
 PropPtr
-propdir_delete_elem(PropPtr l, char *path)
+propdir_new_elem(PropDirPtr l, char *path)
 {
-    PropPtr p;
-    char *n;
+    char comp[BUFFER_LEN];
+    const char *rest;
 
     if (!l)
-        return (NULL);
-    while (*path && *path == PROPDIR_DELIMITER)
-        path++;
-    if (!*path)
-        return (l);
-    n = index(path, PROPDIR_DELIMITER);
-    while (n && *n == PROPDIR_DELIMITER)
-        *(n++) = '\0';
-    if (n && *n) {
-        /* just another propdir in the path */
-        p = locate_prop(l, path);
-        if (p && PropDir(p)) {
-            /* yup, found the propdir */
-            SetPDir(p, propdir_delete_elem(PropDir(p), n));
-            if (!PropDir(p) && PropType(p) == PROP_DIRTYP) {
-                l = delete_prop(&l, PropName(p));
-            }
-        }
-        /* return the updated plist pntr */
-        return (l);
-    } else {
-        /* aha, we are finally to the property itself. */
-        p = locate_prop(l, path);
-        if (p && PropDir(p))
-            delete_proplist(PropDir(p));
-        (void) delete_prop(&l, path);
-        return (l);
+        return NULL;
+    rest = splitPath(path, comp);
+    if (!*comp)
+        return NULL;
+
+    PropPtr p = l->insert(comp);
+
+    if (rest) {
+        p->children().parentNode = p;
+        return propdir_new_elem(&p->children(), (char *) rest);
     }
+    return p;
 }
 
-
-/* returns pointer to given property */
-/* l is the pointer to the root propdir node */
-/* path is the name of the property to find */
-PropPtr
-propdir_get_elem(PropPtr l, char *path)
+PropDirPtr
+propdir_delete_elem(PropDirPtr l, char *path)
 {
-    PropPtr p;
-    char *n;
+    char comp[BUFFER_LEN];
+    const char *rest;
 
     if (!l)
-        return (NULL);
-    while (*path && *path == PROPDIR_DELIMITER)
-        path++;
-    if (!*path)
-        return (NULL);
-    n = index(path, PROPDIR_DELIMITER);
-    while (n && *n == PROPDIR_DELIMITER)
-        *(n++) = '\0';
-    if (n && *n) {
-        /* just another propdir in the path */
-        p = locate_prop(l, path);
-        if (p && PropDir(p)) {
-            /* yup, found the propdir */
-            return (propdir_get_elem(PropDir(p), n));
+        return NULL;
+    rest = splitPath(path, comp);
+    if (!*comp)
+        return l;
+
+    if (rest) {
+        PropPtr p = l->find(comp);
+
+        if (p && p->isDir()) {
+            propdir_delete_elem(&p->children(), (char *) rest);
+            /* an emptied pure directory disappears with its child */
+            if (!p->isDir() && p->type() == PROP_DIRTYP)
+                l->erase(p->name());
         }
-        return (NULL);
-    } else {
-        /* aha, we are finally to the property subname itself. */
-        if ((p = locate_prop(l, path)))
-            return (p);         /* found the property! */
-        return (NULL);          /* nope, doesn't exist */
+        return l;
     }
+    l->erase(comp);             /* erases the subtree with it */
+    return l;
 }
 
-
-/* returns pointer to first property in the given propdir */
-/* l is the pointer to the root propdir node */
-/* path is the name of the propdir to find the first node of */
 PropPtr
-propdir_first_elem(PropPtr l, char *path)
+propdir_get_elem(PropDirPtr l, char *path)
 {
-    PropPtr p;
-
-    while (*path && *path == PROPDIR_DELIMITER)
-        path++;
-    if (!*path)
-        return (first_node(l));
-    p = propdir_get_elem(l, path);
-    if (p && PropDir(p))
-        return (first_node(PropDir(p))); /* found the property! */
-    return (NULL);              /* nope, doesn't exist */
-}
-
-
-/* returns pointer to next property after the given one in the propdir */
-/* l is the pointer to the root propdir node */
-/* path is the name of the property to find the next node after */
-/* Note: Finds the next alphabetical property, regardless of the existence
-	  of the original property given. */
-PropPtr
-propdir_next_elem(PropPtr l, char *path)
-{
-    PropPtr p;
-    char *n;
+    char comp[BUFFER_LEN];
+    const char *rest;
 
     if (!l)
-        return (NULL);
+        return NULL;
+    rest = splitPath(path, comp);
+    if (!*comp)
+        return NULL;
+
+    PropPtr p = l->find(comp);
+
+    if (!p)
+        return NULL;
+    if (rest)
+        return p->isDir() ? propdir_get_elem(&p->children(), (char *) rest)
+                          : NULL;
+    return p;
+}
+
+PropPtr
+propdir_first_elem(PropDirPtr l, char *path)
+{
+    if (!l)
+        return NULL;
     while (*path && *path == PROPDIR_DELIMITER)
         path++;
     if (!*path)
-        return (NULL);
-    n = index(path, PROPDIR_DELIMITER);
-    while (n && *n == PROPDIR_DELIMITER)
-        *(n++) = '\0';
-    if (n && *n) {
-        /* just another propdir in the path */
-        p = locate_prop(l, path);
-        if (p && PropDir(p)) {
-            /* yup, found the propdir */
-            return (propdir_next_elem(PropDir(p), n));
-        }
-        return (NULL);
-    } else {
-        /* aha, we are finally to the property subname itself. */
-        return (next_node(l, path));
-    }
+        return l->first();
+
+    PropPtr p = propdir_get_elem(l, path);
+
+    if (p && p->isDir())
+        return p->children().first();
+    return NULL;
 }
 
+PropPtr
+propdir_next_elem(PropDirPtr l, char *path)
+{
+    char comp[BUFFER_LEN];
+    const char *rest;
 
-/* return true if a property contains a propdir */
+    if (!l)
+        return NULL;
+    rest = splitPath(path, comp);
+    if (!*comp)
+        return NULL;
+
+    if (rest) {
+        PropPtr p = l->find(comp);
+
+        if (p && p->isDir())
+            return propdir_next_elem(&p->children(), (char *) rest);
+        return NULL;
+    }
+    return l->nextAfter(comp);
+}
+
 int
-propdir_check(PropPtr l, char *path)
+propdir_check(PropDirPtr l, char *path)
 {
-    PropPtr p;
+    PropPtr p = propdir_get_elem(l, path);
 
-    if ((p = propdir_get_elem(l, path)))
-        return (PropDir(p) != NULL);
-    return (0);
+    return p ? (p->isDir() ? 1 : 0) : 0;
 }

@@ -458,7 +458,8 @@ include_defs(COMPSTATE *cstat, dbref i)
     char dirname[BUFFER_LEN];
     char temp[BUFFER_LEN];
     const char *tmpptr;
-    PropPtr j, pptr;
+    PropPtr j;
+    PropDirPtr pptr;
 
     strcpy(dirname, "/_defs/");
     j = first_prop(i, dirname, &pptr, temp);

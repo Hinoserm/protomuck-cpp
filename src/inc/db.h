@@ -503,12 +503,14 @@ typedef char boolexp_type;
 #define BOOLEXP_CONST 3
 #define BOOLEXP_PROP 4
 
+namespace MUCK { class PropNode; }
+
 struct boolexp {
     boolexp_type type;
     struct boolexp *sub1;
     struct boolexp *sub2;
     dbref   thing;
-    struct plist *prop_check;
+    MUCK::PropNode *prop_check;
 };
 
 #define TRUE_BOOLEXP ((struct boolexp *) 0)
@@ -1029,7 +1031,8 @@ struct object {
     dbref   owner;
     /* contents/exits/next chains are gone: containment is the owning
      * vectors on MUCK::DbObject (contentsVec/exitsVec). */
-    struct plist *properties;
+    /* the property root lives on the Properties module now; reach it
+     * with MUCK::propRoot(ref). docs/PROPERTIES.txt */
 
 #ifdef DISKBASE
     int	    propsfpos;

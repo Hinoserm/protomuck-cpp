@@ -324,6 +324,9 @@ show_program_usage(char *prog)
     fprintf(stderr, "       --db-exclude-type NAME\n");
     fprintf(stderr, "                         boot without the NAME type module; its objects\n");
     fprintf(stderr, "                         load as UNSUPPORTED placeholders, data kept.\n");
+    fprintf(stderr, "       --db-exclude-module NAME\n");
+    fprintf(stderr, "                         boot without the NAME feature module (e.g.\n");
+    fprintf(stderr, "                         properties); its data rides dormant, kept.\n");
     fprintf(stderr, "       -pwconvert        convert passwords to hashed format on next save.\n");
     fprintf(stderr, "       -decompress       when saving db, save in uncompressed format.\n");
     fprintf(stderr, "       -nosanity         don't do db sanity checks at startup time.\n");
@@ -442,6 +445,16 @@ main(int argc, char **argv)
 
                 if (!MUCK::ObjectStore::excludeType(argv[++i], &exerr)) {
                     fprintf(stderr, "--db-exclude-type: %s\n", exerr.c_str());
+                    exit(1);
+                }
+            } else if (!strcmp(argv[i], "--db-exclude-module")) {
+                if (i + 1 >= argc) {
+                    show_program_usage(*argv);
+                }
+                std::string exerr;
+
+                if (!MUCK::ObjectStore::excludeModule(argv[++i], &exerr)) {
+                    fprintf(stderr, "--db-exclude-module: %s\n", exerr.c_str());
                     exit(1);
                 }
             } else if (!strcmp(argv[i], "-decompress")) {
@@ -6741,7 +6754,8 @@ mssp_send(struct descriptor_data *d)
     char mssp_val[BUFFER_LEN];
     char propname[BUFFER_LEN];
     char *p;
-    PropPtr propadr, pptr;
+    PropPtr propadr;
+    PropDirPtr pptr;
     PropPtr prptr;
 
     const char *dir = "/~mssp";

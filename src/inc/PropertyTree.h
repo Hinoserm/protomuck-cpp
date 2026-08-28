@@ -61,6 +61,10 @@ class PropertyTree {
     size_t size() const { return count_; }
     bool empty() const { return count_ == 0; }
 
+    /* The node this directory hangs under, null at an object root.
+     * Set by the path walker when it descends into a child tree. */
+    PropNode *parentNode = nullptr;
+
     /* Delete every leaf (recursively freeing their subtrees). */
     void clear();
 

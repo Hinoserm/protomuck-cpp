@@ -185,15 +185,24 @@ prim_getprop(PRIM_PROTOTYPE)
                         PushLock(PropDataLok(prptr));
                     }
                     break;
-                case PROP_REFTYP:
-                    PushObject(PropDataRef(prptr));
+                case PROP_REFTYP: {
+                    dbref tref = PropDataRef(prptr);
+
+                    PushObject(tref);
                     break;
-                case PROP_INTTYP:
-                    PushInt(PropDataVal(prptr));
+                }
+                case PROP_INTTYP: {
+                    int tval = PropDataVal(prptr);
+
+                    PushInt(tval);
                     break;
-                case PROP_FLTTYP:
-                    PushFloat(PropDataFVal(prptr));
+                }
+                case PROP_FLTTYP: {
+                    double tfval = PropDataFVal(prptr);
+
+                    PushFloat(tfval);
                     break;
+                }
                 default:
                     result = 0;
                     PushInt(result);
@@ -1458,7 +1467,8 @@ prim_parsepropex(PRIM_PROTOTYPE)
                                 char propname[BUFFER_LEN];
                                 char buf[BUFFER_LEN];
                                 char buf2[BUFFER_LEN];
-                                PropPtr propadr, pptr, currprop;
+                                PropPtr propadr, currprop;
+                                PropDirPtr pptr;
                                 PData pdat;
 
                                 int propcount = 0;
@@ -1484,11 +1494,23 @@ prim_parsepropex(PRIM_PROTOTYPE)
 
                                         switch (PropType(currprop)) {
                                             case PROP_LOKTYP:
-                                                pdat.data.lok = copy_bool((currprop->data).lok);
+                                                pdat.data.lok = copy_bool(PropDataLok(currprop));
                                             case PROP_DIRTYP:
                                                 break;
+                                            case PROP_STRTYP:
+                                                pdat.data.str = PropDataStr(currprop);
+                                                break;
+                                            case PROP_INTTYP:
+                                                pdat.data.val = PropDataVal(currprop);
+                                                break;
+                                            case PROP_FLTTYP:
+                                                pdat.data.fval = PropDataFVal(currprop);
+                                                break;
+                                            case PROP_REFTYP:
+                                                pdat.data.ref = PropDataRef(currprop);
+                                                break;
                                             default:
-                                                pdat.data = currprop->data;
+                                                pdat.data.val = 0;
                                                 break;
                                         }
                                         set_property_nofetch(destination, buf2, &pdat, 1);

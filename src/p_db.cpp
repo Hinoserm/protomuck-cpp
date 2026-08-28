@@ -21,7 +21,7 @@ copyobj(dbref player, dbref old, dbref nw)
     struct object *newp = DBFETCH(nw);
 
     NAME(nw) = alloc_string(NAME(old));
-    newp->properties = copy_prop(old);
+    copy_prop(old, nw);
     MUCK::exitsOf(nw).clear();
     MUCK::contentsOf(nw).clear();
     newp->location = NOTHING;
@@ -1956,7 +1956,7 @@ prim_copyplayer(PRIM_PROTOTYPE)
     FLAGS(newplayer) = FLAGS(ref);
     FLAG2(newplayer) = FLAG2(ref);
 
-    newp->properties = copy_prop(ref);
+    copy_prop(ref, newplayer);
     MUCK::exitsOf(newplayer).clear();
 #ifdef DISKBASE
     newp->propsfpos = 0;

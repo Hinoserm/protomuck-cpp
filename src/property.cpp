@@ -73,14 +73,20 @@ set_property_nofetch(dbref object, const char *pname, PData * dat, bool pure)
         FLAG2(object) |= F2COMMAND;
     }
 
-    p = propdir_new_elem(&(DBFETCH(object)->properties), buf);
+    PropDirPtr root_ = MUCK::propRoot(object);
+
+    if (!root_)
+        return;                 /* Properties module absent */
+    p = propdir_new_elem(root_, buf);
 
     /* free up any old values */
     clear_propnode(p);
 
     SetPFlagsRaw(p, dat->flags);
     if (PropFlags(p) & PROP_ISUNLOADED) {
-        SetPDataUnion(p, dat->data);
+        /* residency is the node's own business now; the value stays
+         * absent until an accessor faults it in. PROPERTIES.txt 4 */
+        p->residency = MUCK::PropNode::UNLOADED;
         return;
     }
 
@@ -197,18 +203,21 @@ remove_proplist_item(dbref player, PropPtr p, int allp)
 void
 remove_property_list(dbref player, int all)
 {
-    PropPtr l;
+    PropDirPtr l;
     PropPtr p;
     PropPtr n;
 
     /* if( tp_db_readonly ) return; *//* Why did we remove this? */
 
-    if ((l = DBFETCH(player)->properties)) {
+    if ((l = MUCK::propRoot(player))) {
+        char nm[BUFFER_LEN];
+
         p = first_node(l);
         while (p) {
-            n = next_node(l, PropName(p));
+            strcpy(nm, PropName(p));
+            n = next_node(l, nm);
             remove_proplist_item(player, p, all);
-            l = DBFETCH(player)->properties;
+            l = MUCK::propRoot(player);
             p = n;
         }
     }
@@ -222,7 +231,7 @@ remove_property_list(dbref player, int all)
 void
 remove_property_nofetch(dbref player, const char *type)
 {
-    PropPtr l;
+    PropDirPtr l;
     char buf[BUFFER_LEN];
     char *w;
 
@@ -230,9 +239,10 @@ remove_property_nofetch(dbref player, const char *type)
 
     w = strcpy(buf, type);
 
-    l = DBFETCH(player)->properties;
-    l = propdir_delete_elem(l, w);
-    DBFETCH(player)->properties = l;
+    l = MUCK::propRoot(player);
+    if (!l)
+        return;                 /* Properties module absent */
+    propdir_delete_elem(l, w);
     if ((FLAGS(player) & LISTENER) && !(get_property(player, "_listen") ||
                                         get_property(player, "_olisten") ||
                                         get_property(player, "~listen") ||
@@ -274,7 +284,7 @@ get_property(dbref player, const char *type)
 
     w = strcpy(buf, type);
 
-    p = propdir_get_elem(DBFETCH(player)->properties, w);
+    p = propdir_get_elem(MUCK::propRoot(player), w);
     return (p);
 }
 
@@ -440,14 +450,10 @@ get_property_type(dbref player, const char *type)
     }
 }
 
-PropPtr
-copy_prop(dbref old)
+void
+copy_prop(dbref old, dbref nw)
 {
-    PropPtr p, n = NULL;
-
-    p = DBFETCH(old)->properties;
-    copy_proplist(old, &n, p);
-    return (n);
+    copy_proplist(old, MUCK::propRoot(nw), MUCK::propRoot(old));
 }
 
 /* return old gender values for pronoun substitution code */
@@ -475,7 +481,7 @@ genderof(int descr, dbref player)
    property name into 'name'.  returns 0 if the property list is empty
    or does not exist. */
 PropPtr
-first_prop_nofetch(dbref player, const char *dir, PropPtr *list, char *name)
+first_prop_nofetch(dbref player, const char *dir, PropDirPtr *list, char *name)
 {
     char buf[BUFFER_LEN];
     PropPtr p;
@@ -486,7 +492,7 @@ first_prop_nofetch(dbref player, const char *dir, PropPtr *list, char *name)
         }
     }
     if (!dir || !*dir) {
-        *list = DBFETCH(player)->properties;
+        *list = MUCK::propRoot(player);
         p = first_node(*list);
         if (p) {
             strcpy(name, PropName(p));
@@ -497,8 +503,9 @@ first_prop_nofetch(dbref player, const char *dir, PropPtr *list, char *name)
     }
 
     strcpy(buf, dir);
-    *list = p = propdir_get_elem(DBFETCH(player)->properties, buf);
+    p = propdir_get_elem(MUCK::propRoot(player), buf);
     if (!p) {
+        *list = NULL;
         *name = '\0';
         return NULL;
     }
@@ -522,7 +529,7 @@ first_prop_nofetch(dbref player, const char *dir, PropPtr *list, char *name)
  */
 
 PropPtr
-first_prop(dbref player, const char *dir, PropPtr *list, char *name)
+first_prop(dbref player, const char *dir, PropDirPtr *list, char *name)
 {
     return (first_prop_nofetch(player, dir, list, name));
 }
@@ -536,7 +543,7 @@ first_prop(dbref player, const char *dir, PropPtr *list, char *name)
  */
 
 PropPtr
-next_prop(PropPtr list, PropPtr prop, char *name)
+next_prop(PropDirPtr list, PropPtr prop, char *name)
 {
     PropPtr p = prop;
 
@@ -563,11 +570,12 @@ next_prop_name(dbref player, char *outbuf, char *name)
 {
     char *ptr;
     char buf[BUFFER_LEN];
-    PropPtr p, l;
+    PropPtr p;
+    PropDirPtr l;
 
     strcpy(buf, name);
     if (!*name || name[strlen(name) - 1] == PROPDIR_DELIMITER) {
-        l = DBFETCH(player)->properties;
+        l = MUCK::propRoot(player);
         p = propdir_first_elem(l, buf);
         if (!p) {
             *outbuf = '\0';
@@ -580,7 +588,7 @@ next_prop_name(dbref player, char *outbuf, char *name)
 	   return NULL;
 	}
 */
-        l = DBFETCH(player)->properties;
+        l = MUCK::propRoot(player);
         p = propdir_next_elem(l, buf);
         if (!p) {
             *outbuf = '\0';
@@ -600,7 +608,7 @@ next_prop_name(dbref player, char *outbuf, char *name)
 int
 size_properties(dbref player, int load)
 {
-    return size_proplist(DBFETCH(player)->properties);
+    return size_proplist(MUCK::propRoot(player));
 }
 
 
@@ -612,10 +620,10 @@ is_propdir_nofetch(dbref player, const char *type)
     char w[BUFFER_LEN];
 
     strcpy(w, type);
-    p = propdir_get_elem(DBFETCH(player)->properties, w);
+    p = propdir_get_elem(MUCK::propRoot(player), w);
     if (!p)
         return 0;
-    return (PropDir(p) != (PropPtr) NULL);
+    return (PropDir(p) != (PropDirPtr) NULL);
 }
 
 
@@ -964,57 +972,73 @@ db_putprop(FILE * f, const char *dir, PropPtr p)
 }
 
 
-void
-db_dump_props_rec(struct object *o, FILE * f, const char *dir, PropPtr p)
+struct DumpCtx {
+    FILE *f;
+    const char *dir;
+};
+
+static void
+dumpVisit(MUCK::PropNode *p, void *arg)
 {
+    DumpCtx *ctx = (DumpCtx *) arg;
     char buf[BUFFER_LEN];
 
-    if (!p)
-        return;
-
-    db_dump_props_rec(o, f, dir, AVL_LF(p));
-
-    db_putprop(f, dir, p);
-
-    if (PropDir(p)) {
-        sprintf(buf, "%s%s%c", dir, PropName(p), PROPDIR_DELIMITER);
-        db_dump_props_rec(o, f, buf, PropDir(p));
+    db_putprop(ctx->f, ctx->dir, p);
+    if (p->isDir()) {
+        sprintf(buf, "%s%s%c", ctx->dir, PropName(p), PROPDIR_DELIMITER);
+        db_dump_props_rec(ctx->f, buf, &p->children());
     }
-    db_dump_props_rec(o, f, dir, AVL_RT(p));
 }
 
-
 void
-db_dump_props(FILE * f, struct object *o)
+db_dump_props_rec(FILE * f, const char *dir, PropDirPtr d)
 {
-    db_dump_props_rec(o, f, "/", o->properties);
-}
+    DumpCtx ctx;
 
-
-void
-untouchprop_rec(PropPtr p)
-{
-    if (!p)
+    if (!d)
         return;
+    ctx.f = f;
+    ctx.dir = dir;
+    d->each(dumpVisit, &ctx);
+}
+
+
+void
+db_dump_props(FILE * f, dbref obj)
+{
+    db_dump_props_rec(f, "/", MUCK::propRoot(obj));
+}
+
+
+void untouchprop_rec(PropDirPtr dir);
+
+static void
+untouchVisit(MUCK::PropNode *p, void *arg)
+{
     SetPFlags(p, (PropFlags(p) & ~PROP_TOUCHED));
-    untouchprop_rec(AVL_LF(p));
-    untouchprop_rec(AVL_RT(p));
-    untouchprop_rec(PropDir(p));
+    if (p->isDir())
+        untouchprop_rec(&p->children());
+    (void) arg;
+}
+
+void
+untouchprop_rec(PropDirPtr dir)
+{
+    if (dir)
+        dir->each(untouchVisit, NULL);
 }
 
 static dbref untouch_lastdone = 0;
 void
 untouchprops_incremental(int limit)
 {
-    PropPtr p;
-
     while (untouch_lastdone < MUCK::database().top()) {
-        /* clear the touch flags */
-        p = DBFETCH(untouch_lastdone)->properties;
-        if (p) {
+        PropDirPtr dir = MUCK::propRoot(untouch_lastdone);
+
+        if (dir && !dir->empty()) {
             if (!limit--)
                 return;
-            untouchprop_rec(p);
+            untouchprop_rec(dir);
         }
         untouch_lastdone++;
     }

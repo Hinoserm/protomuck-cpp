@@ -11,6 +11,7 @@
  */
 
 #include "DbObject.h"
+#include "PropertyTree.h"
 
 namespace MUCK {
 
@@ -213,7 +214,11 @@ ProgramRuntime &programRuntime(dbref ref);
 
 class Properties : public Module {
   public:
-    const char *moduleName() const override { return "properties"; }
+    static const char *staticName() { return "properties"; }
+    const char *moduleName() const override { return staticName(); }
+
+    /* The object's root propdir. docs/PROPERTIES.txt. */
+    PropertyTree &root() { return root_; }
 
     /* Thin typed veneer over the legacy prop tree; call sites migrate
      * here from get_property_class and friends. */
@@ -225,7 +230,15 @@ class Properties : public Module {
     void setInt(const char *path, int value);
     void remove(const char *path);
     bool exists(const char *path) const;
+
+  private:
+    PropertyTree root_;
 };
+
+/* Root propdir of an object, or null when the Properties module is
+ * not attached (excluded build): every legacy entry point then reads
+ * empty and refuses writes. docs/PROPERTIES.txt section 5. */
+PropertyTree *propRoot(dbref ref);
 
 } /* namespace MUCK */
 

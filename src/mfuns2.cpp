@@ -1781,7 +1781,8 @@ const char *
 mfn_dirprops(MFUNARGS)
 {
     char propname[BUFFER_LEN];
-    PropPtr propadr, pptr;
+    PropPtr propadr;
+    PropDirPtr pptr;
     char buf2[BUFFER_LEN];
     int list_limit = MAX_MFUN_LIST_LEN;
     dbref obj;

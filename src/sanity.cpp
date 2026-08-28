@@ -1154,27 +1154,27 @@ extract_prop(FILE * f, const char *dir, PropPtr p)
 }
 
 void
-extract_props_rec(FILE * f, dbref obj, const char *dir, PropPtr p)
+extract_props_rec(FILE * f, dbref obj, const char *dir, PropDirPtr p)
 {
     char buf[BUFFER_LEN];
 
     if (!p)
         return;
 
-    extract_props_rec(f, obj, dir, AVL_LF(p));
-    extract_prop(f, dir, p);
-    if (PropDir(p)) {
-        sprintf(buf, "%s%s%c", dir, PropName(p), PROPDIR_DELIMITER);
-        extract_props_rec(f, obj, buf, PropDir(p));
+    for (PropPtr q = p->first(); q; q = p->nextAfter(q->name())) {
+        extract_prop(f, dir, q);
+        if (PropDir(q)) {
+            sprintf(buf, "%s%s%c", dir, PropName(q), PROPDIR_DELIMITER);
+            extract_props_rec(f, obj, buf, PropDir(q));
+        }
     }
-    extract_props_rec(f, obj, dir, AVL_RT(p));
 }
 
 
 void
 extract_props(FILE * f, dbref obj)
 {
-    extract_props_rec(f, obj, "/", DBFETCH(obj)->properties);
+    extract_props_rec(f, obj, "/", MUCK::propRoot(obj));
 }
 
 void
@@ -1203,6 +1203,7 @@ void
 extract_object(FILE * f, dbref d)
 {
     int i;
+    PropDirPtr props;
 
     fprintf(f, "  #%d\n", d);
     fprintf(f, "  Object:         %s\n", unparse(d));
@@ -1247,7 +1248,8 @@ extract_object(FILE * f, dbref d)
 #ifdef DISKBASE
     fetchprops(d);
 #endif
-    if (DBFETCH(d)->properties) {
+    props = MUCK::propRoot(d);
+    if (props && !props->empty()) {
         fprintf(f, "  Properties:\n");
         extract_props(f, d);
     } else {

@@ -310,7 +310,7 @@ create_player(dbref creator, const char *name, const char *password)
         FLAG2(player) = FLAG2(tp_player_prototype);
 
         if (tp_pcreate_copy_props) {
-            newp->properties = copy_prop(tp_player_prototype);
+            copy_prop(tp_player_prototype, player);
 #ifdef DISKBASE
             newp->propsfpos = 0;
             newp->propsmode = PROPS_UNLOADED;

@@ -354,7 +354,8 @@ do_look_at(int descr, dbref player, const char *name, const char *detail)
             }
         } else if (thing == NOTHING || (*detail && thing != AMBIGUOUS)) {
             char propname[BUFFER_LEN];
-            PropPtr propadr, pptr, lastmatch;
+            PropPtr propadr, lastmatch;
+            PropDirPtr pptr;
             bool ambig;
 
             lastthing = NOTHING;
@@ -638,7 +639,8 @@ listprops_wildcard(dbref player, dbref thing, const char *dir, const char *wild)
     char wld[BUFFER_LEN];
     char buf[BUFFER_LEN];
     char buf2[BUFFER_LEN];
-    PropPtr propadr, pptr;
+    PropPtr propadr;
+    PropDirPtr pptr;
     char *ptr, *wldcrd = wld;
     int i, cnt = 0;
     bool recurse = 0;
