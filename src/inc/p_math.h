@@ -23,17 +23,23 @@ extern void prim_plusplus(PRIM_PROTOTYPE);
 extern void prim_minusminus(PRIM_PROTOTYPE);
 extern void prim_abs(PRIM_PROTOTYPE);
 extern void prim_sign(PRIM_PROTOTYPE);
+extern void *muf_seed_copy(void *rndbuf);
+extern void prim_srand(PRIM_PROTOTYPE);
+extern void prim_getseed(PRIM_PROTOTYPE);
+extern void prim_setseed(PRIM_PROTOTYPE);
 
 #define PRIMS_MATH_FUNCS prim_add, prim_subtract, prim_multiply, prim_divide, \
     prim_mod, prim_bitor, prim_bitxor, prim_bitand, prim_bitshift, prim_and,  \
     prim_or, prim_xor, prim_not, prim_lessthan, prim_greathan, prim_equal,    \
     prim_noteq, prim_lesseq, prim_greateq, prim_random, prim_int,             \
-    prim_plusplus, prim_minusminus, prim_abs, prim_sign
+    prim_plusplus, prim_minusminus, prim_abs, prim_sign, prim_srand,      \
+    prim_getseed, prim_setseed
 
 #define PRIMS_MATH_NAMES  "+",  "-",  "*",  "/",          \
     "%", "BITOR", "BITXOR", "BITAND", "BITSHIFT", "AND",  \
     "OR",  "XOR",  "NOT",  "<",  ">",  "=",  "!=",  "<=", \
-    ">=", "RANDOM", "INT", "++", "--", "ABS", "SIGN"
+    ">=", "RANDOM", "INT", "++", "--", "ABS", "SIGN", "SRAND",            \
+    "GETSEED", "SETSEED"
     
     
 #define PRIMLIST_MATH   { "+",         LM1, 2, prim_add },          \
@@ -60,7 +66,10 @@ extern void prim_sign(PRIM_PROTOTYPE);
                         { "++",        LM1, 1, prim_plusplus },     \
                         { "--",        LM1, 1, prim_minusminus },   \
                         { "ABS",       LM1, 1, prim_abs },          \
-                        { "SIGN",      LM1, 1, prim_sign }
+                        { "SIGN",      LM1, 1, prim_sign },         \
+                        { "SRAND",     LM1, 0, prim_srand },        \
+                        { "GETSEED",   LM1, 0, prim_getseed },      \
+                        { "SETSEED",   LM1, 1, prim_setseed }
       
 #define PRIMS_MATH_CNT 28
 

@@ -1288,7 +1288,7 @@ prim_array_put_propvals(PRIM_PROTOTYPE)
                     sprintf(propname, "%s%c%s", DoNullInd(oper[1].data.string), PROPDIR_DELIMITER, DoNullInd(temp1.data.string));
                     break;
                 case PROG_INTEGER:
-                    sprintf(propname, "%s%c%d", DoNullInd(oper[1].data.string), PROPDIR_DELIMITER, temp1.data.number);
+                    sprintf(propname, "%s%c%lld", DoNullInd(oper[1].data.string), PROPDIR_DELIMITER, (long long) temp1.data.number);
                     break;
                 case PROG_FLOAT:
                     sprintf(propname, "%s%c%.15g", DoNullInd(oper[1].data.string), PROPDIR_DELIMITER, temp1.data.fnumber);
@@ -1746,11 +1746,11 @@ prim_array_join(PRIM_PROTOTYPE)
                 text = DoNullInd(in->data.string);
                 break;
             case PROG_INTEGER:
-                sprintf(buf, "%d", in->data.number);
+                sprintf(buf, "%lld", (long long) in->data.number);
                 text = buf;
                 break;
             case PROG_OBJECT:
-                sprintf(buf, "#%d", in->data.number);
+                sprintf(buf, "#%d", (int) in->data.number);
                 text = buf;
                 break;
             case PROG_FLOAT:
@@ -1808,7 +1808,7 @@ prim_array_interpret(PRIM_PROTOTYPE)
                 text = DoNullInd(in->data.string);
                 break;
             case PROG_INTEGER:
-                sprintf(buf, "%d", in->data.number);
+                sprintf(buf, "%lld", (long long) in->data.number);
                 text = buf;
                 break;
             case PROG_OBJECT:
@@ -1829,12 +1829,12 @@ prim_array_interpret(PRIM_PROTOTYPE)
                     break;
                 }
                 if (in->data.number < -4) {
-                    sprintf(buf, "*INVALID(#%d)*", in->data.number);
+                    sprintf(buf, "*INVALID(#%d)*", (int) in->data.number);
                     text = buf;
                     break;
                 }
                 if (in->data.number >= MUCK::database().top()) {
-                    sprintf(buf, "*INVALID(#%d)*", in->data.number);
+                    sprintf(buf, "*INVALID(#%d)*", (int) in->data.number);
                     text = buf;
                     break;
                 }
@@ -2242,8 +2242,8 @@ prim_array_sum(PRIM_PROTOTYPE)
     struct inst *in;
     stk_array *arr;
     double facc;
-    int iacc;
-    int tiacc;
+    MUFINT iacc;
+    MUFINT tiacc;
     int done;
     int floaty;
     struct inst temp1;

@@ -1685,9 +1685,24 @@ sockwrite(struct descriptor_data *d, const char *str, int len)
     } else
 #endif /* MCCP_ENABLED */
 #ifdef USE_SSL
-    if (d->ssl_session)
-        return SSL_write(d->ssl_session, str, len);
-    else
+    if (d->ssl_session) {
+        int wrote = SSL_write(d->ssl_session, str, len);
+
+        if (wrote <= 0) {
+            /* Classify through SSL_get_error; errno is meaningless for
+               TLS results. Map would-block to EWOULDBLOCK so the errno
+               logic in process_output keeps working, and everything
+               else to a hard error. */
+            int sslerr = SSL_get_error(d->ssl_session, wrote);
+
+            if (sslerr == SSL_ERROR_WANT_READ || sslerr == SSL_ERROR_WANT_WRITE)
+                errnosocket = EWOULDBLOCK;
+            else
+                errnosocket = EPIPE;
+            return -1;
+        }
+        return wrote;
+    } else
 #endif
         return writesocket(d->fd, str, len);
 }
@@ -1836,12 +1851,71 @@ shovechars(void)
 #endif
 
 #ifdef USE_SSL
-    SSL_load_error_strings();
-    OpenSSL_add_ssl_algorithms();
-    ssl_ctx = SSL_CTX_new(SSLv23_server_method());
-    ssl_ctx_client = SSL_CTX_new(SSLv23_client_method());
+    /* OpenSSL 1.1.0 and later initialize themselves; the old
+       SSL_load_error_strings/OpenSSL_add_ssl_algorithms calls are no-ops. */
+    ssl_ctx = SSL_CTX_new(TLS_server_method());
+    ssl_ctx_client = SSL_CTX_new(TLS_client_method());
 
-    if (!SSL_CTX_use_certificate_file(ssl_ctx, SSL_CERT_FILE, SSL_FILETYPE_PEM)) {
+    /* POLICY (project owner, 2026-08-28): accept and offer everything
+       the linked OpenSSL still implements. Players connect with
+       whatever MUD client they have, some of them very old, and MUF
+       sockets reach equally old peers; we refuse a protocol or
+       algorithm only when the library itself has dropped it. This is
+       a deliberate compatibility choice, not an oversight: a MUCK
+       that cannot be connected to is worse than one reachable over a
+       dated cipher. Modern clients still negotiate TLS 1.3 and are
+       unaffected. Do not "harden" this without the owner's say-so.
+
+       Security level 0 re-enables the legacy algorithms that OpenSSL 3
+       and distribution crypto-policies otherwise filter out (SHA-1
+       signatures, small keys, older ciphersuites). The protocol floor
+       must be requested explicitly: passing 0 defers to the
+       distribution crypto-policy (Fedora and friends pin TLS 1.2+
+       system-wide), which is exactly what this policy rejects, so we
+       probe from the oldest version this library still compiles in,
+       falling back version by version until one sticks. */
+    {
+        static const int floors[] = {
+#ifdef SSL3_VERSION
+            SSL3_VERSION,
+#endif
+            TLS1_VERSION, TLS1_1_VERSION, TLS1_2_VERSION
+        };
+        for (size_t fi = 0; fi < sizeof(floors) / sizeof(floors[0]); fi++)
+            if (SSL_CTX_set_min_proto_version(ssl_ctx, floors[fi]))
+                break;
+        for (size_t fi = 0; fi < sizeof(floors) / sizeof(floors[0]); fi++)
+            if (SSL_CTX_set_min_proto_version(ssl_ctx_client, floors[fi]))
+                break;
+    }
+    SSL_CTX_set_max_proto_version(ssl_ctx, 0);
+    SSL_CTX_set_max_proto_version(ssl_ctx_client, 0);
+
+    SSL_CTX_set_security_level(ssl_ctx, 0);
+    SSL_CTX_set_security_level(ssl_ctx_client, 0);
+
+    /* TLS-level compression (zlib) is negotiated only if the client asks
+       for it and only on TLS 1.2 and below; 1.3 removed it from the
+       protocol. OpenSSL has disabled it by default since 1.1.0, so clear
+       that option to let willing clients have it. */
+    SSL_CTX_clear_options(ssl_ctx, SSL_OP_NO_COMPRESSION);
+    SSL_CTX_clear_options(ssl_ctx_client, SSL_OP_NO_COMPRESSION);
+
+    if (!SSL_CTX_set_cipher_list(ssl_ctx, "ALL:COMPLEMENTOFDEFAULT:@SECLEVEL=0"))
+        log_status("SSLX: Could not widen the server cipher list.\n");
+    if (!SSL_CTX_set_cipher_list(ssl_ctx_client, "ALL:COMPLEMENTOFDEFAULT:@SECLEVEL=0"))
+        log_status("SSLX: Could not widen the client cipher list.\n");
+
+    /* Load the system trust store on the client context so that
+       certificate verification is possible when it is switched on. */
+    if (!SSL_CTX_set_default_verify_paths(ssl_ctx_client))
+        log_status("SSLX: Could not load the system certificate store; "
+                   "outbound certificate verification will not work.\n");
+
+    /* use_certificate_chain_file, unlike use_certificate_file, sends any
+       intermediates present in the PEM. Without the chain, clients that
+       have not cached the intermediate reject an otherwise valid cert. */
+    if (!SSL_CTX_use_certificate_chain_file(ssl_ctx, SSL_CERT_FILE)) {
         log_status("SSLX: Could not load certificate file %s\n", SSL_CERT_FILE);
         ssl_status_ok = 0;
     }
@@ -2156,8 +2230,23 @@ shovechars(void)
                     newd->ssl_session = SSL_new(ssl_ctx);
                     SSL_set_fd(newd->ssl_session, newd->fd);
                     cnt = SSL_accept(newd->ssl_session);
-                    newd->type = CT_SSL;
-                    newd->flags += DF_SSL;
+                    if (cnt <= 0) {
+                        int sslerr = SSL_get_error(newd->ssl_session, cnt);
+
+                        /* WANT_READ/WANT_WRITE just means the handshake
+                           needs more packets; SSL_read finishes it later.
+                           Anything else is a client that cannot or will
+                           not speak TLS: drop it now instead of leaving a
+                           half-open descriptor. */
+                        if (sslerr != SSL_ERROR_WANT_READ && sslerr != SSL_ERROR_WANT_WRITE) {
+                            shutdownsock(newd);
+                            newd = NULL;
+                        }
+                    }
+                    if (newd) {
+                        newd->type = CT_SSL;
+                        newd->flags += DF_SSL;
+                    }
                 }
             }
 #ifdef IPV6
@@ -2178,9 +2267,19 @@ shovechars(void)
                     newd->ssl_session = SSL_new(ssl_ctx);
                     SSL_set_fd(newd->ssl_session, newd->fd);
                     cnt = SSL_accept(newd->ssl_session);
-                    newd->type = CT_SSL;
-                    newd->flags += DF_SSL;
-                    newd->flags += DF_IPV6;
+                    if (cnt <= 0) {
+                        int sslerr = SSL_get_error(newd->ssl_session, cnt);
+
+                        if (sslerr != SSL_ERROR_WANT_READ && sslerr != SSL_ERROR_WANT_WRITE) {
+                            shutdownsock(newd);
+                            newd = NULL;
+                        }
+                    }
+                    if (newd) {
+                        newd->type = CT_SSL;
+                        newd->flags += DF_SSL;
+                        newd->flags += DF_IPV6;
+                    }
                 }
             }
 #endif
@@ -3584,24 +3683,26 @@ process_input(struct descriptor_data *d)
     if (d->type == CT_INBOUND)
         return -1;
 #ifdef USE_SSL
-    if (d->ssl_session)
+    if (d->ssl_session) {
         got = SSL_read(d->ssl_session, buf, sizeof buf);
-    else
+        if (got <= 0) {
+            /* SSL results are classified by SSL_get_error, not errno.
+               Would-block (including a handshake still in flight and
+               TLS 1.3 post-handshake messages) is not a disconnect. */
+            int sslerr = SSL_get_error(d->ssl_session, got);
+
+            if (sslerr == SSL_ERROR_WANT_READ || sslerr == SSL_ERROR_WANT_WRITE)
+                return 1;
+            return 0;
+        }
+    } else
 #endif
         got = readsocket(d->fd, buf, sizeof buf);
 
 #ifndef WIN32
-# ifdef USE_SSL
     if (!got || ((got < 0) && errno != EWOULDBLOCK))
-# else
-    if (got <= 0)
-# endif
 #else
-# ifdef USE_SSL
     if ((got <= 0) && WSAGetLastError() != EWOULDBLOCK)
-# else
-    if (got <= 0)
-# endif
 #endif
     {
 #ifdef DEBUGPROCESS

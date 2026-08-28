@@ -1129,9 +1129,9 @@ string_dup(const char *s)
 #endif
 
 char *
-intostr(char *buf, int i)
+intostr(char *buf, MUFINT i)
 {
-    sprintf(buf, "%d", i);
+    sprintf(buf, "%lld", (long long) i);
     return (buf);
 }
 

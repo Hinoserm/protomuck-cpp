@@ -314,6 +314,7 @@ prim_fork(PRIM_PROTOTYPE)
     //memset(tmpfr, 0, sizeof(struct frame)); // TODO: Fix later when C++ support is better -hinoserm june 23 2014
 
     tmpfr->next = NULL;
+    tmpfr->rndbuf = muf_seed_copy(fr->rndbuf);
     tmpfr->system.top = fr->system.top;
     for (i = 0; i < fr->system.top; i++)
         tmpfr->system.st[i] = fr->system.st[i];
@@ -387,7 +388,7 @@ prim_fork(PRIM_PROTOTYPE)
     tmpfr->aintbot = NULL;
     /* child process gets a 0 returned on the stack */
     result = 0;
-    push(tmpfr->argument.st, &(tmpfr->argument.top), PROG_INTEGER, MIPSCAST & result);
+    push_mufint(tmpfr->argument.st, &(tmpfr->argument.top), (MUFINT) result);
     result = add_muf_delay_event(0, fr->descr, player, NOTHING, NOTHING, program, tmpfr, "BACKGROUND");
     /* parent process gets the child's pid returned on the stack */
     if (!result)
@@ -945,7 +946,7 @@ prim_watchpid(PRIM_PROTOTYPE)
     } else {
         char buf[64];
 
-        sprintf(buf, "PROC.EXIT.%d", oper[0].data.number);
+        sprintf(buf, "PROC.EXIT.%d", (int) oper[0].data.number);
         muf_event_add(fr, buf, &oper[0], 0);
     }
 
@@ -1044,7 +1045,8 @@ prim_systime_precise(PRIM_PROTOTYPE)
 void
 prim_htoi(PRIM_PROTOTYPE)
 {
-    int result, tmp;
+    MUFINT result;
+    int tmp;
 
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string argument. (1)");
@@ -1067,7 +1069,7 @@ prim_itoh(PRIM_PROTOTYPE)
 
     if (oper[0].type != PROG_INTEGER)
         abort_interp("Non-integer argument. (1)");
-    sprintf(buf, "%.2X", oper[0].data.number);
+    sprintf(buf, "%.2llX", (unsigned long long) oper[0].data.number);
 
     PushString(buf);
 }

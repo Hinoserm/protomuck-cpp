@@ -129,7 +129,7 @@ extern void prim_wcharlen_slice(PRIM_PROTOTYPE);
                                 { "HEX2STR",                LM1, 1, prim_hex2str },                     \
                                 { "HEX2BASE64STR",          LM1, 1, prim_hex2base64str }
 
-#define PRIMS_STRINGS_CNT 60
+#define PRIMS_STRINGS_CNT 63
 
 #ifdef UTF8_SUPPORT
 

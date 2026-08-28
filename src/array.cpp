@@ -233,7 +233,9 @@ array_tree_compare(array_iter *a, array_iter *b, int case_sens, int objname, boo
         }
         return (a->data.addr->data - b->data.addr->data);
     } else {
-        return (a->data.number - b->data.number);
+        /* Three-way compare: subtraction truncates and can overflow now
+           that MUF ints are 64-bit. */
+        return (a->data.number > b->data.number) - (a->data.number < b->data.number);
     }
 }
 
@@ -1743,7 +1745,7 @@ array_set_strkey_arrval(stk_array **arr, const char *key, stk_array *arr2)
 }
 
 int
-array_set_strkey_intval(stk_array **arr, const char *key, int val)
+array_set_strkey_intval(stk_array **arr, const char *key, MUFINT val)
 {
     struct inst value;
     int result;

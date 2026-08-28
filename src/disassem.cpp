@@ -28,7 +28,7 @@ disassemble(dbref player, dbref program)
                 if (curr->data.number >= BASE_MIN && curr->data.number <= BASE_MAX)
                     sprintf(buf, "%d: (line %d) PRIMITIVE: %s", i, curr->line, primlist[curr->data.number - BASE_MIN].name);
                 else
-                    sprintf(buf, "%d: (line %d) PRIMITIVE: %d", i, curr->line, curr->data.number);
+                    sprintf(buf, "%d: (line %d) PRIMITIVE: %lld", i, curr->line, (long long) curr->data.number);
                 break;
             case PROG_MARK:
                 sprintf(buf, "%d: (line %d) MARK", i, curr->line);
@@ -49,7 +49,7 @@ disassemble(dbref player, dbref program)
                 sprintf(buf, "%d: (line %d) LOCK: [%s]", i, curr->line, curr->data.lock == TRUE_BOOLEXP ? "TRUE_BOOLEXP" : unparse_boolexp(ubuf, 0, curr->data.lock, 0));
                 break;
             case PROG_INTEGER:
-                sprintf(buf, "%d: (line %d) INTEGER: %d", i, curr->line, curr->data.number);
+                sprintf(buf, "%d: (line %d) INTEGER: %lld", i, curr->line, (long long) curr->data.number);
                 break;
             case PROG_FLOAT:
                 sprintf(buf, " %d: (line %d) FLOAT: %.15g", i, curr->line, curr->data.fnumber);
@@ -69,22 +69,22 @@ disassemble(dbref player, dbref program)
                 sprintf(buf, "%d: (line %d) EXEC: %d", i, curr->line, (int) (curr->data.call - codestart));
                 break;
             case PROG_OBJECT:
-                sprintf(buf, "%d: (line %d) OBJECT REF: %d", i, curr->line, curr->data.number);
+                sprintf(buf, "%d: (line %d) OBJECT REF: %lld", i, curr->line, (long long) curr->data.number);
                 break;
             case PROG_VAR:
-                sprintf(buf, "%d: (line %d) VARIABLE: %d", i, curr->line, curr->data.number);
+                sprintf(buf, "%d: (line %d) VARIABLE: %lld", i, curr->line, (long long) curr->data.number);
                 break;
             case PROG_SVAR:
-                sprintf(buf, "%d: (line %d) SCOPEDVAR: %d", i, curr->line, curr->data.number);
+                sprintf(buf, "%d: (line %d) SCOPEDVAR: %lld", i, curr->line, (long long) curr->data.number);
                 break;
             case PROG_SVAR_AT:
-                sprintf(buf, "%d: (line %d) GET SCOPEDVAR: %d", i, curr->line, curr->data.number);
+                sprintf(buf, "%d: (line %d) GET SCOPEDVAR: %lld", i, curr->line, (long long) curr->data.number);
                 break;
             case PROG_SVAR_BANG:
-                sprintf(buf, "%d: (line %d) SET SCOPEDVAR: %d", i, curr->line, curr->data.number);
+                sprintf(buf, "%d: (line %d) SET SCOPEDVAR: %lld", i, curr->line, (long long) curr->data.number);
                 break;
             case PROG_LVAR:
-                sprintf(buf, "%d: (line %d) LOCALVAR: %d", i, curr->line, curr->data.number);
+                sprintf(buf, "%d: (line %d) LOCALVAR: %lld", i, curr->line, (long long) curr->data.number);
                 break;
             case PROG_LABEL:
                 sprintf(buf, "%d: (line %d) LABEL: %s", i, curr->line, curr->data.labelname);

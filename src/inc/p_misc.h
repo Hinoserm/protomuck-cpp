@@ -109,4 +109,4 @@ extern void prim_escape_url(PRIM_PROTOTYPE);
                         { "BACKTRACE",             LARCH,   1, prim_backtrace }
    
 
-#define PRIMS_MISC_CNT 50
+#define PRIMS_MISC_CNT 53

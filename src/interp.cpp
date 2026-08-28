@@ -978,6 +978,11 @@ prog_clean(struct frame *fr)
         }
     }
     watchpid_process(fr);
+    if (fr->rndbuf) {
+        free(fr->rndbuf);
+        fr->rndbuf = NULL;
+    }
+
     fr->system.top = 0;
     for (i = 0; i < fr->argument.top; i++)
         CLEAR(&fr->argument.st[i]);
@@ -2077,7 +2082,7 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
             pc = NULL;
             abort_loop_hard("Program internal error. Program erroneously freed from memory.", NULL, NULL);
         default:
-            fprintf(stderr, "Attempt to execute unknown instruction type %d line %hd in program %d\n", pc->data.number, pc->line, program);
+            fprintf(stderr, "Attempt to execute unknown instruction type %lld line %hd in program %d\n", (long long) pc->data.number, pc->line, program);
             pc = NULL;
             abort_loop_hard("Program internal error. Unknown instruction type.", NULL, NULL);
         }                       /* switch */
@@ -2213,6 +2218,8 @@ push(struct inst *stack, int *top, int type, voidptr res)
     stack[*top].type = type;
     if (type == PROG_FLOAT)
         stack[*top].data.fnumber = *(double *) res;
+    else if (type == PROG_INTEGER)
+        stack[*top].data.number = *(MUFINT *) res;
     else if (type < PROG_STRING)
         stack[*top].data.number = *(int *) res;
     else
@@ -2232,6 +2239,14 @@ void
 push(struct inst *stack, int *top, const char *str)
 {
     push(stack, top, PROG_STRING, MIPSCAST alloc_prog_string(str));
+}
+
+void
+push_mufint(struct inst *stack, int *top, MUFINT val)
+{
+    stack[*top].type = PROG_INTEGER;
+    stack[*top].data.number = val;
+    (*top)++;
 }
 
 /* Move a std::string result onto the stack without copying it. */

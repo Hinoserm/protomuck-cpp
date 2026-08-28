@@ -1,0 +1,165 @@
+SSL / TLS AUDIT AND MODERNIZATION PLAN
+======================================
+Branch: ssl-upgrade
+Date:   2026-08-28
+Scope:  src/p_socket.cpp, src/interface.cpp, src/inc/interface.h,
+        src/inc/db.h, src/compile.cpp, src/newhttp.cpp
+Build:  system OpenSSL 3.5.4, USE_SSL and SSL_SOCKETS both enabled
+
+
+WHY MUF SSL PRIMS CANNOT REACH MODERN SERVERS
+---------------------------------------------
+
+The reported symptom has one primary cause and several that surface
+immediately after it is fixed.
+
+1. NO SNI (the primary cause).
+   prim_socksecure (p_socket.cpp:817) does SSL_new, SSL_set_fd,
+   SSL_connect with no SSL_set_tlsext_host_name in between. The string
+   "tlsext" does not appear anywhere in the source tree. Practically
+   every TLS endpoint reachable on the public internet in 2026 is
+   name-based: CDNs, Cloudflare, shared hosting, and any nginx or
+   apache virtual host. Without a server_name extension in the
+   ClientHello, those servers either abort the handshake or hand back
+   a default certificate for an unrelated site.
+
+   The fix is cheap because the data is already there: SOCKOPEN and
+   NBSOCKOPEN store the target hostname on the socket
+   (p_socket.cpp:665 and 751, field at db.h:627), so SOCKSECURE can
+   read oper[0].data.sock->hostname with no MUF-visible change.
+
+2. NO OUTBOUND SSL OPEN PRIM.
+   The SSL_SOCKOPEN define (compile.cpp:625 and 724) expands to
+   SSL_NBSOCKOPEN, which does not exist as a prim or define. Any
+   program using the documented SSL_SOCKOPEN fails to compile with
+   "Unrecognized word". There is no one-step way to open a TLS
+   connection; a program must call NBSOCKOPEN, poll SOCKCHECK, then
+   loop on SOCKSECURE.
+
+3. RENEGOTIATION ON AN ESTABLISHED SESSION.
+   Calling SOCKSECURE twice runs SSL_renegotiate (p_socket.cpp:806).
+   TLS 1.3 removed renegotiation entirely, so this always fails
+   against a modern server, and the failure is reported as a bare
+   integer.
+
+4. PROTOCOL AND CIPHER POLICY IS WHATEVER THE BUILD HOST LINKED.
+   Both contexts are created with the deprecated SSLv23_*_method
+   aliases (interface.cpp:1828-1829) with no
+   SSL_CTX_set_min_proto_version, no SSL_CTX_set_options, and no
+   cipher or ciphersuite configuration. Behavior therefore varies
+   silently by build machine.
+
+
+SERVER-BREAKING DEFECTS FOUND ALONG THE WAY
+-------------------------------------------
+
+These are worse than the connection problem and should be fixed
+regardless of what happens to the modernization.
+
+A. SSL_SOCKACCEPT RETURNS A PLAINTEXT SOCKET (blocker).
+   p_socket.cpp: the prim creates a session with SSL_new(ssl_ctx),
+   completes SSL_accept, and then sets
+       result->data.sock->ssl_session = NULL;
+   The negotiated SSL object is leaked and never attached to the
+   socket handed back to MUF. Every subsequent read and write on that
+   socket is cleartext on a connection where the client believes it
+   is inside TLS. SSL_SOCKACCEPT is non-functional as documented.
+   Verified by reading the whole prim: ssl_session is referenced only
+   in the accept block and then explicitly nulled.
+
+B. WANT_READ BUSY-SPIN FREEZES THE ENTIRE SERVER (blocker).
+   handle_ssl_error (p_socket.cpp:196-233) returns 0 for
+   SSL_ERROR_WANT_READ and SSL_ERROR_WANT_WRITE. ssl_read_loop
+   (236-245) and ssl_write_loop (247-256) treat that as "retry now"
+   and immediately re-call SSL_read/SSL_write on a non-blocking
+   socket. The MUCK is single threaded, so the whole game wedges at
+   100 percent CPU until the peer sends bytes or the connection dies.
+   TLS 1.3 reaches this routinely: post-handshake NewSessionTicket
+   records make the fd readable, the MUF calls NBSOCKRECV, SSL_read
+   consumes the tickets and returns WANT_READ, and the server hangs.
+
+C. FATAL SSL ERROR SILENTLY DOWNGRADES TO CLEARTEXT (major).
+   handle_ssl_error frees the session and sets ssl_session = NULL
+   while leaving the socket flagged connected. Later I/O takes the
+   plaintext path on a socket the peer still considers encrypted.
+   This matches the existing man.txt warning under SSL ERRORS, but
+   the manual presents it as a caveat rather than as data leaking in
+   the clear.
+
+D. DESCRIPTOR I/O CLASSIFIES SSL FAILURES BY ERRNO (major).
+   process_input (interface.cpp:3582) and process_output (3410) test
+   errno after SSL_read/SSL_write instead of calling SSL_get_error.
+   errno is not meaningful for SSL return values, so fatal errors can
+   be missed and routine WANT_READ can be treated as failure.
+
+E. SESSION LOST ACROSS HANDOFFS (major).
+   SOCKTODESCR (p_socket.cpp:1498) and SOCKET_SETUSER (1444) move a
+   MUF socket into the descriptor table without transferring
+   ssl_session, so a secured socket silently becomes plaintext and
+   DESCR_SSL? reports it as insecure.
+
+F. NO CERTIFICATE VERIFICATION AT ALL (major).
+   ssl_ctx_client is created (interface.cpp:1829) and never
+   configured again. No SSL_CTX_set_verify, no trust store, no
+   SSL_set1_host. The client default is SSL_VERIFY_NONE, so every
+   outbound MUF TLS connection accepts any certificate from anyone
+   and no MUF-visible mechanism can detect interception.
+
+G. SERVER CHAIN AND FAILURE HANDLING (major).
+   SSL_CTX_use_certificate_file loads only the leaf, so intermediates
+   in data/server.pem are never sent and clients without the
+   intermediate cached reject the chain. When cert or key loading
+   fails, ssl_status_ok is cleared but the empty ssl_ctx is still
+   handed to MUF SSL_SOCKACCEPT calls.
+
+
+PROPOSED MODERNIZATION
+----------------------
+
+Phase 1, make outbound TLS work. Small, low risk, no MUF-visible
+signature changes.
+  * interface.cpp:1828-1829: TLS_client_method and TLS_server_method;
+    drop the 1.0-era init calls, which are no-ops under OpenSSL 1.1+.
+  * Policy per the project owner: never refuse a protocol or
+    algorithm unless the linked library itself has dropped it. Both
+    contexts run at security level 0 with the widest cipher list, the
+    floor is probed down to the oldest protocol the library still
+    compiles (explicitly, because distribution crypto-policies pin
+    TLS 1.2+ when the application defers), and TLS compression is
+    re-enabled for clients that request it on TLS 1.2 and below.
+  * p_socket.cpp:817: call SSL_set_tlsext_host_name with the stored
+    hostname before SSL_connect. This alone fixes most reports.
+  * Implement SSL_SOCKOPEN as a real define built from NBSOCKOPEN,
+    SOCKCHECK, and SOCKSECURE so the documented prim exists.
+
+Phase 2, stop the hangs and the silent downgrades.
+  * Make WANT_READ/WANT_WRITE a distinct return from
+    handle_ssl_error, and have ssl_read_loop and ssl_write_loop
+    return to the caller instead of spinning.
+  * Attach the negotiated session in SSL_SOCKACCEPT.
+  * Replace errno-based classification in process_input and
+    process_output with SSL_get_error.
+  * Carry ssl_session across SOCKTODESCR and SOCKET_SETUSER, or
+    refuse the handoff for secured sockets.
+
+Phase 3, authentication, opt-in so existing programs do not break.
+  * Load the system trust store on the client context.
+  * Add an @tune for verification mode. Default off preserves current
+    behavior exactly; on, use SSL_set1_host with the stored hostname
+    and expose the result to MUF, most naturally as a new key in
+    GET_SOCKINFO rather than by changing SOCKSECURE's return values.
+
+Behavior to preserve throughout: SOCKSECURE's documented return codes
+(0 connected, -1 disconnected, 2 and 3 retry, other values SSL
+errors), the SOCKET.SSLERR event shape and its once-only delivery,
+DESCR_SSL? semantics, and the prim permission levels in p_socket.h.
+
+
+DOCUMENTATION DISAGREEMENTS FOUND
+---------------------------------
+  * SOCKET.SSLERR "ssl_error" is documented as numeric; the code
+    stores a string such as "SSL_ERROR_SSL".
+  * GETDESCRINFO documents an SSL key that the code never sets.
+  * man.txt describes SSL_SOCKOPEN as usable; it cannot compile.
+  * SOCKSECURE is documented as leaving the channel unsecured on
+    failure; the code leaves a dead session attached.

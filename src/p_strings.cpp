@@ -206,12 +206,12 @@ prim_fmtstring(PRIM_PROTOTYPE)
                 }
                 switch (sstr[scnt]) {
                     case 'i':
-                        strcat(sfmt, "d");
+                        strcat(sfmt, "lld");
                         if (oper2->type != PROG_INTEGER) {
                             CLEAR(oper2);
                             abort_interp("Format specified integer argument not found.");
                         }
-                        sprintf(tbuf, sfmt, oper2->data.number);
+                        sprintf(tbuf, sfmt, (long long) oper2->data.number);
                         tlen = strlen(tbuf);
                         if (slrj == 2) {
                             tnum = 0;
@@ -861,12 +861,12 @@ prim_strcat(PRIM_PROTOTYPE)
 void
 prim_atoi(PRIM_PROTOTYPE)
 {
-    int result;
+    MUFINT result;
 
     if (oper[0].type != PROG_STRING || !oper[0].data.string)
         result = 0;
     else
-        result = atoi(oper[0].data.string->data.c_str());
+        result = (MUFINT) strtoll(oper[0].data.string->data.c_str(), NULL, 10);
 
     PushInt(result);
 }
@@ -1392,7 +1392,7 @@ prim_intostr(PRIM_PROTOTYPE)
         sprintf(buf, "%.15g", oper[0].data.fnumber);
         ptr = buf;
     } else {
-        sprintf(buf, "%d", oper[0].data.number);
+        sprintf(buf, "%lld", (long long) oper[0].data.number);
         ptr = buf;
     }
 
@@ -2576,10 +2576,10 @@ prim_array_fmtstrings(PRIM_PROTOTYPE)
                         }
                         switch (sstr[scnt]) {
                             case 'i':
-                                strcatn(sfmt, sizeof(sfmt), "d");
+                                strcatn(sfmt, sizeof(sfmt), "lld");
                                 if (oper3->type != PROG_INTEGER)
                                     abort_interp("Format specified integer argument not found.");
-                                snprintf(tbuf, sizeof(tbuf), sfmt, oper3->data.number);
+                                snprintf(tbuf, sizeof(tbuf), sfmt, (long long) oper3->data.number);
                                 tlen = strlen(tbuf);
                                 if (slrj == 2) {
                                     tnum = 0;

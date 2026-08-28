@@ -14,8 +14,8 @@
 #include "strutils.h"
 #include "interp.h"
 #ifndef WIN_VC
-# define MAXINT ~(1<<((sizeof(int)*8)-1))
-# define MININT (1<<((sizeof(int)*8)-1))
+# define MAXINT INT64_MAX
+# define MININT INT64_MIN
 #endif
 #define no_good(x) ((x == INF) || (x == NINF) || (x == NAN))
 #define ISINF(x) ((x == INF) || (x == NINF))
@@ -43,7 +43,8 @@ void
 prim_add(PRIM_PROTOTYPE)
 {
     double fresult = 0.0, tf1, tf2, tl;
-    int tmp, result = 0;
+    int tmp;
+    MUFINT result = 0;
 
     if (!arith_type(&oper[1], &oper[0]))
         abort_interp("Invalid argument type");
@@ -81,7 +82,8 @@ void
 prim_subtract(PRIM_PROTOTYPE)
 {
     double fresult = 0.0, tf1, tf2, tl;
-    int tmp, result = 0;
+    int tmp;
+    MUFINT result = 0;
 
     if (!arith_type(&oper[1], &oper[0]))
         abort_interp("Invalid argument type.");
@@ -119,7 +121,8 @@ void
 prim_multiply(PRIM_PROTOTYPE)
 {
     double fresult = 0.0, tf1, tf2, tl;
-    int tmp, result = 0;
+    int tmp;
+    MUFINT result = 0;
 
     if (!arith_type(&oper[1], &oper[0]))
         abort_interp("Invalid argument type.");
@@ -157,7 +160,8 @@ void
 prim_divide(PRIM_PROTOTYPE)
 {
     double fresult = 0.0, tf1, tf2;
-    int result = 0, tmp;
+    int tmp;
+    MUFINT result = 0;
 
     if (!arith_type(&oper[1], &oper[0]))
         abort_interp("Invalid argument type");
@@ -202,7 +206,8 @@ prim_divide(PRIM_PROTOTYPE)
 void
 prim_mod(PRIM_PROTOTYPE)
 {
-    int result, tmp;
+    int tmp;
+    MUFINT result;
 
     if ((!arith_type(&oper[1], &oper[0])) || (oper[0].type == PROG_FLOAT) || (oper[1].type == PROG_FLOAT))
         abort_interp("Invalid argument type.");
@@ -218,7 +223,8 @@ prim_mod(PRIM_PROTOTYPE)
 void
 prim_bitor(PRIM_PROTOTYPE)
 {
-    int result, tmp;
+    int tmp;
+    MUFINT result;
 
     if (!arith_type(&oper[1], &oper[0]))
         abort_interp("Invalid argument type");
@@ -231,7 +237,8 @@ prim_bitor(PRIM_PROTOTYPE)
 void
 prim_bitxor(PRIM_PROTOTYPE)
 {
-    int result, tmp;
+    int tmp;
+    MUFINT result;
 
     if (!arith_type(&oper[1], &oper[0]))
         abort_interp("Invalid argument type");
@@ -244,7 +251,8 @@ prim_bitxor(PRIM_PROTOTYPE)
 void
 prim_bitand(PRIM_PROTOTYPE)
 {
-    int result, tmp;
+    int tmp;
+    MUFINT result;
 
     if (!arith_type(&oper[1], &oper[0]))
         abort_interp("Invalid argument type");
@@ -257,7 +265,8 @@ prim_bitand(PRIM_PROTOTYPE)
 void
 prim_bitshift(PRIM_PROTOTYPE)
 {
-    int result, tmp;
+    int tmp;
+    MUFINT result;
 
     if (!arith_type(&oper[1], &oper[0]))
         abort_interp("Invalid argument type");
@@ -275,7 +284,7 @@ prim_bitshift(PRIM_PROTOTYPE)
 void
 prim_and(PRIM_PROTOTYPE)
 {
-    int result;
+    MUFINT result;
 
     result = !logical_false(&oper[0]) && !logical_false(&oper[1]);
 
@@ -285,7 +294,7 @@ prim_and(PRIM_PROTOTYPE)
 void
 prim_or(PRIM_PROTOTYPE)
 {
-    int result;
+    MUFINT result;
 
     result = !logical_false(&oper[0]) || !logical_false(&oper[1]);
 
@@ -295,7 +304,7 @@ prim_or(PRIM_PROTOTYPE)
 void
 prim_xor(PRIM_PROTOTYPE)
 {
-    int result;
+    MUFINT result;
 
     if (logical_false(&oper[0]))
         result = !logical_false(&oper[1]);
@@ -308,7 +317,7 @@ prim_xor(PRIM_PROTOTYPE)
 void
 prim_not(PRIM_PROTOTYPE)
 {
-    int result;
+    MUFINT result;
 
     result = logical_false(&oper[0]);
 
@@ -325,7 +334,7 @@ void
 prim_lessthan(PRIM_PROTOTYPE)
 {
     double tf1, tf2;
-    int result;
+    MUFINT result;
 
     if (!comp_t(&oper[0]) || !comp_t(&oper[1]))
         abort_interp("Invalid argument type.");
@@ -345,7 +354,7 @@ void
 prim_greathan(PRIM_PROTOTYPE)
 {
     double tf1, tf2;
-    int result;
+    MUFINT result;
 
     if (!comp_t(&oper[0]) || !comp_t(&oper[1]))
         abort_interp("Invalid argument type.");
@@ -365,7 +374,7 @@ void
 prim_equal(PRIM_PROTOTYPE)
 {
     double tf1, tf2;
-    int result;
+    MUFINT result;
 
     if (!comp_t(&oper[0]) || !comp_t(&oper[1]))
         abort_interp("Invalid argument type.");
@@ -385,7 +394,7 @@ void
 prim_noteq(PRIM_PROTOTYPE)
 {
     double tf1, tf2;
-    int result;
+    MUFINT result;
 
     if (!comp_t(&oper[0]) || !comp_t(&oper[1]))
         abort_interp("Invalid argument type.");
@@ -405,7 +414,7 @@ void
 prim_lesseq(PRIM_PROTOTYPE)
 {
     double tf1, tf2;
-    int result;
+    MUFINT result;
 
     if (!comp_t(&oper[0]) || !comp_t(&oper[1]))
         abort_interp("Invalid argument type.");
@@ -425,7 +434,7 @@ void
 prim_greateq(PRIM_PROTOTYPE)
 {
     double tf1, tf2;
-    int result;
+    MUFINT result;
 
     if (!comp_t(&oper[0]) || !comp_t(&oper[1]))
         abort_interp("Invalid argument type.");
@@ -441,10 +450,132 @@ prim_greateq(PRIM_PROTOTYPE)
     PushInt(result);
 }
 
+/* Seedable random support, ported from Fuzzball 6 (fbmath.c / p_math.c).
+   The seed is 16 bytes on the frame; each SRAND MD5-hashes the buffer in
+   place and returns the first word. Note sizeof(digest) below hashes
+   only the pointer-width prefix; that is faithful to FB6 so that seeded
+   sequences match. */
+static void *
+init_seed(char *seed)
+{
+    uint32_t *digest;
+    int tbuf[8];
+
+    if (!(digest = (uint32_t *) malloc(sizeof(uint32_t) * 4)))
+        return (NULL);
+
+    if (!seed) {
+        /* No fixed seed given... make something up */
+        srand((unsigned int) time(NULL));
+
+        for (int loop = 0; loop < 8; loop++)
+            tbuf[loop] = rand();
+
+        memcpy(digest, tbuf, 16);
+    } else {
+        memcpy(digest, seed, 16);
+    }
+
+    return ((void *) digest);
+}
+
+static uint32_t
+rnd(void *buffer)
+{
+    uint32_t *digest = (uint32_t *) buffer;
+
+    if (!digest)
+        return (0);
+
+    MD5hash(digest, digest, sizeof(digest));
+    return (digest[0]);
+}
+
+/* Give FORK (p_misc.cpp) a way to copy a frame's seed buffer without
+   exposing the seed internals. */
+void *
+muf_seed_copy(void *rndbuf)
+{
+    if (!rndbuf)
+        return NULL;
+    return init_seed((char *) rndbuf);
+}
+
+void
+prim_srand(PRIM_PROTOTYPE)
+{
+    CHECKOFLOW(1);
+
+    if (!(fr->rndbuf))
+        fr->rndbuf = init_seed(NULL);
+
+    PushInt((int) rnd(fr->rndbuf));
+}
+
+void
+prim_getseed(PRIM_PROTOTYPE)
+{
+    char buf[33];
+    char buf2[17];
+
+    CHECKOFLOW(1);
+
+    if (!(fr->rndbuf)) {
+        PushNullStr;
+    } else {
+        memcpy(buf2, fr->rndbuf, 16);
+        buf2[16] = '\0';
+
+        for (int loop = 0; loop < 16; loop++) {
+            buf[loop * 2] = (buf2[loop] & 0x0F) + 65;
+            buf[(loop * 2) + 1] = ((buf2[loop] & 0xF0) >> 4) + 65;
+        }
+
+        buf[32] = '\0';
+        PushString(buf);
+    }
+}
+
+void
+prim_setseed(PRIM_PROTOTYPE)
+{
+    int slen;
+    char holdbuf[33];
+    char buf[17];
+
+    if (!(oper[0].type == PROG_STRING))
+        abort_interp("Invalid argument type.");
+
+    if (fr->rndbuf) {
+        free(fr->rndbuf);
+        fr->rndbuf = NULL;
+    }
+
+    if (!oper[0].data.string) {
+        fr->rndbuf = init_seed(NULL);
+        return;
+    } else {
+        slen = oper[0].data.string->length();
+
+        if (slen > 32)
+            slen = 32;
+
+        for (int sloop = 0; sloop < 32; sloop++)
+            holdbuf[sloop] = oper[0].data.string->data[sloop % slen];
+
+        for (int sloop = 0; sloop < 16; sloop++)
+            buf[sloop] = ((holdbuf[sloop * 2] - 65) & 0x0F) |
+                         (((holdbuf[(sloop * 2) + 1] - 65) & 0x0F) << 4);
+
+        buf[16] = '\0';
+        fr->rndbuf = init_seed(buf);
+    }
+}
+
 void
 prim_random(PRIM_PROTOTYPE)
 {
-    int result = RANDOM();
+    MUFINT result = RANDOM();
 
     CHECKOFLOW(1);
     PushInt(result);
@@ -453,12 +584,12 @@ prim_random(PRIM_PROTOTYPE)
 void
 prim_int(PRIM_PROTOTYPE)
 {
-    int result;
+    MUFINT result;
 
     if (!(oper[0].type == PROG_OBJECT || oper[0].type == PROG_VAR || oper[0].type == PROG_LVAR || oper[0].type == PROG_FLOAT))
         abort_interp("Invalid argument type.");
     if ((!(oper[0].type == PROG_FLOAT)) || (oper[0].type == PROG_FLOAT && arith_good((double) oper[0].data.fnumber))) {
-        result = (int) ((oper[0].type == PROG_OBJECT) ? oper[0].data.objref : (oper[0].type == PROG_FLOAT) ? oper[0].data.fnumber : oper[0].data.number);
+        result = (MUFINT) ((oper[0].type == PROG_OBJECT) ? (MUFINT) oper[0].data.objref : (oper[0].type == PROG_FLOAT) ? (MUFINT) oper[0].data.fnumber : oper[0].data.number);
     } else {
         result = 0;
         fr->error.error_flags.i_bounds = 1;
@@ -471,7 +602,8 @@ void
 prim_plusplus(PRIM_PROTOTYPE)
 {
     struct inst *tmp;
-    int vnum, result;
+    int vnum;
+    MUFINT result;
     double fresult;
     struct inst temp1, temp2;
 
@@ -562,7 +694,8 @@ void
 prim_minusminus(PRIM_PROTOTYPE)
 {
     struct inst *tmp;
-    int vnum, result;
+    int vnum;
+    MUFINT result;
     double fresult;
     struct inst temp1, temp2;
 
@@ -652,7 +785,7 @@ prim_minusminus(PRIM_PROTOTYPE)
 void
 prim_abs(PRIM_PROTOTYPE)
 {
-    int result;
+    MUFINT result;
 
     if (oper[0].type != PROG_INTEGER)
         abort_interp("Non-integer argument.");
@@ -666,7 +799,7 @@ prim_abs(PRIM_PROTOTYPE)
 void
 prim_sign(PRIM_PROTOTYPE)
 {
-    int result;
+    MUFINT result;
 
     if (oper[0].type != PROG_INTEGER)
         abort_interp("Non-integer argument.");

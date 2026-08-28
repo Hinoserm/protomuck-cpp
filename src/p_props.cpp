@@ -98,7 +98,7 @@ prim_getpropfval(PRIM_PROTOTYPE)
 void
 prim_getpropval(PRIM_PROTOTYPE)
 {
-    int result;
+    MUFINT result;
 
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string argument (2)");
@@ -1094,7 +1094,7 @@ prim_array_filter_smart(PRIM_PROTOTYPE)
                 val_int = oper[0].data.number;
                 val_ref = oper[0].data.number;
                 val_flt = oper[0].data.number;
-                sprintf(val_str, "%d", oper[0].data.number);
+                sprintf(val_str, "%lld", (long long) oper[0].data.number);
                 break;
             case PROG_FLOAT:
                 val_int = (int) oper[0].data.fnumber;
@@ -1393,7 +1393,7 @@ prim_parsepropex(PRIM_PROTOTYPE)
 
                         switch (val->type) {
                             case PROG_INTEGER:
-                                snprintf(var_buf, BUFFER_LEN, "%i", val->data.number);
+                                snprintf(var_buf, BUFFER_LEN, "%lld", (long long) val->data.number);
                                 break;
                             case PROG_FLOAT:
                                 snprintf(var_buf, BUFFER_LEN, "%f", val->data.fnumber);

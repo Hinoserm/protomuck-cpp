@@ -434,7 +434,7 @@ extern const char *string_match(const char *src, const char *sub);
 
 //extern char *mushformat_substitute(const char *str);
 extern char *pronoun_substitute(int descr, dbref player, const char *str);
-extern char *intostr(char *buf, int i);
+extern char *intostr(char *buf, MUFINT i);
 extern char *html_escape(const char *str);
 extern char *parse_ansi(dbref player, char *buf, const char *from, const char *defcolor);
 extern char* parse_ansi(descriptor_data *d, dbref player, char* buf, const char* from, const char* defcolor);

@@ -27,6 +27,7 @@ extern void RCLEAR(struct inst *oper, const char *file, int line);
 
 #define CLEAR(oper) RCLEAR(oper, __FILE__, __LINE__)
 extern void push (struct inst *stack, int *top, int type, voidptr res);
+extern void push_mufint(struct inst *stack, int *top, MUFINT val);
 extern int valid_object(struct inst *oper);
   
 extern struct localvars *localvars_get(struct frame *fr, dbref prog);
@@ -147,7 +148,7 @@ extern void push(struct inst *stack, int *top, const std::string & str);
 extern void push(struct inst *stack, int *top, std::string && str);
 
 #define PushObject(x)       push(arg, top, PROG_OBJECT, MIPSCAST &x)
-#define PushInt(x)          push(arg, top, PROG_INTEGER, MIPSCAST &x)
+#define PushInt(x)          push_mufint(arg, top, (MUFINT) (x))
 #define PushFloat(x)        push(arg, top, PROG_FLOAT, MIPSCAST &x)
 #define PushLock(x)         push(arg, top, PROG_LOCK, MIPSCAST copy_bool(x))
 #define PushTrueLock(x)     push(arg, top, PROG_LOCK, MIPSCAST TRUE_BOOLEXP)
