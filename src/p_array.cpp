@@ -1733,7 +1733,7 @@ prim_array_join(PRIM_PROTOTYPE)
 
     arr = oper[1].data.array;
     const char *delim = DoNullInd(oper[0].data.string);
-    const size_t delimlen = strlen(delim);
+    const size_t delimlen = oper[0].data.string ? oper[0].data.string->data.size() : 0;
     std::string out;
 
     done = !array_first(arr, &temp1);

@@ -175,7 +175,7 @@ unparse_flags(dbref thing, char buf[BUFFER_LEN])
 }
 
 char
-flag_2char(char *flag)
+flag_2char(const char *flag)
 {
     if (string_prefix("m", flag))
         return 'M';
@@ -264,7 +264,7 @@ flag_2char(char *flag)
 }
 
 char
-power_2char(char *p)
+power_2char(const char *p)
 {
     if (string_prefix("ALL_MUF_PRIMS", p)) {
         return 'm';

@@ -40,7 +40,7 @@ prim_fmtstring(PRIM_PROTOTYPE)
     }
     /* We now have the non-null format string, parse it */
     result = 0;                 /* End of current string, must be smaller than BUFFER_LEN */
-    slen = strlen(oper[0].data.string->data.c_str());
+    slen = oper[0].data.string->length();
     scnt = 0;
     tstop = 0;
     strcpyn(sstr, sizeof(sstr), oper[0].data.string->data.c_str());
@@ -1463,7 +1463,8 @@ prim_subst(PRIM_PROTOTYPE)
 
     const std::string &src = oper[2].data.string->data;
     const std::string &match = oper[0].data.string->data;
-    const std::string repl = oper[1].data.string ? oper[1].data.string->data : std::string();
+    static const std::string subst_empty;
+    const std::string &repl = oper[1].data.string ? oper[1].data.string->data : subst_empty;
     const size_t mlen = match.size();
     std::string out;
 
@@ -2320,22 +2321,18 @@ prim_flag_2char(PRIM_PROTOTYPE)
 {
     int n = 0;
     char flag_char;
-    char *flag_str;
     char buf[BUFFER_LEN];
 
     if (oper[0].type != PROG_STRING)
         abort_interp("Top argument must be a string. (1)");
     if (!oper[0].data.string)
         abort_interp("Empty string given. (1)");
-    flag_str = new char[strlen(oper[0].data.string->data.c_str()) + 1];
-
-    strcpy(flag_str, oper[0].data.string->data.c_str());
+    const char *flag_str = oper[0].data.string->data.c_str();
     while (*flag_str == '!') {
         n = !n;
-        (void) flag_str++;
+        flag_str++;
     }
     flag_char = flag_2char(flag_str);
-    delete[]flag_str;
 
     if (flag_char <= 0)
         abort_interp("Not a valid flag to convert to a character. (1)");
@@ -2352,22 +2349,18 @@ prim_power_2char(PRIM_PROTOTYPE)
 {
     int n = 0;
     char power_char;
-    char *power_str;
     char buf[BUFFER_LEN];
 
     if (oper[0].type != PROG_STRING)
         abort_interp("Top argument must be a string. (1)");
     if (!oper[0].data.string)
         abort_interp("Empty string given. (1)");
-    power_str = new char[strlen(oper[0].data.string->data.c_str()) + 1];
-
-    strcpy(power_str, oper[0].data.string->data.c_str());
+    const char *power_str = oper[0].data.string->data.c_str();
     while (*power_str == '!') {
         n = !n;
-        (void) power_str++;
+        power_str++;
     }
     power_char = power_2char(power_str);
-    delete[]power_str;
 
     if (power_char <= 0)
         abort_interp("Not a valid power to convert to a character. (1)");
@@ -2987,7 +2980,7 @@ prim_base64decode(PRIM_PROTOTYPE)
         std::string tmp;
 
         try {
-            tmp = http_decode64(oper[0].data.string->data.c_str());
+            tmp = http_decode64(oper[0].data.string->data);
         }
         catch(std::exception & e) {
             abort_interp(e.what());
@@ -2995,7 +2988,7 @@ prim_base64decode(PRIM_PROTOTYPE)
         if (tmp.length() >= BUFFER_LEN)
             abort_interp("Resultant string would overflow buffer.");
 
-        PushString(tmp);
+        push(arg, top, std::move(tmp));
     }
 }
 
@@ -3013,7 +3006,7 @@ prim_str2hex(PRIM_PROTOTYPE)
 
         std::string out = strToHex(oper[0].data.string->data, 1);
 
-        PushString(out);
+        push(arg, top, std::move(out));
     }
 }
 
@@ -3037,7 +3030,7 @@ prim_hex2str(PRIM_PROTOTYPE)
         if (out.length() >= BUFFER_LEN)
             abort_interp("Resultant string would overflow buffer.");
 
-        PushString(out);
+        push(arg, top, std::move(out));
     }
 }
 
@@ -3055,7 +3048,7 @@ prim_hex2base64str(PRIM_PROTOTYPE)
         std::string tmp;
 
         try {
-            tmp = hexToStr(oper[0].data.string->data.c_str());
+            tmp = hexToStr(oper[0].data.string->data);
         }
         catch(std::exception & e) {
             abort_interp(e.what());
@@ -3067,7 +3060,7 @@ prim_hex2base64str(PRIM_PROTOTYPE)
         if (tmp.length() >= BUFFER_LEN)
             abort_interp("Resultant string would overflow buffer.");
 
-        PushString(tmp);
+        push(arg, top, std::move(tmp));
     }
 }
 

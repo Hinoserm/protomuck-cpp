@@ -267,7 +267,7 @@ do_abort_compile(COMPSTATE *cstat, const char *c)
 }
 
 /* abort compile macro */
-#define abort_compile(ST,C) { do_abort_compile(ST,C); return 0; }
+#define abort_compile(ST,C) { do_abort_compile(ST,C); return {}; }
 
 /* abort compile for void functions */
 #define v_abort_compile(ST,C) { do_abort_compile(ST,C); return; }
@@ -2063,7 +2063,7 @@ do_directive(COMPSTATE *cstat, const char *direct)
         if (!(MLevel(OWNER(cstat->program)) >= LWIZ))
             abort_compile(cstat, "Permission denied for $log_status");
         if (!tmpname.empty()) {
-            log_status("%s", tmpname);
+            log_status("%s", tmpname.c_str());
         } else {
             abort_compile(cstat, "No data given for the status log and show to LOGWALL admin.");
         }
@@ -2077,7 +2077,7 @@ do_directive(COMPSTATE *cstat, const char *direct)
         if (!(MLevel(OWNER(cstat->program)) >= LWIZ))
             abort_compile(cstat, "Permission denied for $show_status");
         if (!tmpname.empty()) {
-            show_status("%s", tmpname);
+            show_status("%s", tmpname.c_str());
         } else {
             abort_compile(cstat, "No data given to show to LOGWALL admin.");
         }
@@ -2453,7 +2453,7 @@ do_directive(COMPSTATE *cstat, const char *direct)
                         doitset = 0;
                     }
                 } else {
-                    sprintf(propname, "/_Defs/%s", tmpname);
+                    sprintf(propname, "/_Defs/%s", tmpname.c_str());
                 }
 
                 if (doitset) {
@@ -2545,7 +2545,7 @@ do_directive(COMPSTATE *cstat, const char *direct)
                 if (temppropstr)
                     doitset = 0;
             } else {
-                sprintf(propname, "/_defs/%s", tmpname);
+                sprintf(propname, "/_defs/%s", tmpname.c_str());
             }
 
             snprintf(defstr, sizeof(defstr), "#%i \"%s\" call", cstat->program, tmpname);
@@ -2686,7 +2686,6 @@ do_string(COMPSTATE *cstat)
     std::string buf;
     int quoted = 0;
 
-    buf.reserve(32);
     buf.push_back(*cstat->next_char);
     cstat->next_char++;
     while ((quoted || *cstat->next_char != ENDSTRING) && *cstat->next_char) {
@@ -4628,7 +4627,7 @@ size_prog(dbref prog)
             }
             byts += sizeof(struct muf_proc_data);
         } else if (c[i].type == PROG_STRING && c[i].data.string) {
-            byts += strlen(c[i].data.string->data.c_str()) + 1;
+            byts += c[i].data.string->length() + 1;
             byts += sizeof(struct shared_string);
         } else if (c[i].type == PROG_ADD)
             byts += sizeof(struct prog_addr);

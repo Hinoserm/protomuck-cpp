@@ -2225,7 +2225,7 @@ push(struct inst *stack, int *top, int type, voidptr res)
 void
 push(struct inst *stack, int *top, const std::string &str)
 {
-    push(stack, top, PROG_STRING, MIPSCAST alloc_prog_string_exact(str.c_str(), str.length(), -1));
+    push(stack, top, PROG_STRING, MIPSCAST alloc_prog_string_exact(str.c_str(), str.length(), -2));
 }
 
 void

@@ -1346,7 +1346,7 @@ prim_parsepropex(PRIM_PROTOTYPE)
                 CLEAR(&idx);
                 abort_interp("Empty string keys not supported. (3)");
             }
-            if (strlen(idx.data.string->data.c_str()) > MAX_MFUN_NAME_LEN) {
+            if (idx.data.string->length() > MAX_MFUN_NAME_LEN) {
                 CLEAR(&idx);
                 abort_interp("Key too long to be an MPI variable. (3)");
             }
