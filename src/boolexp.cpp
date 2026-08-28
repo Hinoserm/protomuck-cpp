@@ -15,6 +15,7 @@
 #include "params.h"
 #include "tune.h"
 #include "interface.h"
+#include "ObjectAccess.h"
 
 /* Lachesis note on the routines in this package:
  *   eval_booexp does just evaluation.
@@ -128,9 +129,9 @@ eval_boolexp_rec2(int descr, dbref player, struct boolexp * b, dbref thing, int 
                     if (Typeof(player) == TYPE_PLAYER || Typeof(player) == TYPE_THING)
                         real_player = player;
                     else
-                        real_player = OWNER(player);
+                        real_player = MUCK::getOwner(player);
 
-                    tmpfr = interp(descr, real_player, DBFETCH(player)->location, b->thing, thing, PREEMPT, STD_HARDUID, 0);
+                    tmpfr = interp(descr, real_player, MUCK::getLocation(player), b->thing, thing, PREEMPT, STD_HARDUID, 0);
 
                     if (!tmpfr)
                         return 0;
@@ -139,9 +140,9 @@ eval_boolexp_rec2(int descr, dbref player, struct boolexp * b, dbref thing, int 
 
                     return (rv != NULL);
                 }
-                return (b->thing == player || b->thing == OWNER(player)
+                return (b->thing == player || b->thing == MUCK::getOwner(player)
                         || member(b->thing, CONTENTS(player))
-                        || b->thing == DBFETCH(player)->location);
+                        || b->thing == MUCK::getLocation(player));
 #else /* !SANITY */
                 return 0;
 #endif /* !SANITY */

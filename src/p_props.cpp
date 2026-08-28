@@ -15,6 +15,7 @@
 #include "strutils.h"
 #include "interp.h"
 #include "msgparse.h"
+#include "ObjectAccess.h"
 
 int
 prop_read_perms(dbref player, dbref obj, const char *name, int mlev)
@@ -807,7 +808,7 @@ prim_propqueue(PRIM_PROTOTYPE)
         char *str1 = string_dup(oper[2].data.string->data.c_str());
         char *str2 = string_dup(oper[0].data.string->data.c_str());
 
-        propqueue(fr->descr, player, OkObj(player) ? getloc(player) : -1, obj1, obj2, NOTHING, str1, str2, 1, 1);
+        propqueue(fr->descr, player, OkObj(player) ? MUCK::getLocation(player) : -1, obj1, obj2, NOTHING, str1, str2, 1, 1);
 
         delete[]str1;
         delete[]str2;
@@ -840,7 +841,7 @@ prim_envpropqueue(PRIM_PROTOTYPE)
         char *str1 = string_dup(oper[2].data.string->data.c_str());
         char *str2 = string_dup(oper[0].data.string->data.c_str());
 
-        propqueue(fr->descr, player, OkObj(player) ? getloc(player) : -1, obj1, obj2, NOTHING, str1, str2, 1, 1);
+        propqueue(fr->descr, player, OkObj(player) ? MUCK::getLocation(player) : -1, obj1, obj2, NOTHING, str1, str2, 1, 1);
 
         delete[]str1;
         delete[]str2;

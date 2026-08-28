@@ -12,6 +12,7 @@
 #include "msgparse.h"
 #include "externs.h"
 #include "Modules.h"
+#include "ObjectAccess.h"
 #include "MacroTable.h"
 #include "ObjectStore.h"
 #include "FlatFileConverter.h"
@@ -183,7 +184,7 @@ do_shutdown(dbref player, const char *muckname, const char *msg)
     int nodelay = !strcmp(msg, "now");
     int cancel = !strcmp(msg, "abort");
 
-    if ((Arch(player)) || (POWERS(player) & POW_SHUTDOWN)) {
+    if ((Arch(player)) || (MUCK::getPowers(player) & POW_SHUTDOWN)) {
         if (*muckname == '\0' || strcmp(muckname, tp_muckname)) {
             notify(player, SYSCYAN "Usage: " SYSAQUA "@shutdown muckname[=now|abort|message]");
             return;
@@ -224,7 +225,7 @@ do_restart(dbref player, const char *muckname, const char *msg)
     int cancel = !strcmp(msg, "abort");
 
 
-    if ((Arch(player)) || (POWERS(player) & POW_SHUTDOWN)) {
+    if ((Arch(player)) || (MUCK::getPowers(player) & POW_SHUTDOWN)) {
         if (*muckname == '\0' || strcmp(muckname, tp_muckname)) {
             notify(player, SYSCYAN "Syntax: " SYSAQUA "@restart muckname[=now|abort|message]");
             return;
@@ -774,7 +775,7 @@ process_command(int descr, dbref player, char *command, int len, int wclen)
     }
 
     if (force_level >= 32) {
-        anotify_fmt(player, CFAIL "I'm sorry, %s, I'm afraid I cannot do that.  Maximum force recursion depth exceeded.", NAME(player));
+        anotify_fmt(player, CFAIL "I'm sorry, %s, I'm afraid I cannot do that.  Maximum force recursion depth exceeded.", MUCK::getName(player));
         return;
     }
 
@@ -784,16 +785,16 @@ process_command(int descr, dbref player, char *command, int len, int wclen)
         return;
     }
 
-    if (((tp_log_commands || (tp_log_guests && Guest(OWNER(player)))) ||
-         (tp_log_suspects && (FLAG2(OWNER(player)) & F2SUSPECT)) || (tp_log_wizards && (MLevel(OWNER(player)) >= LMAGE))
+    if (((tp_log_commands || (tp_log_guests && Guest(MUCK::getOwner(player)))) ||
+         (tp_log_suspects && (FLAG2(MUCK::getOwner(player)) & F2SUSPECT)) || (tp_log_wizards && (MLevel(MUCK::getOwner(player)) >= LMAGE))
         ) && (tp_log_interactive || !(FLAGS(player) & (INTERACTIVE | READMODE)))) {
         if (*command)           /* To prevent logging of NULL commands? FB6 change */
-            log_command("%s%s%s%s(%d) in %s(%d):%s %s\n", (MLevel(OWNER(player)) >= LMAGE) ? "WIZ: " : (FLAG2(OWNER(player)) & F2SUSPECT)
+            log_command("%s%s%s%s(%d) in %s(%d):%s %s\n", (MLevel(MUCK::getOwner(player)) >= LMAGE) ? "WIZ: " : (FLAG2(MUCK::getOwner(player)) & F2SUSPECT)
                         ? "SUSPECT: " : "",
-                        (Typeof(player) != TYPE_PLAYER) ? NAME(player) : "",
+                        (Typeof(player) != TYPE_PLAYER) ? MUCK::getName(player) : "",
                         (Typeof(player) != TYPE_PLAYER) ? " by " : "",
-                        NAME(OWNER(player)), (int) player,
-                        NAME(DBFETCH(player)->location), (int) DBFETCH(player)->location, (FLAGS(player) & INTERACTIVE) ? " [interactive]" : " ", command);
+                        MUCK::getName(MUCK::getOwner(player)), (int) player,
+                        MUCK::getName(MUCK::getLocation(player)), (int) MUCK::getLocation(player), (FLAGS(player) & INTERACTIVE) ? " [interactive]" : " ", command);
     }
 
     if (FLAGS(player) & INTERACTIVE) {
@@ -1849,12 +1850,12 @@ process_command(int descr, dbref player, char *command, int len, int wclen)
 
             /* Do the propqueue, with the HUH args on the stack */
             sprintf(zbuf, "HUH:%s %s", command, full_command);
-            propqueue(descr, player, DBFETCH(player)->location, player, 0, -1, "@huh", zbuf, 1, 1);
+            propqueue(descr, player, MUCK::getLocation(player), player, 0, -1, "@huh", zbuf, 1, 1);
 
             /* Regular logging */
-            if (tp_log_failed_commands && !controls(player, DBFETCH(player)->location)) {
+            if (tp_log_failed_commands && !controls(player, MUCK::getLocation(player))) {
                 log_status("HUH from %s(%d) in %s(%d)[%s]: %s %s\n",
-                           NAME(player), player, NAME(DBFETCH(player)->location), DBFETCH(player)->location, NAME(OWNER(DBFETCH(player)->location)), command, full_command);
+                           MUCK::getName(player), player, MUCK::getName(MUCK::getLocation(player)), MUCK::getLocation(player), MUCK::getName(MUCK::getOwner(MUCK::getLocation(player))), command, full_command);
             }
         }
             break;
@@ -2025,16 +2026,16 @@ prop_command(int descr, dbref player, const char *command, const char *arg, cons
                 notify_descriptor(descr, "Invalid program call from a command prop.");
                 return 1;
             } else {
-                if (OkObj(DBFETCH(progRef)->location) && ((Typeof(DBFETCH(progRef)->location) == TYPE_ROOM)
-                                                          || Typeof(DBFETCH(progRef)->location) == TYPE_THING)) {
+                if (OkObj(MUCK::getLocation(progRef)) && ((Typeof(MUCK::getLocation(progRef)) == TYPE_ROOM)
+                                                          || Typeof(MUCK::getLocation(progRef)) == TYPE_THING)) {
                     if (Wizard(player) || Mage(where)
                         || (controls(player, progRef)
-                            && controls(player, DBFETCH(progRef)->location))
+                            && controls(player, MUCK::getLocation(progRef)))
                         || (((FLAGS(progRef) & JUMP_OK)
                              || (FLAGS(progRef) & VEHICLE))
-                            && ((FLAGS(DBFETCH(progRef)->location) & JUMP_OK)
-                                && !(FLAGS(DBFETCH(progRef)->location) & VEHICLE))))
-                        enter_room(descr, player, (int) (DBFETCH(progRef)->location), progRef);
+                            && ((FLAGS(MUCK::getLocation(progRef)) & JUMP_OK)
+                                && !(FLAGS(MUCK::getLocation(progRef)) & VEHICLE))))
+                        enter_room(descr, player, (int) (MUCK::getLocation(progRef)), progRef);
                     else
                         notify_descriptor(descr, RED "Permission denied.");
                 } else {
@@ -2052,7 +2053,7 @@ prop_command(int descr, dbref player, const char *command, const char *arg, cons
         } else {
             struct frame *tmpfr;
 
-            tmpfr = interp(descr, player, (OkObj(player)) ? DBFETCH(player)->location : -1, progRef, where, FOREGROUND, STD_HARDUID, 0);
+            tmpfr = interp(descr, player, (OkObj(player)) ? MUCK::getLocation(player) : -1, progRef, where, FOREGROUND, STD_HARDUID, 0);
             if (tmpfr) {
                 interp_loop(player, progRef, tmpfr, 0);
             }

@@ -12,6 +12,7 @@
 #include "tune.h"
 #include "strutils.h"
 #include "interp.h"
+#include "ObjectAccess.h"
 extern int tune_setparm(const dbref player, const char *parmname, const char *val);
 extern struct frame *aForceFrameStack[9];
 void
@@ -152,7 +153,7 @@ prim_queue(PRIM_PROTOTYPE)
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string argument (3)");
     if ((oper3 = fr->variables + 1)->type != PROG_OBJECT)
-        temproom = DBFETCH(PSafe)->location;
+        temproom = MUCK::getLocation(PSafe);
     else
         temproom = oper3->data.objref;
     result = add_muf_delayq_event(oper[2].data.number, fr->descr, player, temproom, NOTHING, oper[1].data.objref, DoNullInd(oper[0].data.string), "Queued Event.", 0);
@@ -183,7 +184,7 @@ prim_enqueue(PRIM_PROTOTYPE)
         || (Typeof(oper[3].data.objref) != TYPE_PLAYER && Typeof(oper[3].data.objref) != TYPE_THING))
         abort_interp("Object must be a player or thing. (4)");
     if ((oper4 = fr->variables + 1)->type != PROG_OBJECT)
-        temproom = DBFETCH(PSafe)->location;
+        temproom = MUCK::getLocation(PSafe);
     else
         temproom = oper4->data.objref;
     if (oper[2].type == PROG_INTEGER) {
@@ -236,13 +237,13 @@ prim_timestamps(PRIM_PROTOTYPE)
     CHECKREMOTE(ref);
     CHECKOFLOW(4);
 
-    result = (int) DBFETCH(ref)->ts.created;
+    result = (int) MUCK::getCreated(ref);
     PushInt(result);
-    result = (int) DBFETCH(ref)->ts.modified;
+    result = (int) MUCK::getModified(ref);
     PushInt(result);
-    result = (int) DBFETCH(ref)->ts.lastused;
+    result = (int) MUCK::getLastUsed(ref);
     PushInt(result);
-    result = DBFETCH(ref)->ts.usecount;
+    result = MUCK::getUseCount(ref);
     PushInt(result);
 }
 
@@ -260,11 +261,11 @@ prim_refstamps(PRIM_PROTOTYPE)
     CHECKREMOTE(ref);
     CHECKOFLOW(3);
 
-    result = DBFETCH(ref)->ts.dcreated;
+    result = MUCK::getCreatedBy(ref);
     PushObject(result);
-    result = DBFETCH(ref)->ts.dmodified;
+    result = MUCK::getModifiedBy(ref);
     PushObject(result);
-    result = DBFETCH(ref)->ts.dlastused;
+    result = MUCK::getLastUsedBy(ref);
     PushObject(result);
 }
 
@@ -426,7 +427,7 @@ prim_stats(PRIM_PROTOTYPE)
         /* tmp, ref */
         rooms = exits = things = players = programs = garbage = 0;
         for (i = 0; i < MUCK::database().top(); i++) {
-            if (ref == NOTHING || OWNER(i) == ref) {
+            if (ref == NOTHING || MUCK::getOwner(i) == ref) {
                 switch (Typeof(i)) {
                     case TYPE_ROOM:
                         rooms++;
@@ -759,12 +760,12 @@ prim_cancallp(PRIM_PROTOTYPE)
 
         tmpline = MUCK::programRuntime(oper[1].data.objref).first;
         MUCK::programRuntime(oper[1].data.objref).first = ((struct line *) MUCK::programs().read(oper[1].data.objref));
-        do_compile(fr->descr, OWNER(oper[1].data.objref), oper[1].data.objref, 0);
+        do_compile(fr->descr, MUCK::getOwner(oper[1].data.objref), oper[1].data.objref, 0);
         free_prog_text(MUCK::programRuntime(oper[1].data.objref).first);
         MUCK::programRuntime(oper[1].data.objref).first = tmpline;
     }
     result = 0;
-    if (ProgMLevel(oper[1].data.objref) > 0 && (mlev >= 4 || OWNER(oper[1].data.objref) == ProgUID || Linkable(oper[1].data.objref))
+    if (ProgMLevel(oper[1].data.objref) > 0 && (mlev >= 4 || MUCK::getOwner(oper[1].data.objref) == ProgUID || Linkable(oper[1].data.objref))
         ) {
         struct publics *pbs;
 
@@ -1014,8 +1015,8 @@ prim_debug_line(PRIM_PROTOTYPE)
         if (controls(PSafe, program))
             notify_nolisten(PSafe, mesg, 1);
 
-        if ((FLAG2(program) & F2PARENT) && PSafe != OWNER(program))
-            notify_nolisten(OWNER(program), mesg, 1);
+        if ((FLAG2(program) & F2PARENT) && PSafe != MUCK::getOwner(program))
+            notify_nolisten(MUCK::getOwner(program), mesg, 1);
     }
 }
 

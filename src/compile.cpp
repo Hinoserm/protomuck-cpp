@@ -7,6 +7,7 @@
 #include "MacroTable.h"
 
 #include "db.h"
+#include "ObjectAccess.h"
 #include "props.h"
 #include "interface.h"
 #include "inst.h"
@@ -808,7 +809,7 @@ init_defs(COMPSTATE *cstat)
     include_defs(cstat, (dbref) 0);
 
     /* Include any defines set in program owner's _defs/ propdir. */
-    include_defs(cstat, OWNER(cstat->program));
+    include_defs(cstat, MUCK::getOwner(cstat->program));
 }
 
 
@@ -834,7 +835,7 @@ do_uncompile(dbref player)
 {
     dbref i;
 
-    if (!Arch(OWNER(player))) {
+    if (!Arch(MUCK::getOwner(player))) {
         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
         return;
     }
@@ -856,7 +857,7 @@ do_proginfo(dbref player, const char *arg)
 
     if (*arg != '#') {
         anotify_nolisten(player, SYSYELLOW "Usage: @proginfo #prognum", 1);
-        if (Mage(OWNER(player))) {
+        if (Mage(MUCK::getOwner(player))) {
             anotify_nolisten(player, SYSAQUA "Inst Object ProgSz Insts " SYSBROWN "Name", 1);
             for (i = 0; i < MUCK::database().top(); i++) {
                 if (Typeof(i) == TYPE_PROGRAM && MUCK::programRuntime(i).codeSize) {
@@ -864,7 +865,7 @@ do_proginfo(dbref player, const char *arg)
                     tsize += csize = size_object(i, 0);
                     timem += cimem = size_prog(i);
                     tinst += cinst = MUCK::programRuntime(i).codeSize;
-                    sprintf(buf, SYSCYAN "%4d %6d %6d %5d %s " SYSRED "by " SYSGREEN "%s", ccnt, csize, cimem, cinst, ansi_unparse_object(player, i), NAME(OWNER(i))
+                    sprintf(buf, SYSCYAN "%4d %6d %6d %5d %s " SYSRED "by " SYSGREEN "%s", ccnt, csize, cimem, cinst, ansi_unparse_object(player, i), MUCK::getName(MUCK::getOwner(i))
                         );
                     anotify_nolisten(player, buf, 1);
                 }
@@ -883,7 +884,7 @@ do_proginfo(dbref player, const char *arg)
 
     anotify_nolisten(player, SYSYELLOW "Age: 1 = cleanable, 0 = used recently", 1);
     sprintf(buf, "AI: %d Age: %d Instances: %d",
-            (FLAGS(thing) & (ABODE | INTERNAL)), (now - DBFETCH(thing)->ts.lastused) > tp_clean_interval, MUCK::programRuntime(thing).instances);
+            (FLAGS(thing) & (ABODE | INTERNAL)), (now - MUCK::getLastUsed(thing)) > tp_clean_interval, MUCK::programRuntime(thing).instances);
     notify(player, buf);
 }
 
@@ -895,7 +896,7 @@ free_unused_programs()
     time_t now = current_systime;
 
     for (i = 0; i < MUCK::database().top(); i++) {
-        if ((Typeof(i) == TYPE_PROGRAM) && !(FLAGS(i) & (ABODE | INTERNAL)) && (now - DBFETCH(i)->ts.lastused > tp_clean_interval)
+        if ((Typeof(i) == TYPE_PROGRAM) && !(FLAGS(i) & (ABODE | INTERNAL)) && (now - MUCK::getLastUsed(i) > tp_clean_interval)
             && (MUCK::programRuntime(i).instances == 0)) {
             uncompile_program(i);
         }
@@ -1720,8 +1721,8 @@ do_compile(int descr, dbref player_in, dbref program_in, int force_err_display)
     rt.instances = 0;
 
     /* restart AUTOSTART program. */
-    if ((FLAGS(cstat.program) & ABODE) && TMage(OWNER(cstat.program)))
-        add_muf_queue_event(-1, OWNER(cstat.program), NOTHING, NOTHING, cstat.program, "Startup", "Queued Event.", 0);
+    if ((FLAGS(cstat.program) & ABODE) && TMage(MUCK::getOwner(cstat.program)))
+        add_muf_queue_event(-1, MUCK::getOwner(cstat.program), NOTHING, NOTHING, cstat.program, "Startup", "Queued Event.", 0);
 
 }
 
@@ -2070,7 +2071,7 @@ do_directive(COMPSTATE *cstat, const char *direct)
         while (*cstat->next_char && isspace(*cstat->next_char))
             cstat->next_char++; /* eating leading spaces */
         tmpname = (char *) cstat->next_char;
-        if (!(MLevel(OWNER(cstat->program)) >= LWIZ))
+        if (!(MLevel(MUCK::getOwner(cstat->program)) >= LWIZ))
             abort_compile(cstat, "Permission denied for $log_status");
         if (!tmpname.empty()) {
             log_status("%s", tmpname.c_str());
@@ -2084,7 +2085,7 @@ do_directive(COMPSTATE *cstat, const char *direct)
         while (*cstat->next_char && isspace(*cstat->next_char))
             cstat->next_char++; /* eating leading spaces */
         tmpname = (char *) cstat->next_char;
-        if (!(MLevel(OWNER(cstat->program)) >= LWIZ))
+        if (!(MLevel(MUCK::getOwner(cstat->program)) >= LWIZ))
             abort_compile(cstat, "Permission denied for $show_status");
         if (!tmpname.empty()) {
             show_status("%s", tmpname.c_str());
@@ -2117,8 +2118,8 @@ do_directive(COMPSTATE *cstat, const char *direct)
         while (*cstat->next_char)
             cstat->next_char++;
         advance_line(cstat);
-        if (tmpname.empty() || !(MLevel(OWNER(cstat->program)) >= LWIZ)) {
-            include_defs(cstat, OWNER(cstat->program));
+        if (tmpname.empty() || !(MLevel(MUCK::getOwner(cstat->program)) >= LWIZ)) {
+            include_defs(cstat, MUCK::getOwner(cstat->program));
             include_defs(cstat, (dbref) 0);
         }
 
@@ -2205,12 +2206,12 @@ do_directive(COMPSTATE *cstat, const char *direct)
 
             tmpline = MUCK::programRuntime(i).first;
             MUCK::programRuntime(i).first = ((struct line *) MUCK::programs().read(i));
-            do_compile(cstat->descr, OWNER(i), i, 0);
+            do_compile(cstat->descr, MUCK::getOwner(i), i, 0);
             free_prog_text(MUCK::programRuntime(i).first);
             MUCK::programRuntime(i).first = tmpline;
         }
         j = 0;
-        if (MLevel(OWNER(i)) > 0 && (MLevel(OWNER(cstat->program)) >= 4 || OWNER(i) == OWNER(cstat->program) || Linkable(i))
+        if (MLevel(MUCK::getOwner(i)) > 0 && (MLevel(MUCK::getOwner(cstat->program)) >= 4 || MUCK::getOwner(i) == MUCK::getOwner(cstat->program) || Linkable(i))
             ) {
             struct publics *pbs;
 
@@ -2220,7 +2221,7 @@ do_directive(COMPSTATE *cstat, const char *direct)
                     break;
                 pbs = pbs->next;
             }
-            if (pbs && MLevel(OWNER(cstat->program)) >= pbs->mlev)
+            if (pbs && MLevel(MUCK::getOwner(cstat->program)) >= pbs->mlev)
                 j = 1;
         }
         if (!string_compare(temp, "ifncancall"))
@@ -2594,10 +2595,10 @@ do_directive(COMPSTATE *cstat, const char *direct)
             inc_type = atoi(tmpname.c_str());
             if (inc_type == 0) {
                 cstat->use_macros = 1;
-                include_defs(cstat, OWNER(cstat->program));
+                include_defs(cstat, MUCK::getOwner(cstat->program));
                 include_defs(cstat, (dbref) 0);
             } else if (inc_type == 1) {
-                include_defs(cstat, OWNER(cstat->program));
+                include_defs(cstat, MUCK::getOwner(cstat->program));
                 include_defs(cstat, (dbref) 0);
             } else if (inc_type == 2) {
                 cstat->use_macros = 1;

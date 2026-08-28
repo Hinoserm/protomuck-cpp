@@ -12,6 +12,7 @@
 #include "ProgramStore.h"
 #include "PasswordHash.h"
 #include "ObjectStore.h"
+#include "ObjectAccess.h"
 
 /* Views over the legacy storage: every accessor resolves through the
  * classic macros so the two worlds stay coherent during migration. */
@@ -79,33 +80,32 @@ DbObject::rebuildModules()
 const char *
 DbObject::name() const
 {
-    return NAME(ref_);
+    return MUCK::getName(ref_);
 }
 
 void
 DbObject::setName(const char *newname)
 {
-    delete[] DBFETCH(ref_)->name;
-    NAME(ref_) = alloc_string(newname);
+    MUCK::setName(ref_, newname);
     DBDIRTY(ref_);
 }
 
 DbObject *
 DbObject::location() const
 {
-    return database().get(DBFETCH(ref_)->location);
+    return database().get(MUCK::getLocation(ref_));
 }
 
 DbObject *
 DbObject::owner() const
 {
-    return database().get(OWNER(ref_));
+    return database().get(MUCK::getOwner(ref_));
 }
 
 void
 DbObject::setOwner(DbObject *o)
 {
-    OWNER(ref_) = o ? o->ref() : NOTHING;
+    MUCK::setOwner(ref_, o ? o->ref() : NOTHING);
     DBDIRTY(ref_);
 }
 
@@ -242,7 +242,7 @@ nextSiblingRef(dbref obj)
     if (!o)
         return NOTHING;
 
-    dbref loc = DBFETCH(obj)->location;
+    dbref loc = MUCK::getLocation(obj);
 
     if (loc == NOTHING)
         return NOTHING;

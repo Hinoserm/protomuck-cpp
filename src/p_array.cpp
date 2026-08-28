@@ -13,6 +13,7 @@
 #include "strutils.h"
 #include "interp.h"
 #include "props.h"
+#include "ObjectAccess.h"
 
 extern int prop_read_perms(dbref player, dbref obj, const char *name, int mlev);
 extern int prop_write_perms(dbref player, dbref obj, const char *name, int mlev);
@@ -694,7 +695,7 @@ prim_array_notify(PRIM_PROTOTYPE)
             strcpy(buf, DoNullInd(oper4->data.string));
 
             if (tp_m1_name_notify && mlev < 2) {
-                prefix_message(buf, DoNullInd(oper4->data.string), NAME(PSafe), BUFFER_LEN, 1);
+                prefix_message(buf, DoNullInd(oper4->data.string), MUCK::getName(PSafe), BUFFER_LEN, 1);
             } else {
                 strcpy(buf, DoNullInd(oper4->data.string));
             }
@@ -703,7 +704,7 @@ prim_array_notify(PRIM_PROTOTYPE)
                 do {
                     oper3 = array_getitem(refarr, &temp1);
                     if (valid_object(oper3))
-                        notify_listeners(fr->descr, PSafe, program, oper3->data.objref, getloc(oper3->data.objref), buf, 1);
+                        notify_listeners(fr->descr, PSafe, program, oper3->data.objref, MUCK::getLocation(oper3->data.objref), buf, 1);
                 } while (array_next(refarr, &temp1));
             }
         } while (array_next(strarr, &temp2));
@@ -738,7 +739,7 @@ prim_array_ansi_notify(PRIM_PROTOTYPE)
             strcpy(buf, DoNullInd(oper4->data.string));
 
             if (tp_m1_name_notify && mlev < 2) {
-                strcpy(buf2, NAME(PSafe));
+                strcpy(buf2, MUCK::getName(PSafe));
                 strcat(buf2, " ");
                 if (!string_prefix(buf, buf2)) {
                     strcat(buf2, buf);
@@ -750,7 +751,7 @@ prim_array_ansi_notify(PRIM_PROTOTYPE)
                 do {
                     oper3 = array_getitem(refarr, &temp1);
                     if (valid_object(oper3))
-                        ansi_notify_listeners(fr->descr, PSafe, program, oper3->data.objref, getloc(oper3->data.objref), buf, 1);
+                        ansi_notify_listeners(fr->descr, PSafe, program, oper3->data.objref, MUCK::getLocation(oper3->data.objref), buf, 1);
 
                 } while (array_next(refarr, &temp1));
             }
@@ -785,7 +786,7 @@ prim_array_notify_html(PRIM_PROTOTYPE)
             oper4 = array_getitem(strarr, &temp2);
             strcpy(buf, DoNullInd(oper4->data.string));
             if (tp_m1_name_notify && mlev < 2) {
-                strcpy(buf2, NAME(PSafe));
+                strcpy(buf2, MUCK::getName(PSafe));
                 strcat(buf2, " ");
                 if (!string_prefix(buf, buf2)) {
                     strcat(buf2, buf);
@@ -797,7 +798,7 @@ prim_array_notify_html(PRIM_PROTOTYPE)
                 do {
                     oper3 = array_getitem(refarr, &temp1);
 
-                    notify_html_listeners(fr->descr, PSafe, program, oper3->data.objref, getloc(oper3->data.objref), buf, 1);
+                    notify_html_listeners(fr->descr, PSafe, program, oper3->data.objref, MUCK::getLocation(oper3->data.objref), buf, 1);
                 } while (array_next(refarr, &temp1));
             }
         } while (array_next(strarr, &temp2));
@@ -1838,7 +1839,7 @@ prim_array_interpret(PRIM_PROTOTYPE)
                     text = buf;
                     break;
                 }
-                sprintf(buf, "%s", NAME(in->data.number));
+                sprintf(buf, "%s", MUCK::getName(in->data.number));
                 text = buf;
                 break;
             case PROG_FLOAT:
@@ -1918,7 +1919,7 @@ prim_array_matchval(PRIM_PROTOTYPE)
                     array_setitem(&nw, &temp1, in);
                 }
             } else if (in->type == PROG_OBJECT) {
-                if (equalstr((char *) DoNullInd(oper[0].data.string), (char *) NAME(in->data.objref))) {
+                if (equalstr((char *) DoNullInd(oper[0].data.string), (char *) MUCK::getName(in->data.objref))) {
                     array_setitem(&nw, &temp1, in);
                 }
             }

@@ -8,6 +8,7 @@
 #include "match.h"
 #include "externs.h"
 #include "Modules.h"
+#include "ObjectAccess.h"
 
 void
 do_give(int descr, dbref player, const char *recipient, int amount)
@@ -22,7 +23,7 @@ do_give(int descr, dbref player, const char *recipient, int amount)
     }
 
     /* do amount consistency check */
-    if (amount < 0 && !Mage(OWNER(player))) {
+    if (amount < 0 && !Mage(MUCK::getOwner(player))) {
         anotify_nolisten2(player, CINFO "You can not steal money. Welcome to a true utopia.");
         return;
     } else if (amount == 0) {
@@ -33,7 +34,7 @@ do_give(int descr, dbref player, const char *recipient, int amount)
     init_match(descr, player, recipient, TYPE_PLAYER, &md);
     match_neighbor(&md);
     match_me(&md);
-    if (Mage(OWNER(player))) {
+    if (Mage(MUCK::getOwner(player))) {
         match_player(&md);
         match_absolute(&md);
     }
@@ -45,7 +46,7 @@ do_give(int descr, dbref player, const char *recipient, int amount)
             anotify_nolisten2(player, CINFO "I don't know who you mean!");
             return;
         default:
-            if (!Mage(OWNER(player)) && !(POWERS(player) & POW_NO_PAY)) {
+            if (!Mage(MUCK::getOwner(player)) && !(MUCK::getPowers(player) & POW_NO_PAY)) {
                 if (Typeof(who) != TYPE_PLAYER) {
                     anotify_nolisten2(player, CFAIL "You can only give to other players.");
                     return;
@@ -65,16 +66,16 @@ do_give(int descr, dbref player, const char *recipient, int amount)
         switch (Typeof(who)) {
             case TYPE_PLAYER:
                 MUCK::playerAddPennies(who, amount);
-                sprintf(buf, CSUCC "You give %d %s to %s.", amount, amount == 1 ? tp_penny : tp_pennies, NAME(who));
+                sprintf(buf, CSUCC "You give %d %s to %s.", amount, amount == 1 ? tp_penny : tp_pennies, MUCK::getName(who));
                 anotify_nolisten2(player, buf);
-                sprintf(buf, CNOTE "%s gives you %d %s.", NAME(player), amount, amount == 1 ? tp_penny : tp_pennies);
+                sprintf(buf, CNOTE "%s gives you %d %s.", MUCK::getName(player), amount, amount == 1 ? tp_penny : tp_pennies);
                 anotify_nolisten2(who, buf);
                 break;
             case TYPE_THING: {
                 MUCK::Thing *t = MUCK::database().get(who)->As<MUCK::Thing>();
 
                 t->setValue(t->value() + amount);
-                sprintf(buf, CSUCC "You change the value of %s to %d %s.", NAME(who), t->value(), t->value() == 1 ? tp_penny : tp_pennies);
+                sprintf(buf, CSUCC "You change the value of %s to %d %s.", MUCK::getName(who), t->value(), t->value() == 1 ? tp_penny : tp_pennies);
                 anotify_nolisten2(player, buf);
                 break;
             }

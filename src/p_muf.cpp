@@ -13,6 +13,7 @@
 #include "tune.h"
 #include "strutils.h"
 #include "interp.h"
+#include "ObjectAccess.h"
 /* Some externs to functions elsewhere in the code. */
 
 void
@@ -356,7 +357,7 @@ prim_program_insertlines(PRIM_PROTOTYPE)
             curr = new_line;    /* move curr to insert after it next */
         } while (array_next(lines, &temp1));
     }
-    log_status("PROGRAM EDITED: %s by %s(%d)\n", unparse_object(PSafe, theprog), OkObj(player) ? NAME(player) : "(login)", player);
+    log_status("PROGRAM EDITED: %s by %s(%d)\n", unparse_object(PSafe, theprog), OkObj(player) ? MUCK::getName(player) : "(login)", player);
     if (tp_log_programs)
         MUCK::programs().logText(MUCK::programRuntime(theprog).first, player, oper[2].data.objref);
     endline = MUCK::programRuntime(theprog).currLine;

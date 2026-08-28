@@ -8,6 +8,7 @@
 #include "interface.h"
 #include "externs.h"
 #include "Modules.h"
+#include "ObjectAccess.h"
 
 static hash_tab player_list[PLAYER_HASH_SIZE];
 
@@ -323,14 +324,14 @@ create_player(dbref creator, const char *name, const char *password)
     }
 
     if (OkObj(tp_player_start)) {
-        DBFETCH(player)->location = tp_player_start;
+        MUCK::setLocation(player, tp_player_start);
         MUCK::database().get(player)->As<MUCK::Player>()->setHome(MUCK::database().get(tp_player_start));
     } else {
-        DBFETCH(player)->location = GLOBAL_ENVIRONMENT;
+        MUCK::setLocation(player, GLOBAL_ENVIRONMENT);
         MUCK::database().get(player)->As<MUCK::Player>()->setHome(MUCK::database().get(GLOBAL_ENVIRONMENT));
     }
 
-    OWNER(player) = player;
+    MUCK::setOwner(player, player);
     MUCK::playerSetPennies(player, tp_start_pennies);
 
     /* set password */
@@ -342,7 +343,7 @@ create_player(dbref creator, const char *name, const char *password)
     DBDIRTY(player);
     DBDIRTY(tp_player_start);
 
-    sprintf(buf, CNOTE "%s is born!", NAME(player));
+    sprintf(buf, CNOTE "%s is born!", MUCK::getName(player));
     anotify_except(CONTENTS(tp_player_start), NOTHING, buf, player);
 
     return player;
@@ -380,7 +381,7 @@ add_player(dbref who)
     hash_data hd;
 
     hd.dbval = who;
-    if (add_hash(NAME(who), hd, player_list, PLAYER_HASH_SIZE) == NULL)
+    if (add_hash(MUCK::getName(who), hd, player_list, PLAYER_HASH_SIZE) == NULL)
         panic("Out of memory");
     else
         return;
@@ -392,7 +393,7 @@ delete_player(dbref who)
 {
     int result;
 
-    result = free_hash(NAME(who), player_list, PLAYER_HASH_SIZE);
+    result = free_hash(MUCK::getName(who), player_list, PLAYER_HASH_SIZE);
 
     /* Nuke the alias managed by this dbref. This will not remove any aliases
      * that were manually set on #0, but they should auto-clean as the lookups
@@ -409,7 +410,7 @@ delete_player(dbref who)
                 add_player(i);
             }
         }
-        result = free_hash(NAME(who), player_list, PLAYER_HASH_SIZE);
+        result = free_hash(MUCK::getName(who), player_list, PLAYER_HASH_SIZE);
         if (result) {
             wall_wizards(MARK "WARNING: Playername hashtable still inconsistent after rebuild.");
         }

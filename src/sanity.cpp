@@ -7,6 +7,7 @@
 #include "interface.h"
 #include "tune.h"
 #include "externs.h"
+#include "ObjectAccess.h"
 #include "Modules.h"
 
 #include "params.h"
@@ -74,8 +75,8 @@ sane_dump_object(dbref player, const char *arg)
         SanPrint(player, "Object:         %s", unparse(d));
     }
 
-    SanPrint(player, "  Owner:          %s", unparse(OWNER(d)));
-    SanPrint(player, "  Location:       %s", unparse(LOCATION(d)));
+    SanPrint(player, "  Owner:          %s", unparse(MUCK::getOwner(d)));
+    SanPrint(player, "  Location:       %s", unparse(MUCK::getLocation(d)));
     SanPrint(player, "  Contents Start: %s", unparse(CONTENTS(d)));
     SanPrint(player, "  Exits Start:    %s", unparse(EXITS(d)));
     SanPrint(player, "  Next:           %s", unparse(NEXTOBJ(d)));
@@ -225,14 +226,14 @@ find_orphan_objects(dbref player)
     FLAGS(GLOBAL_ENVIRONMENT) |= SANEBIT;
 
     for (i = 0; i < MUCK::database().top(); i++) {
-        if (EXITS(i) != NOTHING) {
+        if (!MUCK::getExits(i).empty()) {
             if (FLAGS(EXITS(i)) & SANEBIT) {
                 violate(player, EXITS(i), "is referred to by more than one object's Next, Contents, or Exits field");
             } else {
                 FLAGS(EXITS(i)) |= SANEBIT;
             }
         }
-        if (CONTENTS(i) != NOTHING) {
+        if (!MUCK::getContents(i).empty()) {
             if (FLAGS(CONTENTS(i)) & SANEBIT) {
                 violate(player, CONTENTS(i), "is referred to by more than one object's Next, Contents, or Exits field");
             } else {
@@ -346,7 +347,7 @@ check_contents_list(dbref player, dbref obj)
     int limit;
 
     if (TYPEOF(obj) != TYPE_PROGRAM && TYPEOF(obj) != TYPE_EXIT && TYPEOF(obj) != TYPE_GARBAGE) {
-        for (i = CONTENTS(obj), limit = MUCK::database().top(); valid_obj(i) && --limit && LOCATION(i) == obj && TYPEOF(i) != TYPE_EXIT; i = NEXTOBJ(i)) ;
+        for (i = CONTENTS(obj), limit = MUCK::database().top(); valid_obj(i) && --limit && MUCK::getLocation(i) == obj && TYPEOF(i) != TYPE_EXIT; i = NEXTOBJ(i)) ;
         if (i != NOTHING) {
             if (!limit) {
                 check_next_chain(player, CONTENTS(obj));
@@ -358,14 +359,14 @@ check_contents_list(dbref player, dbref obj)
                     if (TYPEOF(i) == TYPE_EXIT) {
                         violate(player, obj, "has an exit in its contents list (it shoudln't)");
                     }
-                    if (LOCATION(i) != obj) {
+                    if (MUCK::getLocation(i) != obj) {
                         violate(player, obj, "has an object in its contents lists that thinks it is located elsewhere");
                     }
                 }
             }
         }
     } else {
-        if (CONTENTS(obj) != NOTHING) {
+        if (!MUCK::getContents(obj).empty()) {
             if (TYPEOF(obj) == TYPE_EXIT) {
                 violate(player, obj, "is an exit/action whose contents aren't #-1");
             } else if (TYPEOF(obj) == TYPE_GARBAGE) {
@@ -385,7 +386,7 @@ check_exits_list(dbref player, dbref obj)
     int limit;
 
     if (TYPEOF(obj) != TYPE_PROGRAM && TYPEOF(obj) != TYPE_EXIT && TYPEOF(obj) != TYPE_GARBAGE) {
-        for (i = EXITS(obj), limit = MUCK::database().top(); valid_obj(i) && --limit && LOCATION(i) == obj && TYPEOF(i) == TYPE_EXIT; i = NEXTOBJ(i)) ;
+        for (i = EXITS(obj), limit = MUCK::database().top(); valid_obj(i) && --limit && MUCK::getLocation(i) == obj && TYPEOF(i) == TYPE_EXIT; i = NEXTOBJ(i)) ;
         if (i != NOTHING) {
             if (!limit) {
                 check_next_chain(player, CONTENTS(obj));
@@ -396,13 +397,13 @@ check_exits_list(dbref player, dbref obj)
                 if (TYPEOF(i) != TYPE_EXIT) {
                     violate(player, obj, "has a non-exit in it's exits list");
                 }
-                if (LOCATION(i) != obj) {
+                if (MUCK::getLocation(i) != obj) {
                     violate(player, obj, "has an exit in its exits lists that thinks it is located elsewhere");
                 }
             }
         }
     } else {
-        if (EXITS(obj) != NOTHING) {
+        if (!MUCK::getExits(obj).empty()) {
             if (TYPEOF(obj) == TYPE_EXIT) {
                 violate(player, obj, "is an exit/action whose exits list isn't #-1");
             } else if (TYPEOF(obj) == TYPE_GARBAGE) {
@@ -421,32 +422,32 @@ check_object(dbref player, dbref obj)
     /*
      * Do we have a name?
      */
-    if (!NAME(obj))
+    if (!MUCK::getName(obj))
         violate(player, obj, "doesn't have a name");
 
     /*
      * Check the ownership
      */
     if (TYPEOF(obj) != TYPE_GARBAGE) {
-        if (!valid_obj(OWNER(obj))) {
+        if (!valid_obj(MUCK::getOwner(obj))) {
             violate(player, obj, "has an invalid object as its owner.");
-        } else if (TYPEOF(OWNER(obj)) != TYPE_PLAYER) {
+        } else if (TYPEOF(MUCK::getOwner(obj)) != TYPE_PLAYER) {
             violate(player, obj, "has a non-player object as its owner.");
         }
 
-        /* 
-         * check location 
+        /*
+         * check location
          */
-        if (!valid_obj(LOCATION(obj)) && !(obj == GLOBAL_ENVIRONMENT && LOCATION(obj) == NOTHING)
+        if (!valid_obj(MUCK::getLocation(obj)) && !(obj == GLOBAL_ENVIRONMENT && MUCK::getLocation(obj) == NOTHING)
             ) {
             violate(player, obj, "has an invalid object as it's location");
         }
     }
 
-    if (LOCATION(obj) != NOTHING && (TYPEOF(LOCATION(obj)) == TYPE_GARBAGE || TYPEOF(LOCATION(obj)) == TYPE_EXIT || TYPEOF(LOCATION(obj)) == TYPE_PROGRAM))
+    if (MUCK::getLocation(obj) != NOTHING && (TYPEOF(MUCK::getLocation(obj)) == TYPE_GARBAGE || TYPEOF(MUCK::getLocation(obj)) == TYPE_EXIT || TYPEOF(MUCK::getLocation(obj)) == TYPE_PROGRAM))
         violate(player, obj, "thinks it is located in a non-container object");
 
-    if ((TYPEOF(obj) == TYPE_GARBAGE) && (LOCATION(obj) != NOTHING))
+    if ((TYPEOF(obj) == TYPE_GARBAGE) && (MUCK::getLocation(obj) != NOTHING))
         violate(player, obj, "is a garbage object with a location that isn't #-1");
 
     check_contents_list(player, obj);
@@ -538,12 +539,12 @@ san_fixed_log(char *format, int unparse, dbref ref1, dbref ref2)
 void
 cut_all_chains(dbref obj)
 {
-    if (CONTENTS(obj) != NOTHING) {
+    if (!MUCK::getContents(obj).empty()) {
         SanFixed(obj, "Cleared contents of %s");
         MUCK::contentsOf(obj).clear();
         DBDIRTY(obj);
     }
-    if (EXITS(obj) != NOTHING) {
+    if (!MUCK::getExits(obj).empty()) {
         SanFixed(obj, "Cleared exits of %s");
         MUCK::exitsOf(obj).clear();
         DBDIRTY(obj);
@@ -565,14 +566,14 @@ cut_bad_contents(dbref obj)
     for (size_t i = 0; i < v.size(); i++) {
         dbref loop = v[i]->ref();
 
-        if (!valid_obj(loop) || FLAGS(loop) & SANEBIT || TYPEOF(loop) == TYPE_EXIT || LOCATION(loop) != obj || loop == obj) {
+        if (!valid_obj(loop) || FLAGS(loop) & SANEBIT || TYPEOF(loop) == TYPE_EXIT || MUCK::getLocation(loop) != obj || loop == obj) {
             if (!valid_obj(loop)) {
                 SanFixed(obj, "Contents list for %s cut at invalid dbref");
             } else if (TYPEOF(loop) == TYPE_EXIT) {
                 SanFixed2(obj, loop, "Contents list for %s cut at exit %s");
             } else if (loop == obj) {
                 SanFixed(obj, "Contents list for %s cut at self-reference");
-            } else if (LOCATION(loop) != obj) {
+            } else if (MUCK::getLocation(loop) != obj) {
                 SanFixed2(obj, loop, "Contents list for %s cut at misplaced object %s");
             } else if (FLAGS(loop) & SANEBIT) {
                 SanFixed2(obj, loop, "Contents list for %s cut at already listed object %s");
@@ -595,12 +596,12 @@ cut_bad_exits(dbref obj)
     for (size_t i = 0; i < v.size(); i++) {
         dbref loop = v[i]->ref();
 
-        if (!valid_obj(loop) || FLAGS(loop) & SANEBIT || TYPEOF(loop) != TYPE_EXIT || LOCATION(loop) != obj) {
+        if (!valid_obj(loop) || FLAGS(loop) & SANEBIT || TYPEOF(loop) != TYPE_EXIT || MUCK::getLocation(loop) != obj) {
             if (!valid_obj(loop)) {
                 SanFixed(obj, "Exits list for %s cut at invalid dbref");
             } else if (TYPEOF(loop) != TYPE_EXIT) {
                 SanFixed2(obj, loop, "Exits list for %s cut at non-exit %s");
-            } else if (LOCATION(loop) != obj) {
+            } else if (MUCK::getLocation(loop) != obj) {
                 SanFixed2(obj, loop, "Exits list for %s cut at misplaced exit %s");
             } else if (FLAGS(loop) & SANEBIT) {
                 SanFixed2(obj, loop, "Exits list for %s cut at already listed exit %s");
@@ -653,8 +654,8 @@ create_lostandfound(dbref *player, dbref *room)
     int temp = 0;
 
     *room = MUCK::database().newObject(*player);
-    NAME(*room) = alloc_string("lost+found");
-    LOCATION(*room) = GLOBAL_ENVIRONMENT;
+    MUCK::setName(*room, "lost+found");
+    MUCK::setLocation(*room, GLOBAL_ENVIRONMENT);
     MUCK::roomSetDropToRef(*room, NOTHING);
     FLAGS(*room) = TYPE_ROOM | SANEBIT;
     MUCK::attachContent(GLOBAL_ENVIRONMENT, *room);
@@ -669,10 +670,10 @@ create_lostandfound(dbref *player, dbref *room)
         *player = MAN;
     } else {
         *player = MUCK::database().newObject(1);
-        NAME(*player) = alloc_string(player_name);
-        LOCATION(*player) = *room;
+        MUCK::setName(*player, player_name);
+        MUCK::setLocation(*player, *room);
         FLAGS(*player) = TYPE_PLAYER | PCREATE_FLAGS | SANEBIT;
-        OWNER(*player) = *player;
+        MUCK::setOwner(*player, *player);
         MUCK::playerSetHomeRef(*player, *room);
         MUCK::playerSetPennies(*player, tp_start_pennies);
         set_password(*player, rand_password());
@@ -682,7 +683,7 @@ create_lostandfound(dbref *player, dbref *room)
         add_player(*player);
         log2file("logs/sanfixed", "Using %s (with password %s) to resolve " "unknown owner", unparse(*player), MUCK::playerPasswordSlot(*player));
     }
-    OWNER(*room) = *player;
+    MUCK::setOwner(*room, *player);
     DBDIRTY(*room);
     DBDIRTY(*player);
     DBDIRTY(GLOBAL_ENVIRONMENT);
@@ -712,8 +713,8 @@ fix_thing(dbref obj)
     i = MUCK::thingHomeRef(obj);
 
     if (!valid_obj(i) || (TYPEOF(i) != TYPE_ROOM && TYPEOF(i) != TYPE_THING && TYPEOF(i) != TYPE_PLAYER)) {
-        SanFixed2(obj, OWNER(obj), "Setting the home on %s to %s, it's owner");
-        MUCK::thingSetHomeRef(obj, OWNER(obj));
+        SanFixed2(obj, MUCK::getOwner(obj), "Setting the home on %s to %s, it's owner");
+        MUCK::thingSetHomeRef(obj, MUCK::getOwner(obj));
     }
 }
 
@@ -778,7 +779,7 @@ find_misplaced_objects(void)
             sanity_violated = 1;
             continue;
         }
-        if (!NAME(loop) || !(*NAME(loop))) {
+        if (!MUCK::getName(loop) || !(*MUCK::getName(loop))) {
             switch TYPEOF
                 (loop) {
                 case TYPE_GARBAGE:
@@ -792,62 +793,62 @@ find_misplaced_objects(void)
                     while (lookup_player(name) != NOTHING && strlen(name) < PLAYER_NAME_LIMIT) {
                         sprintf(name, "Unnamed%d", ++temp);
                     }
-                    NAME(loop) = alloc_string(name);
+                    MUCK::setName(loop, name);
                     add_player(loop);
                 }
                     break;
                 default:
-                    NAME(loop) = alloc_string("Unnamed");
+                    MUCK::setName(loop, "Unnamed");
                 }
             SanFixed(loop, "Gave a name to %s");
             DBDIRTY(loop);
         }
         if (TYPEOF(loop) != TYPE_GARBAGE) {
-            if (!valid_obj(OWNER(loop)) || TYPEOF(OWNER(loop)) != TYPE_PLAYER) {
+            if (!valid_obj(MUCK::getOwner(loop)) || TYPEOF(MUCK::getOwner(loop)) != TYPE_PLAYER) {
                 if (player == NOTHING) {
                     create_lostandfound(&player, &room);
                 }
                 SanFixed2(loop, player, "Set owner of %s to %s");
-                OWNER(loop) = player;
+                MUCK::setOwner(loop, player);
                 DBDIRTY(loop);
             }
-            if (loop != GLOBAL_ENVIRONMENT && (!valid_obj(LOCATION(loop)) ||
-                                               TYPEOF(LOCATION(loop)) ==
+            if (loop != GLOBAL_ENVIRONMENT && (!valid_obj(MUCK::getLocation(loop)) ||
+                                               TYPEOF(MUCK::getLocation(loop)) ==
                                                TYPE_GARBAGE
-                                               || TYPEOF(LOCATION(loop)) ==
-                                               TYPE_EXIT || TYPEOF(LOCATION(loop)) == TYPE_PROGRAM || (TYPEOF(loop) == TYPE_PLAYER && TYPEOF(LOCATION(loop))
+                                               || TYPEOF(MUCK::getLocation(loop)) ==
+                                               TYPE_EXIT || TYPEOF(MUCK::getLocation(loop)) == TYPE_PROGRAM || (TYPEOF(loop) == TYPE_PLAYER && TYPEOF(MUCK::getLocation(loop))
                                                                                                        == TYPE_PLAYER))) {
                 if (TYPEOF(loop) == TYPE_PLAYER) {
-                    if (valid_obj(LOCATION(loop)) && TYPEOF(LOCATION(loop)) == TYPE_PLAYER) {
-                        MUCK::detachContent(LOCATION(loop), loop);
-                        DBDIRTY(LOCATION(loop));
+                    if (valid_obj(MUCK::getLocation(loop)) && TYPEOF(MUCK::getLocation(loop)) == TYPE_PLAYER) {
+                        MUCK::detachContent(MUCK::getLocation(loop), loop);
+                        DBDIRTY(MUCK::getLocation(loop));
                     }
-                    LOCATION(loop) = tp_player_start;
+                    MUCK::setLocation(loop, tp_player_start);
                 } else {
                     if (player == NOTHING) {
                         create_lostandfound(&player, &room);
                     }
-                    LOCATION(loop) = room;
+                    MUCK::setLocation(loop, room);
                 }
                 DBDIRTY(loop);
-                DBDIRTY(LOCATION(loop));
+                DBDIRTY(MUCK::getLocation(loop));
                 if (TYPEOF(loop) == TYPE_EXIT) {
-                    MUCK::attachExit(LOCATION(loop), loop);
+                    MUCK::attachExit(MUCK::getLocation(loop), loop);
                 } else {
-                    MUCK::attachContent(LOCATION(loop), loop);
+                    MUCK::attachContent(MUCK::getLocation(loop), loop);
                 }
                 FLAGS(loop) |= SANEBIT;
-                SanFixed2(loop, LOCATION(loop), "Set location of %s to %s");
+                SanFixed2(loop, MUCK::getLocation(loop), "Set location of %s to %s");
             }
         } else {
-            if (OWNER(loop) != NOTHING) {
+            if (MUCK::getOwner(loop) != NOTHING) {
                 SanFixedRef(loop, "Set owner of recycled object #%d to NOTHING");
-                OWNER(loop) = NOTHING;
+                MUCK::setOwner(loop, NOTHING);
                 DBDIRTY(loop);
             }
-            if (LOCATION(loop) != NOTHING) {
+            if (MUCK::getLocation(loop) != NOTHING) {
                 SanFixedRef(loop, "Set location of recycled object #%d to NOTHING");
-                LOCATION(loop) = NOTHING;
+                MUCK::setLocation(loop, NOTHING);
                 DBDIRTY(loop);
             }
         }
@@ -887,12 +888,12 @@ adopt_orphans(void)
                 case TYPE_THING:
                 case TYPE_PLAYER:
                 case TYPE_PROGRAM:
-                    MUCK::attachContent(LOCATION(loop), loop);
-                    SanFixed2(loop, LOCATION(loop), "Orphaned object %s added to contents of %s");
+                    MUCK::attachContent(MUCK::getLocation(loop), loop);
+                    SanFixed2(loop, MUCK::getLocation(loop), "Orphaned object %s added to contents of %s");
                     break;
                 case TYPE_EXIT:
-                    MUCK::attachExit(LOCATION(loop), loop);
-                    SanFixed2(loop, LOCATION(loop), "Orphaned exit %s added to exits of %s");
+                    MUCK::attachExit(MUCK::getLocation(loop), loop);
+                    SanFixed2(loop, MUCK::getLocation(loop), "Orphaned exit %s added to exits of %s");
                     break;
                 case TYPE_GARBAGE:
                     /* dead shell; nothing to chain anymore */
@@ -912,9 +913,9 @@ clean_global_environment(void)
     /* with owned lists, #0 can only be in a list if its location
      * points there, which the clause below clears; misplaced list
      * members were already cut by the hacksaw pass */
-    if (LOCATION(GLOBAL_ENVIRONMENT) != NOTHING) {
-        SanFixed2(GLOBAL_ENVIRONMENT, LOCATION(GLOBAL_ENVIRONMENT), "Removed the global environment %s from %s");
-        LOCATION(GLOBAL_ENVIRONMENT) = NOTHING;
+    if (MUCK::getLocation(GLOBAL_ENVIRONMENT) != NOTHING) {
+        SanFixed2(GLOBAL_ENVIRONMENT, MUCK::getLocation(GLOBAL_ENVIRONMENT), "Removed the global environment %s from %s");
+        MUCK::setLocation(GLOBAL_ENVIRONMENT, NOTHING);
         DBDIRTY(GLOBAL_ENVIRONMENT);
     }
 }
@@ -1039,14 +1040,14 @@ sanechange(dbref player, const char *command)
         DBDIRTY(d);
 
     } else if (!string_compare(field, "location")) {
-        strcpy(buf2, unparse(LOCATION(d)));
-        LOCATION(d) = v;
+        strcpy(buf2, unparse(MUCK::getLocation(d)));
+        MUCK::setLocation(d, v);
         DBDIRTY(d);
         SanPrint(player, MARK "Setting #%d's location to %s", d, unparse(v));
 
     } else if (!string_compare(field, "owner")) {
-        strcpy(buf2, unparse(OWNER(d)));
-        OWNER(d) = v;
+        strcpy(buf2, unparse(MUCK::getOwner(d)));
+        MUCK::setOwner(d, v);
         DBDIRTY(d);
         SanPrint(player, MARK "Setting #%d's owner to %s", d, unparse(v));
 
@@ -1207,8 +1208,8 @@ extract_object(FILE * f, dbref d)
 
     fprintf(f, "  #%d\n", d);
     fprintf(f, "  Object:         %s\n", unparse(d));
-    fprintf(f, "  Owner:          %s\n", unparse(OWNER(d)));
-    fprintf(f, "  Location:       %s\n", unparse(LOCATION(d)));
+    fprintf(f, "  Owner:          %s\n", unparse(MUCK::getOwner(d)));
+    fprintf(f, "  Location:       %s\n", unparse(MUCK::getLocation(d)));
     fprintf(f, "  Contents Start: %s\n", unparse(CONTENTS(d)));
     fprintf(f, "  Exits Start:    %s\n", unparse(EXITS(d)));
     fprintf(f, "  Next:           %s\n", unparse(NEXTOBJ(d)));
@@ -1285,7 +1286,7 @@ extract(void)
     }
 
     for (i = 0; i < MUCK::database().top(); i++) {
-        if ((OWNER(i) == d) && (TYPEOF(i) != TYPE_GARBAGE)) {
+        if ((MUCK::getOwner(i) == d) && (TYPEOF(i) != TYPE_GARBAGE)) {
             extract_object(f, i);
         }                       /* extract only objects owned by this player */
     }                           /* loop through db */

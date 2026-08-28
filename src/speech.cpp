@@ -9,6 +9,7 @@
 #include "tune.h"
 #include "props.h"
 #include "externs.h"
+#include "ObjectAccess.h"
 #include "Modules.h"
 
 /* Commands which involve speaking */
@@ -21,14 +22,14 @@ do_say(int descr, dbref player, const char *message)
     dbref loc;
     char buf[BUFFER_LEN], buf2[BUFFER_LEN];
 
-    if ((loc = getloc(player)) == NOTHING)
+    if ((loc = MUCK::getLocation(player)) == NOTHING)
         return;
     tct(message, buf2);
     /* notify everybody */
     sprintf(buf, "^SAY/POSE^You say, ^SAY/QUOTES^\"^SAY/TEXT^%s^SAY/QUOTES^\"", buf2);
     anotify(player, buf);
 
-    sprintf(buf, "^SAY/POSE^%s says, ^SAY/QUOTES^\"^SAY/TEXT^%s^SAY/QUOTES^\"", PNAME(player), buf2);
+    sprintf(buf, "^SAY/POSE^%s says, ^SAY/QUOTES^\"^SAY/TEXT^%s^SAY/QUOTES^\"", MUCK::getName(player), buf2);
     anotify_except(CONTENTS(loc), player, buf, player);
 }
 
@@ -59,7 +60,7 @@ do_whisper(int descr, dbref player, const char *arg1, const char *arg2)
             anotify_nolisten2(player, CINFO "I don't know who you mean!");
             break;
         default:
-            if (Meeper(OWNER(player))) {
+            if (Meeper(MUCK::getOwner(player))) {
                 do_parse_mesg(descr, player, player, arg2, "(whisper)", buf, MPI_ISPRIVATE);
                 tct(buf, buf2);
             } else {
@@ -67,23 +68,23 @@ do_whisper(int descr, dbref player, const char *arg1, const char *arg2)
             }
 
             if (buf2[0] == ':' || buf2[0] == ';') {
-                sprintf(buf, SYSBLUE "%s whispers, \"" SYSPURPLE "%s %s" SYSBLUE "\"", PNAME(player), PNAME(player), buf2 + 1);
+                sprintf(buf, SYSBLUE "%s whispers, \"" SYSPURPLE "%s %s" SYSBLUE "\"", MUCK::getName(player), MUCK::getName(player), buf2 + 1);
                 if (!anotify_from(player, who, buf)) {
-                    sprintf(buf, SYSBLUE "%s is not connected.", PNAME(who));
+                    sprintf(buf, SYSBLUE "%s is not connected.", MUCK::getName(who));
                     anotify_nolisten2(player, buf);
                     break;
                 }
-                sprintf(buf, SYSBLUE "You whisper, \"" SYSPURPLE "%s %s" SYSBLUE "\" to %s.", PNAME(player), buf2 + 1, PNAME(who));
+                sprintf(buf, SYSBLUE "You whisper, \"" SYSPURPLE "%s %s" SYSBLUE "\" to %s.", MUCK::getName(player), buf2 + 1, MUCK::getName(who));
                 anotify(player, buf);
                 break;
             } else {
-                sprintf(buf, SYSBLUE "%s whispers, \"" SYSPURPLE "%s" SYSBLUE "\"", PNAME(player), buf2);
+                sprintf(buf, SYSBLUE "%s whispers, \"" SYSPURPLE "%s" SYSBLUE "\"", MUCK::getName(player), buf2);
                 if (!anotify_from(player, who, buf)) {
-                    sprintf(buf, SYSBLUE "%s is not connected.", PNAME(who));
+                    sprintf(buf, SYSBLUE "%s is not connected.", MUCK::getName(who));
                     anotify_nolisten2(player, buf);
                     break;
                 }
-                sprintf(buf, SYSBLUE "You whisper, \"" SYSPURPLE "%s" SYSBLUE "\" to %s.", buf2, PNAME(who));
+                sprintf(buf, SYSBLUE "You whisper, \"" SYSPURPLE "%s" SYSBLUE "\" to %s.", buf2, MUCK::getName(who));
                 anotify(player, buf);
                 break;
             }
@@ -96,11 +97,11 @@ do_pose(int descr, dbref player, const char *message)
     dbref loc;
     char buf[BUFFER_LEN], buf2[BUFFER_LEN];
 
-    if ((loc = getloc(player)) == NOTHING)
+    if ((loc = MUCK::getLocation(player)) == NOTHING)
         return;
     tct(message, buf2);
     /* notify everybody */
-    sprintf(buf, "^SAY/POSE^%s %s", PNAME(player), buf2);
+    sprintf(buf, "^SAY/POSE^%s %s", MUCK::getName(player), buf2);
     anotify_except(CONTENTS(loc), NOTHING, buf, player);
 }
 
@@ -109,7 +110,7 @@ do_wall(dbref player, const char *message)
 {
     char buf[BUFFER_LEN];
 
-    if ((Mage(player) || (POWERS(player) & POW_ANNOUNCE))
+    if ((Mage(player) || (MUCK::getPowers(player) & POW_ANNOUNCE))
         && Typeof(player) == TYPE_PLAYER) {
         if (!*message) {
             anotify_nolisten2(player, CINFO "Shout what?");
@@ -118,14 +119,14 @@ do_wall(dbref player, const char *message)
         switch (message[0]) {
             case ':':
             case ';':
-                sprintf(buf, SYSWHITE MARK SYSNORMAL "%s %s", NAME(player), message + 1);
+                sprintf(buf, SYSWHITE MARK SYSNORMAL "%s %s", MUCK::getName(player), message + 1);
                 break;
             case '#':
             case '|':
                 sprintf(buf, SYSWHITE MARK SYSNORMAL "%s", message + 1);
                 break;
             default:
-                sprintf(buf, SYSWHITE MARK SYSNORMAL "%s shouts, \"%s\"", NAME(player), message);
+                sprintf(buf, SYSWHITE MARK SYSNORMAL "%s shouts, \"%s\"", MUCK::getName(player), message);
         }
         wall_all(buf);
         /* log_status("WALL: %s(%d): %s\n", NAME(player), player, buf); */
@@ -154,12 +155,12 @@ do_gripe(dbref player, const char *message)
         return;
     }
 
-    loc = DBFETCH(player)->location;
-    log_gripe("%s(%d) in %s(%d): %s\n", NAME(player), player, NAME(loc), loc, message);
+    loc = MUCK::getLocation(player);
+    log_gripe("%s(%d) in %s(%d): %s\n", MUCK::getName(player), player, MUCK::getName(loc), loc, message);
 
     anotify_nolisten2(player, CINFO "Your complaint has been filed.");
 
-    sprintf(buf, MARK "Gripe from %s: %s", NAME(player), message);
+    sprintf(buf, MARK "Gripe from %s: %s", MUCK::getName(player), message);
     wall_wizards(buf);
 }
 
@@ -193,7 +194,7 @@ do_page(int descr, dbref player, const char *arg1, const char *arg2)
         anotify_nolisten2(player, CFAIL "That player is haven.");
         return;
     }
-    if (Meeper(OWNER(player))) {
+    if (Meeper(MUCK::getOwner(player))) {
         do_parse_mesg(descr, player, player, arg2, "(page)", buf, MPI_ISPRIVATE);
         tct(buf, buf2);
     } else {
@@ -201,18 +202,18 @@ do_page(int descr, dbref player, const char *arg1, const char *arg2)
     }
 
     if (!*buf2) {
-        sprintf(buf, CSUCC "You sense that %s is looking for you in %s.", PNAME(player), NAME(DBFETCH(player)->location));
+        sprintf(buf, CSUCC "You sense that %s is looking for you in %s.", MUCK::getName(player), MUCK::getName(MUCK::getLocation(player)));
     } else {
         if (buf2[0] == ':' || buf2[0] == ';') {
-            sprintf(buf, SYSGREEN "%s pages \"" SYSYELLOW "%s %s" SYSGREEN "\"", PNAME(player), PNAME(player), buf2);
+            sprintf(buf, SYSGREEN "%s pages \"" SYSYELLOW "%s %s" SYSGREEN "\"", MUCK::getName(player), MUCK::getName(player), buf2);
         } else {
-            sprintf(buf, SYSGREEN "%s pages \"" SYSYELLOW "%s" SYSGREEN "\"", PNAME(player), buf2);
+            sprintf(buf, SYSGREEN "%s pages \"" SYSYELLOW "%s" SYSGREEN "\"", MUCK::getName(player), buf2);
         }
     }
     if (anotify_from(player, target, buf))
         anotify_nolisten2(player, CSUCC "Your message has been sent.");
     else {
-        sprintf(buf, CSUCC "%s is not connected.", PNAME(target));
+        sprintf(buf, CSUCC "%s is not connected.", MUCK::getName(target));
         anotify_nolisten2(player, buf);
     }
 }
@@ -245,8 +246,8 @@ notify_listeners(int descr, dbref who, dbref xprog, dbref obj, dbref room, const
         /* Loop up the environment only if tp_listeners_env is set and obj
          * is a room. Runs once otherwise. -brevantes */
         if (tp_listeners_env && (Typeof(obj) == TYPE_ROOM)) {
-            obj = DBFETCH(obj)->location;
-            for (; obj != NOTHING; obj = DBFETCH(obj)->location) {
+            obj = MUCK::getLocation(obj);
+            for (; obj != NOTHING; obj = MUCK::getLocation(obj)) {
                 listenqueue(descr, who, room, obj, obj, xprog, "_listen", msg, tp_listen_mlev, 1, 0);
                 listenqueue(descr, who, room, obj, obj, xprog, "_olisten", msg, tp_listen_mlev, 0, 0);
                 listenqueue(descr, who, room, obj, obj, xprog, "~listen", msg, tp_listen_mlev, 1, 1);
@@ -267,7 +268,7 @@ notify_listeners(int descr, dbref who, dbref xprog, dbref obj, dbref room, const
 
     if (tp_zombies && (Typeof(obj) == TYPE_THING) && !isprivate && !(FLAGS(obj) & QUELL)) {
         if (FLAGS(obj) & VEHICLE) {
-            if (getloc(who) == getloc(obj)) {
+            if (MUCK::getLocation(who) == MUCK::getLocation(obj)) {
                 char pbuf[BUFFER_LEN];
                 const char *prefix;
 
@@ -294,7 +295,7 @@ notify_listeners(int descr, dbref who, dbref xprog, dbref obj, dbref room, const
 #ifdef IGNORE_SUPPORT
         if (ignorance(who, obj))
             return 0;
-        if (!isprivate && Typeof(obj) == TYPE_THING && FLAGS(obj) & ZOMBIE && LOCATION(obj) == LOCATION(OWNER(obj))
+        if (!isprivate && Typeof(obj) == TYPE_THING && FLAGS(obj) & ZOMBIE && MUCK::getLocation(obj) == MUCK::getLocation(MUCK::getOwner(obj))
             )
             return 0;
 #endif /* IGNORE_SUPPORT */
@@ -347,8 +348,8 @@ ansi_notify_listeners(descriptor_data *d, dbref who, dbref xprog, dbref obj, dbr
         /* Loop up the environment only if tp_listeners_env is set and obj
          * is a room. Runs once otherwise. -brevantes */
         if (tp_listeners_env && (Typeof(obj) == TYPE_ROOM)) {
-            obj = DBFETCH(obj)->location;
-            for (; obj != NOTHING; obj = DBFETCH(obj)->location) {
+            obj = MUCK::getLocation(obj);
+            for (; obj != NOTHING; obj = MUCK::getLocation(obj)) {
                 listenqueue(descr, who, room, obj, obj, xprog, "_listen", noabuf, tp_listen_mlev, 1, 0);
                 listenqueue(descr, who, room, obj, obj, xprog, "_olisten", noabuf, tp_listen_mlev, 0, 0);
                 listenqueue(descr, who, room, obj, obj, xprog, "~listen", noabuf, tp_listen_mlev, 1, 1);
@@ -368,7 +369,7 @@ ansi_notify_listeners(descriptor_data *d, dbref who, dbref xprog, dbref obj, dbr
 
     if (tp_zombies && (Typeof(obj) == TYPE_THING) && !isprivate && !(FLAGS(obj) & QUELL)) {
         if (FLAGS(obj) & VEHICLE) {
-            if (getloc(who) == getloc(obj)) {
+            if (MUCK::getLocation(who) == MUCK::getLocation(obj)) {
                 char pbuf[BUFFER_LEN];
                 const char *prefix;
 
@@ -396,7 +397,7 @@ ansi_notify_listeners(descriptor_data *d, dbref who, dbref xprog, dbref obj, dbr
         if (ignorance(who, obj))
             return 0;
 #endif /* IGNORE_SUPPORT */
-        if (!isprivate && Typeof(obj) == TYPE_THING && FLAGS(obj) & ZOMBIE && LOCATION(obj) == LOCATION(OWNER(obj))
+        if (!isprivate && Typeof(obj) == TYPE_THING && FLAGS(obj) & ZOMBIE && MUCK::getLocation(obj) == MUCK::getLocation(MUCK::getOwner(obj))
             )
             return 0;
         return anotify_nolisten(d, obj, msg, isprivate);
@@ -433,8 +434,8 @@ notify_html_listeners(int descr, dbref who, dbref xprog, dbref obj, dbref room, 
         /* Loop up the environment only if tp_listeners_env is set and obj
          * is a room. Runs once otherwise. -brevantes */
         if (tp_listeners_env && (Typeof(obj) == TYPE_ROOM)) {
-            obj = DBFETCH(obj)->location;
-            for (; obj != NOTHING; obj = DBFETCH(obj)->location) {
+            obj = MUCK::getLocation(obj);
+            for (; obj != NOTHING; obj = MUCK::getLocation(obj)) {
                 listenqueue(descr, who, room, obj, obj, xprog, "_listen", nohbuf, tp_listen_mlev, 1, 0);
                 listenqueue(descr, who, room, obj, obj, xprog, "_olisten", nohbuf, tp_listen_mlev, 0, 0);
                 listenqueue(descr, who, room, obj, obj, xprog, "~listen", nohbuf, tp_listen_mlev, 1, 1);
@@ -454,7 +455,7 @@ notify_html_listeners(int descr, dbref who, dbref xprog, dbref obj, dbref room, 
 
     if (tp_zombies && (Typeof(obj) == TYPE_THING) && !isprivate && !(FLAGS(obj) & QUELL)) {
         if (FLAGS(obj) & VEHICLE) {
-            if (getloc(who) == getloc(obj)) {
+            if (MUCK::getLocation(who) == MUCK::getLocation(obj)) {
                 char pbuf[BUFFER_LEN];
                 const char *prefix;
 
@@ -482,7 +483,7 @@ notify_html_listeners(int descr, dbref who, dbref xprog, dbref obj, dbref room, 
         if (ignorance(who, obj))
             return 0;
 #endif
-        if (!isprivate && Typeof(obj) == TYPE_THING && FLAGS(obj) & ZOMBIE && LOCATION(obj) == LOCATION(OWNER(obj))
+        if (!isprivate && Typeof(obj) == TYPE_THING && FLAGS(obj) & ZOMBIE && MUCK::getLocation(obj) == MUCK::getLocation(MUCK::getOwner(obj))
             )
             return 0;
 
@@ -500,7 +501,7 @@ notify_except(dbref first, dbref exception, const char *msg, dbref who)
 
     if (first != NOTHING) {
 
-        srch = room = DBFETCH(first)->location;
+        srch = room = MUCK::getLocation(first);
 
         if (tp_listeners) {
             notify_from_echo(who, srch, msg, 0);
@@ -523,7 +524,7 @@ notify_html_except(dbref first, dbref exception, const char *msg, dbref who)
 
     if (first != NOTHING) {
 
-        srch = room = DBFETCH(first)->location;
+        srch = room = MUCK::getLocation(first);
 
         if (tp_listeners) {
             notify_from_echo(who, srch, msg, 0);
@@ -547,7 +548,7 @@ anotify_except(dbref first, dbref exception, const char *msg, dbref who)
 
     if (first != NOTHING) {
 
-        srch = room = DBFETCH(first)->location;
+        srch = room = MUCK::getLocation(first);
 
         if (tp_listeners) {
             anotify_from_echo(who, srch, msg, 0);

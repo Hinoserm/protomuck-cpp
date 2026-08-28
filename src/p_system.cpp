@@ -16,6 +16,7 @@
 #include "strutils.h"
 #include "interp.h"
 #include "netresolve.h"
+#include "ObjectAccess.h"
 
 /* mutex? -hinoserm */
 extern struct frame *aForceFrameStack[9];
@@ -57,7 +58,7 @@ prim_setsysparm(PRIM_PROTOTYPE)
 
     switch (result) {
         case 0:                /* TUNESET_SUCCESS */
-            log_status("TUNED (MUF): %s(%d) tuned %s to %s\n", OkObj(player) ? NAME(player) : "(Login)", player, oper[1].data.string->data.c_str(), oper[0].data.string->data.c_str());
+            log_status("TUNED (MUF): %s(%d) tuned %s to %s\n", OkObj(player) ? MUCK::getName(player) : "(Login)", player, oper[1].data.string->data.c_str(), oper[0].data.string->data.c_str());
             break;
         case 1:                /* TUNESET_UNKNOWN */
             abort_interp("Unknown parameter. (1)");
@@ -107,7 +108,7 @@ prim_force(PRIM_PROTOTYPE)
         abort_interp("Null string argument (2)");
     if (index(oper[0].data.string->data.c_str(), '\r'))
         abort_interp("Carriage returns not allowed in command string (2)");
-    if (Man(oper[1].data.objref) && !(Man(OWNER(program)) && Boy(program)))
+    if (Man(oper[1].data.objref) && !(Man(MUCK::getOwner(program)) && Boy(program)))
         abort_interp("Cannot force the man (1)");
 
     strcpy(buf, oper[0].data.string->data.c_str());
@@ -189,7 +190,7 @@ prim_shutdown(PRIM_PROTOTYPE)
     if (oper[0].type != PROG_STRING)
         abort_interp("String expected.");
 
-    log_status("SHUT(MUF: %d): by %s(%d)\n", program, OkObj(player) ? NAME(player) : "(login)", player);
+    log_status("SHUT(MUF: %d): by %s(%d)\n", program, OkObj(player) ? MUCK::getName(player) : "(login)", player);
     shutdown_flag = 1;
     restart_flag = 0;
     if (oper[0].data.string) {
@@ -206,7 +207,7 @@ prim_restart(PRIM_PROTOTYPE)
     if (oper[0].type != PROG_STRING)
         abort_interp("String expected.");
 
-    log_status("RESTART(MUF: %d): by %s(%d)\n", program, OkObj(player) ? NAME(player) : "(login)", player);
+    log_status("RESTART(MUF: %d): by %s(%d)\n", program, OkObj(player) ? MUCK::getName(player) : "(login)", player);
     shutdown_flag = 1;
     restart_flag = 1;
 
@@ -226,15 +227,15 @@ prim_armageddon(PRIM_PROTOTYPE)
     if (oper[0].type != PROG_STRING)
         abort_interp("String expected.");
 
-    sprintf(buf, "\r\nImmediate shutdown by %s.\r\n", NAME(PSafe));
+    sprintf(buf, "\r\nImmediate shutdown by %s.\r\n", MUCK::getName(PSafe));
     if (oper[0].data.string) {
         strcat(buf, SYSWHITE MARK SYSNORMAL);
         strcat(buf, oper[0].data.string->data.c_str());
         strcat(buf, "\r\n");
     }
 
-    log_status("DDAY(MUF: %d): by %s(%d)\n", program, OkObj(player) ? NAME(player) : "(login)", player);
-    fprintf(stderr, "DDAY(MUF: %d): by %s(%d)\n", program, OkObj(player) ? NAME(player) : "(login)", player);
+    log_status("DDAY(MUF: %d): by %s(%d)\n", program, OkObj(player) ? MUCK::getName(player) : "(login)", player);
+    fprintf(stderr, "DDAY(MUF: %d): by %s(%d)\n", program, OkObj(player) ? MUCK::getName(player) : "(login)", player);
     close_sockets(buf);
 
 #ifdef SPAWN_HOST_RESOLVER

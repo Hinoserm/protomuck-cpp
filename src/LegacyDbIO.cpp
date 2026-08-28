@@ -9,6 +9,7 @@
 #include "externs.h"
 #include "Modules.h"
 #include "strutils.h"
+#include "ObjectAccess.h"
 
 /* LEGACY DATABASE HELPERS.
  *
@@ -249,13 +250,13 @@ autostart_progs(void)
 
     for (i = 0; i < MUCK::database().top(); i++) {
         if (Typeof(i) == TYPE_PROGRAM) {
-            if ((FLAGS(i) & ABODE) && TMage(OWNER(i))) {
+            if ((FLAGS(i) & ABODE) && TMage(MUCK::getOwner(i))) {
                 /* pre-compile AUTOSTART programs. */
                 /* They queue up when they finish compiling. */
                 MUCK::ProgramRuntime &rt = MUCK::programRuntime(i);
                 tmp = rt.first;
                 rt.first = (struct line *) MUCK::programs().read(i);
-                do_compile(-1, OWNER(i), i, 0);
+                do_compile(-1, MUCK::getOwner(i), i, 0);
                 free_prog_text(rt.first);
                 rt.first = tmp;
             }

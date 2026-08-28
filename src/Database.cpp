@@ -13,6 +13,7 @@
 #include "Modules.h"
 #include "ProgramStore.h"
 #include "ObjectStore.h"
+#include "ObjectAccess.h"
 #include "strutils.h"
 
 #ifndef MALLOC_PROFILING
@@ -131,7 +132,7 @@ Database::clearObject(dbref player, dbref i)
     struct object *o = DBFETCH(i);
 
     bzero(o, sizeof(struct object));
-    NAME(i) = 0;
+    MUCK::setName(i, 0);
     ts_newobject(player, o);
     o->location = NOTHING;
     contentsOf(i).clear();
@@ -164,7 +165,7 @@ Database::newProgram(dbref player, const char *name)
     unsigned char mlvl;
     char buf[BUFFER_LEN];
 
-    player = OWNER(player);
+    player = MUCK::getOwner(player);
 
     MufProgram *mp = Create<MufProgram>(name, player);
 
@@ -174,8 +175,8 @@ Database::newProgram(dbref player, const char *name)
     dbref newprog = mp->object()->ref();
 
     sprintf(buf, "A scroll containing a spell called %s", name);
-    SETDESC(newprog, buf);
-    DBFETCH(newprog)->location = player;   /* chain wiring flips later */
+    MUCK::setDesc(newprog, buf);
+    MUCK::setLocation(newprog, player);   /* chain wiring flips later */
 
     mlvl = MLevel(player);
     if (mlvl < 1)
@@ -349,7 +350,7 @@ Database::parent(dbref obj)
             if (obj != NOTHING && Typeof(obj) == TYPE_PLAYER)
                 obj = playerHomeRef(obj);
         } else {
-            obj = getloc(obj);
+            obj = MUCK::getLocation(obj);
         }
     } while (obj != NOTHING && Typeof(obj) == TYPE_THING);
     if (!limit)
@@ -388,8 +389,8 @@ Database::Create(const char *name, dbref owner)
     dbref r = newObject(owner);
 
     FLAGS(r) = moduleTypeBits((T *) nullptr);
-    NAME(r) = alloc_string(name);
-    OWNER(r) = owner;
+    MUCK::setName(r, name);
+    MUCK::setOwner(r, owner);
     typeInit(r);
     DBDIRTY(r);
     return get(r)->template As<T>();

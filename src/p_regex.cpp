@@ -26,6 +26,7 @@
 #include "strutils.h"
 #include "interp.h"
 #include "props.h"
+#include "ObjectAccess.h"
 
 #define MUF_RE_CACHE_ITEMS 256
 
@@ -64,7 +65,7 @@ show_re_cache(dbref player)
     size_t size_re = 0;
     size_t size_extra = 0;
 
-    if (!Boy(OWNER(player))) {
+    if (!Boy(MUCK::getOwner(player))) {
         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
         return;
     }
@@ -749,7 +750,7 @@ prim_array_regmatchval(PRIM_PROTOTYPE)
                     array_setitem(&nw, &temp1, in);
                 }
             } else if (in->type == PROG_OBJECT) {
-                text = (char *) NAME(in->data.objref);
+                text = (char *) MUCK::getName(in->data.objref);
                 if ((matchcnt = regmatch_exec(re, text)) < 0) {
                     if (matchcnt != PCRE_ERROR_NOMATCH)
                         abort_interp(muf_re_error(matchcnt));
@@ -897,11 +898,11 @@ prim_regfind_array(PRIM_PROTOTYPE)
      * making sure these alterations work as-is before attempting to remove it.
      * -brevantes */
     for (ref = (dbref) 0; ref < MUCK::database().top(); ref++) {
-        if (((who == NOTHING) ? 1 : (OWNER(ref) == who)) && checkflags(ref, check) && NAME(ref)) {
+        if (((who == NOTHING) ? 1 : (MUCK::getOwner(ref) == who)) && checkflags(ref, check) && MUCK::getName(ref)) {
             if (!*name)
                 array_appendref(&nw, ref);
             else
-                text = (char *) NAME(ref);
+                text = (char *) MUCK::getName(ref);
             if ((matchcnt = regmatch_exec(re, text)) < 0) {
                 if (matchcnt != PCRE_ERROR_NOMATCH)
                     abort_interp(muf_re_error(matchcnt));
@@ -986,12 +987,12 @@ prim_regfindnext(PRIM_PROTOTYPE)
     ref = NOTHING;
     init_checkflags(PSafe, DoNullInd(oper[1].data.string), &check);
     for (i = item; i < MUCK::database().top(); i++) {
-        if ((who == NOTHING || OWNER(i) == who) && checkflags(i, check) && NAME(i)) {
+        if ((who == NOTHING || MUCK::getOwner(i) == who) && checkflags(i, check) && MUCK::getName(i)) {
             if (!*name) {
                 ref = i;
                 break;
             } else {
-                text = (char *) NAME(i);
+                text = (char *) MUCK::getName(i);
                 if ((matchcnt = regmatch_exec(re, text)) < 0) {
                     if (matchcnt != PCRE_ERROR_NOMATCH)
                         abort_interp(muf_re_error(matchcnt));

@@ -3,6 +3,7 @@
 #include "params.h"
 
 #include "db.h"
+#include "ObjectAccess.h"
 #include "tune.h"
 #include "mpi.h"
 #include "externs.h"
@@ -37,7 +38,7 @@ mfn_match(MFUNARGS)
         match_here(&md);
         match_home(&md);
     }
-    if (Wiz(OWNER(what)) || (Mage(player))) {
+    if (Wiz(MUCK::getOwner(what)) || (Mage(player))) {
         match_absolute(&md);
         match_player(&md);
     }
@@ -62,7 +63,7 @@ mfn_pmatch(MFUNARGS)
         ref = lookup_player(argv[0]);
         if (ref == NOTHING) {
             for (result = pcount(); result && ref == NOTHING; result--)
-                if (string_prefix(PNAME(pdbref(result)), argv[0]))
+                if (string_prefix(MUCK::getName(pdbref(result)), argv[0]))
                     ref = pdbref(result);
         }
     }
@@ -82,7 +83,7 @@ mfn_owner(MFUNARGS)
         ABORT_MPI("OWNER", tp_noperm_mesg);
     if (obj == HOME)
         obj = MUCK::playerHomeRef(player);
-    return ref2str(OWNER(obj), buf);
+    return ref2str(MUCK::getOwner(obj), buf);
 }
 
 
@@ -109,9 +110,9 @@ mfn_controls(MFUNARGS)
         if (obj2 == HOME)
             obj2 = MUCK::playerHomeRef(player);
         if (Typeof(obj2) != TYPE_PLAYER)
-            obj2 = OWNER(obj2);
+            obj2 = MUCK::getOwner(obj2);
     } else {
-        obj2 = OWNER(perms);
+        obj2 = MUCK::getOwner(perms);
     }
     if (controls(obj2, obj)) {
         return "1";
@@ -214,7 +215,7 @@ mfn_testlock(MFUNARGS)
         ABORT_MPI("TESTLOCK", "Permission denied. (2)");
     if (Prop_Hidden(argv[1]))
         ABORT_MPI("TESTLOCK", "Permission denied. (2)");
-    if (Prop_Private(argv[1]) && OWNER(perms) != OWNER(what))
+    if (Prop_Private(argv[1]) && MUCK::getOwner(perms) != MUCK::getOwner(what))
         ABORT_MPI("TESTLOCK", "Permission denied. (2)");
     lok = get_property_lock(obj, argv[1]);
     if (argc > 3 && lok == TRUE_BOOLEXP)
@@ -264,7 +265,7 @@ mfn_contents(MFUNARGS)
     while (obj != NOTHING && list_limit) {
         if ((typchk == NOTYPE || Typeof(obj) == typchk) &&
             (ownroom || controls(perms, obj) ||
-             !((FLAGS(obj) & DARK) || (FLAGS(getloc(obj)) & DARK) ||
+             !((FLAGS(obj) & DARK) || (FLAGS(MUCK::getLocation(obj)) & DARK) ||
                (Typeof(obj) == TYPE_PROGRAM && !(FLAGS(obj) & LINK_OK)))) && !(Typeof(obj) == TYPE_ROOM && typchk != TYPE_ROOM)) {
             ref2str(obj, buf2);
             nextlen = strlen(buf2);
@@ -390,7 +391,7 @@ mfn_name(MFUNARGS)
         strcpy(buf, "#HOME#");
         return buf;
     }
-    strcpy(buf, RNAME(obj));
+    strcpy(buf, MUCK::getName(obj));
     if (Typeof(obj) == TYPE_EXIT) {
         ptr = index(buf, ';');
         if (ptr)
@@ -421,7 +422,7 @@ mfn_fullname(MFUNARGS)
         strcpy(buf, "#HOME#");
         return buf;
     }
-    strcpy(buf, RNAME(obj));
+    strcpy(buf, MUCK::getName(obj));
     return buf;
 }
 
@@ -1253,7 +1254,7 @@ mfn_awake(MFUNARGS)
         return ("0");
 
     if (Typeof(obj) == TYPE_THING && (FLAGS(obj) & ZOMBIE)) {
-        obj = OWNER(obj);
+        obj = MUCK::getOwner(obj);
     } else if (Typeof(obj) != TYPE_PLAYER) {
         return ("0");
     }
@@ -1406,7 +1407,7 @@ mfn_delay(MFUNARGS)
 #endif
     cmdchr = get_mvar("cmd");
     argchr = get_mvar("arg");
-    i = add_mpi_event(i, descr, player, getloc(player), perms, argv[1], cmdchr, argchr, (mesgtyp & MPI_ISLISTENER), (!(mesgtyp & MPI_ISPRIVATE)));
+    i = add_mpi_event(i, descr, player, MUCK::getLocation(player), perms, argv[1], cmdchr, argchr, (mesgtyp & MPI_ISLISTENER), (!(mesgtyp & MPI_ISPRIVATE)));
     sprintf(buf, "%d", i);
     return buf;
 }
@@ -1464,7 +1465,7 @@ mfn_muf(MFUNARGS)
     ptr = get_mvar("how");
     strcpy(match_cmdname, ptr);
     strcat(match_cmdname, "(MPI)");
-    tmpfr = interp(descr, player, DBFETCH(player)->location, obj, perms, PREEMPT, STD_HARDUID, 0);
+    tmpfr = interp(descr, player, MUCK::getLocation(player), obj, perms, PREEMPT, STD_HARDUID, 0);
     if (tmpfr) {
         rv = interp_loop(player, obj, tmpfr, 1);
     }
@@ -1522,14 +1523,14 @@ mfn_force(MFUNARGS)
     if (!tp_zombies && !Archperms(perms))
         ABORT_MPI("FORCE", tp_noperm_mesg);
     if (!Archperms(perms)) {
-        const char *ptr = RNAME(obj);
+        const char *ptr = MUCK::getName(obj);
         char objname[BUFFER_LEN], *ptr2;
-        dbref loc = getloc(obj);
+        dbref loc = MUCK::getLocation(obj);
 
         if (Typeof(obj) == TYPE_THING) {
             if (FLAGS(obj) & DARK)
                 ABORT_MPI("FORCE", "Cannot force a dark puppet.");
-            if ((FLAGS(OWNER(obj)) & ZOMBIE))
+            if ((FLAGS(MUCK::getOwner(obj)) & ZOMBIE))
                 ABORT_MPI("FORCE", tp_noperm_mesg);
             if (loc != NOTHING && (FLAGS(loc) & ZOMBIE) && Typeof(loc) == TYPE_ROOM)
                 ABORT_MPI("FORCE", "Cannot force a Puppet in a no-puppets room.");

@@ -54,7 +54,7 @@ add_custom_target(gen_version DEPENDS ${GEN_INC}/version.h)
 # --- sources: mirrors the old Makefile.in COBJ list plus interface.cpp ---
 set(PROTO_SOURCES
     src/array.cpp src/boolexp.cpp src/cgi.cpp src/compile.cpp src/compress.cpp
-    src/create.cpp src/Database.cpp src/MacroTable.cpp src/UUID.cpp src/DbObject.cpp src/LegacyDbIO.cpp src/ModuleRegistry.cpp src/ObjectStore.cpp src/ObjectAccess.cpp src/FlatFileConverter.cpp src/PasswordHash.cpp src/ProgramStore.cpp src/PropertyTree.cpp src/PropNode.cpp src/debugger.cpp src/disassem.cpp
+    src/create.cpp src/Database.cpp src/MacroTable.cpp src/UUID.cpp src/DbObject.cpp src/LegacyDbIO.cpp src/ModuleRegistry.cpp src/ObjectStore.cpp src/ObjectAccess.cpp src/Journal.cpp src/FlatFileConverter.cpp src/PasswordHash.cpp src/ProgramStore.cpp src/PropertyTree.cpp src/PropNode.cpp src/debugger.cpp src/disassem.cpp
     src/diskprop.cpp src/edit.cpp src/events.cpp src/game.cpp src/hashtab.cpp
     src/help.cpp src/inst.cpp src/interp.cpp src/log.cpp src/look.cpp
     src/match.cpp src/mfuns.cpp src/mfuns2.cpp src/mfuns3.cpp src/msgparse.cpp

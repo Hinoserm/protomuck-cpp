@@ -15,6 +15,7 @@
 #include "interface.h"
 #include "externs.h"
 #include "Modules.h"
+#include "ObjectAccess.h"
 #include "mufevent.h"
 
 /*
@@ -191,7 +192,7 @@ add_event(int event_typ, int subtyp, int dtime, int descr, dbref player,
         }
     }
     if (!(event_typ == TQ_MUF_TYP && subtyp == TQ_MUF_TREAD)) {
-        if (process_count > tp_max_process_limit || (mypids > tp_max_plyr_processes && !Mage(OWNER(PSafe)))) {
+        if (process_count > tp_max_process_limit || (mypids > tp_max_plyr_processes && !Mage(MUCK::getOwner(PSafe)))) {
             if (fr) {
                 if (fr->multitask != BACKGROUND) {
                     if (OkObj(player)) {
@@ -563,7 +564,7 @@ next_timequeue_event(void)
                     char bbuf[BUFFER_LEN];
                     dbref plyr;
 
-                    sprintf(bbuf, ">> %.4000s %.*s", NAME(event->uid), (int) (4000 - strlen(NAME(event->uid))), pronoun_substitute(event->descr, event->uid, cbuf));
+                    sprintf(bbuf, ">> %.4000s %.*s", MUCK::getName(event->uid), (int) (4000 - strlen(MUCK::getName(event->uid))), pronoun_substitute(event->descr, event->uid, cbuf));
                     plyr = CONTENTS(event->loc);
                     for (; plyr != NOTHING; plyr = NEXTOBJ(plyr)) {
                         if (Typeof(plyr) == TYPE_PLAYER && plyr != event->uid)
@@ -738,33 +739,33 @@ list_events(dbref player)
         if (ptr->typ == TQ_MUF_TYP && ptr->subtyp == TQ_MUF_DELAY) {
             (void) sprintf(buf, "%8d %4s %4s %5lld %4.1f #%-6d %-16s %.512s",
                            ptr->eventnum, buf2,
-                           time_format_2((long) etime), (ptr->fr->instcnt / 1000), pcnt, ptr->called_prog, (OkObj(ptr->uid)) ? NAME(ptr->uid) : "(Login)", ptr->called_data);
+                           time_format_2((long) etime), (ptr->fr->instcnt / 1000), pcnt, ptr->called_prog, (OkObj(ptr->uid)) ? MUCK::getName(ptr->uid) : "(Login)", ptr->called_data);
         } else if (ptr->typ == TQ_MUF_TYP && ptr->subtyp == TQ_MUF_READ) {
             (void) sprintf(buf, "%8d %4s %4s %5lld %4.1f #%-6d %-16s %.512s",
                            ptr->eventnum, "--",
-                           time_format_2((long) etime), (ptr->fr->instcnt / 1000), pcnt, ptr->called_prog, (OkObj(ptr->uid)) ? NAME(ptr->uid) : "(Login)", ptr->called_data);
+                           time_format_2((long) etime), (ptr->fr->instcnt / 1000), pcnt, ptr->called_prog, (OkObj(ptr->uid)) ? MUCK::getName(ptr->uid) : "(Login)", ptr->called_data);
         } else if (ptr->typ == TQ_MUF_TYP && ptr->subtyp == TQ_MUF_TIMER) {
             (void) sprintf(buf, "(%6d) %4s %4s %5lld %4.1f #%-6d %-16s %.512s",
                            ptr->eventnum, buf2,
-                           time_format_2((long) etime), (ptr->fr->instcnt / 1000), pcnt, ptr->called_prog, (OkObj(ptr->uid)) ? NAME(ptr->uid) : "(Login)", ptr->called_data);
+                           time_format_2((long) etime), (ptr->fr->instcnt / 1000), pcnt, ptr->called_prog, (OkObj(ptr->uid)) ? MUCK::getName(ptr->uid) : "(Login)", ptr->called_data);
 
         } else if (ptr->typ == TQ_MUF_TYP && ptr->subtyp == TQ_MUF_TREAD) {
             (void) sprintf(buf, "%8d %4s %4s %5lld %4.1f #%-6d %-16s %.512s",
                            ptr->eventnum, buf2,
-                           time_format_2((long) etime), (ptr->fr->instcnt / 1000), pcnt, ptr->called_prog, (OkObj(ptr->uid)) ? NAME(ptr->uid) : "(Login)", ptr->called_data);
+                           time_format_2((long) etime), (ptr->fr->instcnt / 1000), pcnt, ptr->called_prog, (OkObj(ptr->uid)) ? MUCK::getName(ptr->uid) : "(Login)", ptr->called_data);
         } else if (ptr->typ == TQ_MPI_TYP) {
-            (void) sprintf(buf, "%8d %4s   --   MPI   -- #%-6d %-16s \"%.512s\"", ptr->eventnum, buf2, ptr->trig, NAME(ptr->uid), ptr->called_data);
+            (void) sprintf(buf, "%8d %4s   --   MPI   -- #%-6d %-16s \"%.512s\"", ptr->eventnum, buf2, ptr->trig, MUCK::getName(ptr->uid), ptr->called_data);
         } else {
             (void) sprintf(buf,
                            "%8d %4s   0s     0   -- #%-6d %-16s \"%.512s\"",
-                           ptr->eventnum, buf2, ptr->called_prog, (OkObj(ptr->uid)) ? NAME(ptr->uid) : "(Login)", ptr->called_data);
+                           ptr->eventnum, buf2, ptr->called_prog, (OkObj(ptr->uid)) ? MUCK::getName(ptr->uid) : "(Login)", ptr->called_data);
         }
-        if (Mage(OWNER(player)) || ((ptr->called_prog != NOTHING) && (OWNER(ptr->called_prog) == OWNER(player)))
+        if (Mage(MUCK::getOwner(player)) || ((ptr->called_prog != NOTHING) && (MUCK::getOwner(ptr->called_prog) == MUCK::getOwner(player)))
             || (ptr->uid == player))
             notify_nolisten(player, buf, 1);
         else if (ptr->called_prog == NOTHING) {
             fprintf(stderr, "Strangeness alert!  @ps produces %s\n", buf);
-        } else if (ptr->called_prog != NOTHING && OWNER(ptr->called_prog) == OWNER(player)) {
+        } else if (ptr->called_prog != NOTHING && MUCK::getOwner(ptr->called_prog) == MUCK::getOwner(player)) {
             notify_nolisten(player, buf, 1);
         }
         ptr = ptr->next;
@@ -1223,7 +1224,7 @@ do_dequeue(int descr, dbref player, const char *arg1)
         anotify_nolisten(player, CINFO "Dequeue which event?", 1);
     } else {
         if (!string_compare(arg1, "all")) {
-            if (!Mage(OWNER(player))) {
+            if (!Mage(MUCK::getOwner(player))) {
                 anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
                 return;
             }
@@ -1380,12 +1381,12 @@ propqueue(int descr, dbref player, dbref where, dbref trigger, dbref what, dbref
                     the_prog = NOTHING;
                 } else if (Typeof(the_prog) != TYPE_PROGRAM) {
                     the_prog = NOTHING;
-                } else if (OkObj(player) && (OWNER(the_prog) != OWNER(player))
+                } else if (OkObj(player) && (MUCK::getOwner(the_prog) != MUCK::getOwner(player))
                            && !(FLAGS(the_prog) & LINK_OK)) {
                     the_prog = NOTHING;
                 } else if (MLevel(the_prog) < mlev) {
                     the_prog = NOTHING;
-                } else if (MLevel(OWNER(the_prog)) < mlev) {
+                } else if (MLevel(MUCK::getOwner(the_prog)) < mlev) {
                     the_prog = NOTHING;
                 } else if (the_prog == xclude) {
                     the_prog = NOTHING;
@@ -1464,7 +1465,7 @@ listenqueue(int descr, dbref player, dbref where, dbref trigger, dbref what, dbr
     char exbuf[BUFFER_LEN];
     char *ptr2;
 
-    if (!(FLAGS(what) & LISTENER) && !(FLAGS(OWNER(what)) & ZOMBIE))
+    if (!(FLAGS(what) & LISTENER) && !(FLAGS(MUCK::getOwner(what)) & ZOMBIE))
         return;
 
     the_prog = NOTHING;
@@ -1518,12 +1519,12 @@ listenqueue(int descr, dbref player, dbref where, dbref trigger, dbref what, dbr
                     the_prog = NOTHING;
                 } else if (Typeof(the_prog) != TYPE_PROGRAM) {
                     the_prog = NOTHING;
-                } else if (OkObj(player) && OWNER(the_prog) != OWNER(player)
+                } else if (OkObj(player) && MUCK::getOwner(the_prog) != MUCK::getOwner(player)
                            && !(FLAGS(the_prog) & LINK_OK)) {
                     the_prog = NOTHING;
                 } else if (MLevel(the_prog) < mlev) {
                     the_prog = NOTHING;
-                } else if (MLevel(OWNER(the_prog)) < mlev) {
+                } else if (MLevel(MUCK::getOwner(the_prog)) < mlev) {
                     the_prog = NOTHING;
                 } else if (the_prog == xclude) {
                     the_prog = NOTHING;

@@ -9,6 +9,7 @@
 #include "inst.h"
 #include "externs.h"
 #include "Modules.h"
+#include "ObjectAccess.h"
 #include "match.h"
 #include "interface.h"
 #include "params.h"
@@ -380,8 +381,8 @@ prim_fmtstring(PRIM_PROTOTYPE)
                         if ((Typeof(ref) != TYPE_PLAYER)
                             && (Typeof(ref) != TYPE_PROGRAM))
                             ts_lastuseobject(program, ref);
-                        if (NAME(ref)) {
-                            strcpy(hold, PNAME(ref));
+                        if (MUCK::getName(ref)) {
+                            strcpy(hold, MUCK::getName(ref));
                         } else {
                             hold[0] = '\0';
                         }
@@ -974,11 +975,11 @@ prim_notify(PRIM_PROTOTYPE)
         char buf[BUFFER_LEN * 2];
 
         if (tp_m1_name_notify && mlev < LM2 && PSafe != oper[1].data.objref) {
-            prefix_message(buf, oper[0].data.string->data.c_str(), PNAME(PSafe), BUFFER_LEN, 1);
+            prefix_message(buf, oper[0].data.string->data.c_str(), MUCK::getName(PSafe), BUFFER_LEN, 1);
         } else {
             strcpy(buf, oper[0].data.string->data.c_str());
         }
-        notify_listeners(fr->descr, PSafe, program, oper[1].data.objref, getloc(PSafe), buf, 1);
+        notify_listeners(fr->descr, PSafe, program, oper[1].data.objref, MUCK::getLocation(PSafe), buf, 1);
     }
 
 
@@ -1006,12 +1007,12 @@ prim_notify_html(PRIM_PROTOTYPE)
 
     if (oper[0].data.string) {
         if (tp_m1_name_notify && mlev < LM2 && PSafe != oper[1].data.objref) {
-            prefix_message(buf, oper[0].data.string->data.c_str(), PNAME(PSafe), BUFFER_LEN - 1, 1);
+            prefix_message(buf, oper[0].data.string->data.c_str(), MUCK::getName(PSafe), BUFFER_LEN - 1, 1);
         } else {
             strcpy(buf, oper[0].data.string->data.c_str());
         }
         strcat(buf, "\r");
-        notify_html_listeners(fr->descr, PSafe, program, oper[1].data.objref, getloc(PSafe), buf, 1);
+        notify_html_listeners(fr->descr, PSafe, program, oper[1].data.objref, MUCK::getLocation(PSafe), buf, 1);
     }
 
 
@@ -1039,11 +1040,11 @@ prim_notify_html_nocr(PRIM_PROTOTYPE)
 
     if (oper[0].data.string) {
         if (tp_m1_name_notify && mlev < LM2 && PSafe != oper[1].data.objref) {
-            prefix_message(buf, oper[0].data.string->data.c_str(), PNAME(PSafe), BUFFER_LEN, 1);
+            prefix_message(buf, oper[0].data.string->data.c_str(), MUCK::getName(PSafe), BUFFER_LEN, 1);
         } else {
             strcpy(buf, oper[0].data.string->data.c_str());
         }
-        notify_html_listeners(fr->descr, PSafe, program, oper[1].data.objref, getloc(PSafe), buf, 1);
+        notify_html_listeners(fr->descr, PSafe, program, oper[1].data.objref, MUCK::getLocation(PSafe), buf, 1);
     }
 
 
@@ -1063,11 +1064,11 @@ prim_ansi_notify(PRIM_PROTOTYPE)
 
     if (oper[0].data.string) {
         if (tp_m1_name_notify && mlev < LM2 && PSafe != oper[1].data.objref) {
-            prefix_message(buf, oper[0].data.string->data.c_str(), PNAME(PSafe), BUFFER_LEN, 1);
+            prefix_message(buf, oper[0].data.string->data.c_str(), MUCK::getName(PSafe), BUFFER_LEN, 1);
         } else {
             strcpy(buf, oper[0].data.string->data.c_str());
         }
-        ansi_notify_listeners(fr->descr, PSafe, program, oper[1].data.objref, getloc(PSafe), buf, 1);
+        ansi_notify_listeners(fr->descr, PSafe, program, oper[1].data.objref, MUCK::getLocation(PSafe), buf, 1);
     }
 
 
@@ -1087,7 +1088,7 @@ prim_notify_exclude(PRIM_PROTOTYPE)
         abort_interp("Non-string message argument (top)");
 
     if (tp_m1_name_notify && oper[0].data.string && mlev < LM2 && PSafe != oper[1].data.objref) {
-        prefix_message(buf, oper[0].data.string->data.c_str(), PNAME(PSafe), BUFFER_LEN, 1);
+        prefix_message(buf, oper[0].data.string->data.c_str(), MUCK::getName(PSafe), BUFFER_LEN, 1);
     } else {
         strcpy(buf, DoNullInd(oper[0].data.string));
     }
@@ -1159,7 +1160,7 @@ prim_ansi_notify_exclude(PRIM_PROTOTYPE)
         abort_interp("Non-string message argument (top)");
 
     if (tp_m1_name_notify && oper[0].data.string && mlev < LM2 && PSafe != oper[1].data.objref) {
-        prefix_message(buf, oper[0].data.string->data.c_str(), PNAME(PSafe), BUFFER_LEN, 1);
+        prefix_message(buf, oper[0].data.string->data.c_str(), MUCK::getName(PSafe), BUFFER_LEN, 1);
     } else {
         strcpy(buf, DoNullInd(oper[0].data.string));
     }
@@ -1236,7 +1237,7 @@ prim_notify_html_exclude(PRIM_PROTOTYPE)
         abort_interp("Non-string message argument (top)");
 
     if (tp_m1_name_notify && oper[0].data.string && mlev < LM2 && PSafe != oper[1].data.objref) {
-        prefix_message(buf, oper[0].data.string->data.c_str(), PNAME(PSafe), BUFFER_LEN, 1);
+        prefix_message(buf, oper[0].data.string->data.c_str(), MUCK::getName(PSafe), BUFFER_LEN, 1);
     } else {
         strcpy(buf, DoNullInd(oper[0].data.string));
     }
@@ -1314,7 +1315,7 @@ prim_notify_html_exclude_nocr(PRIM_PROTOTYPE)
         abort_interp("Non-string message argument (top)");
 
     if (tp_m1_name_notify && oper[0].data.string && mlev < LM2 && PSafe != oper[1].data.objref) {
-        prefix_message(buf, oper[0].data.string->data.c_str(), PNAME(PSafe), BUFFER_LEN, 1);
+        prefix_message(buf, oper[0].data.string->data.c_str(), MUCK::getName(PSafe), BUFFER_LEN, 1);
     } else {
         strcpy(buf, DoNullInd(oper[0].data.string));
     }
@@ -1637,7 +1638,7 @@ prim_unparseobj(PRIM_PROTOTYPE)
                 if (result < 0 || result >= MUCK::database().top())
                     sprintf(buf, "*INVALID(#%d)*", result);
                 else
-                    sprintf(buf, "%s(#%d%s)", RNAME(result), result, unparse_flags(result, tbuf));
+                    sprintf(buf, "%s(#%d%s)", MUCK::getName(result), result, unparse_flags(result, tbuf));
         }
 
         PushString(buf);
@@ -2732,8 +2733,8 @@ prim_array_fmtstrings(PRIM_PROTOTYPE)
                                     abort_interp("Format specified object not valid.");
                                 ref = oper3->data.objref;
                                 CHECKREMOTE(ref);
-                                if (NAME(ref)) {
-                                    strcpyn(hold, sizeof(hold), NAME(ref));
+                                if (MUCK::getName(ref)) {
+                                    strcpyn(hold, sizeof(hold), MUCK::getName(ref));
                                 } else {
                                     hold[0] = '\0';
                                 }
@@ -2912,7 +2913,7 @@ prim_ansi_name(PRIM_PROTOTYPE)
     CHECKREMOTE(ref);
     if ((Typeof(ref) != TYPE_PLAYER) && (Typeof(ref) != TYPE_PROGRAM))
         ts_lastuseobject(program, ref);
-    if (NAME(ref)) {
+    if (MUCK::getName(ref)) {
         ansiname(ref, buf);
     } else {
         buf[0] = '\0';

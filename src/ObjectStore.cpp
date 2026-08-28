@@ -25,6 +25,7 @@
 #include "externs.h"
 #include "strutils.h"
 #include "ObjectStore.h"
+#include "ObjectAccess.h"
 #include "Modules.h"
 #include "ProgramStore.h"
 #include "PasswordHash.h"
@@ -380,7 +381,7 @@ listToJson(dbref container, const std::vector<MUCK::DbObject *> &list)
         dbref i = o->ref();
 
         if (!MUCK::database().valid(i) || i == container
-            || DBFETCH(i)->location != container) {
+            || MUCK::getLocation(i) != container) {
             fprintf(stderr, "STORE: dropping corrupt list member #%d from #%d\n",
                     i, container);
             continue;
@@ -1450,20 +1451,20 @@ ObjectStore::resurrectObject(const MUCK::Database::Tombstone &t, long rev,
 
     if (Typeof(i) == TYPE_EXIT) {
         if (!locValid)
-            loc = OWNER(i);
+            loc = MUCK::getOwner(i);
         MUCK::attachExit(loc, i);
         o->location = loc;
         DBDIRTY(loc);
     } else {
         if (!locValid)
-            loc = Typeof(i) == TYPE_ROOM ? GLOBAL_ENVIRONMENT : OWNER(i);
+            loc = Typeof(i) == TYPE_ROOM ? GLOBAL_ENVIRONMENT : MUCK::getOwner(i);
         moveto(i, loc);
     }
 
     MUCK::database().reviveHole(i);
     MUCK::database().removeTombstone(t.uuid);
     DBDIRTY(i);
-    log_status("RESURRECT: #%d (%s) at rev %ld\n", i, NAME(i), rev);
+    log_status("RESURRECT: #%d (%s) at rev %ld\n", i, MUCK::getName(i), rev);
     return true;
 }
 

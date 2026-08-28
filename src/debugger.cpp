@@ -13,6 +13,7 @@
 #include "tune.h"
 #include "match.h"
 #include "interp.h"
+#include "ObjectAccess.h"
 
 
 
@@ -191,7 +192,7 @@ unparse_breakpoint(struct frame *fr, int brk)
         strcat(buf, buf2);
     }
     if (fr->brkpt.prog[brk] != NOTHING) {
-        sprintf(buf2, " in %s(#%d)", NAME(fr->brkpt.prog[brk]), fr->brkpt.prog[brk]);
+        sprintf(buf2, " in %s(#%d)", MUCK::getName(fr->brkpt.prog[brk]), fr->brkpt.prog[brk]);
         strcat(buf, buf2);
     }
     if (fr->brkpt.level[brk] != -1) {
@@ -267,7 +268,7 @@ muf_backtrace(dbref player, dbref program, int count, struct frame *fr)
 
 
         if (pinst != lastinst) {
-            sprintf(buf, "%3d) %s(#%d) %s:", j, NAME(ref), ref, ptr);
+            sprintf(buf, "%3d) %s(#%d) %s:", j, MUCK::getName(ref), ref, ptr);
             notify_nolisten(player, buf, 1);
             flag = ((FLAGS(player) & INTERNAL) ? 1 : 0);
             FLAGS(player) &= ~INTERNAL;

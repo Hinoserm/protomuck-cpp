@@ -1,6 +1,7 @@
 #include "config.h"
 #include "db.h"
 #include "tune.h"
+#include "ObjectAccess.h"
 
 
 /* creds: all stuff related to refstamps was done by the foxy fox, Alynna */
@@ -23,12 +24,11 @@ ts_useobject(dbref player, dbref thing)
 {
     if (thing == NOTHING)
         return;
-    DBFETCH(thing)->ts.lastused = current_systime;
-    DBFETCH(thing)->ts.dlastused = player;
+    MUCK::setLastUsed(thing, current_systime, player);
     DBFETCH(thing)->ts.usecount++;
     DBDIRTY(thing);
     if (Typeof(thing) == TYPE_ROOM)
-        ts_useobject(player, DBFETCH(thing)->location);
+        ts_useobject(player, MUCK::getLocation(thing));
 }
 
 void
@@ -36,15 +36,13 @@ ts_lastuseobject(dbref player, dbref thing)
 {
     if (thing == NOTHING)
         return;
-    DBSTORE(thing, ts.lastused, current_systime);
-    DBSTORE(thing, ts.dlastused, player);
+    MUCK::setLastUsed(thing, current_systime, player);
     if (Typeof(thing) == TYPE_ROOM)
-        ts_lastuseobject(player, DBFETCH(thing)->location);
+        ts_lastuseobject(player, MUCK::getLocation(thing));
 }
 
 void
 ts_modifyobject(dbref player, dbref thing)
 {
-    DBSTORE(thing, ts.modified, current_systime);
-    DBSTORE(thing, ts.dmodified, player);
+    MUCK::setModified(thing, current_systime, player);
 }

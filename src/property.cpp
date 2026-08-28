@@ -8,6 +8,7 @@
 #include "props.h"
 #include "externs.h"
 #include "Modules.h"
+#include "ObjectAccess.h"
 #include "interface.h"
 #include "nan.h"
 
@@ -730,8 +731,8 @@ envprop_cmds(dbref *where, const char *propname, int typ)
 
     while (*where != NOTHING) {
         if (typ ? 1 : ((FLAG2(*where) & F2COMMAND) && !(FLAG2(*where) & F2NO_COMMAND)
-                       && ((FLAGS(OWNER(*where)) & BUILDER)
-                           || (MLevel(OWNER(*where)) >= LMAGE)))) {
+                       && ((FLAGS(MUCK::getOwner(*where)) & BUILDER)
+                           || (MLevel(MUCK::getOwner(*where)) >= LMAGE)))) {
             temp = get_property(*where, propname);
 
             if (temp)

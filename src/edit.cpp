@@ -2,6 +2,7 @@
 #include "config.h"
 
 #include "db.h"
+#include "ObjectAccess.h"
 #include "props.h"
 #include "interface.h"
 #include "externs.h"
@@ -257,7 +258,7 @@ do_delete(dbref player, dbref program, int arg[], int argc)
 void
 do_quit(dbref player, dbref program)
 {
-    log_status("PROGRAM SAVED: %s by %s(%d)\n", unparse_object(player, program), NAME(player), player);
+    log_status("PROGRAM SAVED: %s by %s(%d)\n", unparse_object(player, program), MUCK::getName(player), player);
     MUCK::programs().write(MUCK::programRuntime(program).first, program);
 
     if (tp_log_programs)
@@ -318,7 +319,7 @@ match_and_list(int descr, dbref player, const char *name, char *linespec, int ed
         return;
     }
     if (!controls(player, thing) && !Viewable(thing)
-        && !(POWERS(player) & POW_SEE_ALL)) {
+        && !(MUCK::getPowers(player) & POW_SEE_ALL)) {
         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
         return;
     }
@@ -509,13 +510,13 @@ list_publics(int descr, dbref player, int arg[], int argc)
     }
     if (!(MUCK::programRuntime(program).code)) {
         if (program == MUCK::playerSession(player).currProg) {
-            do_compile(descr, OWNER(program), program, 0);
+            do_compile(descr, MUCK::getOwner(program), program, 0);
         } else {
             struct line *tmpline;
 
             tmpline = MUCK::programRuntime(program).first;
             MUCK::programRuntime(program).first = (struct line *) MUCK::programs().read(program);
-            do_compile(descr, OWNER(program), program, 0);
+            do_compile(descr, MUCK::getOwner(program), program, 0);
             free_prog_text(MUCK::programRuntime(program).first);
             MUCK::programRuntime(program).first = tmpline;
         }

@@ -47,6 +47,7 @@
 #include "tune.h"
 #include "cgi.h"
 #include "mpi.h"
+#include "ObjectAccess.h"
 
 #ifdef MCCP_ENABLED
 void mccp_start(struct descriptor_data *d, int version);
@@ -446,7 +447,7 @@ http::parsempi(dbref what, const char *yerf, char *buf)
     this->flags |= HS_MPI;
 
     if (yerf)
-        return (do_parse_mesg(d->descriptor, OWNER(what), what, yerf, "WWW", buf, 0));
+        return (do_parse_mesg(d->descriptor, MUCK::getOwner(what), what, yerf, "WWW", buf, 0));
     else
         return "";
 }
@@ -718,7 +719,7 @@ int
         return 1;
     }
 
-    player = OWNER(ref);
+    player = MUCK::getOwner(ref);
     /* Insanity check! */
     if (!OkObj(player))
         return 0;

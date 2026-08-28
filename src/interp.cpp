@@ -3,6 +3,7 @@
 #include "copyright.h"
 #include "config.h"
 #include "db.h"
+#include "ObjectAccess.h"
 #include "inst.h"
 #include "externs.h"
 #include "Modules.h"
@@ -587,11 +588,11 @@ interp(int descr, dbref player, dbref location, dbref program, dbref source, int
 /*    if (program == -1)
  *        return NULL;
  */
-    if (!MLevel(program) || !MLevel(OWNER(program)) || ((OkObj(source)
+    if (!MLevel(program) || !MLevel(MUCK::getOwner(program)) || ((OkObj(source)
                                                          && Typeof(source)
                                                          != TYPE_GARBAGE)
-                                                        ? (!TMage(OWNER(source))
-                                                           && !can_link_to(OWNER(source), TYPE_EXIT, program))
+                                                        ? (!TMage(MUCK::getOwner(source))
+                                                           && !can_link_to(MUCK::getOwner(source), TYPE_EXIT, program))
                                                         : 0)) {
         anotify_nolisten(PSafe, CFAIL "Program call: Permission denied.", 1);
         return 0;
@@ -946,7 +947,7 @@ prog_clean(struct frame *fr)
     if (OkObj(fr->player) && (FLAG2(fr->player) & F2MUFCOUNT)
         && (controls(fr->player, fr->prog)
             || (Mage(fr->player)
-                && (OWNER(fr->prog) != MAN)))
+                && (MUCK::getOwner(fr->prog) != MAN)))
         ) {
         notify_fmt(fr->player, "MUF> %ld %s %ds", fr->instcnt, unparse_object(fr->player, fr->prog), (now - fr->started)
             );
@@ -1210,13 +1211,13 @@ do_abort_loop(dbref player, dbref program, const char *msg, struct frame *fr, st
     fr->pc = pc;
     if (!fr->trys.top) {
         if (pc) {
-            interp_err(fr, OWNER(PSafe), program, pc, fr->argument.st, fr->argument.top, fr->caller.st[1], insttotext(fr, 0, pc, buffer, sizeof(buffer), 30, program), msg, fr->pid);
+            interp_err(fr, MUCK::getOwner(PSafe), program, pc, fr->argument.st, fr->argument.top, fr->caller.st[1], insttotext(fr, 0, pc, buffer, sizeof(buffer), 30, program), msg, fr->pid);
             if (OkObj(player)
-                && (controls(OWNER(player), program)
-                    || (FLAG2(OWNER(player)) & F2PARENT)))
+                && (controls(MUCK::getOwner(player), program)
+                    || (FLAG2(MUCK::getOwner(player)) & F2PARENT)))
                 muf_backtrace(player, program, ADDR_SIZE, fr);
-            else if (FLAG2(program) & F2PARENT && player != OWNER(program))
-                muf_backtrace(OWNER(program), program, ADDR_SIZE, fr);
+            else if (FLAG2(program) & F2PARENT && player != MUCK::getOwner(program))
+                muf_backtrace(MUCK::getOwner(program), program, ADDR_SIZE, fr);
         } else {
             if (OkObj(player))
                 notify_nolisten(player, msg, 1);
@@ -1281,7 +1282,7 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
 
         tmpline = MUCK::programRuntime(program).first;
         MUCK::programRuntime(program).first = MUCK::programs().read(program);
-        do_compile(-1, OWNER(program), program, 0);
+        do_compile(-1, MUCK::getOwner(program), program, 0);
         free_prog_text(MUCK::programRuntime(program).first);
         MUCK::programRuntime(program).first = tmpline;
         pc = fr->pc = MUCK::programRuntime(program).start;
@@ -1383,10 +1384,10 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
         } else {
             fr->brkpt.debugging = 0;
         }
-        if (OkObj(player) && OkObj(OWNER(player))) {
+        if (OkObj(player) && OkObj(MUCK::getOwner(player))) {
             if (((FLAGS(program) & DARK) || (fr->brkpt.debugging && fr->brkpt.showstack && !fr->brkpt.bypass))
-                && (controls(OWNER(player), program)
-                    || (FLAG2(OWNER(player)) & F2PARENT))
+                && (controls(MUCK::getOwner(player), program)
+                    || (FLAG2(MUCK::getOwner(player)) & F2PARENT))
                 ) {
                 /* Small fix so only program owner can see debug traces */
                 char *m = debug_inst(fr, 0, pc, fr->pid, arg, dbuf, sizeof(dbuf),
@@ -1395,12 +1396,12 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
                 notify_nolisten(player, m, 1);
             }
         }
-        if (FLAGS(program) & DARK && ((FLAG2(program) & F2PARENT && (OWNER(program) != player)
+        if (FLAGS(program) & DARK && ((FLAG2(program) & F2PARENT && (MUCK::getOwner(program) != player)
                                        || !OkObj(player)))) {
             char *m = debug_inst(fr, 0, pc, fr->pid, arg, dbuf, sizeof(dbuf), atop,
                                  program);
 
-            notify_nolisten(OWNER(program), m, 1);
+            notify_nolisten(MUCK::getOwner(program), m, 1);
         }
         if (fr->brkpt.debugging) {
             if (fr->brkpt.count) {
@@ -1735,7 +1736,7 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
 
                     tmpline = MUCK::programRuntime(temp1->data.objref).first;
                     MUCK::programRuntime(temp1->data.objref).first = MUCK::programs().read(temp1->data.objref);
-                    do_compile(-1, OWNER(temp1->data.objref), temp1->data.objref, 0);
+                    do_compile(-1, MUCK::getOwner(temp1->data.objref), temp1->data.objref, 0);
                     free_prog_text(MUCK::programRuntime(temp1->data.objref).first);
                     MUCK::programRuntime(temp1->data.objref).first = tmpline;
                     if (!(MUCK::programRuntime(temp1->data.objref).code))
@@ -1743,7 +1744,7 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
                 }
                 if (ProgMLevel(temp1->data.objref) == 0)
                     abort_loop(tp_noperm_mesg, temp1, temp2);
-                if (mlev < LMAGE && OWNER(temp1->data.objref) != ProgUID && !Linkable(temp1->data.objref))
+                if (mlev < LMAGE && MUCK::getOwner(temp1->data.objref) != ProgUID && !Linkable(temp1->data.objref))
                     abort_loop(tp_noperm_mesg, temp1, temp2);
                 if (stop >= ADDR_SIZE)
                     abort_loop("System Stack Overflow", temp1, temp2);
@@ -2178,13 +2179,13 @@ interp_err(struct frame *fr, dbref player, dbref program, struct inst *pc, struc
     }
     if (OkObj(player))
         notify_nolisten(player, buf, 1);
-    if (FLAG2(origprog) & F2PARENT && player != OWNER(origprog))
-        notify_nolisten(OWNER(origprog), "Program Error.  Your program just got the following error.", 1);
-    sprintf(buf, "%s(#%d), line %d; %s: %s", NAME(program), program, pc->line, msg1, msg2);
+    if (FLAG2(origprog) & F2PARENT && player != MUCK::getOwner(origprog))
+        notify_nolisten(MUCK::getOwner(origprog), "Program Error.  Your program just got the following error.", 1);
+    sprintf(buf, "%s(#%d), line %d; %s: %s", MUCK::getName(program), program, pc->line, msg1, msg2);
     if (OkObj(player) && controls(player, origprog))
         notify_nolisten(player, buf, 1);
-    if (FLAG2(origprog) & F2PARENT && OWNER(origprog) != player)
-        notify_nolisten(OWNER(origprog), buf, 1);
+    if (FLAG2(origprog) & F2PARENT && MUCK::getOwner(origprog) != player)
+        notify_nolisten(MUCK::getOwner(origprog), buf, 1);
     log_status("MUF: %s\n", buf);
     lt = time(NULL);
     format_time(tbuf, 32, "%c", localtime(&lt));
@@ -2300,32 +2301,32 @@ newpermissions(int mlev, dbref player, dbref thing, bool true_c)
     /* never do this check if one object or the other is invalid */
     if (OkObj(thing)) {
         if (((Protect(thing) && !(mlev >= LBOY)
-              && (MLevel(OWNER(thing)) >= LBOY))
-             || (Protect(thing) && !(mlev > MLevel(OWNER(thing))))
+              && (MLevel(MUCK::getOwner(thing)) >= LBOY))
+             || (Protect(thing) && !(mlev > MLevel(MUCK::getOwner(thing))))
             )
-            && !((FLAG2(OWNER(thing)) & F2ANTIPROTECT)
+            && !((FLAG2(MUCK::getOwner(thing)) & F2ANTIPROTECT)
                  || (FLAG2(thing) & F2ANTIPROTECT))
             )
             return 0;
     }
-    if ((mlev >= LWIZ) && (mlev >= MLevel(OWNER(thing))))
+    if ((mlev >= LWIZ) && (mlev >= MLevel(MUCK::getOwner(thing))))
         return 1;
     if (!OkObj(player) || !OkObj(thing))
         return 0;
     if (thing == player)
         return 1;
-    if (newcontrols(OWNER(player), thing, true_c))
+    if (newcontrols(MUCK::getOwner(player), thing, true_c))
         return 1;
     switch (Typeof(thing)) {
     case TYPE_PLAYER:
         return 0;
     case TYPE_EXIT:
-        return (OWNER(thing) == OWNER(player)
-                || OWNER(thing) == NOTHING);
+        return (MUCK::getOwner(thing) == MUCK::getOwner(player)
+                || MUCK::getOwner(thing) == NOTHING);
     case TYPE_ROOM:
     case TYPE_THING:
     case TYPE_PROGRAM:
-        return (OWNER(thing) == OWNER(player));
+        return (MUCK::getOwner(thing) == MUCK::getOwner(player));
     }
     return 0;
 }
@@ -2339,54 +2340,54 @@ permissions(int mlev, dbref player, dbref thing)
 int
 find_mlev(dbref prog, struct frame *fr, int st)
 {
-    int maxmlev = (POWERS(OWNER(prog)) & POW_ALL_MUF_PRIMS) ? LBOY : MLevel(OWNER(prog));
+    int maxmlev = (MUCK::getPowers(MUCK::getOwner(prog)) & POW_ALL_MUF_PRIMS) ? LBOY : MLevel(MUCK::getOwner(prog));
     int mlev;
 
     if (!tp_compatible_muf_perms) { /* Do it the proto/neon way */
         if ((FLAGS(prog) & STICKY) && (FLAGS(prog) & HAVEN)
-            && ((st > 1) && (TMage(OWNER(prog))))) {
+            && ((st > 1) && (TMage(MUCK::getOwner(prog))))) {
             mlev = find_mlev(fr->caller.st[st - 1], fr, st - 1);
         } else {
-            if ((FLAGS(prog) & HAVEN) && ((st > 1) && (TMage(OWNER(prog))))) {
-                mlev = MLevel(OWNER(fr->caller.st[st - 1]));
+            if ((FLAGS(prog) & HAVEN) && ((st > 1) && (TMage(MUCK::getOwner(prog))))) {
+                mlev = MLevel(MUCK::getOwner(fr->caller.st[st - 1]));
             } else {
                 if ((FLAGS(prog) & QUELL) && (FLAGS(prog) & HAVEN)) {
                     mlev = MLevel(prog);
                 } else {
                     if ((FLAGS(prog) & QUELL)
                         && (((fr->player > 0) && (fr->player < MUCK::database().top()))
-                            && (TMage(OWNER(prog))))) {
-                        mlev = QLevel(OWNER(fr->player));
+                            && (TMage(MUCK::getOwner(prog))))) {
+                        mlev = QLevel(MUCK::getOwner(fr->player));
                     } else {
-                        mlev = (POWERS(OWNER(prog)) & POW_ALL_MUF_PRIMS) ? LBOY : MLevel(OWNER(prog));
+                        mlev = (MUCK::getPowers(MUCK::getOwner(prog)) & POW_ALL_MUF_PRIMS) ? LBOY : MLevel(MUCK::getOwner(prog));
                     }
                 }
             }
         }
     } else {                    /* do it the FB6/Glow way */
-        /* W S and H, give it the level of the owner of the program, or the player 
+        /* W S and H, give it the level of the owner of the program, or the player
            if not a program */
         if ((FLAGS(prog) & STICKY) && (FLAGS(prog) & HAVEN)
-            && ((st > 1) && (TMage(OWNER(prog))))) {
+            && ((st > 1) && (TMage(MUCK::getOwner(prog))))) {
             mlev = find_mlev(fr->caller.st[st - 1], fr, st - 1);
         } else {
             /* HARDUID, give it permissions of the owner of the trigger */
             if ((FLAGS(prog) & HAVEN)
-                && ((st > 1) && (TMage(OWNER(prog))))) {
-                mlev = MLevel(OWNER(fr->caller.st[st - 1]));
+                && ((st > 1) && (TMage(MUCK::getOwner(prog))))) {
+                mlev = MLevel(MUCK::getOwner(fr->caller.st[st - 1]));
             } else {
                 /* SETUID, give it the owners permissions */
                 if ((FLAGS(prog) & STICKY)) {
-                    mlev = MLevel(OWNER(prog));
+                    mlev = MLevel(MUCK::getOwner(prog));
                 } else {
                     /* QUELL, give it the permissions of the caller */
                     if ((FLAGS(prog) & QUELL)
                         && (((fr->player > 0) && (fr->player < MUCK::database().top()))
-                            && (TMage(OWNER(prog))))) {
-                        mlev = MLevel(OWNER(fr->player));
+                            && (TMage(MUCK::getOwner(prog))))) {
+                        mlev = MLevel(MUCK::getOwner(fr->player));
                     } else {
                         /* Give it W4 if the owner has ALL_MUF_PRIMS, else give it its MLevel */
-                        mlev = (POWERS(OWNER(prog)) & POW_ALL_MUF_PRIMS) ? LBOY : MLevel(prog);
+                        mlev = (MUCK::getPowers(MUCK::getOwner(prog)) & POW_ALL_MUF_PRIMS) ? LBOY : MLevel(prog);
                     }
                 }
             }
@@ -2403,26 +2404,26 @@ find_uid(dbref player, struct frame * fr, int st, dbref program)
 {
     if ((FLAGS(program) & STICKY) || (fr->perms == STD_SETUID)) {
         if (FLAGS(program) & HAVEN) {
-            if ((st > 1) && (TMage(OWNER(program)))) {
+            if ((st > 1) && (TMage(MUCK::getOwner(program)))) {
                 return (find_uid(player, fr, st - 1, fr->caller.st[st - 1]));
             } else {
-                return (OWNER(program));
+                return (MUCK::getOwner(program));
             }
         }
-        return (OWNER(program));
+        return (MUCK::getOwner(program));
     }
     if (ProgMLevel(program) < 2)
-        return (OWNER(program));
+        return (MUCK::getOwner(program));
     if ((FLAGS(program) & HAVEN) || (fr->perms == STD_HARDUID)) {
-        if (OkObj(fr->trig) && OkObj(OWNER(fr->trig)))
-            return (OWNER(fr->trig));
+        if (OkObj(fr->trig) && OkObj(MUCK::getOwner(fr->trig)))
+            return (MUCK::getOwner(fr->trig));
         else
-            return (OWNER(program));
+            return (MUCK::getOwner(program));
     }
     if (OkObj(player))
-        return (OWNER(player));
+        return (MUCK::getOwner(player));
     else
-        return (OWNER(program));
+        return (MUCK::getOwner(program));
 }
 
 void
@@ -2445,8 +2446,8 @@ do_abort_interp(dbref player, const char *msg, struct inst *pc, struct inst *arg
         if (OkObj(player) && controls(player, program))
             muf_backtrace(player, program, ADDR_SIZE, fr);
         /*    else */
-        if (FLAG2(program) & F2PARENT && player != OWNER(program))
-            muf_backtrace(OWNER(program), program, ADDR_SIZE, fr);
+        if (FLAG2(program) & F2PARENT && player != MUCK::getOwner(program))
+            muf_backtrace(MUCK::getOwner(program), program, ADDR_SIZE, fr);
         muf_oper_clean(fr, file, line);
     }
     return;

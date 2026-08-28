@@ -2,6 +2,7 @@
 #include "params.h"
 #include "defaults.h"
 #include "interface.h"
+#include "ObjectAccess.h"
 #include "tune.h"
 #include "externs.h"
 #include "array.h"
@@ -690,9 +691,9 @@ tune_show_strings(dbref player, char *name)
 
     while (tstr->name) {
         strcpy(buf, tstr->name);
-        if (MLevel(OWNER(player)) >= tstr->readmlev) {
+        if (MLevel(MUCK::getOwner(player)) >= tstr->readmlev) {
             sprintf(buf, SYSCYAN "(str)  " SYSRED "%c" SYSGREEN "%-24s"
-                    SYSRED " = " SYSCYAN "%.4096s", (WLevel(OWNER(player)) >= tstr->writemlev) ? ' ' : '-', tstr->name, tct(*tstr->str, tbuf));
+                    SYSRED " = " SYSCYAN "%.4096s", (WLevel(MUCK::getOwner(player)) >= tstr->writemlev) ? ' ' : '-', tstr->name, tct(*tstr->str, tbuf));
             anotify_nolisten2(player, buf);
             total++;
         }
@@ -710,9 +711,9 @@ tune_show_times(dbref player, char *name)
 
     while (ttim->name) {
         strcpy(buf, ttim->name);
-        if (MLevel(OWNER(player)) >= ttim->readmlev) {
+        if (MLevel(MUCK::getOwner(player)) >= ttim->readmlev) {
             sprintf(buf, SYSPURPLE "(time) " SYSRED "%c" SYSGREEN "%-24s"
-                    SYSRED " = " SYSPURPLE "%s", (WLevel(OWNER(player)) >= ttim->writemlev) ? ' ' : '-', ttim->name, timestr_full(*ttim->tim));
+                    SYSRED " = " SYSPURPLE "%s", (WLevel(MUCK::getOwner(player)) >= ttim->writemlev) ? ' ' : '-', ttim->name, timestr_full(*ttim->tim));
             anotify_nolisten2(player, buf);
             total++;
         }
@@ -730,9 +731,9 @@ tune_show_vals(dbref player, char *name)
 
     while (tval->name) {
         strcpy(buf, tval->name);
-        if (MLevel(OWNER(player)) >= tval->readmlev) {
+        if (MLevel(MUCK::getOwner(player)) >= tval->readmlev) {
             sprintf(buf, SYSGREEN "(int)  " SYSRED "%c" SYSGREEN "%-24s"
-                    SYSRED " = " SYSYELLOW "%d", (WLevel(OWNER(player)) >= tval->writemlev) ? ' ' : '-', tval->name, *tval->val);
+                    SYSRED " = " SYSYELLOW "%d", (WLevel(MUCK::getOwner(player)) >= tval->writemlev) ? ' ' : '-', tval->name, *tval->val);
             anotify_nolisten2(player, buf);
             total++;
         }
@@ -750,9 +751,9 @@ tune_show_refs(dbref player, char *name)
 
     while (tref->name) {
         strcpy(buf, tref->name);
-        if (MLevel(OWNER(player)) >= tref->readmlev) {
+        if (MLevel(MUCK::getOwner(player)) >= tref->readmlev) {
             sprintf(buf, SYSYELLOW "(ref)  " SYSRED "%c" SYSGREEN "%-24s"
-                    SYSRED " = %s", (WLevel(OWNER(player)) >= tref->writemlev) ? ' ' : '-', tref->name, ansi_unparse_object(player, *tref->ref));
+                    SYSRED " = %s", (WLevel(MUCK::getOwner(player)) >= tref->writemlev) ? ' ' : '-', tref->name, ansi_unparse_object(player, *tref->ref));
             anotify_nolisten2(player, buf);
             total++;
         }
@@ -770,9 +771,9 @@ tune_show_bool(dbref player, char *name)
 
     while (tbool->name) {
         strcpy(buf, tbool->name);
-        if (MLevel(OWNER(player)) >= tbool->readmlev) {
+        if (MLevel(MUCK::getOwner(player)) >= tbool->readmlev) {
             sprintf(buf, SYSWHITE "(bool) " SYSRED "%c" SYSGREEN "%-24s"
-                    SYSRED " = " SYSBLUE "%s", (WLevel(OWNER(player)) >= tbool->writemlev) ? ' ' : '-', tbool->name, ((*tbool->boolv) ? "yes" : "no"));
+                    SYSRED " = " SYSBLUE "%s", (WLevel(MUCK::getOwner(player)) >= tbool->writemlev) ? ' ' : '-', tbool->name, ((*tbool->boolv) ? "yes" : "no"));
             anotify_nolisten2(player, buf);
             total++;
         }
@@ -795,9 +796,9 @@ tune_display_parms(dbref player, char *name)
 
     while (tstr->name) {
         strcpy(buf, tstr->name);
-        if ((MLevel(OWNER(player)) >= tstr->readmlev) && (!*name || equalstr(name, buf))) {
+        if ((MLevel(MUCK::getOwner(player)) >= tstr->readmlev) && (!*name || equalstr(name, buf))) {
             sprintf(buf, SYSCYAN "(str)  " SYSRED "%c" SYSGREEN "%-24s"
-                    SYSRED " = " SYSCYAN "%.4096s", (WLevel(OWNER(player)) >= tstr->writemlev) ? ' ' : '-', tstr->name, tct(*tstr->str, tbuf));
+                    SYSRED " = " SYSCYAN "%.4096s", (WLevel(MUCK::getOwner(player)) >= tstr->writemlev) ? ' ' : '-', tstr->name, tct(*tstr->str, tbuf));
             lastname = tstr->name;
             anotify_nolisten2(player, buf);
             total++;
@@ -807,9 +808,9 @@ tune_display_parms(dbref player, char *name)
 
     while (ttim->name) {
         strcpy(buf, ttim->name);
-        if ((MLevel(OWNER(player)) >= ttim->readmlev) && (!*name || equalstr(name, buf))) {
+        if ((MLevel(MUCK::getOwner(player)) >= ttim->readmlev) && (!*name || equalstr(name, buf))) {
             sprintf(buf, SYSPURPLE "(time) " SYSRED "%c" SYSGREEN "%-24s"
-                    SYSRED " = " SYSPURPLE "%s", (WLevel(OWNER(player)) >= ttim->writemlev) ? ' ' : '-', ttim->name, timestr_full(*ttim->tim));
+                    SYSRED " = " SYSPURPLE "%s", (WLevel(MUCK::getOwner(player)) >= ttim->writemlev) ? ' ' : '-', ttim->name, timestr_full(*ttim->tim));
             lastname = ttim->name;
             anotify_nolisten2(player, buf);
             total++;
@@ -819,9 +820,9 @@ tune_display_parms(dbref player, char *name)
 
     while (tval->name) {
         strcpy(buf, tval->name);
-        if ((MLevel(OWNER(player)) >= tval->readmlev) && (!*name || equalstr(name, buf))) {
+        if ((MLevel(MUCK::getOwner(player)) >= tval->readmlev) && (!*name || equalstr(name, buf))) {
             sprintf(buf, SYSGREEN "(int)  " SYSRED "%c" SYSGREEN "%-24s"
-                    SYSRED " = " SYSYELLOW "%d", (WLevel(OWNER(player)) >= tval->writemlev) ? ' ' : '-', tval->name, *tval->val);
+                    SYSRED " = " SYSYELLOW "%d", (WLevel(MUCK::getOwner(player)) >= tval->writemlev) ? ' ' : '-', tval->name, *tval->val);
             lastname = tval->name;
             anotify_nolisten2(player, buf);
             total++;
@@ -830,9 +831,9 @@ tune_display_parms(dbref player, char *name)
     }
     while (tref->name) {
         strcpy(buf, tref->name);
-        if ((MLevel(OWNER(player)) >= tref->readmlev) && (!*name || equalstr(name, buf))) {
+        if ((MLevel(MUCK::getOwner(player)) >= tref->readmlev) && (!*name || equalstr(name, buf))) {
             sprintf(buf, SYSYELLOW "(ref)  " SYSRED "%c" SYSGREEN "%-24s"
-                    SYSRED " = %s", (WLevel(OWNER(player)) >= tref->writemlev) ? ' ' : '-', tref->name, ansi_unparse_object(player, *tref->ref));
+                    SYSRED " = %s", (WLevel(MUCK::getOwner(player)) >= tref->writemlev) ? ' ' : '-', tref->name, ansi_unparse_object(player, *tref->ref));
             lastname = tref->name;
             anotify_nolisten2(player, buf);
             total++;
@@ -842,10 +843,10 @@ tune_display_parms(dbref player, char *name)
 
     while (tbool->name) {
         strcpy(buf, tbool->name);
-        if ((MLevel(OWNER(player)) >= tbool->readmlev) && (!*name || equalstr(name, buf))) {
+        if ((MLevel(MUCK::getOwner(player)) >= tbool->readmlev) && (!*name || equalstr(name, buf))) {
             sprintf(buf,
                     SYSWHITE "(bool) " SYSRED "%c" SYSGREEN "%-24s" SYSRED
-                    " = " SYSBLUE "%s", (WLevel(OWNER(player)) >= tbool->writemlev) ? ' ' : '-', tbool->name, ((*tbool->boolv) ? "yes" : "no"));
+                    " = " SYSBLUE "%s", (WLevel(MUCK::getOwner(player)) >= tbool->writemlev) ? ' ' : '-', tbool->name, ((*tbool->boolv) ? "yes" : "no"));
             lastname = tbool->name;
             anotify_nolisten2(player, buf);
             total++;
@@ -1028,7 +1029,7 @@ tune_setparm(const dbref player, const char *parmname, const char *val)
     while (tstr->name) {
         if (!string_compare(parmname, tstr->name)) {
             if ((player != NOTHING)
-                && (WLevel(OWNER(player)) < tstr->writemlev))
+                && (WLevel(MUCK::getOwner(player)) < tstr->writemlev))
                 return TUNESET_NOPERM;
             if (!tstr->isdefault)
                 delete[] * tstr->str;
@@ -1047,7 +1048,7 @@ tune_setparm(const dbref player, const char *parmname, const char *val)
             char *end;
 
             if ((player != NOTHING)
-                && (WLevel(OWNER(player)) < ttim->writemlev))
+                && (WLevel(MUCK::getOwner(player)) < ttim->writemlev))
                 return TUNESET_NOPERM;
             days = hrs = mins = secs = 0;
             end = parmval + strlen(parmval) - 1;
@@ -1095,7 +1096,7 @@ tune_setparm(const dbref player, const char *parmname, const char *val)
     while (tval->name) {
         if (!string_compare(parmname, tval->name)) {
             if ((player != NOTHING)
-                && (WLevel(OWNER(player)) < tval->writemlev))
+                && (WLevel(MUCK::getOwner(player)) < tval->writemlev))
                 return TUNESET_NOPERM;
             if (!number(parmval))
                 return 2;
@@ -1110,7 +1111,7 @@ tune_setparm(const dbref player, const char *parmname, const char *val)
             dbref obj;
 
             if ((player != NOTHING)
-                && (WLevel(OWNER(player)) < tref->writemlev))
+                && (WLevel(MUCK::getOwner(player)) < tref->writemlev))
                 return TUNESET_NOPERM;
             if (!strcmp(parmval, "me"))
                 obj = player;
@@ -1140,7 +1141,7 @@ tune_setparm(const dbref player, const char *parmname, const char *val)
     while (tbool->name) {
         if (!string_compare(parmname, tbool->name)) {
             if ((player != NOTHING)
-                && (WLevel(OWNER(player)) < tbool->writemlev))
+                && (WLevel(MUCK::getOwner(player)) < tbool->writemlev))
                 return TUNESET_NOPERM;
             if (*parmval == 'y' || *parmval == 'Y') {
                 *tbool->boolv = 1;
@@ -1237,7 +1238,7 @@ do_tune(dbref player, char *parmname, char *parmval)
         result = tune_setparm(player, parmname, parmval);
         switch (result) {
             case TUNESET_SUCCESS:
-                log_status("TUNE: %s(%d) tuned %s to %s\n", NAME(player), player, parmname, parmval);
+                log_status("TUNE: %s(%d) tuned %s to %s\n", MUCK::getName(player), player, parmname, parmval);
                 anotify_nolisten2(player, CSUCC "Parameter set.");
                 tune_display_parms(player, parmname);
                 break;

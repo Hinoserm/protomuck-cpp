@@ -11,6 +11,7 @@
 #include "interface.h"
 #include "externs.h"
 #include "Modules.h"
+#include "ObjectAccess.h"
 
 #define DOWNCASE(x) (tolower(x))
 
@@ -94,7 +95,7 @@ match_player(struct match_data *md)
     dbref match;
     const char *p;
 
-    if (*(md->match_name) == LOOKUP_TOKEN && (payfor(OWNER(md->match_from), tp_lookup_cost))) {
+    if (*(md->match_name) == LOOKUP_TOKEN && (payfor(MUCK::getOwner(md->match_from), tp_lookup_cost))) {
         for (p = (md->match_name) + 1; isspace(*p); p++) ;
         if ((match = lookup_player(p)) != NOTHING) {
             md->exact_match = match;
@@ -261,8 +262,8 @@ void
 match_here(struct match_data *md)
 {
     if (!string_compare(md->match_name, "here")
-        && DBFETCH(md->match_who)->location != NOTHING) {
-        md->exact_match = DBFETCH(md->match_who)->location;
+        && MUCK::getLocation(md->match_who) != NOTHING) {
+        md->exact_match = MUCK::getLocation(md->match_who);
     }
 }
 
@@ -296,17 +297,17 @@ match_list(dbref first, struct match_data *md)
     dbref absolute;
 
     absolute = absolute_name(md);
-    if (!controls(OWNER(md->match_from), absolute))
+    if (!controls(MUCK::getOwner(md->match_from), absolute))
         absolute = NOTHING;
 
     DOLIST(first, first) {
         if (first == absolute) {
             md->exact_match = first;
             return;
-        } else if (!string_compare(RNAME(first), md->match_name)) {
+        } else if (!string_compare(MUCK::getName(first), md->match_name)) {
             /* if there are multiple exact matches, randomly choose one */
             md->exact_match = choose_thing(md->match_descr, md->exact_match, first, md);
-        } else if (string_match(RNAME(first), md->match_name)) {
+        } else if (string_match(MUCK::getName(first), md->match_name)) {
             md->last_match = first;
             (md->match_count)++;
         }
@@ -326,7 +327,7 @@ match_neighbor(struct match_data *md)
 {
     dbref loc;
 
-    if ((loc = DBFETCH(md->match_from)->location) != NOTHING) {
+    if ((loc = MUCK::getLocation(md->match_from)) != NOTHING) {
         match_list(CONTENTS(loc), md);
     }
 }
@@ -344,11 +345,11 @@ match_exits(dbref first, struct match_data *md)
 
     if (first == NOTHING)
         return;                 /* Easy fail match */
-    if ((DBFETCH(md->match_from)->location) == NOTHING)
+    if ((MUCK::getLocation(md->match_from)) == NOTHING)
         return;
 
     absolute = absolute_name(md); /* parse #nnn entries */
-    if (!controls(OWNER(md->match_from), absolute))
+    if (!controls(MUCK::getOwner(md->match_from), absolute))
         absolute = NOTHING;
 
     DOLIST(exit, first) {
@@ -366,7 +367,7 @@ match_exits(dbref first, struct match_data *md)
            }
            }
          */
-        exitname = NAME(exit);
+        exitname = MUCK::getName(exit);
         while (*exitname) {     /* for all exit aliases */
             for (p = md->match_name; /* check out 1 alias */
                  *p && DOWNCASE(*p) == DOWNCASE(*exitname)
@@ -378,7 +379,7 @@ match_exits(dbref first, struct match_data *md)
                     exitname++;
                 lev = MLevel(exit);
                 if (tp_compatible_priorities && (lev == 1) &&
-                    (DBFETCH(exit)->location == NOTHING || Typeof(DBFETCH(exit)->location) != TYPE_THING || controls(OWNER(exit), getloc(md->match_from))))
+                    (MUCK::getLocation(exit) == NOTHING || Typeof(MUCK::getLocation(exit)) != TYPE_THING || controls(MUCK::getOwner(exit), MUCK::getLocation(md->match_from))))
                     lev = 2;
                 if (*exitname == '\0' || *exitname == EXIT_DELIMITER) {
                     /* we got a match on this alias */
@@ -453,14 +454,12 @@ match_exits(dbref first, struct match_data *md)
 void
 match_invobj_actions(struct match_data *md)
 {
-    dbref thing;
-
     if (md->match_from == NOTHING) /* Don't match #-1's contents. */
         return;
-    if (CONTENTS(md->match_from) == NOTHING)
+    if (MUCK::getContents(md->match_from).empty())
         return;
-    DOLIST(thing, CONTENTS(md->match_from)) {
-        if (Typeof(thing) == TYPE_THING && EXITS(thing) != NOTHING) {
+    for (dbref thing : MUCK::getContents(md->match_from)) {
+        if (Typeof(thing) == TYPE_THING && !MUCK::getExits(thing).empty()) {
             match_exits(EXITS(thing), md);
         }
     }
@@ -473,16 +472,16 @@ match_invobj_actions(struct match_data *md)
 void
 match_roomobj_actions(struct match_data *md)
 {
-    dbref thing, loc;
+    dbref loc;
 
     if (md->match_from == NOTHING)
         return;
-    if ((loc = DBFETCH(md->match_from)->location) == NOTHING)
+    if ((loc = MUCK::getLocation(md->match_from)) == NOTHING)
         return;
-    if (CONTENTS(loc) == NOTHING)
+    if (MUCK::getContents(loc).empty())
         return;
-    DOLIST(thing, CONTENTS(loc)) {
-        if (Typeof(thing) == TYPE_THING && EXITS(thing) != NOTHING) {
+    for (dbref thing : MUCK::getContents(loc)) {
+        if (Typeof(thing) == TYPE_THING && !MUCK::getExits(thing).empty()) {
             match_exits(EXITS(thing), md);
         }
     }
@@ -556,7 +555,7 @@ match_all_exits(struct match_data *md)
     if (md->match_from == NOTHING)
         return;
     if (md->match_from != NOTHING)
-        if ((loc = DBFETCH(md->match_from)->location) != NOTHING)
+        if ((loc = MUCK::getLocation(md->match_from)) != NOTHING)
             match_room_exits(loc, md);
 
     if (md->exact_match != NOTHING)
@@ -586,7 +585,7 @@ match_all_exits(struct match_data *md)
         match_room_exits(loc, md);
     }
 
-    while ((loc = DBFETCH(loc)->location) != NOTHING) {
+    while ((loc = MUCK::getLocation(loc)) != NOTHING) {
         if (md->exact_match != NOTHING)
             md->block_equals = 1;
         match_room_exits(loc, md);
@@ -604,7 +603,7 @@ match_everything(struct match_data *md)
     match_me(md);
     match_here(md);
     match_registered(md);
-    if (Mage(OWNER(md->match_from)) || Mage(md->match_who) || POWERS(OWNER(md->match_who)) & POW_LONG_FINGERS) {
+    if (Mage(MUCK::getOwner(md->match_from)) || Mage(md->match_who) || MUCK::getPowers(MUCK::getOwner(md->match_who)) & POW_LONG_FINGERS) {
         match_absolute(md);
         match_player(md);
     }

@@ -14,6 +14,7 @@
 #include "interp.h"
 #include "netresolve.h"
 #include "Modules.h"
+#include "ObjectAccess.h"
 
 int
 check_descr_flag(const char *dflag)
@@ -136,7 +137,7 @@ prim_awakep(PRIM_PROTOTYPE)
         abort_interp("invalid argument");
     ref = oper[0].data.objref;
     if (Typeof(ref) == TYPE_THING && (FLAGS(ref) & ZOMBIE))
-        ref = OWNER(ref);
+        ref = MUCK::getOwner(ref);
     if (Typeof(ref) != TYPE_PLAYER)
         abort_interp("invalid argument");
     result = online(ref);
@@ -523,7 +524,7 @@ prim_descr_setuser(PRIM_PROTOTYPE)
         }
     }
     if (ref != NOTHING) {
-        log_status("SUSR: %d %s(%d) to %s(%d)\n", oper[2].data.number, OkObj(player) ? NAME(player) : "(Login)", player, NAME(ref), ref);
+        log_status("SUSR: %d %s(%d) to %s(%d)\n", oper[2].data.number, OkObj(player) ? MUCK::getName(player) : "(Login)", player, MUCK::getName(ref), ref);
     }
 
     tmp = oper[2].data.number;
@@ -552,7 +553,7 @@ prim_descr_setuser_nopass(PRIM_PROTOTYPE)
     if (!pdescrp(oper[1].data.number))
         abort_interp("That is not a valid descriptor.");
     if (ref != NOTHING) {
-        log_status("SUSR: %d %s(%d) to %s(%d)\n", oper[1].data.number, OkObj(player) ? NAME(player) : "(Login)", player, NAME(ref), ref);
+        log_status("SUSR: %d %s(%d) to %s(%d)\n", oper[1].data.number, OkObj(player) ? MUCK::getName(player) : "(Login)", player, MUCK::getName(ref), ref);
     }
     tmp = oper[1].data.number;
     result = pset_user2(tmp, ref);

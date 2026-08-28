@@ -13,6 +13,7 @@
 #include "tune.h"
 #include "strutils.h"
 #include "interp.h"
+#include "ObjectAccess.h"
 
 /* We'll put the external temp vars here */
 
@@ -385,7 +386,7 @@ sort4(const void *op1, const void *op2)
     if ((o1->data.objref >= MUCK::database().top()) || (o2->data.objref >= MUCK::database().top()))
         return 0;
 
-    return strcasecmp(NAME(o1->data.objref), NAME(o2->data.objref));
+    return strcasecmp(MUCK::getName(o1->data.objref), MUCK::getName(o2->data.objref));
 }
 
 int
@@ -403,7 +404,7 @@ sort5(const void *op1, const void *op2)
     if ((o1->data.objref >= MUCK::database().top()) || (o2->data.objref >= MUCK::database().top()))
         return 0;
 
-    return -strcasecmp(NAME(o1->data.objref), NAME(o2->data.objref));
+    return -strcasecmp(MUCK::getName(o1->data.objref), MUCK::getName(o2->data.objref));
 }
 
 void
@@ -911,7 +912,7 @@ prim_interp(PRIM_PROTOTYPE)
     strcpy(match_args, oper[0].data.string ? oper[0].data.string->data.c_str() : "");
     fr->level++;
     interp_set_depth(fr);
-    tmpfr = interp(fr->descr, player, DBFETCH(player)->location, oper[2].data.objref, oper[1].data.objref, PREEMPT, STD_HARDUID, 0);
+    tmpfr = interp(fr->descr, player, MUCK::getLocation(player), oper[2].data.objref, oper[1].data.objref, PREEMPT, STD_HARDUID, 0);
     if (tmpfr) {
         rv = interp_loop(player, oper[2].data.objref, tmpfr, 1);
     }

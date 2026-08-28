@@ -13,6 +13,7 @@
 #include "interp.h"
 #include "interface.h"
 #include "msgparse.h"
+#include "ObjectAccess.h"
 
 
 /***** Insert MFUNs here *****/
@@ -328,10 +329,10 @@ mfn_listprops(MFUNARGS)
                 if (Prop_Hidden(ptr)) {
                     flag = 0;
                 }
-                if (Prop_Private(ptr) && OWNER(what) != OWNER(obj)) {
+                if (Prop_Private(ptr) && MUCK::getOwner(what) != MUCK::getOwner(obj)) {
                     flag = 0;
                 }
-                if (obj != player && OWNER(obj) != OWNER(what)) {
+                if (obj != player && MUCK::getOwner(obj) != MUCK::getOwner(what)) {
                     flag = 0;
                 }
             }
@@ -721,7 +722,7 @@ mfn_ontime(MFUNARGS)
     if (obj == PERMDENIED)
         ABORT_MPI("ONTIME", tp_noperm_mesg);
     if (Typeof(obj) != TYPE_PLAYER)
-        obj = OWNER(obj);
+        obj = MUCK::getOwner(obj);
     d = least_idle_player_descr(obj);
     if (!d)
         return "-1";
@@ -742,7 +743,7 @@ mfn_idle(MFUNARGS)
     if (obj == UNKNOWN || obj == AMBIGUOUS || obj == NOTHING || obj == HOME)
         return "-1";
     if (Typeof(obj) != TYPE_PLAYER)
-        obj = OWNER(obj);
+        obj = MUCK::getOwner(obj);
     d = least_idle_player_descr(obj);
     if (!d)
         return "-1";
@@ -806,7 +807,7 @@ mfn_contains(MFUNARGS)
         ABORT_MPI("CONTAINS", tp_noperm_mesg);
 
     while (obj2 != NOTHING && obj2 != obj1)
-        obj2 = getloc(obj2);
+        obj2 = MUCK::getLocation(obj2);
     if (obj1 == obj2) {
         return "1";
     } else {
@@ -834,7 +835,7 @@ mfn_holds(MFUNARGS)
     if (obj2 == PERMDENIED)
         ABORT_MPI("HOLDS", tp_noperm_mesg);
 
-    if (obj2 == getloc(obj1)) {
+    if (obj2 == MUCK::getLocation(obj1)) {
         return "1";
     } else {
         return "0";
@@ -1589,7 +1590,7 @@ mfn_loc(MFUNARGS)
         ABORT_MPI("LOC", "Match failed.");
     if (obj == PERMDENIED)
         ABORT_MPI("LOC", tp_noperm_mesg);
-    return ref2str(getloc(obj), buf);
+    return ref2str(MUCK::getLocation(obj), buf);
 }
 
 
@@ -1701,11 +1702,11 @@ mfn_ansi(MFUNARGS)
         } else {
             ptr2 = ptr + strlen(ptr);
         }
-        if (Typeof(what) == TYPE_ROOM || OWNER(what) == obj || player == obj || Mageperms(what) || (Typeof(what) == TYPE_EXIT && Typeof(getloc(what)) == TYPE_ROOM)
-            || string_prefix(argv[0], NAME(player))) {
+        if (Typeof(what) == TYPE_ROOM || MUCK::getOwner(what) == obj || player == obj || Mageperms(what) || (Typeof(what) == TYPE_EXIT && Typeof(MUCK::getLocation(what)) == TYPE_ROOM)
+            || string_prefix(argv[0], MUCK::getName(player))) {
             sprintf(buf, "%.4093s", ptr);
         } else {
-            sprintf(buf, "%s%.16s%s%.4078s", ((obj == OWNER(perms) || obj == player) ? "" : "> "), NAME(player), ((*argv[0] == '\'' || isspace(*argv[0])) ? "" : " "), ptr);
+            sprintf(buf, "%s%.16s%s%.4078s", ((obj == MUCK::getOwner(perms) || obj == player) ? "" : "> "), MUCK::getName(player), ((*argv[0] == '\'' || isspace(*argv[0])) ? "" : " "), ptr);
         }
         anotify_from_echo(player, obj, buf, 1);
     }
@@ -1739,15 +1740,15 @@ mfn_html(MFUNARGS)
         } else {
             ptr2 = ptr + strlen(ptr);
         }
-        if (Typeof(what) == TYPE_ROOM || OWNER(what) == obj || player == obj || Mageperms(what) || (Typeof(what) == TYPE_EXIT && Typeof(getloc(what)) == TYPE_ROOM)
-            || string_prefix(argv[0], NAME(player))) {
+        if (Typeof(what) == TYPE_ROOM || MUCK::getOwner(what) == obj || player == obj || Mageperms(what) || (Typeof(what) == TYPE_EXIT && Typeof(MUCK::getLocation(what)) == TYPE_ROOM)
+            || string_prefix(argv[0], MUCK::getName(player))) {
             sprintf(buf, "%.4093s", ptr);
         } else {
-            sprintf(buf, "%s%.16s%s%.4078s", ((obj == OWNER(perms) || obj == player) ? "" : "> "), NAME(player), ((*argv[0] == '\'' || isspace(*argv[0])) ? "" : " "), ptr);
+            sprintf(buf, "%s%.16s%s%.4078s", ((obj == MUCK::getOwner(perms) || obj == player) ? "" : "> "), MUCK::getName(player), ((*argv[0] == '\'' || isspace(*argv[0])) ? "" : " "), ptr);
         }
         notify_html_from_echo(player, obj, buf, 1);
 /*      notify_html_nolisten(player, buf, 1); */
-        if (NHtml(OWNER(obj)))
+        if (NHtml(MUCK::getOwner(obj)))
             notify_html_from_echo(player, obj, "<BR>", 1); /* notify_html_nolisten(player, buf, 1); */
     }
     return argv[0];
@@ -1777,11 +1778,11 @@ mfn_tell(MFUNARGS)
         } else {
             ptr2 = ptr + strlen(ptr);
         }
-        if (Typeof(what) == TYPE_ROOM || OWNER(what) == obj || player == obj || Mageperms(what) || (Typeof(what) == TYPE_EXIT && Typeof(getloc(what)) == TYPE_ROOM)
-            || string_prefix(argv[0], NAME(player))) {
+        if (Typeof(what) == TYPE_ROOM || MUCK::getOwner(what) == obj || player == obj || Mageperms(what) || (Typeof(what) == TYPE_EXIT && Typeof(MUCK::getLocation(what)) == TYPE_ROOM)
+            || string_prefix(argv[0], MUCK::getName(player))) {
             sprintf(buf, "%.4093s", ptr);
         } else {
-            sprintf(buf, "%s%.16s%s%.4078s", ((obj == OWNER(perms) || obj == player) ? "" : "> "), NAME(player), ((*argv[0] == '\'' || isspace(*argv[0])) ? "" : " "), ptr);
+            sprintf(buf, "%s%.16s%s%.4078s", ((obj == MUCK::getOwner(perms) || obj == player) ? "" : "> "), MUCK::getName(player), ((*argv[0] == '\'' || isspace(*argv[0])) ? "" : " "), ptr);
         }
         notify_from_echo(player, obj, buf, 1);
     }
@@ -1817,11 +1818,11 @@ mfn_telldescr(MFUNARGS)
         } else {
             ptr2 = ptr + strlen(ptr);
         }
-        if (Typeof(what) == TYPE_ROOM || OWNER(what) == obj || player == obj || Mageperms(what) || (Typeof(what) == TYPE_EXIT && Typeof(getloc(what)) == TYPE_ROOM)
-            || string_prefix(argv[0], NAME(player))) {
+        if (Typeof(what) == TYPE_ROOM || MUCK::getOwner(what) == obj || player == obj || Mageperms(what) || (Typeof(what) == TYPE_EXIT && Typeof(MUCK::getLocation(what)) == TYPE_ROOM)
+            || string_prefix(argv[0], MUCK::getName(player))) {
             sprintf(buf, "%.4093s", ptr);
         } else {
-            sprintf(buf, "%s%.16s%s%.4078s", ((obj == OWNER(perms) || obj == player) ? "" : "> "), NAME(player), ((*argv[0] == '\'' || isspace(*argv[0])) ? "" : " "), ptr);
+            sprintf(buf, "%s%.16s%s%.4078s", ((obj == MUCK::getOwner(perms) || obj == player) ? "" : "> "), MUCK::getName(player), ((*argv[0] == '\'' || isspace(*argv[0])) ? "" : " "), ptr);
         }
         notify_descriptor(obj, buf);
     }
@@ -1833,7 +1834,7 @@ mfn_otell(MFUNARGS)
 {
     char buf2[BUFFER_LEN];
     char *ptr, *ptr2;
-    dbref obj = getloc(player);
+    dbref obj = MUCK::getLocation(player);
     dbref eobj = player;
     dbref thing;
 
@@ -1855,11 +1856,11 @@ mfn_otell(MFUNARGS)
         } else {
             ptr2 = ptr + strlen(ptr);
         }
-        if (Typeof(what) == TYPE_ROOM || Mageperms(what) || (Typeof(what) == TYPE_EXIT && Typeof(getloc(what)) == TYPE_ROOM)
-            || string_prefix(argv[0], NAME(player))) {
+        if (Typeof(what) == TYPE_ROOM || Mageperms(what) || (Typeof(what) == TYPE_EXIT && Typeof(MUCK::getLocation(what)) == TYPE_ROOM)
+            || string_prefix(argv[0], MUCK::getName(player))) {
             strcpy(buf, ptr);
         } else {
-            sprintf(buf, "%.16s%s%.4078s", NAME(player), ((*argv[0] == '\'' || isspace(*argv[0])) ? "" : " "), ptr);
+            sprintf(buf, "%.16s%s%.4078s", MUCK::getName(player), ((*argv[0] == '\'' || isspace(*argv[0])) ? "" : " "), ptr);
         }
         thing = CONTENTS(obj);
         while (thing != NOTHING) {
@@ -1877,7 +1878,7 @@ mfn_oansi(MFUNARGS)
 {
     char buf2[BUFFER_LEN];
     char *ptr, *ptr2;
-    dbref obj = getloc(player);
+    dbref obj = MUCK::getLocation(player);
     dbref eobj = player;
     dbref thing;
 
@@ -1899,11 +1900,11 @@ mfn_oansi(MFUNARGS)
         } else {
             ptr2 = ptr + strlen(ptr);
         }
-        if (Typeof(what) == TYPE_ROOM || Mageperms(what) || (Typeof(what) == TYPE_EXIT && Typeof(getloc(what)) == TYPE_ROOM)
-            || string_prefix(argv[0], NAME(player))) {
+        if (Typeof(what) == TYPE_ROOM || Mageperms(what) || (Typeof(what) == TYPE_EXIT && Typeof(MUCK::getLocation(what)) == TYPE_ROOM)
+            || string_prefix(argv[0], MUCK::getName(player))) {
             strcpy(buf, ptr);
         } else {
-            sprintf(buf, "%.16s%s%.4078s", NAME(player), ((*argv[0] == '\'' || isspace(*argv[0])) ? "" : " "), ptr);
+            sprintf(buf, "%.16s%s%.4078s", MUCK::getName(player), ((*argv[0] == '\'' || isspace(*argv[0])) ? "" : " "), ptr);
         }
         thing = CONTENTS(obj);
         while (thing != NOTHING) {
@@ -1921,7 +1922,7 @@ mfn_ohtml(MFUNARGS)
 {
     char buf2[BUFFER_LEN];
     char *ptr, *ptr2;
-    dbref obj = getloc(player);
+    dbref obj = MUCK::getLocation(player);
     dbref eobj = player;
     dbref thing;
 
@@ -1943,17 +1944,17 @@ mfn_ohtml(MFUNARGS)
         } else {
             ptr2 = ptr + strlen(ptr);
         }
-        if (Typeof(what) == TYPE_ROOM || Mageperms(what) || (Typeof(what) == TYPE_EXIT && Typeof(getloc(what)) == TYPE_ROOM)
-            || string_prefix(argv[0], NAME(player))) {
+        if (Typeof(what) == TYPE_ROOM || Mageperms(what) || (Typeof(what) == TYPE_EXIT && Typeof(MUCK::getLocation(what)) == TYPE_ROOM)
+            || string_prefix(argv[0], MUCK::getName(player))) {
             strcpy(buf, ptr);
         } else {
-            sprintf(buf, "%.16s%s%.4078s", NAME(player), ((*argv[0] == '\'' || isspace(*argv[0])) ? "" : " "), ptr);
+            sprintf(buf, "%.16s%s%.4078s", MUCK::getName(player), ((*argv[0] == '\'' || isspace(*argv[0])) ? "" : " "), ptr);
         }
         thing = CONTENTS(obj);
         while (thing != NOTHING) {
             if (thing != eobj) {
                 notify_html_from_echo(player, thing, buf, 0);
-                if (NHtml(OWNER(thing)))
+                if (NHtml(MUCK::getOwner(thing)))
                     notify_html_from_echo(player, thing, "<BR>", 0);
             }
             thing = NEXTOBJ(thing);
@@ -2002,7 +2003,7 @@ mfn_created(MFUNARGS)
     if (obj == PERMDENIED)
         ABORT_MPI("CREATED", tp_noperm_mesg);
 
-    sprintf(buf, "%ld", DBFETCH(obj)->ts.created);
+    sprintf(buf, "%ld", MUCK::getCreated(obj));
 
     return buf;
 }
@@ -2019,7 +2020,7 @@ mfn_lastused(MFUNARGS)
     if (obj == PERMDENIED)
         ABORT_MPI("LASTUSED", tp_noperm_mesg);
 
-    sprintf(buf, "%ld", DBFETCH(obj)->ts.lastused);
+    sprintf(buf, "%ld", MUCK::getLastUsed(obj));
 
     return buf;
 }
@@ -2036,7 +2037,7 @@ mfn_modified(MFUNARGS)
     if (obj == PERMDENIED)
         ABORT_MPI("MODIFIED", tp_noperm_mesg);
 
-    sprintf(buf, "%ld", DBFETCH(obj)->ts.modified);
+    sprintf(buf, "%ld", MUCK::getModified(obj));
 
     return buf;
 }
@@ -2053,7 +2054,7 @@ mfn_usecount(MFUNARGS)
     if (obj == PERMDENIED)
         ABORT_MPI("USECOUNT", tp_noperm_mesg);
 
-    sprintf(buf, "%d", DBFETCH(obj)->ts.usecount);
+    sprintf(buf, "%d", MUCK::getUseCount(obj));
 
     return buf;
 }

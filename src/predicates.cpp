@@ -11,6 +11,7 @@
 #include "externs.h"
 #include "Modules.h"
 #include "reg.h"
+#include "ObjectAccess.h"
 
 bool
 can_link_to(dbref who, object_flag_type what_type, dbref where)
@@ -27,30 +28,30 @@ can_link_to(dbref who, object_flag_type what_type, dbref where)
     switch (what_type) {
         case TYPE_EXIT:
             return (controls(who, where) || (FLAGS(where) & LINK_OK)
-                    || (POWERS(who) & POW_LINK_ANYWHERE));
+                    || (MUCK::getPowers(who) & POW_LINK_ANYWHERE));
             /* NOTREACHED */
             break;
         case TYPE_PLAYER:
             return (Typeof(where) == TYPE_ROOM && (controls(who, where)
                                                    || Linkable(where)
-                                                   || (POWERS(who) & POW_LINK_ANYWHERE)));
+                                                   || (MUCK::getPowers(who) & POW_LINK_ANYWHERE)));
             /* NOTREACHED */
             break;
         case TYPE_ROOM:
             return ((Typeof(where) == TYPE_ROOM || Typeof(where) == TYPE_THING)
                     && (controls(who, where) || Linkable(where)
-                        || (POWERS(who) & POW_LINK_ANYWHERE)));
+                        || (MUCK::getPowers(who) & POW_LINK_ANYWHERE)));
             /* NOTREACHED */
             break;
         case TYPE_THING:
             return ((Typeof(where) == TYPE_ROOM || Typeof(where) == TYPE_PLAYER || Typeof(where) == TYPE_THING)
                     && (controls(who, where) || Linkable(where)
-                        || (POWERS(who) & POW_LINK_ANYWHERE)));
+                        || (MUCK::getPowers(who) & POW_LINK_ANYWHERE)));
             /* NOTREACHED */
             break;
         case NOTYPE:
             return (controls(who, where) || (FLAGS(where) & LINK_OK)
-                    || (POWERS(who) & POW_LINK_ANYWHERE)
+                    || (MUCK::getPowers(who) & POW_LINK_ANYWHERE)
                     || (Typeof(where) != TYPE_THING && (FLAGS(where) & ABODE)));
             /* NOTREACHED */
             break;
@@ -82,8 +83,8 @@ could_doit(int descr, dbref player, dbref thing)
             return 0;
         }
 
-        owner = OWNER(thing);
-        source = DBFETCH(player)->location;
+        owner = MUCK::getOwner(thing);
+        source = MUCK::getLocation(player);
         dest = MUCK::exitDestRef(thing, 0);
 
         if (dest == NIL)        /* unless its locked, anyone can use #-4 */
@@ -92,7 +93,7 @@ could_doit(int descr, dbref player, dbref thing)
         if (Typeof(dest) == TYPE_PLAYER) {
             dbref destplayer = dest;
 
-            dest = DBFETCH(dest)->location;
+            dest = MUCK::getLocation(dest);
             if (!(FLAGS(destplayer) & JUMP_OK) || (FLAGS(dest) & BUILDER)) {
                 return 0;
             }
@@ -122,7 +123,7 @@ could_doit(int descr, dbref player, dbref thing)
         }
 
         /* for actions */
-        if ((DBFETCH(thing)->location != NOTHING) && (Typeof(DBFETCH(thing)->location) != TYPE_ROOM)) {
+        if ((MUCK::getLocation(thing) != NOTHING) && (Typeof(MUCK::getLocation(thing)) != TYPE_ROOM)) {
 
             if ((Typeof(dest) == TYPE_ROOM || Typeof(dest) == TYPE_PLAYER) && (FLAGS(source) & BUILDER))
                 return 0;
@@ -151,8 +152,8 @@ could_doit2(int descr, dbref player, dbref thing, char *prop, bool tryprog)
             return 0;
         }
 
-        owner = OWNER(thing);
-        source = DBFETCH(player)->location;
+        owner = MUCK::getOwner(thing);
+        source = MUCK::getLocation(player);
         dest = MUCK::exitDestRef(thing, 0);
 
         if (dest == NIL)        /* unless its locked, anyone can use #-4 */
@@ -161,7 +162,7 @@ could_doit2(int descr, dbref player, dbref thing, char *prop, bool tryprog)
         if (Typeof(dest) == TYPE_PLAYER) {
             dbref destplayer = dest;
 
-            dest = DBFETCH(dest)->location;
+            dest = MUCK::getLocation(dest);
             if (!(FLAGS(destplayer) & JUMP_OK) || (FLAGS(dest) & BUILDER)) {
                 return 0;
             }
@@ -184,7 +185,7 @@ could_doit2(int descr, dbref player, dbref thing, char *prop, bool tryprog)
         }
 
         /* for actions */
-        if ((DBFETCH(thing)->location != NOTHING) && (Typeof(DBFETCH(thing)->location) != TYPE_ROOM)) {
+        if ((MUCK::getLocation(thing) != NOTHING) && (Typeof(MUCK::getLocation(thing)) != TYPE_ROOM)) {
 
             if ((Typeof(dest) == TYPE_ROOM || Typeof(dest) == TYPE_PLAYER) && (FLAGS(source) & BUILDER))
                 return 0;
@@ -235,7 +236,7 @@ can_doit(int descr, dbref player, dbref thing, const char *default_fail_msg)
 {
     dbref loc;
 
-    if ((loc = getloc(player)) == NOTHING)
+    if ((loc = MUCK::getLocation(player)) == NOTHING)
         return 0;
 
     if (OkObj(thing)) {
@@ -243,11 +244,11 @@ can_doit(int descr, dbref player, dbref thing, const char *default_fail_msg)
 
         if (((FLAG2(player) & F2IMMOBILE) && !(FLAG2(thing) & F2IMMOBILE)) && (!OkObj(dest) || Typeof(dest) != TYPE_PROGRAM)
             ) {
-            envpropqueue(descr, player, OkObj(player) ? getloc(player) : -1, thing, thing, NOTHING, "@immobile", "Immobile", 1, 1);
+            envpropqueue(descr, player, OkObj(player) ? MUCK::getLocation(player) : -1, thing, thing, NOTHING, "@immobile", "Immobile", 1, 1);
             return 0;
         }
     }
-    if (!TMage(OWNER(player)) && Typeof(player) == TYPE_THING && (FLAGS(thing) & ZOMBIE)) {
+    if (!TMage(MUCK::getOwner(player)) && Typeof(player) == TYPE_THING && (FLAGS(thing) & ZOMBIE)) {
         notify(player, "Sorry, but zombies can't do that.");
         return 0;
     }
@@ -259,7 +260,7 @@ can_doit(int descr, dbref player, dbref thing, const char *default_fail_msg)
             notify(player, default_fail_msg);
         }
         if (GETOFAIL(thing) && !Dark(player)) {
-            parse_omessage(descr, player, loc, thing, GETOFAIL(thing), PNAME(player), "(@Ofail)");
+            parse_omessage(descr, player, loc, thing, GETOFAIL(thing), MUCK::getName(player), "(@Ofail)");
         }
         return 0;
     } else {
@@ -293,14 +294,14 @@ can_see(dbref player, dbref thing, bool can_see_loc)
         switch (Typeof(thing)) {
             case TYPE_PROGRAM:
                 return ((FLAGS(thing) & LINK_OK) || controls(player, thing)
-                        || (POWERS(player) & POW_SEE_ALL));
+                        || (MUCK::getPowers(player) & POW_SEE_ALL));
             case TYPE_PLAYER:
                 if (tp_dark_sleepers) {
                     return (!Dark(thing) || online(thing)
-                            || (POWERS(player) & POW_SEE_ALL));
+                            || (MUCK::getPowers(player) & POW_SEE_ALL));
                 }
             default:
-                return (!Dark(thing) || (POWERS(player) & POW_SEE_ALL) || (controls(player, thing)
+                return (!Dark(thing) || (MUCK::getPowers(player) & POW_SEE_ALL) || (controls(player, thing)
                                                                            && !(FLAGS(player) & STICKY)));
 
         }
@@ -312,7 +313,7 @@ can_see(dbref player, dbref thing, bool can_see_loc)
 
 #ifdef CONTROLS_SUPPORT
 #   define controlsEx(W, H) ((FLAG2(H) & F2CONTROLS) && \
-    test_lock_false_default(-1, OWNER(W), H, CHLK_PROP))
+    test_lock_false_default(-1, MUCK::getOwner(W), H, CHLK_PROP))
 #endif
 
 bool
@@ -335,27 +336,27 @@ newcontrols(dbref who, dbref what, bool true_c)
 
     /* Puppets are based on owner */
     if (Typeof(who) != TYPE_PLAYER)
-        who = OWNER(who);
+        who = MUCK::getOwner(who);
 
     /* owners control their own stuff */
     /* Makes stuff faster here. -Hinoserm */
-    if (who == OWNER(what))
+    if (who == MUCK::getOwner(what))
         return 1;
 
     /* CONTROL_ALL controls all objects */
-    if ((POWERS(who) & POW_CONTROL_ALL) && !Protect(what))
+    if ((MUCK::getPowers(who) & POW_CONTROL_ALL) && !Protect(what))
         return 1;
 
     /* CONTROL_MUF power controls all MUF objects */
-    if ((POWERS(who) & POW_CONTROL_MUF) && (Typeof(what) == TYPE_PROGRAM)
+    if ((MUCK::getPowers(who) & POW_CONTROL_MUF) && (Typeof(what) == TYPE_PROGRAM)
         && (!(Protect(what))))
         return 1;
 
     /* Wizard controls (most) everything else */
-    if (Wiz(who) && (!(Protect(what) && MLevel(OWNER(what)) >= LBOY)
+    if (Wiz(who) && (!(Protect(what) && MLevel(MUCK::getOwner(what)) >= LBOY)
                      || MLevel(who) >= LBOY))
         if (tp_fb_controls ? (MLevel(who) >= LWIZ)
-            : (MLevel(who) >= MLevel(OWNER(what))))
+            : (MLevel(who) >= MLevel(MUCK::getOwner(what))))
             return 1;
 
     /* If realms control is enabled, the player will Control anything 
@@ -375,13 +376,13 @@ newcontrols(dbref who, dbref what, bool true_c)
         if (tp_realms_control) {
             if (!tp_wiz_realms) {
                 if (Typeof(what) != TYPE_PLAYER)
-                    for (index = what; index != NOTHING; index = getloc(index))
+                    for (index = what; index != NOTHING; index = MUCK::getLocation(index))
                         if ((controlsEx(who, index))
                             && (Typeof(index) == TYPE_ROOM && ((FLAGS(index) & BUILDER) || Mage(index))))
                             return 1;
             } else {
                 if (Typeof(what) != TYPE_PLAYER)
-                    for (index = what; index != NOTHING; index = getloc(index))
+                    for (index = what; index != NOTHING; index = MUCK::getLocation(index))
                         if ((controlsEx(who, index))
                             && (Typeof(index) == TYPE_ROOM && (Mage(index))))
                             return 1;
@@ -391,8 +392,8 @@ newcontrols(dbref who, dbref what, bool true_c)
 #endif
 
         if (tp_realms_control && (Typeof(what) != TYPE_PLAYER))
-            for (index = what; index != NOTHING; index = getloc(index))
-                if ((OWNER(index) == who) && (Typeof(index) == TYPE_ROOM && Mage(index)))
+            for (index = what; index != NOTHING; index = MUCK::getLocation(index))
+                if ((MUCK::getOwner(index) == who) && (Typeof(index) == TYPE_ROOM && Mage(index)))
                     return 1;
 #ifdef CONTROLS_SUPPORT
     }
@@ -410,32 +411,32 @@ restricted(dbref player, dbref thing, object_flag_type flag)
 {
     switch (flag) {
         case ABODE:
-            return (!Mage(OWNER(player)) && (Typeof(thing) == TYPE_PROGRAM));
+            return (!Mage(MUCK::getOwner(player)) && (Typeof(thing) == TYPE_PROGRAM));
             break;
         case ZOMBIE:
             if (tp_wiz_puppets)
                 if (Typeof(thing) == TYPE_THING)
-                    return (!Mage(OWNER(player)));
+                    return (!Mage(MUCK::getOwner(player)));
             if (Typeof(thing) == TYPE_PLAYER)
-                return (!Mage(OWNER(player)));
+                return (!Mage(MUCK::getOwner(player)));
             if ((Typeof(thing) == TYPE_THING)
-                && (FLAGS(OWNER(player)) & ZOMBIE))
-                return (!Mage(OWNER(player)));
+                && (FLAGS(MUCK::getOwner(player)) & ZOMBIE))
+                return (!Mage(MUCK::getOwner(player)));
             return (0);
         case VEHICLE:
             if (Typeof(thing) == TYPE_PLAYER)
-                return (!Mage(OWNER(player)));
+                return (!Mage(MUCK::getOwner(player)));
             if (tp_wiz_vehicles) {
                 if (Typeof(thing) == TYPE_THING)
-                    return (!Mage(OWNER(player)));
+                    return (!Mage(MUCK::getOwner(player)));
             } else {
                 if ((Typeof(thing) == TYPE_THING)
                     && (FLAGS(player) & VEHICLE))
-                    return (!Mage(OWNER(player)));
+                    return (!Mage(MUCK::getOwner(player)));
             }
             return (0);
         case DARK:
-            if (!Arch(OWNER(player)) && !(POWERS(player) & POW_HIDE)) {
+            if (!Arch(MUCK::getOwner(player)) && !(MUCK::getPowers(player) & POW_HIDE)) {
                 if (Typeof(thing) == TYPE_PLAYER)
                     return (1);
                 if (!tp_exit_darking && Typeof(thing) == TYPE_EXIT)
@@ -451,13 +452,13 @@ restricted(dbref player, dbref thing, object_flag_type flag)
         case BUILDER:
             if ((Typeof(thing) == TYPE_PLAYER)
                 || (Typeof(thing) == TYPE_PROGRAM))
-                return (!Mage(OWNER(player)));
+                return (!Mage(MUCK::getOwner(player)));
             else
                 return (!truecontrols(player, thing));
             break;
         case CHOWN_OK:
             if (Typeof(thing) == TYPE_PLAYER)
-                return !((OWNER(thing) == player) || Mage(player));
+                return !((MUCK::getOwner(thing) == player) || Mage(player));
             else
                 return !truecontrols(player, thing);
             break;
@@ -481,18 +482,18 @@ restricted2(dbref player, dbref thing, object_flag_type flag)
 {
     switch (flag) {
         case F2GUEST:
-            return (!Mage(OWNER(player)));
+            return (!Mage(MUCK::getOwner(player)));
             break;
         case F2LOGWALL:
-            return (!Arch(OWNER(player)));
+            return (!Arch(MUCK::getOwner(player)));
         case F2HIDDEN:         /* can only be set on players currently */
             if (Typeof(thing) == TYPE_PLAYER)
-                return (!Arch(OWNER(player)) && !(POWERS(player) & POW_HIDE));
+                return (!Arch(MUCK::getOwner(player)) && !(MUCK::getPowers(player) & POW_HIDE));
             else
                 return 1;
         case F2ANTIPROTECT:
             if (Typeof(thing) == TYPE_PLAYER)
-                return (!Boy(OWNER(player)));
+                return (!Boy(MUCK::getOwner(player)));
             else
                 return 1;
 #ifdef CONTROLS_SUPPORT
@@ -507,10 +508,10 @@ restricted2(dbref player, dbref thing, object_flag_type flag)
             break;
 #endif
         case F2MOBILE:
-            return !(MLevel(OWNER(player)) >= tp_userflag_mlev);
+            return !(MLevel(MUCK::getOwner(player)) >= tp_userflag_mlev);
             break;
         case F2SUSPECT:
-            return (!Wizard(OWNER(player)));
+            return (!Wizard(MUCK::getOwner(player)));
         default:
             return 0;
             break;
@@ -527,8 +528,8 @@ payfor(dbref who, int cost)
     if (who == NOTHING)
         return 1;
 
-    who = OWNER(who);
-    if (Mage(who) || (POWERS(who) & POW_NO_PAY)) {
+    who = MUCK::getOwner(who);
+    if (Mage(who) || (MUCK::getPowers(who) & POW_NO_PAY)) {
         return 1;
 
     } else if (MUCK::playerPennies(who) >= cost) {

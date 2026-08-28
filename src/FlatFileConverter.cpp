@@ -15,6 +15,7 @@
 #include "interface.h"
 #include "externs.h"
 #include "MacroTable.h"
+#include "ObjectAccess.h"
 #include "ProgramStore.h"
 #include "strutils.h"
 #include "FlatFileConverter.h"
@@ -220,7 +221,7 @@ db_read_object_old(FILE * f, struct object *o, dbref objno)
     FLAG4(objno) = 0;
     POWERSDB(objno) = 0;
     POWER2DB(objno) = 0;
-    NAME(objno) = getstring(f);
+    MUCK::setName(objno, getstring_noalloc(f));
     LOADDESC(objno, getstring_oldcomp_noalloc(f));
     o->location = getref(f);
     rawContents[objno] = getref(f);
@@ -231,17 +232,14 @@ db_read_object_old(FILE * f, struct object *o, dbref objno)
     LOADSUCC(objno, getstring_oldcomp_noalloc(f));
     LOADOFAIL(objno, getstring_oldcomp_noalloc(f));
     LOADOSUCC(objno, getstring_oldcomp_noalloc(f));
-    OWNER(objno) = getref(f);
+    MUCK::setOwner(objno, getref(f));
     pennies = getref(f);
 
     /* timestamps mods */
-    o->ts.created = current_systime;
-    o->ts.lastused = current_systime;
-    o->ts.usecount = 0;
-    o->ts.modified = current_systime;
-    o->ts.dcreated = -1;
-    o->ts.dlastused = -1;
-    o->ts.dmodified = -1;
+    MUCK::setCreated(objno, current_systime, -1);
+    MUCK::setLastUsed(objno, current_systime, -1);
+    MUCK::setUseCount(objno, 0);
+    MUCK::setModified(objno, current_systime, -1);
 
 
     FLAGS(objno) |= getfref(f, &f2, &f3, &f4, &p1, &p2);
@@ -313,11 +311,10 @@ db_read_object_old(FILE * f, struct object *o, dbref objno)
             o->sp.player.password = password;
             break;
         case TYPE_GARBAGE:
-            OWNER(objno) = NOTHING;
+            MUCK::setOwner(objno, NOTHING);
 
-            delete[]NAME(objno);
-            NAME(objno) = "<garbage>";
-            SETDESC(objno, "<recyclable>");
+            MUCK::setName(objno, "<garbage>");
+            MUCK::setDesc(objno, "<recyclable>");
             break;
     }
 }
@@ -336,7 +333,7 @@ db_read_object_new(FILE * f, struct object *o, dbref objno)
     FLAG4(objno) = 0;
     POWERSDB(objno) = 0;
     POWER2DB(objno) = 0;
-    NAME(objno) = getstring(f);
+    MUCK::setName(objno, getstring_noalloc(f));
     LOADDESC(objno, getstring_noalloc(f));
     o->location = getref(f);
     rawContents[objno] = getref(f);
@@ -348,13 +345,10 @@ db_read_object_new(FILE * f, struct object *o, dbref objno)
     LOADOSUCC(objno, getstring_oldcomp_noalloc(f));
 
     /* timestamps mods */
-    o->ts.created = current_systime;
-    o->ts.lastused = current_systime;
-    o->ts.usecount = 0;
-    o->ts.modified = current_systime;
-    o->ts.dcreated = -1;
-    o->ts.dlastused = -1;
-    o->ts.dmodified = -1;
+    MUCK::setCreated(objno, current_systime, -1);
+    MUCK::setLastUsed(objno, current_systime, -1);
+    MUCK::setUseCount(objno, 0);
+    MUCK::setModified(objno, current_systime, -1);
 
     /* OWNER(objno) = getref(f); */
     /* o->pennies = getref(f); */
@@ -404,13 +398,13 @@ db_read_object_new(FILE * f, struct object *o, dbref objno)
         case TYPE_THING:
             o->sp.thing.home = getref(f);
             o->exits = getref(f);
-            OWNER(objno) = getref(f);
+            MUCK::setOwner(objno, getref(f));
             o->sp.thing.value = getref(f);
             break;
         case TYPE_ROOM:
             o->sp.room.dropto = getref(f);
             o->exits = getref(f);
-            OWNER(objno) = getref(f);
+            MUCK::setOwner(objno, getref(f));
             break;
         case TYPE_EXIT:
             o->sp.exit.ndest = getref(f);
@@ -419,7 +413,7 @@ db_read_object_new(FILE * f, struct object *o, dbref objno)
             for (j = 0; j < o->sp.exit.ndest; j++) {
                 (o->sp.exit.dest)[j] = getref(f);
             }
-            OWNER(objno) = getref(f);
+            MUCK::setOwner(objno, getref(f));
             break;
         case TYPE_PLAYER:
             o->sp.player.home = getref(f);
@@ -457,7 +451,7 @@ db_read_object_foxen(FILE * f, struct object *o, dbref objno, int dtype, int rea
     if (verboseload)
         fprintf(stderr, "#%d [object_info] ", objno);
 
-    NAME(objno) = getstring(f);
+    MUCK::setName(objno, getstring_noalloc(f));
 #ifdef ARCHAIC_DATABASES
     if (dtype <= 3)
         LOADDESC(objno, getstring_oldcomp_noalloc(f));
@@ -590,7 +584,7 @@ db_read_object_foxen(FILE * f, struct object *o, dbref objno, int dtype, int rea
                 fprintf(stderr, "[type: THING] ");
             MUCK::thingSetHomeRef(objno, prop_flag ? getref(f) : j);
             rawExits[objno] = getref(f);
-            OWNER(objno) = getref(f);
+            MUCK::setOwner(objno, getref(f));
             MUCK::thingSetValue(objno, getref(f));
             break;
         case TYPE_ROOM:
@@ -598,7 +592,7 @@ db_read_object_foxen(FILE * f, struct object *o, dbref objno, int dtype, int rea
                 fprintf(stderr, "[type: ROOM] ");
             MUCK::roomSetDropToRef(objno, prop_flag ? getref(f) : j);
             rawExits[objno] = getref(f);
-            OWNER(objno) = getref(f);
+            MUCK::setOwner(objno, getref(f));
             break;
         case TYPE_EXIT: {
             if (verboseload)
@@ -613,7 +607,7 @@ db_read_object_foxen(FILE * f, struct object *o, dbref objno, int dtype, int rea
                 MUCK::database().get(objno)->As<MUCK::Exit>())
                 x->setDestRefs(dl.empty() ? NULL : dl.data(),
                                (int) dl.size());
-            OWNER(objno) = getref(f);
+            MUCK::setOwner(objno, getref(f));
             break;
         }
         case TYPE_PLAYER:
@@ -691,7 +685,7 @@ db_read_object_foxen(FILE * f, struct object *o, dbref objno, int dtype, int rea
         case TYPE_PROGRAM:
             if (verboseload)
                 fprintf(stderr, "[type: PROGRAM] ");
-            OWNER(objno) = getref(f);
+            MUCK::setOwner(objno, getref(f));
             FLAGS(objno) &= ~INTERNAL;
 #ifdef ARCHAIC_DATABASES
             if (dtype < 5 && MLevel(objno) == 0)
@@ -699,8 +693,7 @@ db_read_object_foxen(FILE * f, struct object *o, dbref objno, int dtype, int rea
 #endif /* ARCHAIC_DATABASES */
             break;
         case TYPE_GARBAGE:
-            delete[]NAME(objno);
-            NAME(objno) = "<garbage>";
+            MUCK::setName(objno, "<garbage>");
 
             if (verboseload)
                 fprintf(stderr, "[type: GARBAGE] ");
@@ -739,7 +732,7 @@ materializeLists(void)
 
             for (dbref m = head; m != NOTHING && guard-- > 0;) {
                 if (!MUCK::database().valid(m) || m == i
-                    || DBFETCH(m)->location != i
+                    || MUCK::getLocation(m) != i
                     || !claimed.insert((int) m).second) {
                     dropped++;
                     break;
@@ -928,7 +921,7 @@ MUCK::FlatFileConverter::import(FILE * f)
                 MUCK::database().assignUUID(thisref, MUCK::UUID::generate());
 
                 if (Typeof(thisref) == TYPE_PLAYER) {
-                    OWNER(thisref) = thisref;
+                    MUCK::setOwner(thisref, thisref);
                     add_player(thisref);
                 }
                 break;

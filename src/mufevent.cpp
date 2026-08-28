@@ -14,6 +14,7 @@
 #include "strutils.h"
 #include "interp.h"
 #include "mufevent.h"
+#include "ObjectAccess.h"
 
 struct mufevent_process *mufevent_processes;
 
@@ -386,8 +387,8 @@ muf_event_list(dbref player, char *pat)
         sprintf(buf, pat,
                 proc->fr->pid, "--",
                 time_format_2((long) (rtime - proc->fr->started)),
-                (proc->fr->instcnt / 1000), pcnt, proc->prog, (OkObj(proc->player)) ? NAME(proc->player) : "(Login)", "EVENT_WAITFOR");
-        if (Wiz(OWNER(player)) || (OWNER(proc->prog) == OWNER(player))
+                (proc->fr->instcnt / 1000), pcnt, proc->prog, (OkObj(proc->player)) ? MUCK::getName(proc->player) : "(Login)", "EVENT_WAITFOR");
+        if (Wiz(MUCK::getOwner(player)) || (MUCK::getOwner(proc->prog) == MUCK::getOwner(player))
             || (proc->player == player))
             notify_nolisten(player, buf, 1);
         count++;
