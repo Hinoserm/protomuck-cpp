@@ -9,6 +9,7 @@
 #include "tune.h"
 #include "interface.h"
 #include "externs.h"
+#include "Modules.h"
 #include "match.h"
 #include "strutils.h"
 
@@ -453,7 +454,8 @@ do_link(int descr, dbref player, const char *thing_name, const char *dest_name)
                 || (thing == dest)) {
                 anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
             } else {
-                DBFETCH(thing)->sp.room.dropto = dest; /* dropto */
+                MUCK::database().get(thing)->As<MUCK::Room>()
+                    ->setDropTo(MUCK::database().get(dest));
                 sprintf(buf, CSUCC "%s's dropto set to %s.", NAME(thing), unparse_object(player, dest));
                 anotify_nolisten2(player, buf);
             }
@@ -530,7 +532,7 @@ do_dig(int descr, dbref player, const char *name, const char *pname)
     DBFETCH(room)->location = newparent;
     OWNER(room) = OWNER(player);
     DBFETCH(room)->exits = NOTHING;
-    DBFETCH(room)->sp.room.dropto = NOTHING;
+    DBFETCH(room)->sp.room.dropto = NOTHING;   /* raw: object still mid-construction */
     FLAGS(room) = TYPE_ROOM | (FLAGS(player) & JUMP_OK);
     PUSH(room, DBFETCH(newparent)->contents);
     DBDIRTY(room);

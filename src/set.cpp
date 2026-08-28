@@ -11,6 +11,7 @@
 #include "match.h"
 #include "interface.h"
 #include "externs.h"
+#include "Modules.h"
 
 char lflag_name[32][32];
 int lflag_mlev[32];
@@ -831,7 +832,9 @@ controls_link(dbref who, dbref what)
 
         case TYPE_ROOM:
         {
-            if (controls(who, DBFETCH(what)->sp.room.dropto))
+            MUCK::Room *r = MUCK::database().get(what)->As<MUCK::Room>();
+
+            if (r && r->dropTo() && controls(who, r->dropTo()->ref()))
                 return 1;
             return 0;
         }
@@ -913,7 +916,7 @@ _do_unlink(int descr, dbref player, const char *name, int quiet)
                         break;
                     case TYPE_ROOM:
                         ts_modifyobject(player, exit);
-                        DBSTORE(exit, sp.room.dropto, NOTHING);
+                        MUCK::database().get(exit)->As<MUCK::Room>()->setDropTo(nullptr);
                         if (!quiet)
                             anotify_fmt(player, CSUCC "Dropto removed from %s.", unparse_object(player, exit));
                         break;

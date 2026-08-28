@@ -9,6 +9,7 @@
 #include "props.h"
 #include "inst.h"
 #include "externs.h"
+#include "Modules.h"
 #include "match.h"
 #include "interface.h"
 #include "strutils.h"
@@ -1325,7 +1326,7 @@ prim_getlink(PRIM_PROTOTYPE)
             ref = DBFETCH(oper[0].data.objref)->sp.thing.home;
             break;
         case TYPE_ROOM:
-            ref = DBFETCH(oper[0].data.objref)->sp.room.dropto;
+            ref = [&]{ MUCK::Room *r = MUCK::database().get(oper[0].data.objref)->As<MUCK::Room>(); return (r && r->dropTo()) ? r->dropTo()->ref() : NOTHING; }();
             break;
         default:
             ref = NOTHING;
@@ -1369,7 +1370,7 @@ prim_getlinks(PRIM_PROTOTYPE)
             PushInt(count);
             break;
         case TYPE_ROOM:
-            ref = DBFETCH(ref2)->sp.room.dropto;
+            ref = [&]{ MUCK::Room *r = MUCK::database().get(ref2)->As<MUCK::Room>(); return (r && r->dropTo()) ? r->dropTo()->ref() : NOTHING; }();
             if (ref != NOTHING) {
                 count = 0;
                 PushInt(count);
@@ -1445,7 +1446,7 @@ prim_setlink(PRIM_PROTOTYPE)
                     SetMLevel(ref, 0);
                 break;
             case TYPE_ROOM:
-                DBSTORE(ref, sp.room.dropto, NOTHING);
+                MUCK::database().get(ref)->As<MUCK::Room>()->setDropTo(nullptr);
                 break;
             default:
                 abort_interp("Invalid object (1)");
@@ -1490,7 +1491,8 @@ prim_setlink(PRIM_PROTOTYPE)
             case TYPE_ROOM:
                 if (!permissions(mlev, ProgUID, ref))
                     abort_interp(tp_noperm_mesg);
-                DBFETCH(ref)->sp.room.dropto = oper[0].data.objref;
+                MUCK::database().get(ref)->As<MUCK::Room>()
+                    ->setDropTo(MUCK::database().get(oper[0].data.objref));
                 break;
         }
     }
@@ -1618,7 +1620,7 @@ prim_newroom(PRIM_PROTOTYPE)
         DBFETCH(ref)->location = oper[1].data.objref;
         OWNER(ref) = OWNER(ProgUID);
         DBFETCH(ref)->exits = NOTHING;
-        DBFETCH(ref)->sp.room.dropto = NOTHING;
+        MUCK::database().get(ref)->As<MUCK::Room>()->setDropTo(nullptr);
         PUSH(ref, DBFETCH(oper[1].data.objref)->contents);
         DBDIRTY(ref);
         DBDIRTY(oper[1].data.objref);
@@ -1871,7 +1873,7 @@ prim_nextentrance(PRIM_PROTOTYPE)
                         foundref = 1;
                     break;
                 case TYPE_ROOM:
-                    if (DBFETCH(ref)->sp.room.dropto == linkref)
+                    if ([&]{ MUCK::Room *r = MUCK::database().get(ref)->As<MUCK::Room>(); return (r && r->dropTo()) ? r->dropTo()->ref() : NOTHING; }() == linkref)
                         foundref = 1;
                     break;
                 case TYPE_THING:
@@ -2456,7 +2458,7 @@ array_getlinks(dbref obj)
                 temp1.type = PROG_INTEGER;
                 temp1.data.number = count++;
                 temp2.type = PROG_OBJECT;
-                temp2.data.objref = DBFETCH(obj)->sp.room.dropto;
+                temp2.data.objref = [&]{ MUCK::Room *r = MUCK::database().get(obj)->As<MUCK::Room>(); return (r && r->dropTo()) ? r->dropTo()->ref() : NOTHING; }();
                 array_setitem(&nw, &temp1, &temp2);
                 CLEAR(&temp1);
                 CLEAR(&temp2);
@@ -2602,7 +2604,7 @@ prim_getobjinfo(PRIM_PROTOTYPE)
             temp1.type = PROG_STRING;
             temp1.data.string = alloc_prog_string("DROPTO");
             temp2.type = PROG_OBJECT;
-            temp2.data.objref = DBFETCH(ref)->sp.room.dropto;
+            temp2.data.objref = [&]{ MUCK::Room *r = MUCK::database().get(ref)->As<MUCK::Room>(); return (r && r->dropTo()) ? r->dropTo()->ref() : NOTHING; }();
             array_setitem(&nw, &temp1, &temp2);
             CLEAR(&temp1);
             CLEAR(&temp2);
@@ -2783,7 +2785,7 @@ prim_entrances_array(PRIM_PROTOTYPE)
                     array_appendref(&nw, i);
                 break;
             case TYPE_ROOM:
-                if (DBFETCH(i)->sp.room.dropto == ref)
+                if ([&]{ MUCK::Room *r = MUCK::database().get(i)->As<MUCK::Room>(); return (r && r->dropTo()) ? r->dropTo()->ref() : NOTHING; }() == ref)
                     array_appendref(&nw, i);
                 break;
             case TYPE_PROGRAM:

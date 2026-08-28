@@ -757,9 +757,11 @@ do_drop(int descr, dbref player, const char *name, const char *obj)
             if (Typeof(cont) == TYPE_ROOM && (FLAGS(thing) & STICKY) && Typeof(thing) == TYPE_THING) {
                 send_home(descr, thing, 0);
             } else {
-                int immediate_dropto = (Typeof(cont) == TYPE_ROOM && DBFETCH(cont)->sp.room.dropto != NOTHING && !(FLAGS(cont) & STICKY));
+                MUCK::Room *cr = MUCK::database().get(cont)->As<MUCK::Room>();
+                bool immediate_dropto = (cr && cr->dropTo()
+                                         && !(FLAGS(cont) & STICKY));
 
-                moveto(thing, immediate_dropto ? DBFETCH(cont)->sp.room.dropto : cont);
+                moveto(thing, immediate_dropto ? cr->dropTo()->ref() : cont);
             }
             if (Typeof(cont) == TYPE_THING) {
                 anotify_nolisten2(player, CSUCC "Put away.");
@@ -935,11 +937,12 @@ recycle(int descr, dbref player, dbref thing)
 
     for (rest = 0; rest < MUCK::database().top(); rest++) {
         switch (Typeof(rest)) {
-            case TYPE_ROOM:
-                if (DBFETCH(rest)->sp.room.dropto == thing) {
-                    DBFETCH(rest)->sp.room.dropto = NOTHING;
-                    DBDIRTY(rest);
-                }
+            case TYPE_ROOM: {
+                MUCK::Room *rr = MUCK::database().get(rest)->As<MUCK::Room>();
+
+                if (rr && rr->dropTo() && rr->dropTo()->ref() == thing)
+                    rr->setDropTo(nullptr);
+            }
                 if (DBFETCH(rest)->exits == thing) {
                     DBFETCH(rest)->exits = DBFETCH(thing)->next;
                     DBDIRTY(rest);

@@ -1672,10 +1672,13 @@ checkflags(dbref what, struct flgchkdat check)
 
     if (check.forlink) {
         switch (Typeof(what)) {
-            case TYPE_ROOM:
-                if ((DBFETCH(what)->sp.room.dropto == NOTHING) != (!check.islinked))
+            case TYPE_ROOM: {
+                MUCK::Room *r = MUCK::database().get(what)->As<MUCK::Room>();
+
+                if ((!r || !r->dropTo()) != (!check.islinked))
                     return (0);
                 break;
+            }
             case TYPE_EXIT:
                 if ((!DBFETCH(what)->sp.exit.ndest) != (!check.islinked))
                     return (0);
@@ -1720,9 +1723,14 @@ display_objinfo(dbref player, dbref obj, char output_type)
             break;
         case 2:                /* links */
             switch (Typeof(obj)) {
-                case TYPE_ROOM:
-                    sprintf(buf, "%-38.512s  %.512s", buf2, ansi_unparse_object(player, DBFETCH(obj)->sp.room.dropto));
+                case TYPE_ROOM: {
+                    MUCK::Room *r = MUCK::database().get(obj)->As<MUCK::Room>();
+
+                    sprintf(buf, "%-38.512s  %.512s", buf2,
+                            ansi_unparse_object(player,
+                                r && r->dropTo() ? r->dropTo()->ref() : NOTHING));
                     break;
+                }
                 case TYPE_EXIT:
                     if (DBFETCH(obj)->sp.exit.ndest == 0) {
                         sprintf(buf, "%-38.512s  %.512s", buf2, "*UNLINKED*");
@@ -1940,12 +1948,15 @@ do_entrances(int descr, dbref player, const char *name, const char *flags)
                         total++;
                     }
                     break;
-                case TYPE_ROOM:
-                    if (DBFETCH(i)->sp.room.dropto == thing) {
+                case TYPE_ROOM: {
+                    MUCK::Room *r = MUCK::database().get(i)->As<MUCK::Room>();
+
+                    if (r && r->dropTo() && r->dropTo()->ref() == thing) {
                         display_objinfo(player, i, output_type);
                         total++;
                     }
                     break;
+                }
                 case TYPE_PROGRAM:
                 case TYPE_GARBAGE:
                     break;
