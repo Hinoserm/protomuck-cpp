@@ -5,6 +5,7 @@
 #include <sys/types.h>
 #include <dirent.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <errno.h>
 #include <cctype>
 #include <fstream>
@@ -1007,6 +1008,33 @@ ObjectStore::objectPath(dbref i) const
     return UUIDObjectPath(root_, MUCK::database().UUIDOf(i));
 }
 
+/* Durability: torn files after power loss have been a real problem
+ * here, so a write is not finished until its bytes are on the platter
+ * and the rename that publishes them is too. docs/DATABASE.txt 7.1. */
+static void
+syncFile(const std::string &path)
+{
+    int fd = open(path.c_str(), O_RDONLY);
+
+    if (fd >= 0) {
+        fsync(fd);
+        close(fd);
+    }
+}
+
+static void
+syncDirOf(const std::string &path)
+{
+    size_t slash = path.rfind('/');
+    std::string dir = (slash == std::string::npos) ? "." : path.substr(0, slash);
+    int fd = open(dir.c_str(), O_RDONLY | O_DIRECTORY);
+
+    if (fd >= 0) {
+        fsync(fd);
+        close(fd);
+    }
+}
+
 static bool
 atomicWrite(const std::string &path, const std::string &content)
 {
@@ -1019,7 +1047,13 @@ atomicWrite(const std::string &path, const std::string &content)
     f.close();
     if (!f)
         return false;
-    return rename(tmp.c_str(), path.c_str()) == 0;
+    /* fsync the data, then publish, then fsync the directory so the
+     * rename itself survives */
+    syncFile(tmp);
+    if (rename(tmp.c_str(), path.c_str()) != 0)
+        return false;
+    syncDirOf(path);
+    return true;
 }
 
 bool
@@ -1226,75 +1260,25 @@ ObjectStore::saveObject(dbref i)
     ensureDirsFor(path);
 
     json cur = objectToJson(i);
-    json &ce = cur["entries"];
 
-    /* Copy-on-write per entry: diff against the file being replaced.
-     * An unchanged value keeps its rev untouched (a no-op write costs
-     * nothing); a changed value whose old rev is visible at a retained
-     * marker pushes the old value into the sidecar history file
-     * (<uuid>.hist, append-only) first. */
+    /* Carry the object's own markers across, and stamp the revision
+     * this base represents. */
     std::ifstream pf(path);
     json prev = pf ? json::parse(pf, nullptr, false) : json();
-    bool havePrev = prev.is_object() && prev.contains("entries");
-    std::vector<Marker> own =
-        havePrev ? markersFromJson(prev.value("markers", json::array()))
-                 : std::vector<Marker>();
-    std::string histLines;
 
-    for (auto it = ce.begin(); it != ce.end(); ++it) {
-        json *old = nullptr;
+    if (prev.is_object() && !prev.value("markers", json::array()).empty())
+        cur["markers"] = prev["markers"];
+    cur["rev"] = rev_;
 
-        if (havePrev) {
-            auto pit = prev["entries"].find(it.key());
-            if (pit != prev["entries"].end())
-                old = &*pit;
-        }
-        if (old && (*old)["type"] == it.value()["type"]
-            && (*old)["value"] == it.value()["value"]
-            && old->value("flags", 0) == it.value().value("flags", 0)) {
-            it.value()["rev"] = old->value("rev", 0L);   /* unchanged */
-            continue;
-        }
-        it.value()["rev"] = rev_;
-        if (old) {
-            long oldRev = old->value("rev", 0L);
+    /* A full base supersedes every layer that sat on it, so the
+     * history goes with it. This is the compacting write: conversion
+     * and maintenance use it. Ordinary saves append layers instead
+     * (persist), which is what preserves rollback history. */
+    unlink(histPath(i).c_str());
 
-            if (markerInWindow(oldRev, rev_, markers_, own)) {
-                json h = *old;
-
-                h["key"] = it.key();
-                h["from"] = oldRev;
-                h["to"] = rev_;
-                histLines += h.dump() + "\n";
-            }
-        }
-    }
-    /* keys that disappeared entirely: deletion, historicize if seen */
-    if (havePrev) {
-        for (auto pit = prev["entries"].begin();
-             pit != prev["entries"].end(); ++pit) {
-            if (ce.contains(pit.key()))
-                continue;
-            long oldRev = pit.value().value("rev", 0L);
-
-            if (markerInWindow(oldRev, rev_, markers_, own)) {
-                json h = pit.value();
-
-                h["key"] = pit.key();
-                h["from"] = oldRev;
-                h["to"] = rev_;
-                histLines += h.dump() + "\n";
-            }
-        }
-        if (!prev.value("markers", json::array()).empty())
-            cur["markers"] = prev["markers"];
-    }
-
-    if (!histLines.empty()) {
-        std::ofstream hf(histPath(i), std::ios::app);
-
-        if (hf)
-            hf << histLines;
+    if (DbObject *o = MUCK::database().get(i)) {
+        o->journal().discardTop();
+        o->setBaseWritten(true);
     }
     return atomicWrite(path, cur.dump(1));
 }
@@ -1309,7 +1293,12 @@ ObjectStore::removeObject(dbref i)
 long
 ObjectStore::retireObject(dbref i)
 {
-    if (!saveObject(i))
+    /* Flush the object's final state as a journal layer so its
+     * history survives; a full base rewrite would drop the layers a
+     * rollback needs. */
+    CaptureSet set = fireObject(i);
+
+    if (!persist(set))
         return -1;
     return rev_;
 }
@@ -1319,10 +1308,14 @@ ObjectStore::snapshotGlobal(const char *label, bool locked)
 {
     Marker m;
 
-    /* a marker only covers what is on disk: flush dirty state first
-     * so the snapshot sees the world as it stands */
-    if (saveAll(true) < 0)
-        return -1;
+    /* a marker only covers what is on disk, so fire first: the
+     * journal seals what changed and persists it */
+    {
+        CaptureSet set = fire();
+
+        if (!persist(set))
+            return -1;
+    }
 
     /* the marker captures the CURRENT era; writes after the snapshot
      * stamp the next one, so a read at the marker excludes them */
@@ -1346,8 +1339,12 @@ ObjectStore::snapshotObject(dbref i, const char *label, bool locked)
 
     /* flush the object first: the marker must cover its current
      * state, not whatever the last dump happened to capture */
-    if (!saveObject(i))
-        return -1;
+    {
+        CaptureSet set = fireObject(i);
+
+        if (!persist(set))
+            return -1;
+    }
 
     std::ifstream pf(path);
 
@@ -1420,40 +1417,34 @@ entriesAtRev(const json &file, const std::string &hist, long rev)
 {
     json out = json::object();
 
-    if (file.contains("entries")) {
-        const json &e = file["entries"];
+    /* Start from the base, which is the object's state as of the
+     * revision stamped on the file. A base written after the target
+     * revision cannot be walked backwards, so its entries are still
+     * the starting point; the layers below only move forward. */
+    if (file.contains("entries"))
+        out = file["entries"];
 
-        for (auto it = e.begin(); it != e.end(); ++it)
-            if (it.value().value("rev", 0L) <= rev)
-                out[it.key()] = it.value();
-    }
-
-    /* newest covering history entry per key wins */
+    /* Apply every layer up to and including the target era, in the
+     * order they were written. A null value is a removal. */
     std::istringstream hs(hist);
     std::string line;
-    std::unordered_map<std::string, long> bestFrom;
 
     while (std::getline(hs, line)) {
-        json h = json::parse(line, nullptr, false);
+        json layer = json::parse(line, nullptr, false);
 
-        if (h.is_discarded())
+        if (layer.is_discarded() || !layer.contains("entries"))
             continue;
-        long from = h.value("from", 0L), to = h.value("to", 0L);
+        if (layer.value("era", 0L) > rev)
+            break;              /* layers are appended in era order */
 
-        if (!(from <= rev && rev < to))
-            continue;
-        std::string k = h.value("key", "");
-        auto bit = bestFrom.find(k);
+        const json &e = layer["entries"];
 
-        if (bit != bestFrom.end() && bit->second >= from)
-            continue;
-        bestFrom[k] = from;
-        json v = h;
-
-        v.erase("key");
-        v.erase("from");
-        v.erase("to");
-        out[k] = v;
+        for (auto it = e.begin(); it != e.end(); ++it) {
+            if (it.value().is_null())
+                out.erase(it.key());
+            else
+                out[it.key()] = it.value();
+        }
     }
     return out;
 }
@@ -1786,6 +1777,39 @@ ObjectStore::loadAll()
 
                 if (deadUUIDs.count(fileUUID))
                     continue;
+
+                /* The stored object is its base plus the layers its
+                 * history holds, applied in era order: that is what
+                 * makes a compacted and an uncompacted object
+                 * indistinguishable here (docs/DATABASE.txt 6). */
+                {
+                    std::string base = l2 + "/" + e2->d_name;
+                    std::ifstream hf(base.substr(0, base.size() - 5) + ".hist");
+
+                    if (hf && j.contains("entries")) {
+                        std::string line;
+
+                        while (std::getline(hf, line)) {
+                            json layer = json::parse(line, nullptr, false);
+
+                            if (layer.is_discarded() || !layer.contains("entries"))
+                                continue;
+                            /* a history line written by the old
+                             * copy-on-write path describes an OLD
+                             * value and carries "key"; a journal layer
+                             * describes new values and does not */
+                            if (layer.contains("key"))
+                                continue;
+                            for (auto lit = layer["entries"].begin();
+                                 lit != layer["entries"].end(); ++lit) {
+                                if (lit.value().is_null())
+                                    j["entries"].erase(lit.key());
+                                else
+                                    j["entries"][lit.key()] = lit.value();
+                            }
+                        }
+                    }
+                }
                 if (j.contains("entries")) {
                     json unknown = json::object();
                     std::string tname = j.value("type", "garbage");
@@ -1878,13 +1902,162 @@ ObjectStore::loadAll()
      * dump. What was just read is not a change. */
     for (dbref i = 0; i < top; i++) {
         DBFETCH(i)->flags &= ~OBJECT_CHANGED;
-        if (DbObject *o = MUCK::database().get(i))
+        if (DbObject *o = MUCK::database().get(i)) {
             o->journal().discardTop();
+            /* it came off disk, so it has a base there already */
+            if (MUCK::typeOf(i) != ObjectType::Garbage)
+                o->setBaseWritten(true);
+        }
     }
 
     return (dbref) top;
 }
 
+
+/* ------------------------------------------------------------------ */
+/* Fire and persist (docs/DATABASE.txt 7.1)                           */
+/* ------------------------------------------------------------------ */
+
+/* Seal one object only: deletion and scoped snapshots need exactly
+ * their own object's layer on disk, not everyone else's. */
+ObjectStore::CaptureSet
+ObjectStore::fireObject(dbref i)
+{
+    CaptureSet set;
+
+    set.rev = rev_;
+    chainClaimed.clear();
+
+    DbObject *o = MUCK::database().get(i);
+
+    if (!o)
+        return set;
+
+    JournalLayer *top = o->journal().peek();
+    SealedLayer sealed;
+
+    sealed.era = top ? top->era() : rev_;
+    sealed.ref = i;
+    sealed.entries = json::object();
+
+    if (!o->baseWritten()) {
+        sealed.entries = objectToJson(i);
+        sealed.full = true;
+        o->setBaseWritten(true);
+    } else if (top && !top->empty()) {
+        for (const std::string &key : top->keys()) {
+            json v = entryValueOf(i, key);
+
+            sealed.entries[key] = v.is_null() ? json() : v;
+        }
+    } else {
+        return set;             /* nothing to say about this object */
+    }
+    o->journal().discardTop();
+    set.layers.push_back(std::move(sealed));
+    return set;
+}
+
+ObjectStore::CaptureSet
+ObjectStore::fire()
+{
+    CaptureSet set;
+
+    set.rev = rev_;
+
+    /* chain sanitation is per pass, and a fire is one pass */
+    chainClaimed.clear();
+    bulkSaveActive = true;
+
+    for (dbref i = 0; i < MUCK::database().top(); i++) {
+        DbObject *o = MUCK::database().get(i);
+
+        if (!o)
+            continue;
+
+        JournalLayer *top = o->journal().peek();
+
+        if (!top || top->empty())
+            continue;
+
+        SealedLayer sealed;
+
+        sealed.era = top->era();
+        sealed.ref = i;
+        sealed.entries = json::object();
+
+        if (!o->baseWritten()) {
+            /* No base yet: this object has never been written, so the
+             * whole object is the change. A layer over nothing would
+             * restore nothing. */
+            json full = objectToJson(i);
+
+            sealed.entries = full;
+            sealed.full = true;
+            o->setBaseWritten(true);
+        } else {
+            for (const std::string &key : top->keys()) {
+                json v = entryValueOf(i, key);
+
+                /* a null value is a removal, and is recorded as one */
+                sealed.entries[key] = v.is_null() ? json() : v;
+            }
+        }
+        o->journal().discardTop();
+        set.layers.push_back(std::move(sealed));
+    }
+    bulkSaveActive = false;
+
+    return set;
+}
+
+bool
+ObjectStore::persist(const CaptureSet &set)
+{
+    if (root_.empty())
+        return false;
+
+    ensureDir(root_);
+    ensureDir(root_ + "/objects");
+
+    for (const SealedLayer &layer : set.layers) {
+        std::string path = UUIDObjectPath(root_,
+                                          MUCK::database().UUIDOf(layer.ref));
+
+        ensureDirsFor(path);
+
+        if (layer.full) {
+            /* the object's first appearance: write the base itself */
+            json j = layer.entries;
+
+            j["rev"] = set.rev;
+            if (!atomicWrite(path, j.dump(1)))
+                return false;
+            continue;
+        }
+
+        /* otherwise the layer appends to the history sidecar */
+        json rec;
+
+        rec["era"] = layer.era;
+        rec["entries"] = layer.entries;
+
+        std::string hist = path.substr(0, path.size() - 5) + ".hist";
+        std::ofstream hf(hist, std::ios::app);
+
+        if (!hf)
+            return false;
+        hf << rec.dump() << "\n";
+        hf.flush();
+        hf.close();
+        syncFile(hist);
+    }
+
+    /* the manifest commits the set */
+    if (!writeManifest())
+        return false;
+    return true;
+}
 
 long
 ObjectStore::verifyEntrySerialization()

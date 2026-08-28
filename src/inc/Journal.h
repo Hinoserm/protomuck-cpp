@@ -44,6 +44,10 @@ struct SealedLayer {
     dbref ref = -1;
     /* entry key -> value, or null for a removal */
     nlohmann::json entries;
+    /* True when this is the object's whole state rather than a delta:
+     * an object with no base file yet has nothing for a layer to sit
+     * on, so its first persist writes the base. */
+    bool full = false;
 };
 
 /* The mutable top layer: which entries changed this era. */

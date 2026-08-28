@@ -277,9 +277,21 @@ dump_database_internal(void)
      * and history belongs to the versioning layer (step 3). A
      * -convert run is a format conversion, so it writes every object,
      * upgrading older-format files in place. */
-    if (MUCK::store().saveAll(!db_conversion_flag) < 0) {
-        sprintf(buf, SYSRED "[DANGER] Error writing the object store at %s!  The DB did not save! :(", MUCK::store().root().c_str());
-        ansi_wall_wizards(buf);
+    /* A conversion writes every object; normal operation fires the
+     * journal, which seals only what changed and persists that.
+     * docs/DATABASE.txt 7.1. */
+    if (db_conversion_flag) {
+        if (MUCK::store().saveAll(false) < 0) {
+            sprintf(buf, SYSRED "[DANGER] Error writing the object store at %s!  The DB did not save! :(", MUCK::store().root().c_str());
+            ansi_wall_wizards(buf);
+        }
+    } else {
+        MUCK::ObjectStore::CaptureSet set = MUCK::store().fire();
+
+        if (!MUCK::store().persist(set)) {
+            sprintf(buf, SYSRED "[DANGER] Error writing the object store at %s!  The DB did not save! :(", MUCK::store().root().c_str());
+            ansi_wall_wizards(buf);
+        }
     }
 
     /* Write out the macros */

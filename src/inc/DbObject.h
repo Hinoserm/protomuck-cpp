@@ -146,6 +146,12 @@ class DbObject {
      * is what lets the dump thread write with no locks. */
     Journal &journal() { return journal_; }
 
+    /* Whether this object has a base file on disk yet. A brand new
+     * object has none, so its first persist writes a full base rather
+     * than a layer over nothing. */
+    bool baseWritten() const { return baseWritten_; }
+    void setBaseWritten(bool v) { baseWritten_ = v; }
+
     /* --- object-level locking (striped; see Database) --- */
     void lockShared() const;
     void unlockShared() const;
@@ -198,6 +204,7 @@ class DbObject {
     std::vector<std::unique_ptr<Module> > modules_;
 
     Journal journal_;
+    bool baseWritten_ = false;
     struct object legacy_;      /* TRANSITIONAL payload */
 };
 

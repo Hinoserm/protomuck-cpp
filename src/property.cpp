@@ -30,6 +30,41 @@ extern const char *old_uncompress(const char *);
 
 #define fltostr(x,y) (sprintf(x, "%.15g", y) ? x : x)
 
+/* Would writing dat leave the node holding exactly what it holds now?
+ * Used to keep no-op writes out of the journal. Unloaded values are
+ * never considered equal: their value is not in hand to compare. */
+static bool
+prop_value_equals(PropPtr p, PData *dat)
+{
+    if (!p || !dat)
+        return false;
+    if (PropFlagsRaw(p) != dat->flags)
+        return false;
+    if (dat->flags & PROP_ISUNLOADED)
+        return false;
+
+    switch (dat->flags & PROP_TYPMASK) {
+        case PROP_STRTYP: {
+            const char *a = PropDataStr(p);
+            const char *b = dat->data.str;
+
+            if (!a || !b)
+                return a == b;
+            return !strcmp(a, b);
+        }
+        case PROP_INTTYP:
+            return PropDataVal(p) == dat->data.val;
+        case PROP_FLTTYP:
+            return PropDataFVal(p) == dat->data.fval;
+        case PROP_REFTYP:
+            return PropDataRef(p) == dat->data.ref;
+        default:
+            /* locks and directories: not worth comparing, treat as a
+             * change so nothing is silently dropped */
+            return false;
+    }
+}
+
 void
 set_property_nofetch(dbref object, const char *pname, PData * dat, bool pure)
 {
@@ -40,10 +75,6 @@ set_property_nofetch(dbref object, const char *pname, PData * dat, bool pure)
     /* Make sure that we are passed a valid property name */
     if (!pname)
         return;
-
-    /* Every property write is a journal record: an entry with no
-     * record is never persisted (docs/DATABASE.txt sections 2 and 7). */
-    MUCK::journalRecordProp(object, pname);
 
     while (*pname == PROPDIR_DELIMITER)
         pname++;
@@ -84,6 +115,13 @@ set_property_nofetch(dbref object, const char *pname, PData * dat, bool pure)
     if (!root_)
         return;                 /* Properties module absent */
     p = propdir_new_elem(root_, buf);
+
+    /* Every property write is a journal record: an entry with no
+     * record is never persisted (docs/DATABASE.txt sections 2 and 7).
+     * A write that changes nothing records nothing, which is what
+     * keeps a value set repeatedly in a loop out of the history. */
+    if (!prop_value_equals(p, dat))
+        MUCK::journalRecordProp(object, buf);
 
     /* free up any old values */
     clear_propnode(p);

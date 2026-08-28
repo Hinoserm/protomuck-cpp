@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "Database.h"
+#include "Journal.h"
 
 namespace MUCK {
 
@@ -121,6 +122,29 @@ class ObjectStore {
      * maintenance time, not from the dump path. Returns the number of
      * entries removed. */
     long gcStore();
+
+    /* --- the journal persist path (docs/DATABASE.txt 7.1) --- */
+
+    /* One fire's worth of frozen work: the layers sealed from every
+     * object that changed, plus the manifest as of that instant.
+     * Nothing in here points at a live object, which is what lets the
+     * dump thread write it without locks. */
+    struct CaptureSet {
+        long rev = 0;
+        std::vector<SealedLayer> layers;
+        std::string manifest;   /* serialized, ready to write */
+        bool hasMarker = false;
+    };
+
+    /* Game thread: seal every object's top layer, materializing only
+     * the entries that changed, and hand back the frozen result. */
+    CaptureSet fire();
+    CaptureSet fireObject(dbref i);
+
+    /* Dump thread (or inline): write a frozen set. Appends each
+     * layer to its object's .hist, or writes a full base when the
+     * object has none yet, then commits with the manifest. */
+    bool persist(const CaptureSet &set);
 
     /* Audit: for every object and every entry it has, check that the
      * per-key materializer used to seal journal layers agrees exactly
