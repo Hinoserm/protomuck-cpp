@@ -450,6 +450,128 @@ prim_greateq(PRIM_PROTOTYPE)
     PushInt(result);
 }
 
+/* Seedable random support, ported from Fuzzball 6 (fbmath.c / p_math.c).
+   The seed is 16 bytes on the frame; each SRAND MD5-hashes the buffer in
+   place and returns the first word. Note sizeof(digest) below hashes
+   only the pointer-width prefix; that is faithful to FB6 so that seeded
+   sequences match. */
+static void *
+init_seed(char *seed)
+{
+    uint32_t *digest;
+    int tbuf[8];
+
+    if (!(digest = (uint32_t *) malloc(sizeof(uint32_t) * 4)))
+        return (NULL);
+
+    if (!seed) {
+        /* No fixed seed given... make something up */
+        srand((unsigned int) time(NULL));
+
+        for (int loop = 0; loop < 8; loop++)
+            tbuf[loop] = rand();
+
+        memcpy(digest, tbuf, 16);
+    } else {
+        memcpy(digest, seed, 16);
+    }
+
+    return ((void *) digest);
+}
+
+static uint32_t
+rnd(void *buffer)
+{
+    uint32_t *digest = (uint32_t *) buffer;
+
+    if (!digest)
+        return (0);
+
+    MD5hash(digest, digest, sizeof(digest));
+    return (digest[0]);
+}
+
+/* Give FORK (p_misc.cpp) a way to copy a frame's seed buffer without
+   exposing the seed internals. */
+void *
+muf_seed_copy(void *rndbuf)
+{
+    if (!rndbuf)
+        return NULL;
+    return init_seed((char *) rndbuf);
+}
+
+void
+prim_srand(PRIM_PROTOTYPE)
+{
+    CHECKOFLOW(1);
+
+    if (!(fr->rndbuf))
+        fr->rndbuf = init_seed(NULL);
+
+    PushInt((int) rnd(fr->rndbuf));
+}
+
+void
+prim_getseed(PRIM_PROTOTYPE)
+{
+    char buf[33];
+    char buf2[17];
+
+    CHECKOFLOW(1);
+
+    if (!(fr->rndbuf)) {
+        PushNullStr;
+    } else {
+        memcpy(buf2, fr->rndbuf, 16);
+        buf2[16] = '\0';
+
+        for (int loop = 0; loop < 16; loop++) {
+            buf[loop * 2] = (buf2[loop] & 0x0F) + 65;
+            buf[(loop * 2) + 1] = ((buf2[loop] & 0xF0) >> 4) + 65;
+        }
+
+        buf[32] = '\0';
+        PushString(buf);
+    }
+}
+
+void
+prim_setseed(PRIM_PROTOTYPE)
+{
+    int slen;
+    char holdbuf[33];
+    char buf[17];
+
+    if (!(oper[0].type == PROG_STRING))
+        abort_interp("Invalid argument type.");
+
+    if (fr->rndbuf) {
+        free(fr->rndbuf);
+        fr->rndbuf = NULL;
+    }
+
+    if (!oper[0].data.string) {
+        fr->rndbuf = init_seed(NULL);
+        return;
+    } else {
+        slen = oper[0].data.string->length();
+
+        if (slen > 32)
+            slen = 32;
+
+        for (int sloop = 0; sloop < 32; sloop++)
+            holdbuf[sloop] = oper[0].data.string->data[sloop % slen];
+
+        for (int sloop = 0; sloop < 16; sloop++)
+            buf[sloop] = ((holdbuf[sloop * 2] - 65) & 0x0F) |
+                         (((holdbuf[(sloop * 2) + 1] - 65) & 0x0F) << 4);
+
+        buf[16] = '\0';
+        fr->rndbuf = init_seed(buf);
+    }
+}
+
 void
 prim_random(PRIM_PROTOTYPE)
 {

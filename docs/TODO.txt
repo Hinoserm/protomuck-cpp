@@ -4,12 +4,9 @@ PROTOMUCK C++ TODO
 MUF primitives
 --------------
 
-* SRAND, GETSEED, SETSEED: seeded random number prims from FB6 are
-  documented in man.txt but were never implemented in this server.
-  Either port the FB6 implementations (prim_srand, prim_setseed,
-  prim_getseed in fb6 p_math.c, plus the per-frame seed storage in
-  struct frame) or remove the man.txt stubs. The man.txt entry
-  currently marks them as NOT CURRENTLY SUPPORTED.
+* RESOLVED 2026-08-28: SRAND, GETSEED, SETSEED ported from FB6
+  (frame rndbuf, MD5-driven sequence, FORK inherits a copy of the
+  seed). Seeded sequences are FB6-compatible.
 
 * PRIMLIST_STRINGS_UTF8 (WCHARLEN, WCHARLEN_SLICE) is implemented in
   p_strings.cpp but never included in primlist[] in interp.cpp, so
@@ -48,9 +45,8 @@ Known code bugs found during the 2026-08-27 man.txt audit
   PRIMS_MISC_CNT says 50 (53 actual). Harmless while BASE_MAX is
   computed at runtime, but wrong.
 
-* mancheck.cpp references eight PRIMS_*_NAMES macros that no longer
-  exist and is not in the CMake build; it cannot compile. Rewrite it
-  to walk primlist[] instead, or retire it.
+* RESOLVED 2026-08-28: mancheck.cpp removed at the owner's request,
+  along with its Makefile.in rule and the base_inst extern.
 
 std::string conversion notes (2026-08-28)
 -----------------------------------------

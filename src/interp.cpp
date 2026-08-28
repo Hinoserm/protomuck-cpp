@@ -978,6 +978,11 @@ prog_clean(struct frame *fr)
         }
     }
     watchpid_process(fr);
+    if (fr->rndbuf) {
+        free(fr->rndbuf);
+        fr->rndbuf = NULL;
+    }
+
     fr->system.top = 0;
     for (i = 0; i < fr->argument.top; i++)
         CLEAR(&fr->argument.st[i]);

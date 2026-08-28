@@ -41,7 +41,7 @@ Math and Logic Prims:
   ATAN2      DIST3D    XYZ_TO_POLAR            POLAR_TO_XYZ  
   EXP        LOG       LOG10      FABS         POW    FRAND
   FMOD       MODF      AND        OR           NOT    ABS
-  SIGN       XOR       INF        (unsupported: SRAND GETSEED SETSEED)
+  SIGN       XOR       INF        SRAND      GETSEED   SETSEED
   EPSILON
 
 See: PRIMS2
@@ -311,7 +311,7 @@ SIN        COS       TAN        ASIN         ACOS   ATAN
 ATAN2      DIST3D    XYZ_TO_POLAR     	     POLAR_TO_XYZ  
 EXP        LOG       LOG10      FABS         POW    FRAND
 FMOD       MODF      ABS        SIGN
-(unsupported: SRAND GETSEED SETSEED)
+SRAND      GETSEED   SETSEED
 See: FLOAT PRIMS
 ~~~~
 LOGICAL OPERATORS|LOGIC PRIMS|LOGICAL PRIMS
@@ -7155,20 +7155,25 @@ srand ( -- i )
 getseed ( -- s )
 setseed ( s -- )
 ----------------
-*** NOT CURRENTLY SUPPORTED ***
+Level: M1 Apprentice
 
-These seeded random number prims exist in FuzzBall 6 but are not
-implemented in this server. Attempting to use them will fail to
-compile with "Unrecognized word". They are documented here so the
-gap is known; support may be added in a future version. See
-docs/TODO.txt in the source distribution.
+SRAND generates a seeded random number from the program frame's seed
+buffer. Given the same seed, the same sequence of numbers is always
+produced, which is what distinguishes it from RANDOM. If SRAND is
+used before SETSEED, the seed starts from a semi-random value.
 
-In FB6, SRAND generates a seeded random number, SETSEED sets the
-seed (first thirty-two characters significant), and GETSEED returns
-the current seed string. Until they are implemented, use RANDOM or
-FRAND instead.
+SETSEED sets the seed from a string; only the first thirty-two
+characters are significant. Passing a null string re-seeds randomly.
 
-See: RANDOM, FRAND
+GETSEED returns the current seed as a 32 character string, or a null
+string if no seed exists yet. Feeding that string back to SETSEED
+reproduces the sequence.
+
+A FORKed child inherits a copy of the parent's seed. The
+implementation matches FuzzBall 6, so seeded sequences are
+compatible with FB6 programs.
+
+See: RANDOM, FRAND, FORK
 ~~~~
 DEG2RAD|RAD2DEG
 

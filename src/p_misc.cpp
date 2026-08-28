@@ -314,6 +314,7 @@ prim_fork(PRIM_PROTOTYPE)
     //memset(tmpfr, 0, sizeof(struct frame)); // TODO: Fix later when C++ support is better -hinoserm june 23 2014
 
     tmpfr->next = NULL;
+    tmpfr->rndbuf = muf_seed_copy(fr->rndbuf);
     tmpfr->system.top = fr->system.top;
     for (i = 0; i < fr->system.top; i++)
         tmpfr->system.st[i] = fr->system.st[i];

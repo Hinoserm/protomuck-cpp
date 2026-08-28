@@ -962,6 +962,7 @@ struct frame {
     int     timercount = 0;             /* How many timers currently exist. */
     int     pid = 0;                    /* what is the process id? */
     struct descriptor_data *d = NULL;   /* descriptor (mostly for web stuff) -hinoserm */
+    void    *rndbuf = NULL;             /* buffer for seedable random (SRAND) */
     char    *errorstr = NULL;           /* the error string thrown */
     char    *errorinst = NULL;          /* the instruction name that threw an error */
     dbref   errorprog = -1;             /* the program that threw an error */

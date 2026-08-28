@@ -21,7 +21,6 @@
 extern int BASE_MAX;
 
 /* now refer to tables to map instruction number to name */
-extern const char *base_inst[];
 
 extern char *insttotext(struct frame *, int, struct inst *, 
                         char *, int, int, dbref);

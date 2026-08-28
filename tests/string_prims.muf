@@ -72,4 +72,11 @@
   { 3000000000 3000000000 }list array_sum intostr "I64ASUM:" t
   8000000000 intostr strlen intostr "I64LEN:" t
   random 0 < not random 2147483648 < and intostr "RNDRANGE:" t
+  "myseed" setseed srand srand srand pop pop var! s1a
+  "myseed" setseed srand srand srand pop pop var! s1b
+  s1a @ s1b @ = intostr "SEEDDET:" t
+  "otherseed" setseed srand s1a @ = not intostr "SEEDDIF:" t
+  "abc" setseed getseed setseed srand
+  "abc" setseed srand = intostr "SEEDRT:" t
+  getseed strlen intostr "SEEDLEN:" t
 ;
