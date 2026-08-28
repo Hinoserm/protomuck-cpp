@@ -8,6 +8,7 @@
 #include "tune.h"
 #include "match.h"
 #include "externs.h"
+#include "ObjectStore.h"
 #include "reg.h"
 #include "maillib.h"
 #include "strutils.h"
@@ -1664,4 +1665,144 @@ do_fixw(dbref player, const char *msg)
             SetMLevel(i, LM1);
     }
     anotify_nolisten2(player, CINFO "Done.");
+}
+
+/* ------------------------------------------------------------------
+ * @snapshot and @rollback: the versioning interface.
+ * docs/DATABASE.txt section 7.
+ *
+ *   @snapshot                  global snapshot
+ *   @snapshot=label            global, labeled
+ *   @snapshot obj              one object
+ *   @snapshot obj=label        one object, labeled
+ *   @snapshot obj=label!lock   locked: never ages out
+ *   @snapshot #list            list global markers
+ *   @snapshot obj=#list        list an object's markers
+ *
+ *   @rollback obj=rev          restore name, props, program source
+ * ------------------------------------------------------------------ */
+
+void
+do_snapshot(int descr, dbref player, const char *arg1, const char *arg2)
+{
+    char buf[BUFFER_LEN];
+
+    if (!Arch(player)) {
+        anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
+        return;
+    }
+    if (!MUCK::store().active()) {
+        anotify_nolisten2(player, CFAIL "No object store is active.");
+        return;
+    }
+
+    bool locked = false;
+    const char *label = arg2 ? arg2 : "";
+
+    if (const char *bang = strchr(label, '!')) {
+        if (!string_compare(bang + 1, "lock"))
+            locked = true;
+        strncpy(buf, label, bang - label);
+        buf[bang - label] = '\0';
+        label = buf;
+    }
+
+    if (!string_compare(arg1, "#list")) {
+        anotify_nolisten2(player, CINFO "Global snapshots:");
+        for (const auto &m : MUCK::store().globalMarkers()) {
+            char line[BUFFER_LEN];
+
+            sprintf(line, SYSAQUA "  rev %ld  %s  %s%s", m.rev,
+                    ctime((const time_t *) &m.when),
+                    m.label.empty() ? "(unlabeled)" : m.label.c_str(),
+                    m.locked ? "  LOCKED" : "");
+            /* ctime embeds a newline; trim it */
+            char *nl = strchr(line, '\n');
+
+            if (nl)
+                memmove(nl, nl + 1, strlen(nl + 1) + 1);
+            anotify_nolisten2(player, line);
+        }
+        return;
+    }
+
+    if (!*arg1) {
+        long rev = MUCK::store().snapshotGlobal(label, locked);
+
+        if (rev < 0) {
+            anotify_nolisten2(player, CFAIL "Snapshot failed; see the server log.");
+        } else {
+            anotify_fmt(player, CSUCC "Global snapshot taken: rev %ld.%s",
+                        rev, locked ? "  (locked)" : "");
+        }
+        return;
+    }
+
+    struct match_data md;
+
+    init_match(descr, player, arg1, NOTYPE, &md);
+    match_everything(&md);
+
+    dbref thing = noisy_match_result(&md);
+
+    if (thing == NOTHING)
+        return;
+
+    if (!string_compare(label, "#list")) {
+        anotify_fmt(player, CINFO "Snapshots of %s:", unparse_object(player, thing));
+        for (const auto &m : MUCK::store().objectMarkers(thing)) {
+            anotify_fmt(player, SYSAQUA "  rev %ld  %s%s", m.rev,
+                        m.label.empty() ? "(unlabeled)" : m.label.c_str(),
+                        m.locked ? "  LOCKED" : "");
+        }
+        return;
+    }
+
+    long rev = MUCK::store().snapshotObject(thing, label, locked);
+
+    if (rev < 0) {
+        anotify_nolisten2(player, CFAIL "Snapshot failed; see the server log.");
+    } else {
+        anotify_fmt(player, CSUCC "Snapshot of %s taken: rev %ld.%s",
+                    unparse_object(player, thing), rev,
+                    locked ? "  (locked)" : "");
+    }
+}
+
+void
+do_rollback(int descr, dbref player, const char *arg1, const char *arg2)
+{
+    if (!Arch(player)) {
+        anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
+        return;
+    }
+    if (!MUCK::store().active()) {
+        anotify_nolisten2(player, CFAIL "No object store is active.");
+        return;
+    }
+    if (!*arg1 || !*arg2 || !number(arg2)) {
+        anotify_nolisten2(player, CINFO "Usage: @rollback object=revision");
+        return;
+    }
+
+    struct match_data md;
+
+    init_match(descr, player, arg1, NOTYPE, &md);
+    match_everything(&md);
+
+    dbref thing = noisy_match_result(&md);
+
+    if (thing == NOTHING)
+        return;
+
+    long rev = atol(arg2);
+
+    if (!MUCK::store().rollbackObject(thing, rev)) {
+        anotify_nolisten2(player, CFAIL "Rollback failed: no stored state for that object at that revision.");
+        return;
+    }
+    anotify_fmt(player, CSUCC
+                "Rolled %s back to rev %ld (name, properties, and program "
+                "source; containment is not rolled back).",
+                unparse_object(player, thing), rev);
 }

@@ -1,3 +1,17 @@
+/* Standard headers FIRST: db.h defines function-like macros (getloc
+ * among them) that clobber identically named members inside libstdc++
+ * headers included after it. */
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <dirent.h>
+#include <unistd.h>
+#include <errno.h>
+#include <fstream>
+#include <sstream>
+#include <unordered_set>
+#include <vector>
+#include <nlohmann/json.hpp>
+
 #include "copyright.h"
 #include "config.h"
 #include "db.h"
@@ -11,16 +25,6 @@
 #include "ProgramStore.h"
 #include "PasswordHash.h"
 
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <dirent.h>
-#include <unistd.h>
-#include <errno.h>
-#include <fstream>
-#include <unordered_set>
-#include <vector>
-#include <nlohmann/json.hpp>
-
 using json = nlohmann::json;
 
 namespace MUCK {
@@ -28,6 +32,11 @@ namespace MUCK {
 ObjectStore g_objectStore;
 
 static const int STORE_FORMAT = 2;
+
+/* forward declarations: marker helpers are defined with the versioned
+ * save path below but used by the manifest writer above it */
+static std::vector<ObjectStore::Marker> markersFromJson(const json &arr);
+static json markersToJson(const std::vector<ObjectStore::Marker> &list);
 
 /* ------------------------------------------------------------------ */
 /* String escaping. MUCK strings are raw 8-bit (latin-1 by long       */
@@ -238,6 +247,7 @@ propsFromJson(dbref obj, const json &arr)
  * per save pass (the claimed set). Violations are dropped with a log
  * line; this is the conversion-time equivalent of @sanfix. */
 static std::unordered_set<int> chainClaimed;
+static bool bulkSaveActive = false;
 
 static json
 chainToJson(dbref container, dbref first)
@@ -764,7 +774,21 @@ ObjectStore::writeManifest()
 
     m["format"] = STORE_FORMAT;
     m["next_dbref"] = (int) MUCK::database().top();
-    m["rev"] = 0;               /* versioning arrives in step 3 */
+
+    /* age out unlocked markers past the snapshot retention window */
+    if (tp_snapshot_retention >= 0) {
+        long cutoff = (long) current_systime
+            - (long) tp_snapshot_retention * 86400L;
+
+        markers_.erase(
+            std::remove_if(markers_.begin(), markers_.end(),
+                           [cutoff](const Marker &m) {
+                               return !m.locked && m.when < cutoff;
+                           }),
+            markers_.end());
+    }
+    m["rev"] = rev_;
+    m["markers"] = markersToJson(markers_);
     m["global_modules"] = { "properties" };
     m["hash_passwords"] = (bool) MUCK::PasswordHash::enabled;
     m["hash_version"] = MUCK::PasswordHash::version;
@@ -786,24 +810,352 @@ ObjectStore::writeManifest()
     return atomicWrite(root_ + "/manifest.json", m.dump(1));
 }
 
+std::string
+ObjectStore::histPath(dbref i) const
+{
+    std::string p = objectPath(i);
+
+    return p.substr(0, p.size() - 5) + ".hist";
+}
+
+/* Does any retained marker fall inside [from, to)? Retained markers
+ * are the union of the global list and this object's own. */
+static bool
+markerInWindow(long from, long to,
+               const std::vector<ObjectStore::Marker> &globals,
+               const std::vector<ObjectStore::Marker> &own)
+{
+    for (const auto &m : globals)
+        if (m.rev >= from && m.rev < to)
+            return true;
+    for (const auto &m : own)
+        if (m.rev >= from && m.rev < to)
+            return true;
+    return false;
+}
+
+static std::vector<ObjectStore::Marker>
+markersFromJson(const json &arr)
+{
+    std::vector<ObjectStore::Marker> out;
+
+    if (!arr.is_array())
+        return out;
+    for (const auto &e : arr) {
+        ObjectStore::Marker m;
+
+        m.rev = e.value("rev", 0L);
+        m.when = e.value("when", 0L);
+        m.label = e.value("label", "");
+        m.locked = e.value("locked", false);
+        out.push_back(m);
+    }
+    return out;
+}
+
+static json
+markersToJson(const std::vector<ObjectStore::Marker> &list)
+{
+    json arr = json::array();
+
+    for (const auto &m : list) {
+        json e;
+
+        e["rev"] = m.rev;
+        e["when"] = m.when;
+        e["label"] = m.label;
+        e["locked"] = m.locked;
+        arr.push_back(e);
+    }
+    return arr;
+}
+
 bool
 ObjectStore::saveObject(dbref i)
 {
     std::string path = objectPath(i);
-    std::string dir1 = path.substr(0, path.rfind('/'));
-    std::string dir0 = dir1.substr(0, dir1.rfind('/'));
 
-    ensureDir(root_);
-    ensureDir(root_ + "/objects");
-    ensureDir(dir0);
-    ensureDir(dir1);
-    return atomicWrite(path, objectToJson(i).dump(1));
+    /* the chain sanitizer's claimed set is per save PASS; a standalone
+     * save is its own pass. Without this, the second single-object
+     * save ever made would drop the object's entire contents chain. */
+    if (!bulkSaveActive)
+        chainClaimed.clear();
+
+    ensureDirsFor(path);
+
+    json cur = objectToJson(i);
+    json &ce = cur["entries"];
+
+    /* Copy-on-write per entry: diff against the file being replaced.
+     * An unchanged value keeps its rev untouched (a no-op write costs
+     * nothing); a changed value whose old rev is visible at a retained
+     * marker pushes the old value into the history file first. */
+    std::ifstream pf(path);
+    json prev = pf ? json::parse(pf, nullptr, false) : json();
+    bool havePrev = prev.is_object() && prev.contains("entries");
+    std::vector<Marker> own =
+        havePrev ? markersFromJson(prev.value("markers", json::array()))
+                 : std::vector<Marker>();
+    std::string histLines;
+
+    for (auto it = ce.begin(); it != ce.end(); ++it) {
+        json *old = nullptr;
+
+        if (havePrev) {
+            auto pit = prev["entries"].find(it.key());
+            if (pit != prev["entries"].end())
+                old = &*pit;
+        }
+        if (old && (*old)["t"] == it.value()["t"]
+            && (*old)["v"] == it.value()["v"]
+            && old->value("m", 0) == it.value().value("m", 0)) {
+            it.value()["rev"] = old->value("rev", 0L);   /* unchanged */
+            continue;
+        }
+        it.value()["rev"] = rev_;
+        if (old) {
+            long oldRev = old->value("rev", 0L);
+
+            if (markerInWindow(oldRev, rev_, markers_, own)) {
+                json h = *old;
+
+                h["k"] = it.key();
+                h["from"] = oldRev;
+                h["to"] = rev_;
+                histLines += h.dump() + "\n";
+            }
+        }
+    }
+    /* keys that disappeared entirely: deletion, historicize if seen */
+    if (havePrev) {
+        for (auto pit = prev["entries"].begin();
+             pit != prev["entries"].end(); ++pit) {
+            if (ce.contains(pit.key()))
+                continue;
+            long oldRev = pit.value().value("rev", 0L);
+
+            if (markerInWindow(oldRev, rev_, markers_, own)) {
+                json h = pit.value();
+
+                h["k"] = pit.key();
+                h["from"] = oldRev;
+                h["to"] = rev_;
+                histLines += h.dump() + "\n";
+            }
+        }
+        if (!prev.value("markers", json::array()).empty())
+            cur["markers"] = prev["markers"];
+    }
+
+    if (!histLines.empty()) {
+        std::ofstream hf(histPath(i), std::ios::app);
+
+        if (hf)
+            hf << histLines;
+    }
+    return atomicWrite(path, cur.dump(1));
 }
 
 bool
 ObjectStore::removeObject(dbref i)
 {
+    unlink(histPath(i).c_str());
     return unlink(objectPath(i).c_str()) == 0;
+}
+
+long
+ObjectStore::snapshotGlobal(const char *label, bool locked)
+{
+    Marker m;
+
+    /* the marker captures the CURRENT era; writes after the snapshot
+     * stamp the next one, so a read at the marker excludes them */
+    m.rev = rev_++;
+    m.when = (long) current_systime;
+    m.label = label ? label : "";
+    m.locked = locked;
+    markers_.push_back(m);
+    if (!writeManifest())
+        return -1;
+    log_status("SNAPSHOT: global rev %ld (%s)%s\n", m.rev,
+               m.label.empty() ? "unlabeled" : m.label.c_str(),
+               locked ? " LOCKED" : "");
+    return m.rev;
+}
+
+long
+ObjectStore::snapshotObject(dbref i, const char *label, bool locked)
+{
+    std::string path = objectPath(i);
+    std::ifstream pf(path);
+
+    if (!pf) {
+        /* object never saved yet; write it first so the marker has a
+         * file to live in */
+        if (!saveObject(i))
+            return -1;
+        pf.open(path);
+        if (!pf)
+            return -1;
+    }
+    json j = json::parse(pf, nullptr, false);
+
+    if (j.is_discarded())
+        return -1;
+
+    Marker m;
+
+    m.rev = rev_++;             /* same era rule as snapshotGlobal */
+    m.when = (long) current_systime;
+    m.label = label ? label : "";
+    m.locked = locked;
+
+    json arr = j.value("markers", json::array());
+    json e;
+
+    e["rev"] = m.rev;
+    e["when"] = m.when;
+    e["label"] = m.label;
+    e["locked"] = m.locked;
+    arr.push_back(e);
+    j["markers"] = arr;
+
+    if (!atomicWrite(path, j.dump(1)))
+        return -1;
+    writeManifest();            /* persist the advanced rev counter */
+    log_status("SNAPSHOT: #%d rev %ld (%s)%s\n", i, m.rev,
+               m.label.empty() ? "unlabeled" : m.label.c_str(),
+               locked ? " LOCKED" : "");
+    return m.rev;
+}
+
+std::vector<ObjectStore::Marker>
+ObjectStore::objectMarkers(dbref i) const
+{
+    std::ifstream pf(objectPath(i));
+
+    if (!pf)
+        return {};
+    json j = json::parse(pf, nullptr, false);
+
+    if (j.is_discarded())
+        return {};
+    return markersFromJson(j.value("markers", json::array()));
+}
+
+/* Value of every entry as of a revision: current entries whose rev is
+ * at or below the target, patched by history entries whose lifetime
+ * covers the target. */
+static json
+entriesAtRev(const json &file, const std::string &hist, long rev)
+{
+    json out = json::object();
+
+    if (file.contains("entries")) {
+        const json &e = file["entries"];
+
+        for (auto it = e.begin(); it != e.end(); ++it)
+            if (it.value().value("rev", 0L) <= rev)
+                out[it.key()] = it.value();
+    }
+
+    /* newest covering history entry per key wins */
+    std::istringstream hs(hist);
+    std::string line;
+    std::unordered_map<std::string, long> bestFrom;
+
+    while (std::getline(hs, line)) {
+        json h = json::parse(line, nullptr, false);
+
+        if (h.is_discarded())
+            continue;
+        long from = h.value("from", 0L), to = h.value("to", 0L);
+
+        if (!(from <= rev && rev < to))
+            continue;
+        std::string k = h.value("k", "");
+        auto bit = bestFrom.find(k);
+
+        if (bit != bestFrom.end() && bit->second >= from)
+            continue;
+        bestFrom[k] = from;
+        json v = h;
+
+        v.erase("k");
+        v.erase("from");
+        v.erase("to");
+        out[k] = v;
+    }
+    return out;
+}
+
+bool
+ObjectStore::rollbackObject(dbref i, long rev)
+{
+    std::ifstream pf(objectPath(i));
+
+    if (!pf)
+        return false;
+    json j = json::parse(pf, nullptr, false);
+
+    if (j.is_discarded() || !j.contains("entries"))
+        return false;
+
+    std::string hist;
+    std::ifstream hf(histPath(i));
+
+    if (hf)
+        hist.assign(std::istreambuf_iterator<char>(hf),
+                    std::istreambuf_iterator<char>());
+
+    json e = entriesAtRev(j, hist, rev);
+    struct object *o = DBFETCH(i);
+
+    /* name */
+    if (e.contains("$core/name")) {
+        if (o->name && Typeof(i) != TYPE_GARBAGE)
+            delete[] o->name;
+        o->name = alloc_string(junstr(e["$core/name"]["v"].get<std::string>()).c_str());
+    }
+
+    /* properties: wipe and rebuild from the snapshot */
+    if (o->properties) {
+        delete_proplist(o->properties);
+        o->properties = NULL;
+    }
+    {
+        json props = json::array();
+
+        for (auto it = e.begin(); it != e.end(); ++it) {
+            if (it.key().empty() || it.key()[0] != '/')
+                continue;
+            json pe;
+
+            pe["n"] = it.key().substr(1);
+            pe["f"] = it.value().value("m", 0);
+            pe["v"] = it.value()["v"];
+            props.push_back(pe);
+        }
+        propsFromJson(i, props);
+    }
+
+    /* program source */
+    if (Typeof(i) == TYPE_PROGRAM && e.contains("$type/source")) {
+        std::vector<std::string> lines;
+
+        for (const auto &h : e["$type/source"]["v"]) {
+            std::string content;
+
+            if (readChunk(root_, h.get<std::string>(), content))
+                lines.push_back(content);
+        }
+        MUCK::programs().setSourceLines(i, std::move(lines));
+        uncompile_program(i);
+    }
+
+    DBDIRTY(i);
+    log_status("ROLLBACK: #%d to rev %ld\n", i, rev);
+    return true;
 }
 
 int
@@ -821,6 +1173,7 @@ ObjectStore::saveAll(bool dirtyOnly)
 
     /* chain sanitizer state is per save pass */
     chainClaimed.clear();
+    bulkSaveActive = true;
 
     ensureDir(root_);
     ensureDir(root_ + "/objects");
@@ -831,11 +1184,14 @@ ObjectStore::saveAll(bool dirtyOnly)
             continue;
         if (dirtyOnly && !(o->flags & OBJECT_CHANGED))
             continue;
-        if (!saveObject(i))
+        if (!saveObject(i)) {
+            bulkSaveActive = false;
             return -1;
+        }
         o->flags &= ~OBJECT_CHANGED;
         written++;
     }
+    bulkSaveActive = false;
     if (!writeManifest())
         return -1;
     return written;
@@ -860,6 +1216,9 @@ ObjectStore::loadAll()
      * reject every login */
     MUCK::PasswordHash::enabled = manifest.value("hash_passwords", false);
     MUCK::PasswordHash::version = manifest.value("hash_version", 0);
+
+    rev_ = manifest.value("rev", 0L);
+    markers_ = markersFromJson(manifest.value("markers", json::array()));
 
     if (manifest.contains("tombstones")) {
         std::vector<Database::Tombstone> list;

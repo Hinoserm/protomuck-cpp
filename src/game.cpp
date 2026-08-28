@@ -1411,6 +1411,11 @@ process_command(int descr, dbref player, char *command, int len, int wclen)
                             Matched("@relink");
                             do_relink(descr, player, arg1, arg2);
                             break;
+                        case 'o':
+                        case 'O':
+                            Matched("@rollback");
+                            do_rollback(descr, player, arg1, arg2);
+                            break;
                         case 's':
                         case 'S':
                             if (!string_compare(command, "@restart")) {
@@ -1455,6 +1460,11 @@ process_command(int descr, dbref player, char *command, int len, int wclen)
                             if (string_compare(command, "@shutdown"))
                                 goto bad;
                             do_shutdown(player, arg1, arg2);
+                            break;
+                        case 'n':
+                        case 'N':
+                            Matched("@snapshot");
+                            do_snapshot(descr, player, arg1, arg2);
                             break;
                         case 'q':
                         case 'Q':

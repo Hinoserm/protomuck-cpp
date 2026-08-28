@@ -15,6 +15,7 @@
 
 #include <cstdio>
 #include <string>
+#include <vector>
 
 namespace MUCK {
 
@@ -46,11 +47,41 @@ class ObjectStore {
      * garbage type dies in step 2). */
     bool removeObject(dbref i);
 
+    /* --- versioning (docs/DATABASE.txt section 7) --- */
+    struct Marker {
+        long rev;
+        long when;
+        std::string label;
+        bool locked;
+    };
+
+    long rev() const { return rev_; }
+
+    /* Take a snapshot: bump the global rev by one and record a marker,
+     * in the manifest (global) or in one object's file (scoped).
+     * Returns the new rev, or -1 on error. */
+    long snapshotGlobal(const char *label, bool locked);
+    long snapshotObject(dbref i, const char *label, bool locked);
+
+    /* Reconstruct one object's entries as of a revision (from its
+     * current file plus its history) and restore the parts that are
+     * safe to restore in a running world: name, properties, program
+     * source. Containment and location are not rolled back. Returns
+     * false if the object or revision cannot be resolved. */
+    bool rollbackObject(dbref i, long rev);
+
+    /* Marker listings for the @snapshot command. */
+    const std::vector<Marker> &globalMarkers() const { return markers_; }
+    std::vector<Marker> objectMarkers(dbref i) const;
+
   private:
     std::string objectPath(dbref i) const;
+    std::string histPath(dbref i) const;
     bool writeManifest();
 
     std::string root_;
+    long rev_ = 0;
+    std::vector<Marker> markers_;    /* global; per-object live in files */
 };
 
 extern ObjectStore g_objectStore;
