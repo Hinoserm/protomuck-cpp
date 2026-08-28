@@ -79,6 +79,13 @@ class DbObject {
 
     bool isDeleted() const { return deleted_; }
 
+    /* --- permissions --- */
+    /* Effective MUF/wizard level from the W-bits, folded by the
+     * multi_wizlevels tune. The MLevel macro family resolves here. */
+    int muckerLevel() const;
+    /* Wizard level: muckerLevel at LMAGE or above, else 0. */
+    int wizLevel() const;
+
     /* --- module access --- */
     /* As<T> is the idiomatic type test at boundaries:
      *     if (Player *p = obj->As<Player>()) { ... }

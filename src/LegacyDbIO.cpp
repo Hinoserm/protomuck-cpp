@@ -16,9 +16,10 @@
  * Database.cpp so the engine file holds only the engine. Users: the
  * macro file loader (getref, putref), the MUF editor and interpreter
  * (line lists), player input parsing (parse_dbref), property loading
- * (number, ifloat), boot (autostart_progs), and permission checks
- * (RawMWLevel, WLevel). Each migrates into its proper class in a
- * later step 2 section; nothing NEW may call these.
+ * (number, ifloat), and boot (autostart_progs). Each migrates into
+ * its proper class in a later step 2 section; nothing NEW may call
+ * these. The permission checks (RawMWLevel, WLevel) moved to
+ * DbObject::muckerLevel and DbObject::wizLevel.
  */
 
 #ifndef MALLOC_PROFILING
@@ -263,28 +264,3 @@ autostart_progs(void)
 }
 
 
-int
-RawMWLevel(dbref thing, const char *file, int line)
-{
-    if (!OkObj(thing))
-        return 0;
-
-    switch (CheckMWLevel(thing)) {
-        case LBOY:
-            return (tp_multi_wizlevels ? LBOY : LARCH);
-        case LWIZ:
-            return (tp_multi_wizlevels ? LWIZ : LARCH);
-        case LMAGE:
-            return (tp_multi_wizlevels ? LMAGE : LM3);
-        default:
-            return CheckMWLevel(thing);
-    }
-}
-
-int
-WLevel(dbref player)
-{
-    int mlev = MLevel(player);
-
-    return mlev >= LMAGE ? mlev : 0;
-}

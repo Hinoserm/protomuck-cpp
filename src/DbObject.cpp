@@ -109,6 +109,54 @@ DbObject::setOwner(DbObject *o)
     DBDIRTY(ref_);
 }
 
+int
+DbObject::muckerLevel() const
+{
+    switch (CheckMWLevel(ref_)) {
+        case LBOY:
+            return (tp_multi_wizlevels ? LBOY : LARCH);
+        case LWIZ:
+            return (tp_multi_wizlevels ? LWIZ : LARCH);
+        case LMAGE:
+            return (tp_multi_wizlevels ? LMAGE : LM3);
+        default:
+            return CheckMWLevel(ref_);
+    }
+}
+
+int
+DbObject::wizLevel() const
+{
+    int mlev = MLevel(ref_);
+
+    return mlev >= LMAGE ? mlev : 0;
+}
+
+} /* namespace MUCK */
+
+/* Legacy shims: the MLevel macro family in db.h lands here. The OkObj
+ * guard preserves the historical 0 for invalid and recycled refs. */
+int
+RawMWLevel(dbref thing, const char *file, int line)
+{
+    (void) file;
+    (void) line;
+
+    if (!OkObj(thing))
+        return 0;
+    return MUCK::database().get(thing)->muckerLevel();
+}
+
+int
+WLevel(dbref player)
+{
+    if (!OkObj(player))
+        return 0;
+    return MUCK::database().get(player)->wizLevel();
+}
+
+namespace MUCK {
+
 const char *
 DbObject::typeName()
 {
