@@ -9,6 +9,7 @@
 #include "strutils.h"
 #include "ObjectStore.h"
 #include "ProgramStore.h"
+#include "PasswordHash.h"
 
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -569,6 +570,8 @@ ObjectStore::writeManifest()
     m["next_dbref"] = (int) MUCK::database().top();
     m["rev"] = 0;               /* versioning arrives in step 3 */
     m["global_modules"] = { "properties" };
+    m["hash_passwords"] = (bool) MUCK::PasswordHash::enabled;
+    m["hash_version"] = MUCK::PasswordHash::version;
     return atomicWrite(root_ + "/manifest.json", m.dump(1));
 }
 
@@ -640,6 +643,13 @@ ObjectStore::loadAll()
         return -1;
 
     int top = manifest.value("next_dbref", 0);
+
+    /* password hashing state travels in the manifest; without it a
+     * store boot would compare plaintext against stored hashes and
+     * reject every login */
+    MUCK::PasswordHash::enabled = manifest.value("hash_passwords", false);
+    MUCK::PasswordHash::version = manifest.value("hash_version", 0);
+
     MUCK::database().growTo(top);
 
     /* every slot starts as garbage; files fill in the live objects */
