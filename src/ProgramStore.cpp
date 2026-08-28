@@ -7,6 +7,7 @@
 #include "interface.h"
 #include "externs.h"
 #include "ProgramStore.h"
+#include "Journal.h"
 
 namespace MUCK {
 
@@ -126,10 +127,12 @@ void
 MUCK::ProgramStore::setSourceLines(dbref i, std::vector<std::string> lines)
 {
     source_[i] = std::move(lines);
+    MUCK::journalRecord(i, "$type/source");
 }
 
 void
 MUCK::ProgramStore::dropSource(dbref i)
 {
     source_.erase(i);
+    MUCK::journalRecord(i, "$type/source");
 }

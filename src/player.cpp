@@ -7,6 +7,7 @@
 #include "tune.h"
 #include "interface.h"
 #include "externs.h"
+#include "Journal.h"
 #include "Modules.h"
 #include "ObjectAccess.h"
 
@@ -61,6 +62,8 @@ set_password(dbref player, const char *password)
 
     if (player == NOTHING)
         return 0;
+
+    MUCK::journalRecord(player, "$type/password");
 
     if (!password || !*password) {
         delete[] MUCK::playerPasswordSlot(player);

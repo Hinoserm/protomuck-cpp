@@ -13,6 +13,7 @@
 #include "PasswordHash.h"
 #include "ObjectStore.h"
 #include "ObjectAccess.h"
+#include "Journal.h"
 
 /* Views over the legacy storage: every accessor resolves through the
  * classic macros so the two worlds stay coherent during migration. */
@@ -48,6 +49,9 @@ DbObject::setType(ObjectType t)
      * fidelity. This is the only place the two are written. */
     legacy_.flags = (legacy_.flags & ~TYPE_MASK) | (int) t;
     legacy_.flags |= OBJECT_CHANGED;
+    /* the type rides in the flags entry on disk, so that is the entry
+     * a type change dirties */
+    journalRecord(ref_, "$core/flags");
     /* modules rebuild lazily: ensureModules sees moduleType_ drift */
 }
 
@@ -297,8 +301,10 @@ attachContent(dbref loc, dbref obj)
 
     if (!l || !o)
         return;
-    if (!listContains(l->contentsVec(), obj))
+    if (!listContains(l->contentsVec(), obj)) {
         l->contentsVec().insert(l->contentsVec().begin(), o);
+        journalRecord(loc, "$type/contents");
+    }
 }
 
 void
@@ -314,6 +320,7 @@ detachContent(dbref loc, dbref obj)
     for (size_t i = 0; i < v.size(); i++)
         if (v[i]->ref() == obj) {
             v.erase(v.begin() + i);
+            journalRecord(loc, "$type/contents");
             return;
         }
 }
@@ -326,8 +333,10 @@ attachExit(dbref loc, dbref ex)
 
     if (!l || !o)
         return;
-    if (!listContains(l->exitsVec(), ex))
+    if (!listContains(l->exitsVec(), ex)) {
         l->exitsVec().insert(l->exitsVec().begin(), o);
+        journalRecord(loc, "$type/exits");
+    }
 }
 
 void
@@ -343,6 +352,7 @@ detachExit(dbref loc, dbref ex)
     for (size_t i = 0; i < v.size(); i++)
         if (v[i]->ref() == ex) {
             v.erase(v.begin() + i);
+            journalRecord(loc, "$type/exits");
             return;
         }
 }
@@ -444,6 +454,7 @@ Player::setPennies(int v)
 {
     pennies_ = v;
     DBDIRTY(object()->ref());
+    journalRecord(object()->ref(), "$type/pennies");
 }
 
 bool
@@ -538,8 +549,10 @@ playerSetHomeRef(dbref ref, dbref where)
     DbObject *o = database().get(ref);
     Player *p = o ? o->As<Player>() : nullptr;
 
-    if (p)
+    if (p) {
         p->setHomeRef(where);
+        journalRecord(ref, "$type/home");
+    }
 }
 
 void
@@ -567,8 +580,10 @@ roomSetDropToRef(dbref ref, dbref where)
     DbObject *o = database().get(ref);
     Room *r = o ? o->As<Room>() : nullptr;
 
-    if (r)
+    if (r) {
         r->setDropToRef(where);
+        journalRecord(ref, "$type/dropto");
+    }
 }
 
 dbref
@@ -586,8 +601,10 @@ thingSetHomeRef(dbref ref, dbref where)
     DbObject *o = database().get(ref);
     Thing *t = o ? o->As<Thing>() : nullptr;
 
-    if (t)
+    if (t) {
         t->setHomeRef(where);
+        journalRecord(ref, "$type/home");
+    }
 }
 
 int
@@ -605,8 +622,10 @@ thingSetValue(dbref ref, int v)
     DbObject *o = database().get(ref);
     Thing *t = o ? o->As<Thing>() : nullptr;
 
-    if (t)
+    if (t) {
         t->setValue(v);
+        journalRecord(ref, "$type/value");
+    }
 }
 
 PropertyTree *
@@ -650,6 +669,7 @@ void
 Exit::setDestRefs(const dbref *refs, int n)
 {
     dests_.assign(refs, refs + (n > 0 ? n : 0));
+    journalRecord(object()->ref(), "$type/dests");
     DBDIRTY(object()->ref());
 }
 

@@ -9,9 +9,17 @@
  * cache: base with every layer applied. Readers never touch the
  * journal at all.
  *
- * A layer maps an entry key to the value it took during that era, or
- * to a removal mark. Latest value per key wins, so a property ticked
- * ten thousand times in one era occupies one slot.
+ * A layer names the entries that changed during its era. Values are
+ * materialized when the layer is SEALED, through the same serializer
+ * that writes the base, which is what keeps the two encodings from
+ * drifting: there is one definition of what an entry looks like.
+ * Sealing therefore costs one serialization per entry that actually
+ * changed, never per object and never per database.
+ *
+ * A key recorded ten thousand times in one era is one set member, so
+ * a property ticked in a loop costs one entry. A write that does not
+ * change the value records nothing at all: the setters compare first
+ * and return early.
  *
  * Only the TOP layer is mutable, and only the game thread touches it.
  * Sealed layers are frozen forever, which is what lets the dump thread
@@ -19,92 +27,88 @@
  */
 
 #include <memory>
+#include <set>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
-#include <nlohmann/json.hpp>
+#include <nlohmann/json_fwd.hpp>
 
 namespace MUCK {
 
-/* One recorded change. A removal carries no value. */
-struct JournalEntry {
-    nlohmann::json value;
-    bool removed = false;
+typedef int dbref;
+
+/* A sealed layer: one era's changes, with values already materialized.
+ * Frozen; the dump thread owns it. */
+struct SealedLayer {
+    long era = 0;
+    dbref ref = -1;
+    /* entry key -> value, or null for a removal */
+    nlohmann::json entries;
 };
 
-/* Every change an object saw during one era. */
+/* The mutable top layer: which entries changed this era. */
 class JournalLayer {
   public:
     explicit JournalLayer(long era) : era_(era) {}
 
     long era() const { return era_; }
-    bool empty() const { return entries_.empty(); }
-    size_t size() const { return entries_.size(); }
+    bool empty() const { return keys_.empty(); }
+    size_t size() const { return keys_.size(); }
 
-    /* Record the latest value for a key; overwrites within the era. */
-    void set(const std::string &key, nlohmann::json value) {
-        JournalEntry &e = entries_[key];
-        e.value = std::move(value);
-        e.removed = false;
-    }
+    void touch(const std::string &key) { keys_.insert(key); }
 
-    void remove(const std::string &key) {
-        JournalEntry &e = entries_[key];
-        e.value = nullptr;
-        e.removed = true;
-    }
-
-    const std::unordered_map<std::string, JournalEntry> &entries() const {
-        return entries_;
-    }
-
-    /* Serialized form for the .hist sidecar: one JSON object holding
-     * the era and its keys. */
-    nlohmann::json toJson() const;
-    static JournalLayer fromJson(const nlohmann::json &j);
+    const std::set<std::string> &keys() const { return keys_; }
 
   private:
     long era_;
-    std::unordered_map<std::string, JournalEntry> entries_;
+    /* ordered so a layer serializes deterministically */
+    std::set<std::string> keys_;
 };
 
 /* The stack on one object. */
 class Journal {
   public:
-    /* The layer currently accepting writes; created on demand so an
-     * untouched object carries no journal weight at all. */
+    /* The layer accepting writes, created on demand so an untouched
+     * object carries no journal weight at all. */
     JournalLayer &top(long era) {
         if (!top_ || top_->era() != era)
-            top_ = std::make_unique<JournalLayer>(era);
+            top_ = std::unique_ptr<JournalLayer>(new JournalLayer(era));
         return *top_;
     }
 
     bool hasUnsaved() const { return top_ && !top_->empty(); }
     size_t unsavedCount() const { return top_ ? top_->size() : 0; }
 
-    /* Freeze the top layer and hand it over; the object starts a fresh
-     * one on its next write. Null when there was nothing to seal. */
-    std::unique_ptr<JournalLayer> seal() {
-        if (!top_ || top_->empty())
-            return nullptr;
-        return std::move(top_);
-    }
+    JournalLayer *peek() { return top_.get(); }
 
-    /* Layers sealed but not yet written, oldest first. The dump thread
-     * owns these once handed over; they are frozen. */
-    const std::vector<std::shared_ptr<const JournalLayer>> &pending() const {
-        return pending_;
-    }
-    void addPending(std::shared_ptr<const JournalLayer> layer) {
-        pending_.push_back(std::move(layer));
-    }
-    void clearPending() { pending_.clear(); }
+    /* Drop the top layer; the object starts a fresh one on its next
+     * write. Called once its contents have been materialized. */
+    void discardTop() { top_.reset(); }
 
   private:
     std::unique_ptr<JournalLayer> top_;
-    std::vector<std::shared_ptr<const JournalLayer>> pending_;
 };
+
+/* ------------------------------------------------------------------ */
+/* Recording. Every setter in the tree lands here, which is how a
+ * change becomes persistent at all: an entry with no journal record is
+ * never written. See docs/DATABASE.txt sections 2 and 7.
+ * ------------------------------------------------------------------ */
+
+/* Note that one entry on one object changed. */
+void journalRecord(dbref ref, const char *key);
+void journalRecord(dbref ref, const std::string &key);
+
+/* Entry key for a property path (docs section 3: properties keep
+ * their traditional slash paths). */
+std::string propEntryKey(const char *path);
+
+/* Note that a property changed, by path. */
+void journalRecordProp(dbref ref, const char *path);
+
+/* True when the object has unsaved changes. This is what @stats
+ * counts; it replaces the OBJECT_CHANGED dirty flag. */
+bool hasUnsavedChanges(dbref ref);
 
 } /* namespace MUCK */
 

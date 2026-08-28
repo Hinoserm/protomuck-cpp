@@ -13,6 +13,8 @@
 #include "externs.h"
 #include "ObjectAccess.h"
 #include "Modules.h"
+#include "Journal.h"
+#include "ObjectStore.h"
 #include <cstring>
 
 #ifndef MALLOC_PROFILING
@@ -148,10 +150,15 @@ setName(dbref ref, const char *name)
 
     if (!o)
         return;
+    /* no-op writes record nothing: that is what keeps a value set
+     * repeatedly to the same thing out of the history */
+    if (o->name && name && !strcmp(o->name, name))
+        return;
     /* a dead shell's name is the static "<garbage>" literal */
     if (o->name && typeOf(ref) != ObjectType::Garbage)
         delete[](char *) o->name;
     o->name = alloc_string(name);
+    journalRecord(ref, "$core/name");
     touched(ref);
 }
 
@@ -170,9 +177,10 @@ setLocation(dbref ref, dbref loc)
 {
     struct object *o = rec(ref);
 
-    if (!o)
+    if (!o || o->location == loc)
         return;
     o->location = loc;
+    journalRecord(ref, "$core/location");
     touched(ref);
 }
 
@@ -189,9 +197,10 @@ setOwner(dbref ref, dbref owner)
 {
     struct object *o = rec(ref);
 
-    if (!o)
+    if (!o || o->owner == owner)
         return;
     o->owner = owner;
+    journalRecord(ref, "$core/owner");
     touched(ref);
 }
 
@@ -208,23 +217,28 @@ setOwner(dbref ref, dbref owner)
         struct object *o = rec(ref);                                    \
         if (!o)                                                         \
             return;                                                     \
+        if (o->FIELD == v)                                              \
+            return;                                                     \
         o->FIELD = v;                                                   \
+        journalRecord(ref, "$core/flags");                              \
         touched(ref);                                                   \
     }                                                                   \
     void addFlags##N(dbref ref, object_flag_type bits)                  \
     {                                                                   \
         struct object *o = rec(ref);                                    \
-        if (!o)                                                         \
+        if (!o || (o->FIELD & bits) == bits)                            \
             return;                                                     \
         o->FIELD |= bits;                                               \
+        journalRecord(ref, "$core/flags");                              \
         touched(ref);                                                   \
     }                                                                   \
     void clearFlags##N(dbref ref, object_flag_type bits)                \
     {                                                                   \
         struct object *o = rec(ref);                                    \
-        if (!o)                                                         \
+        if (!o || !(o->FIELD & bits))                                   \
             return;                                                     \
         o->FIELD &= ~bits;                                              \
+        journalRecord(ref, "$core/flags");                              \
         touched(ref);                                                   \
     }
 
@@ -246,7 +260,12 @@ setFlags(dbref ref, object_flag_type v)
     /* The type bits are not the caller's to set: they mirror the type
      * field, and setType is the only writer. A whole-word write keeps
      * whatever type the object already has. */
-    o->flags = (v & ~TYPE_MASK) | (o->flags & TYPE_MASK);
+    object_flag_type nv = (v & ~TYPE_MASK) | (o->flags & TYPE_MASK);
+
+    if (o->flags == nv)
+        return;
+    o->flags = nv;
+    journalRecord(ref, "$core/flags");
     touched(ref);
 }
 
@@ -257,7 +276,10 @@ addFlags(dbref ref, object_flag_type bits)
 
     if (!o)
         return;
+    if ((o->flags & (bits & ~TYPE_MASK)) == (bits & ~TYPE_MASK))
+        return;
     o->flags |= (bits & ~TYPE_MASK);
+    journalRecord(ref, "$core/flags");
     touched(ref);
 }
 
@@ -268,7 +290,10 @@ clearFlags(dbref ref, object_flag_type bits)
 
     if (!o)
         return;
+    if (!(o->flags & (bits & ~TYPE_MASK)))
+        return;
     o->flags &= ~(bits & ~TYPE_MASK);
+    journalRecord(ref, "$core/flags");
     touched(ref);
 }
 
@@ -315,7 +340,10 @@ setOwnPowers(dbref ref, object_power_type v)
 
     if (!o)
         return;
+    if (o->powers == v)
+        return;
     o->powers = v;
+    journalRecord(ref, "$core/powers");
     touched(ref);
 }
 
@@ -326,7 +354,10 @@ setOwnPowers2(dbref ref, object_power_type v)
 
     if (!o)
         return;
+    if (o->power2 == v)
+        return;
     o->power2 = v;
+    journalRecord(ref, "$core/powers");
     touched(ref);
 }
 
@@ -445,8 +476,11 @@ setCreated(dbref ref, time_t when, dbref who)
 
     if (!o)
         return;
+    if (o->ts.created == when && o->ts.dcreated == who)
+        return;
     o->ts.created = when;
     o->ts.dcreated = who;
+    journalRecord(ref, "$core/ts");
     touched(ref);
 }
 
@@ -457,8 +491,11 @@ setModified(dbref ref, time_t when, dbref who)
 
     if (!o)
         return;
+    if (o->ts.modified == when && o->ts.dmodified == who)
+        return;
     o->ts.modified = when;
     o->ts.dmodified = who;
+    journalRecord(ref, "$core/ts");
     touched(ref);
 }
 
@@ -469,8 +506,11 @@ setLastUsed(dbref ref, time_t when, dbref who)
 
     if (!o)
         return;
+    if (o->ts.lastused == when && o->ts.dlastused == who)
+        return;
     o->ts.lastused = when;
     o->ts.dlastused = who;
+    journalRecord(ref, "$core/ts");
     touched(ref);
 }
 
@@ -481,7 +521,10 @@ setUseCount(dbref ref, int n)
 
     if (!o)
         return;
+    if (o->ts.usecount == n)
+        return;
     o->ts.usecount = n;
+    journalRecord(ref, "$core/ts");
     touched(ref);
 }
 

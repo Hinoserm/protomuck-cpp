@@ -29,6 +29,7 @@
 
 #include "UUID.h"
 #include "ObjectType.h"
+#include "Journal.h"
 
 namespace MUCK {
 
@@ -139,6 +140,12 @@ class DbObject {
             f(m.get());
     }
 
+    /* --- journal (docs/DATABASE.txt section 7) --- */
+    /* The object's stack of layers. Only the top one is mutable and
+     * only the game thread touches it; sealed layers are frozen, which
+     * is what lets the dump thread write with no locks. */
+    Journal &journal() { return journal_; }
+
     /* --- object-level locking (striped; see Database) --- */
     void lockShared() const;
     void unlockShared() const;
@@ -190,6 +197,7 @@ class DbObject {
     Properties *propsCache_ = nullptr;
     std::vector<std::unique_ptr<Module> > modules_;
 
+    Journal journal_;
     struct object legacy_;      /* TRANSITIONAL payload */
 };
 

@@ -7,6 +7,7 @@
 #include "mpi.h"
 #include "props.h"
 #include "externs.h"
+#include "Journal.h"
 #include "Modules.h"
 #include "ObjectAccess.h"
 #include "interface.h"
@@ -39,6 +40,10 @@ set_property_nofetch(dbref object, const char *pname, PData * dat, bool pure)
     /* Make sure that we are passed a valid property name */
     if (!pname)
         return;
+
+    /* Every property write is a journal record: an entry with no
+     * record is never persisted (docs/DATABASE.txt sections 2 and 7). */
+    MUCK::journalRecordProp(object, pname);
 
     while (*pname == PROPDIR_DELIMITER)
         pname++;
@@ -235,6 +240,8 @@ remove_property_nofetch(dbref player, const char *type)
     PropDirPtr l;
     char buf[BUFFER_LEN];
     char *w;
+
+    MUCK::journalRecordProp(player, type);
 
     /* if( tp_db_readonly ) return; *//* Why did we remove this? */
 
