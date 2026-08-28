@@ -498,6 +498,10 @@ objectFromJsonPhase2(const PendingLinks &pl)
             o->sp.player.home = refFromJson(pl.td["home"]);
             o->contents = chainFromJson(pl.td["contents"]);
             o->exits = chainFromJson(pl.td["exits"]);
+            /* the player name lookup table is runtime state the flat
+             * importer built as it read; without it every login fails
+             * before the password is even checked */
+            add_player(pl.ref);
             break;
         case TYPE_EXIT: {
             const json &dests = pl.td["dests"];
@@ -533,7 +537,13 @@ ObjectStore::objectPath(dbref i) const
 {
     std::string u = MUCK::database().uuidOf(i).toString();
 
-    return root_ + "/objects/" + u.substr(0, 2) + "/" + u.substr(2, 2)
+    /* Shard on the LAST four hex digits: uuidv7 leads with a timestamp,
+     * so leading digits are identical for every object minted in the
+     * same era and would put the whole database in one directory. The
+     * tail is random. */
+    size_t n = u.size();
+
+    return root_ + "/objects/" + u.substr(n - 4, 2) + "/" + u.substr(n - 2, 2)
         + "/" + u + ".json";
 }
 
