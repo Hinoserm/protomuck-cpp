@@ -297,9 +297,9 @@ prim_socksend(PRIM_PROTOTYPE)
 #endif
 
         if (oper[1].data.sock->rawmode)
-            strcpy(buf, oper[0].data.string->data);
+            strcpy(buf, oper[0].data.string->data.c_str());
         else
-            sprintf(buf, "%s\n", oper[0].data.string->data);
+            sprintf(buf, "%s\n", oper[0].data.string->data.c_str());
 
 
 #if defined(SSL_SOCKETS) && defined(USE_SSL)
@@ -623,7 +623,7 @@ prim_nbsockopen(PRIM_PROTOTYPE)
         abort_interp("String argument expected.");
     if (!oper[1].data.string)
         abort_interp("Host cannot be an empty string.");
-    if (!(myhost = gethostbyname(oper[1].data.string->data))) {
+    if (!(myhost = gethostbyname(oper[1].data.string->data.c_str()))) {
         strcpy(myresult, "Invalid host.");
         result = new inst;
         result->type = PROG_INTEGER;
@@ -662,7 +662,7 @@ prim_nbsockopen(PRIM_PROTOTYPE)
         result->data.sock->commands = 0;
         result->data.sock->is_player = 0;
         result->data.sock->port = oper[0].data.number; /* remote port # */
-        result->data.sock->hostname = alloc_string(oper[1].data.string->data);
+        result->data.sock->hostname = alloc_string(oper[1].data.string->data.c_str());
         result->data.sock->host = ntohl(name.sin_addr.s_addr);
         result->data.sock->username = alloc_string(unparse_object(PSafe, PSafe));
         result->data.sock->connected_at = time(NULL);
@@ -683,7 +683,7 @@ prim_nbsockopen(PRIM_PROTOTYPE)
         add_socket_to_queue(result->data.sock, fr);
         if (tp_log_sockets)
             log2filetime("logs/sockets",
-                         "#%d by %s SOCKOPEN:  %s:%d -> %d\n", program, unparse_object(PSafe, PSafe), oper[1].data.string->data, oper[0].data.number, result->data.sock->socknum);
+                         "#%d by %s SOCKOPEN:  %s:%d -> %d\n", program, unparse_object(PSafe, PSafe), oper[1].data.string->data.c_str(), oper[0].data.number, result->data.sock->socknum);
     }
 
     copyinst(result, &arg[(*top)++]);
@@ -712,7 +712,7 @@ prim_nbsock6open(PRIM_PROTOTYPE)
         abort_interp("String argument expected.");
     if (!oper[1].data.string)
         abort_interp("Host cannot be an empty string.");
-    if (!(myhost = gethostbyname2(oper[1].data.string->data, AF_INET6))) {
+    if (!(myhost = gethostbyname2(oper[1].data.string->data.c_str(), AF_INET6))) {
         strcpy(myresult, "Invalid host.");
         result = new inst;
         result->type = PROG_INTEGER;
@@ -748,7 +748,7 @@ prim_nbsock6open(PRIM_PROTOTYPE)
         result->data.sock->commands = 0;
         result->data.sock->is_player = 0;
         result->data.sock->port = oper[0].data.number; /* remote port # */
-        result->data.sock->hostname = alloc_string(oper[1].data.string->data);
+        result->data.sock->hostname = alloc_string(oper[1].data.string->data.c_str());
         result->data.sock->host = -1;
         result->data.sock->host6 = (void *) myhost->h_addr;
         result->data.sock->ipv6 = 1;
@@ -767,7 +767,7 @@ prim_nbsock6open(PRIM_PROTOTYPE)
         add_socket_to_queue(result->data.sock, fr);
         if (tp_log_sockets)
             log2filetime("logs/sockets",
-                         "#%d by %s SOCKOPEN:  %s:%d -> %d\n", program, unparse_object(PSafe, PSafe), oper[1].data.string->data, oper[0].data.number, result->data.sock->socknum);
+                         "#%d by %s SOCKOPEN:  %s:%d -> %d\n", program, unparse_object(PSafe, PSafe), oper[1].data.string->data.c_str(), oper[0].data.number, result->data.sock->socknum);
     }
 
     copyinst(result, &arg[(*top)++]);
@@ -1406,7 +1406,7 @@ prim_get_sockinfo(PRIM_PROTOTYPE)
 void
 prim_socket_setuser(PRIM_PROTOTYPE)
 {
-    char *ptr;
+    const char *ptr;
     char pad_char[] = "";
     struct muf_socket *theSock;
     struct descriptor_data *d;
@@ -1428,7 +1428,7 @@ prim_socket_setuser(PRIM_PROTOTYPE)
     ref = oper[1].data.objref;
     if (oper[0].type != PROG_STRING)
         abort_interp("Expected string for password. (3)");
-    ptr = oper[0].data.string ? oper[0].data.string->data : pad_char;
+    ptr = oper[0].data.string ? oper[0].data.string->data.c_str() : pad_char;
     if (!check_password(ref, ptr)) { /* incorrect password */
         result = 0;
         PushInt(result);
@@ -1735,7 +1735,7 @@ prim_udpsend(PRIM_PROTOTYPE)
         abort_interp("UDP data to be sent must be a string. (3)");
 
     /* make some sense of the hostname, or return FALSE */
-    myhost = gethostbyname(oper[1].data.string->data);
+    myhost = gethostbyname(oper[1].data.string->data.c_str());
     if (!myhost) {
         result = 0;
         PushInt(result);
@@ -1749,7 +1749,7 @@ prim_udpsend(PRIM_PROTOTYPE)
     bcopy((char *) myhost->h_addr, (char *) &sa.sin_addr, myhost->h_length);
 
     /* ship it out, shut it down. */
-    sendto(tmp, DoNullInd(oper[2].data.string), oper[2].data.string ? oper[2].data.string->length : 0, 0, (struct sockaddr *) &sa, sizeof(sa));
+    sendto(tmp, DoNullInd(oper[2].data.string), oper[2].data.string ? oper[2].data.string->length() : 0, 0, (struct sockaddr *) &sa, sizeof(sa));
     if (tp_log_sockets)
         log2filetime("logs/sockets", "UDPSEND: host %s, port %d\n", myhost->h_name, htons(sa.sin_port));
     closesocket(tmp);
@@ -1783,7 +1783,7 @@ prim_udp6send(PRIM_PROTOTYPE)
         abort_interp("UDP data to be sent must be a string. (3)");
 
     /* make some sense of the hostname, or return FALSE */
-    myhost = gethostbyname2(oper[1].data.string->data, AF_INET6);
+    myhost = gethostbyname2(oper[1].data.string->data.c_str(), AF_INET6);
     if (!myhost) {
         result = 0;
         PushInt(result);
@@ -1797,7 +1797,7 @@ prim_udp6send(PRIM_PROTOTYPE)
     bcopy((char *) myhost->h_addr, (char *) &sa6.sin6_addr, myhost->h_length);
 
     /* ship it out, shut it down. */
-    sendto(tmp, oper[2].data.string->data, oper[2].data.string->length, 0, (struct sockaddr *) &sa6, sizeof(sa6));
+    sendto(tmp, oper[2].data.string->data.c_str(), oper[2].data.string->length(), 0, (struct sockaddr *) &sa6, sizeof(sa6));
     if (tp_log_sockets)
         log2filetime("logs/sockets", "UDPSEND: host %s, port %d\n", myhost->h_name, htons(sa6.sin6_port));
     close(tmp);
@@ -1827,7 +1827,7 @@ prim_dns(PRIM_PROTOTYPE)
     memset(buf, 0, 16);
 
     /* make some sense of the hostname, or return FALSE */
-    myhost = gethostbyname(oper[0].data.string->data);
+    myhost = gethostbyname(oper[0].data.string->data.c_str());
     if (!myhost) {
         bufip[0] = '\0';
         bufname[0] = '\0';

@@ -16,7 +16,7 @@
 #include "Modules.h"
 
 int
-check_descr_flag(char *dflag)
+check_descr_flag(const char *dflag)
 {
 /* New function in 1.7. Like the check_flag functions of 
  * p_db.c, identifies flags for descriptor flag support.
@@ -93,7 +93,7 @@ descr_flag_check_perms(int descr, int dFlag, int mLev)
 }
 
 int
-has_descr_flag(int descr, char *dFlag, int mLev)
+has_descr_flag(int descr, const char *dFlag, int mLev)
 {
 /* For descriptor flag support in 1.7. Checks to see
  * if the descriptor has the flag if mlev high enough.
@@ -357,7 +357,7 @@ prim_connotify(PRIM_PROTOTYPE)
     if ((result < 1) || (result > pcount()))
         abort_interp("Invalid connection number (1)");
     if (oper[0].data.string)
-        pnotify(result, oper[0].data.string->data);
+        pnotify(result, oper[0].data.string->data.c_str());
 }
 
 void
@@ -495,7 +495,7 @@ prim_descr_array(PRIM_PROTOTYPE)
 void
 prim_descr_setuser(PRIM_PROTOTYPE)
 {
-    char *ptr;
+    const char *ptr;
     char pad_char[] = "";
     dbref ref;
     int tmp, result;
@@ -511,7 +511,7 @@ prim_descr_setuser(PRIM_PROTOTYPE)
         abort_interp("Password string expected");
     if (!pdescrp(oper[2].data.number))
         abort_interp("That is not a valid descriptor.");
-    ptr = oper[0].data.string ? oper[0].data.string->data : pad_char;
+    ptr = oper[0].data.string ? oper[0].data.string->data.c_str() : pad_char;
     if (ref != NOTHING) {
         const char *passwd = MUCK::playerPasswordSlot(ref);
 
@@ -1188,7 +1188,7 @@ prim_descr_set(PRIM_PROTOTYPE)
      * Not as many permission checks possible, so the
      * prim is W3 now for safety sake.
      */
-    char *flag;
+    const char *flag;
     int flagValue = 0;
     int descr;
     struct descriptor_data *d;
@@ -1206,7 +1206,7 @@ prim_descr_set(PRIM_PROTOTYPE)
         abort_interp("That is not a valid descriptor.");
 
     descr = oper[1].data.number;
-    flag = oper[0].data.string->data;
+    flag = oper[0].data.string->data.c_str();
 
     while (*flag == '!') {
         flag++;
@@ -1239,7 +1239,7 @@ prim_descr_flagp(PRIM_PROTOTYPE)
     /* DESCR_FLAG? added for Proto's new descriptor flag support.
      * Since checking flags is less dangerous, is W1 prim for now. 
      */
-    char *flag = NULL;
+    const char *flag = NULL;
     int result = 0;
 
     /* descr flag -- int */
@@ -1253,7 +1253,7 @@ prim_descr_flagp(PRIM_PROTOTYPE)
     if (!pdescrp(oper[1].data.number))
         abort_interp("That is not a valid descriptor.");
 
-    flag = oper[0].data.string->data;
+    flag = oper[0].data.string->data.c_str();
 
     result = has_descr_flag(oper[1].data.number, flag, mlev);
     if (result == -1)
@@ -1356,7 +1356,7 @@ prim_descr_sendfile(PRIM_PROTOTYPE)
     if (!(d = descrdata_by_descr(oper[3].data.number)))
         abort_interp("Invalid descriptor.");
 
-    filename = oper[0].data.string->data;
+    filename = oper[0].data.string->data.c_str();
 
 #ifdef SECURE_FILE_PRIMS
     /* These functions are in p_file.c.  */

@@ -100,9 +100,10 @@ prim_clear_error(PRIM_PROTOTYPE)
             result = 0;
         } else {
             loop = 0;
-            result = strlen(oper[0].data.string->data);
+            result = oper[0].data.string->length();
             for (loop = 0; loop < result; loop++)
                 buf[loop] = toupper(oper[0].data.string->data[loop]);
+            buf[result] = '\0';
             result = 0;
             loop = 0;
             while (loop < ERROR_NUM) {
@@ -141,9 +142,10 @@ prim_set_error(PRIM_PROTOTYPE)
             result = 0;
         } else {
             loop = 0;
-            result = strlen(oper[0].data.string->data);
+            result = oper[0].data.string->length();
             for (loop = 0; loop < result; loop++)
                 buf[loop] = toupper(oper[0].data.string->data[loop]);
+            buf[result] = '\0';
             result = 0;
             loop = 0;
             while (loop < ERROR_NUM) {
@@ -181,9 +183,10 @@ prim_is_set(PRIM_PROTOTYPE)
             result = 0;
         } else {
             loop = 0;
-            result = strlen(oper[0].data.string->data);
+            result = oper[0].data.string->length();
             for (loop = 0; loop < result; loop++)
                 buf[loop] = toupper(oper[0].data.string->data[loop]);
+            buf[result] = '\0';
             result = 0;
             loop = 0;
             while (loop < ERROR_NUM) {
@@ -220,9 +223,10 @@ prim_error_str(PRIM_PROTOTYPE)
             result = -1;
         } else {
             loop = 0;
-            result = strlen(oper[0].data.string->data);
+            result = oper[0].data.string->length();
             for (loop = 0; loop < result; loop++)
                 buf[loop] = toupper(oper[0].data.string->data[loop]);
+            buf[result] = '\0';
             result = -1;
             loop = 0;
             while (loop < ERROR_NUM) {
@@ -277,9 +281,10 @@ prim_error_bit(PRIM_PROTOTYPE)
         result = -1;
     } else {
         loop = 0;
-        result = strlen(oper[0].data.string->data);
+        result = oper[0].data.string->length();
         for (loop = 0; loop < result; loop++)
             buf[loop] = toupper(oper[0].data.string->data[loop]);
+        buf[result] = '\0';
         result = -1;
         loop = 0;
         while (loop < ERROR_NUM) {

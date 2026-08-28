@@ -56,7 +56,7 @@ prim_kill_macro(PRIM_PROTOTYPE)
         abort_interp("Null argument. (1)");
     if (mlev < LWIZ)
         abort_interp("Permission denied.");
-    strcpy(tmp, (const char *) oper[0].data.string->data);
+    strcpy(tmp, (const char *) oper[0].data.string->data.c_str());
 
     result = MUCK::macros().remove(tmp) ? 1 : 0;
     PushInt(result);
@@ -78,8 +78,8 @@ prim_insert_macro(PRIM_PROTOTYPE)
         abort_interp("Arguments may not be empty strings.");
     if (mlev < LWIZ)
         abort_interp("Permission denied.");
-    strcpy(namebuf, (const char *) oper[1].data.string->data);
-    strcpy(defbuf, (const char *) oper[0].data.string->data);
+    strcpy(namebuf, (const char *) oper[1].data.string->data.c_str());
+    strcpy(defbuf, (const char *) oper[0].data.string->data.c_str());
 
     result = MUCK::macros().insert(namebuf, defbuf, player) ? 1 : 0;
     PushInt(result);
@@ -318,7 +318,7 @@ prim_program_insertlines(PRIM_PROTOTYPE)
             new_line = MUCK::programs().newLine(); /* allocate new line */
             oper4 = array_getitem(lines, &temp1);
             if (oper4->data.string)
-                new_line->this_line = alloc_string(oper4->data.string->data);
+                new_line->this_line = alloc_string(oper4->data.string->data.c_str());
             else
                 new_line->this_line = alloc_string(" ");
             oper4 = NULL;

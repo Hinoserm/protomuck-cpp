@@ -936,22 +936,20 @@ CrT_alloc_string(const char *string, const char *file, int line)
 struct shared_string *
 CrT_alloc_prog_string(const char *s, const char *file, int line, int length, int wclength)
 {
-    struct shared_string *ss;
+    /* shared_string now owns a std::string, so the flexible-array
+       CrT_malloc layout no longer applies. Construct it normally; the
+       allocation is not tracked by the profiler, but the RCLEAR path
+       frees it with scalar delete, which now matches. */
+    (void) file;
+    (void) line;
 
-    if (s == NULL || *s == '\0' || length == 0)
+    if (s == NULL || (*s == '\0' && length < 0) || length == 0)
         return (NULL);
 
-    if (length < 0) {
+    if (length < 0)
         length = strlen(s);
-    }
-    if ((ss = (struct shared_string *)
-         CrT_malloc(sizeof(struct shared_string) + length, file, line)) == NULL)
-        abort();
-    ss->links = 1;
-    ss->length = length;
-    ss->wclength = wclength;
-    bcopy(s, ss->data, ss->length + 1);
-    return (ss);
+
+    return new shared_string(s, (size_t) length, wclength);
 }
 
 /* }}} */

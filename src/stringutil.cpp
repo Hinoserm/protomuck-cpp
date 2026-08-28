@@ -1093,32 +1093,22 @@ alloc_string(const char *string)
 struct shared_string *
 alloc_prog_string_exact(const char *s, int length, int wclength)
 {
-    struct shared_string *ss;
-
     if (s == NULL || (*s == '\0' && length < 0) || length == 0)
         return (NULL);
 
-    if (length < 0) {
+    if (length < 0)
         length = strlen(s);
-    }
 
     if (length > BUFFER_LEN) {
-        length = BUFFER_LEN - 1; //For Safety.  This should be removed when string handling is improved.
+        length = BUFFER_LEN - 1; /* For safety, until callers are audited. */
         fprintf(stderr, "MUF String would have exceeded BUFFER_LEN\n");
     }
-
-    if (!(ss = new shared_string[length])) {
-        fprintf(stderr, "PANIC: alloc_prog_string() Out of Memory.\n");
-        abort();
-    }
-    ss->links = 1;
-    ss->length = length;
 #ifdef UTF8_SUPPORT
-    ss->wclength = wclength;
+    return new shared_string(s, (size_t) length, wclength);
+#else
+    (void) wclength;
+    return new shared_string(s, (size_t) length);
 #endif
-    memcpy(ss->data, s, ss->length + 1);
-    ss->data[ss->length] = '\0'; //For Safety
-    return (ss);
 }
 
 #endif

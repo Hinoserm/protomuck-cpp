@@ -31,7 +31,7 @@ prim_sysparm(PRIM_PROTOTYPE)
     if (oper[0].type != PROG_STRING)
         abort_interp("Invalid argument");
     if (oper[0].data.string) {
-        ptr = tune_get_parmstring(oper[0].data.string->data, mlev);
+        ptr = tune_get_parmstring(oper[0].data.string->data.c_str(), mlev);
     } else {
         ptr = "";
     }
@@ -53,11 +53,11 @@ prim_setsysparm(PRIM_PROTOTYPE)
     if (!oper[0].data.string)
         abort_interp("Null string argument. (2)");
 
-    result = tune_setparm(program, oper[1].data.string->data, oper[0].data.string->data);
+    result = tune_setparm(program, oper[1].data.string->data.c_str(), oper[0].data.string->data.c_str());
 
     switch (result) {
         case 0:                /* TUNESET_SUCCESS */
-            log_status("TUNED (MUF): %s(%d) tuned %s to %s\n", OkObj(player) ? NAME(player) : "(Login)", player, oper[1].data.string->data, oper[0].data.string->data);
+            log_status("TUNED (MUF): %s(%d) tuned %s to %s\n", OkObj(player) ? NAME(player) : "(Login)", player, oper[1].data.string->data.c_str(), oper[0].data.string->data.c_str());
             break;
         case 1:                /* TUNESET_UNKNOWN */
             abort_interp("Unknown parameter. (1)");
@@ -105,13 +105,13 @@ prim_force(PRIM_PROTOTYPE)
         abort_interp("Object to force not a thing or player (1)");
     if (!oper[0].data.string)
         abort_interp("Null string argument (2)");
-    if (index(oper[0].data.string->data, '\r'))
+    if (index(oper[0].data.string->data.c_str(), '\r'))
         abort_interp("Carriage returns not allowed in command string (2)");
     if (Man(oper[1].data.objref) && !(Man(OWNER(program)) && Boy(program)))
         abort_interp("Cannot force the man (1)");
 
-    strcpy(buf, oper[0].data.string->data);
-    len = oper[0].data.string->length;
+    strcpy(buf, oper[0].data.string->data.c_str());
+    len = oper[0].data.string->length();
 #ifdef UTF8_SUPPORT
     wclen = oper[0].data.string->wclength;
 #endif
@@ -158,7 +158,7 @@ prim_logstatus(PRIM_PROTOTYPE)
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string argument (1).");
     if (oper[0].data.string) {
-        strcpy(buf, oper[0].data.string->data);
+        strcpy(buf, oper[0].data.string->data.c_str());
         log_status("%s\r\n", buf);
     }
 }
@@ -194,7 +194,7 @@ prim_shutdown(PRIM_PROTOTYPE)
     restart_flag = 0;
     if (oper[0].data.string) {
         strcat(shutdown_message, SYSWHITE MARK SYSNORMAL);
-        strcat(shutdown_message, oper[0].data.string->data);
+        strcat(shutdown_message, oper[0].data.string->data.c_str());
         strcat(shutdown_message, "\r\n");
     }
 }
@@ -212,7 +212,7 @@ prim_restart(PRIM_PROTOTYPE)
 
     if (oper[0].data.string) {
         strcat(restart_message, SYSWHITE MARK SYSNORMAL);
-        strcat(restart_message, oper[0].data.string->data);
+        strcat(restart_message, oper[0].data.string->data.c_str());
         strcat(restart_message, "\r\n");
     }
 }
@@ -229,7 +229,7 @@ prim_armageddon(PRIM_PROTOTYPE)
     sprintf(buf, "\r\nImmediate shutdown by %s.\r\n", NAME(PSafe));
     if (oper[0].data.string) {
         strcat(buf, SYSWHITE MARK SYSNORMAL);
-        strcat(buf, oper[0].data.string->data);
+        strcat(buf, oper[0].data.string->data.c_str());
         strcat(buf, "\r\n");
     }
 

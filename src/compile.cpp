@@ -156,8 +156,8 @@ int primitive(const char *s);   /* returns primitive_number if
 
                                  * primitive */
 void free_prog(dbref);
-const char *next_token(COMPSTATE *);
-const char *next_token_raw(COMPSTATE *);
+std::string next_token(COMPSTATE *);
+std::string next_token_raw(COMPSTATE *);
 struct INTERMEDIATE *next_word(COMPSTATE *, const char *);
 struct INTERMEDIATE *process_special(COMPSTATE *, const char *);
 struct INTERMEDIATE *primitive_word(COMPSTATE *, const char *);
@@ -175,10 +175,10 @@ struct INTERMEDIATE *var_word(COMPSTATE *, const char *);
 struct INTERMEDIATE *lvar_word(COMPSTATE *, const char *);
 struct INTERMEDIATE *svar_word(COMPSTATE *, const char *);
 struct INTERMEDIATE *stvar_word(COMPSTATE *, const char *);
-const char *do_string(COMPSTATE *);
+std::string do_string(COMPSTATE *);
 void do_comment(COMPSTATE *);
 void do_comment_new(COMPSTATE *);
-int do_directive(COMPSTATE *, char *direct);
+int do_directive(COMPSTATE *, const char *direct);
 struct prog_addr *alloc_addr(COMPSTATE *, int, struct inst *);
 struct INTERMEDIATE *prealloc_inst(COMPSTATE *cstat);
 struct INTERMEDIATE *new_inst(COMPSTATE *);
@@ -270,7 +270,7 @@ do_abort_compile(COMPSTATE *cstat, const char *c)
 }
 
 /* abort compile macro */
-#define abort_compile(ST,C) { do_abort_compile(ST,C); return 0; }
+#define abort_compile(ST,C) { do_abort_compile(ST,C); return {}; }
 
 /* abort compile for void functions */
 #define v_abort_compile(ST,C) { do_abort_compile(ST,C); return; }
@@ -1122,7 +1122,7 @@ IntermediateIsString(struct INTERMEDIATE *ptr, const char *val)
     const char *myval;
 
     if (ptr && ptr->in.type == PROG_STRING) {
-        myval = ptr->in.data.string ? ptr->in.data.string->data : "";
+        myval = ptr->in.data.string ? ptr->in.data.string->data.c_str() : "";
         if (!strcmp(myval, val))
             return 1;
     }
@@ -1246,7 +1246,7 @@ OptimizeIntermediate(COMPSTATE *cstat)
                             if (IntermediateIsInteger(curr->next->next, 0)) {
                                 if (IntermediateIsPrimitive(curr->next->next->next, EqualsNo)) {
                                     if (curr->in.data.string)
-                                        delete[]curr->in.data.string;
+                                        delete curr->in.data.string;
                                     curr->in.type = PROG_PRIMITIVE;
                                     curr->in.data.number = NotNo;
                                     RemoveNextIntermediate(cstat, curr);
@@ -1262,7 +1262,7 @@ OptimizeIntermediate(COMPSTATE *cstat)
                             if (IntermediateIsInteger(curr->next->next, 0)) {
                                 if (IntermediateIsPrimitive(curr->next->next->next, EqualsNo)) {
                                     if (curr->in.data.string)
-                                        delete[]curr->in.data.string;
+                                        delete curr->in.data.string;
                                     curr->in.type = PROG_PRIMITIVE;
                                     curr->in.data.number = NotNo;
                                     RemoveNextIntermediate(cstat, curr);
@@ -1525,7 +1525,6 @@ OptimizeIntermediate(COMPSTATE *cstat)
 void
 do_compile(int descr, dbref player_in, dbref program_in, int force_err_display)
 {
-    const char *token;
     struct INTERMEDIATE *new_word;
     int i;
     int instrCount = 0;
@@ -1597,14 +1596,13 @@ do_compile(int descr, dbref player_in, dbref program_in, int force_err_display)
         v_abort_compile(&cstat, "Missing program text.");
 
     /* do compilation */
-    while ((token = next_token(&cstat))) {
-        new_word = next_word(&cstat, token);
+    std::string token;
+    while (!(token = next_token(&cstat)).empty()) {
+        new_word = next_word(&cstat, token.c_str());
 
         /* test for errors */
-        if (cstat.compile_err) {
-            delete[]token;
+        if (cstat.compile_err)
             return;
-        }
 
         if (new_word) {
             if (!cstat.first_word)
@@ -1616,8 +1614,6 @@ do_compile(int descr, dbref player_in, dbref program_in, int force_err_display)
         }
         while (cstat.curr_word && cstat.curr_word->next)
             cstat.curr_word = cstat.curr_word->next;
-
-        delete[]token;
     }
 
     if (cstat.compile_err)
@@ -1812,17 +1808,14 @@ advance_line(COMPSTATE *cstat)
 }
 
 /* Skips comments, grabs strings, returns NULL when no more tokens to grab. */
-const char *
+std::string
 next_token_raw(COMPSTATE *cstat)
 {
-    static char buf[BUFFER_LEN];
-    int i;
-
     if (!cstat->curr_line)
-        return (char *) 0;
+        return std::string();
 
     if (!cstat->next_char)
-        return (char *) 0;
+        return std::string();
 
     /* skip white space */
     while (*cstat->next_char && isspace(*cstat->next_char))
@@ -1843,62 +1836,51 @@ next_token_raw(COMPSTATE *cstat)
     if (*cstat->next_char == BEGINSTRING)
         return do_string(cstat);
 
-    for (i = 0; *cstat->next_char && !isspace(*cstat->next_char); i++) {
-        buf[i] = *cstat->next_char;
+    const char *start = cstat->next_char;
+    while (*cstat->next_char && !isspace(*cstat->next_char))
         cstat->next_char++;
-    }
-    buf[i] = '\0';
-    return alloc_string(buf);
+    return std::string(start, cstat->next_char - start);
 }
 
 
-const char *
+std::string
 next_token(COMPSTATE *cstat)
 {
-    char *expansion, *temp;
+    char *expansion, *splice;
     int result = 0;
 
-    temp = (char *) next_token_raw(cstat);
-    if (!temp)
-        return NULL;
+    std::string temp = next_token_raw(cstat);
+    if (temp.empty())
+        return temp;
 
     if (temp[0] == BEGINDIRECTIVE) {
-        result = do_directive(cstat, temp);
-        delete[]temp;
+        result = do_directive(cstat, temp.c_str());
         if (!result) {          /* changed to abort compiling on directive errors. -Akari */
             cstat->compile_err = 1;
-            return NULL;
+            return std::string();
         }
         return next_token(cstat);
     }
     if (temp[0] == BEGINESCAPE) {
-        if (temp[1]) {
-            expansion = temp;
-            temp = new char[strlen(expansion)];
-
-            strcpy(temp, (expansion + 1));
-            delete[]expansion;
-        }
-        return (temp);
+        if (temp.size() > 1)
+            temp.erase(0, 1);
+        return temp;
     }
-    if ((expansion = expand_def(cstat, temp))) {
-        delete[]temp;
+    if ((expansion = expand_def(cstat, temp.c_str()))) {
         if (++cstat->macrosubs > SUBSTITUTIONS) {
             abort_compile(cstat, "Too many macro substitutions.");
         } else {
-            //temp = (char *) malloc(strlen(cstat->next_char) + strlen(expansion) + 21);
-            temp = new char[strlen(cstat->next_char) + strlen(expansion) + 21]; //blackjack?
+            splice = new char[strlen(cstat->next_char) + strlen(expansion) + 21];
 
-            strcpy(temp, expansion);
-            strcat(temp, cstat->next_char);
+            strcpy(splice, expansion);
+            strcat(splice, cstat->next_char);
             delete[]expansion;
             delete[]cstat->line_copy;
-            cstat->next_char = cstat->line_copy = temp;
+            cstat->next_char = cstat->line_copy = splice;
             return next_token(cstat);
         }
-    } else {
-        return (temp);
     }
+    return temp;
 }
 
 
@@ -2005,11 +1987,11 @@ is_preprocessor_conditional(const char *tmpptr)
 
 /* handle compiler directives */
 int
-do_directive(COMPSTATE *cstat, char *direct)
+do_directive(COMPSTATE *cstat, const char *direct)
 {
     struct match_data md;
     char temp[BUFFER_LEN];
-    char *tmpname, *tmpptr = NULL;
+    std::string tmpname, tmpptr;
     int i = 0;
     int j;
 
@@ -2019,43 +2001,40 @@ do_directive(COMPSTATE *cstat, char *direct)
         abort_compile(cstat, "I don't understand that compiler directive!");
     }
     if (!string_compare(temp, "define")) {
-        tmpname = (char *) next_token_raw(cstat);
-        if (!tmpname)
+        tmpname = next_token_raw(cstat);
+        if (tmpname.empty())
             abort_compile(cstat, "Unexpected end of file looking for $define name.");
         i = 0;
-        while ((tmpptr = (char *) next_token_raw(cstat)) && (string_compare(tmpptr, "$enddef"))) {
-            char *cp;
+        while (!(tmpptr = next_token_raw(cstat)).empty() && (string_compare(tmpptr, "$enddef"))) {
+            const char *cp;
 
-            for (cp = tmpptr; i < (BUFFER_LEN / 2) && *cp;) {
-                if (*tmpptr == BEGINSTRING && cp != tmpptr && (*cp == ENDSTRING || *cp == BEGINESCAPE)) {
+            for (cp = tmpptr.c_str(); i < (BUFFER_LEN / 2) && *cp;) {
+                if (tmpptr[0] == BEGINSTRING && cp != tmpptr.c_str() && (*cp == ENDSTRING || *cp == BEGINESCAPE)) {
                     temp[i++] = BEGINESCAPE;
                 }
                 temp[i++] = *cp++;
             }
-            if (*tmpptr == BEGINSTRING)
+            if (tmpptr[0] == BEGINSTRING)
                 temp[i++] = ENDSTRING;
             temp[i++] = ' ';
-            delete[]tmpptr;
             if (i > (BUFFER_LEN / 2))
                 abort_compile(cstat, "$define definition too long.");
         }
         if (i)
             i--;
         temp[i] = '\0';
-        if (!tmpptr)
+        if (tmpptr.empty())
             abort_compile(cstat, "Unexpected end of file in $define definition.");
-        delete[]tmpptr;
-        (void) insert_def(cstat, tmpname, temp);
-        delete[]tmpname;
+        (void) insert_def(cstat, tmpname.c_str(), temp);
 
     } else if (!string_compare(temp, "beta")) {
         int progver;
 
-        tmpname = (char *) next_token_raw(cstat);
-        if (!tmpname || !*tmpname) {
+        tmpname = next_token_raw(cstat);
+        if (tmpname.empty()) {
             progver = 1;
         } else {
-            progver = atoi(tmpname);
+            progver = atoi(tmpname.c_str());
         }
         if (progver <= 0) {
             abort_compile(cstat, "You must provide a valid beta version number of 1 or greater.");
@@ -2064,16 +2043,15 @@ do_directive(COMPSTATE *cstat, char *direct)
             cstat->next_char++;
         advance_line(cstat);
         add_property(cstat->program, "_Beta", NULL, progver);
-        delete[]tmpname;
 
     } else if (!string_compare(temp, "alpha")) {
         int progver;
 
-        tmpname = (char *) next_token_raw(cstat);
-        if (!tmpname || !*tmpname) {
+        tmpname = next_token_raw(cstat);
+        if (tmpname.empty()) {
             progver = 1;
         } else {
-            progver = atoi(tmpname);
+            progver = atoi(tmpname.c_str());
         }
         if (progver <= 0) {
             abort_compile(cstat, "You must provide a valid alpha version number of 1 or greater.");
@@ -2082,7 +2060,6 @@ do_directive(COMPSTATE *cstat, char *direct)
             cstat->next_char++;
         advance_line(cstat);
         add_property(cstat->program, "_Alpha", NULL, progver);
-        delete[]tmpname;
 
     } else if (!string_compare(temp, "log_status")) {
         while (*cstat->next_char && isspace(*cstat->next_char))
@@ -2090,8 +2067,8 @@ do_directive(COMPSTATE *cstat, char *direct)
         tmpname = (char *) cstat->next_char;
         if (!(MLevel(OWNER(cstat->program)) >= LWIZ))
             abort_compile(cstat, "Permission denied for $log_status");
-        if (tmpname && *tmpname) {
-            log_status("%s", tmpname);
+        if (!tmpname.empty()) {
+            log_status("%s", tmpname.c_str());
         } else {
             abort_compile(cstat, "No data given for the status log and show to LOGWALL admin.");
         }
@@ -2104,8 +2081,8 @@ do_directive(COMPSTATE *cstat, char *direct)
         tmpname = (char *) cstat->next_char;
         if (!(MLevel(OWNER(cstat->program)) >= LWIZ))
             abort_compile(cstat, "Permission denied for $show_status");
-        if (tmpname && *tmpname) {
-            show_status("%s", tmpname);
+        if (!tmpname.empty()) {
+            show_status("%s", tmpname.c_str());
         } else {
             abort_compile(cstat, "No data given to show to LOGWALL admin.");
         }
@@ -2117,8 +2094,8 @@ do_directive(COMPSTATE *cstat, char *direct)
         while (*cstat->next_char && isspace(*cstat->next_char))
             cstat->next_char++; /* eating leading spaces */
         tmpname = (char *) cstat->next_char;
-        if (tmpname && *tmpname) {
-            abort_compile(cstat, tmpname);
+        if (!tmpname.empty()) {
+            abort_compile(cstat, tmpname.c_str());
         } else {
             abort_compile(cstat, "Forced abort for the compile.");
         }
@@ -2135,7 +2112,7 @@ do_directive(COMPSTATE *cstat, char *direct)
         while (*cstat->next_char)
             cstat->next_char++;
         advance_line(cstat);
-        if (!tmpname || !*tmpname || !(MLevel(OWNER(cstat->program)) >= LWIZ)) {
+        if (tmpname.empty() || !(MLevel(OWNER(cstat->program)) >= LWIZ)) {
             include_defs(cstat, OWNER(cstat->program));
             include_defs(cstat, (dbref) 0);
         }
@@ -2147,38 +2124,35 @@ do_directive(COMPSTATE *cstat, char *direct)
         abort_compile(cstat, "$enddef without a previous matching $define.");
 
     } else if (!string_compare(temp, "def")) {
-        tmpname = (char *) next_token_raw(cstat);
-        if (!tmpname)
+        tmpname = next_token_raw(cstat);
+        if (tmpname.empty())
             abort_compile(cstat, "Unexpected end of file looking for $def name.");
-        (void) insert_def(cstat, tmpname, cstat->next_char);
+        (void) insert_def(cstat, tmpname.c_str(), cstat->next_char);
         while (*cstat->next_char)
             cstat->next_char++;
         advance_line(cstat);
-        delete[]tmpname;
 
     } else if (!string_compare(temp, "version")) {
-        tmpname = (char *) next_token_raw(cstat);
-        if (!ifloat(tmpname))
+        tmpname = next_token_raw(cstat);
+        if (!ifloat(tmpname.c_str()))
             abort_compile(cstat, "Expected a floating point number for the version.");
-        add_property(cstat->program, "_Version", tmpname, 0);
+        add_property(cstat->program, "_Version", tmpname.c_str(), 0);
         while (*cstat->next_char)
             cstat->next_char++;
         advance_line(cstat);
-        delete[]tmpname;
     } else if (!string_compare(temp, "lib-version")) {
-        tmpname = (char *) next_token_raw(cstat);
-        if (!ifloat(tmpname))
+        tmpname = next_token_raw(cstat);
+        if (!ifloat(tmpname.c_str()))
             abort_compile(cstat, "Expected a floating point number for the version.");
         while (*cstat->next_char)
             cstat->next_char++;
-        add_property(cstat->program, "_Lib-Version", tmpname, 0);
+        add_property(cstat->program, "_Lib-Version", tmpname.c_str(), 0);
         advance_line(cstat);
-        delete[]tmpname;
     } else if (!string_compare(temp, "author")) {
         while (*cstat->next_char && isspace(*cstat->next_char))
             cstat->next_char++; /* eating leading spaces */
         tmpname = (char *) cstat->next_char;
-        add_property(cstat->program, "_Author", tmpname, 0);
+        add_property(cstat->program, "_Author", tmpname.c_str(), 0);
         while (*cstat->next_char)
             cstat->next_char++;
         advance_line(cstat);
@@ -2188,21 +2162,21 @@ do_directive(COMPSTATE *cstat, char *direct)
         tmpname = (char *) cstat->next_char;
         while (*cstat->next_char)
             cstat->next_char++; /* What does this accomplish ??? */
-        add_property(cstat->program, "_Note", tmpname, 0);
+        add_property(cstat->program, "_Note", tmpname.c_str(), 0);
         advance_line(cstat);
     } else if (!string_compare(temp, "ifcancall")
                || !string_compare(temp, "ifncancall")) {
         struct match_data md;
 
-        tmpname = (char *) next_token_raw(cstat);
-        if (!tmpname)
+        tmpname = next_token_raw(cstat);
+        if (tmpname.empty())
             abort_compile(cstat, "Unexpected end of file for ifcancall.");
         if (string_compare(tmpname, "this")) {
             char tempa[BUFFER_LEN], tempb[BUFFER_LEN];
 
             strcpy(tempa, match_args);
             strcpy(tempb, match_cmdname);
-            init_match(cstat->descr, cstat->player, tmpname, NOTYPE, &md);
+            init_match(cstat->descr, cstat->player, tmpname.c_str(), NOTYPE, &md);
             match_registered(&md);
             match_absolute(&md);
             match_me(&md);
@@ -2212,12 +2186,10 @@ do_directive(COMPSTATE *cstat, char *direct)
         } else {
             i = cstat->program;
         }
-        delete[]tmpname;
         if (!OkObj(i) || (Typeof(i) == TYPE_GARBAGE))
             abort_compile(cstat, "I don't understand what program you want to check in ifcancall.");
-        tmpname = (char *) next_token_raw(cstat);
-        if (!tmpname || !*tmpname) {
-            delete[]tmpptr;
+        tmpname = next_token_raw(cstat);
+        if (tmpname.empty()) {
             abort_compile(cstat, "I don't understand what function you want to check for.");
         }
         while (*cstat->next_char)
@@ -2246,39 +2218,35 @@ do_directive(COMPSTATE *cstat, char *direct)
             if (pbs && MLevel(OWNER(cstat->program)) >= pbs->mlev)
                 j = 1;
         }
-        delete[]tmpname;
         if (!string_compare(temp, "ifncancall"))
             j = !j;
         if (!j) {
             i = 0;
-            while ((tmpptr = (char *) next_token_raw(cstat)) && (i || ((string_compare(tmpptr, "$else"))
+            while (!(tmpptr = next_token_raw(cstat)).empty() && (i || ((string_compare(tmpptr, "$else"))
                                                                        && (string_compare(tmpptr, "$endif"))))) {
-                if (is_preprocessor_conditional(tmpptr))
+                if (is_preprocessor_conditional(tmpptr.c_str()))
                     i++;
                 else if (!string_compare(tmpptr, "$endif"))
                     i--;
-                delete[]tmpptr;
             }
-            if (!tmpptr) {
+            if (tmpptr.empty()) {
                 abort_compile(cstat, "Unexpected end of file in $ifcancall clause.");
             }
-            delete[]tmpptr;
         }
 
     } else if (!string_compare(temp, "ifauthor")
                || !string_compare(temp, "ifnauthor")) {
-        int needFree = 0;
         struct match_data md;
 
-        tmpname = (char *) next_token_raw(cstat);
-        if (!tmpname)
+        tmpname = next_token_raw(cstat);
+        if (tmpname.empty())
             abort_compile(cstat, "Unexpected end of file while doing $include.");
         if (string_compare(tmpname, "this")) {
             char tempa[BUFFER_LEN], tempb[BUFFER_LEN];
 
             strcpy(tempa, match_args);
             strcpy(tempb, match_cmdname);
-            init_match(cstat->descr, cstat->player, tmpname, NOTYPE, &md);
+            init_match(cstat->descr, cstat->player, tmpname.c_str(), NOTYPE, &md);
             match_registered(&md);
             match_absolute(&md);
             match_me(&md);
@@ -2288,45 +2256,36 @@ do_directive(COMPSTATE *cstat, char *direct)
         } else {
             i = cstat->program;
         }
-        delete[]tmpname;
         if (!OkObj(i)
             || (Typeof(i) == TYPE_GARBAGE))
             abort_compile(cstat, "I don't understand what object you want to check with $ifauthor.");
-        tmpptr = (char *) get_property_class(i, "_Author");
-        if (!tmpptr || !*tmpptr) {
-            tmpptr = new char[8];
-
-            strcpy(tmpptr, "Unknown");
-            needFree = 1;
+        {
+            const char *author = get_property_class(i, "_Author");
+            tmpptr = (author && *author) ? author : "Unknown";
         }
 
         tmpname = (char *) cstat->next_char;
-        if (!tmpname || !*tmpname) {
-            delete[]tmpptr;
+        if (tmpname.empty()) {
             abort_compile(cstat, "I don't understand what author you are checking for with $ifauthor.");
         }
         while (*cstat->next_char)
             cstat->next_char++;
         advance_line(cstat);
-        if (needFree)
-            delete[]tmpptr;
-        j = equalstr(tmpptr, tmpname);
+        j = equalstr(tmpptr.c_str(), tmpname.c_str());
         if (!string_compare(temp, "ifnauthor"))
             j = !j;
         if (j) {
             i = 0;
-            while ((tmpptr = (char *) next_token_raw(cstat)) && (i || ((string_compare(tmpptr, "$else"))
+            while (!(tmpptr = next_token_raw(cstat)).empty() && (i || ((string_compare(tmpptr, "$else"))
                                                                        && (string_compare(tmpptr, "$endif"))))) {
-                if (is_preprocessor_conditional(tmpptr))
+                if (is_preprocessor_conditional(tmpptr.c_str()))
                     i++;
                 else if (!string_compare(tmpptr, "$endif"))
                     i--;
-                delete[]tmpptr;
             }
-            if (!tmpptr) {
+            if (tmpptr.empty()) {
                 abort_compile(cstat, "Unexpected end of file in $ifauthor clause.");
             }
-            delete[]tmpptr;
         }
 
     } else if (!string_compare(temp, "ifver")
@@ -2336,17 +2295,16 @@ do_directive(COMPSTATE *cstat, char *direct)
         struct match_data md;
         double verflt = 0;
         double checkflt = 0;
-        int needFree = 0;
 
-        tmpname = (char *) next_token_raw(cstat);
-        if (!tmpname)
+        tmpname = next_token_raw(cstat);
+        if (tmpname.empty())
             abort_compile(cstat, "Unexpected end of file while doing $ifver.");
         if (string_compare(tmpname, "this")) {
             char tempa[BUFFER_LEN], tempb[BUFFER_LEN];
 
             strcpy(tempa, match_args);
             strcpy(tempb, match_cmdname);
-            init_match(cstat->descr, cstat->player, tmpname, NOTYPE, &md);
+            init_match(cstat->descr, cstat->player, tmpname.c_str(), NOTYPE, &md);
             match_registered(&md);
             match_absolute(&md);
             match_me(&md);
@@ -2356,40 +2314,32 @@ do_directive(COMPSTATE *cstat, char *direct)
         } else {
             i = cstat->program;
         }
-        delete[]tmpname;
         if (!OkObj(i) || (Typeof(i) == TYPE_GARBAGE))
             abort_compile(cstat, "I don't understand what object you want to check with $ifver.");
-        if (!string_compare(temp, "ifver") || !string_compare(temp, "ifnver")) {
-            tmpptr = (char *) get_property_class(i, "_Version");
-        } else {
-            tmpptr = (char *) get_property_class(i, "_Lib-Version");
-        }
-        if (!tmpptr || !*tmpptr) {
-            tmpptr = new char[4];
-
-            strcpy(tmpptr, "0.0");
-            needFree = 1;
+        {
+            const char *vprop;
+            if (!string_compare(temp, "ifver") || !string_compare(temp, "ifnver")) {
+                vprop = get_property_class(i, "_Version");
+            } else {
+                vprop = get_property_class(i, "_Lib-Version");
+            }
+            tmpptr = (vprop && *vprop) ? vprop : "0.0";
         }
 
-        tmpname = (char *) next_token_raw(cstat);
-        if (!tmpname || !*tmpname) {
-            delete[]tmpptr;
-            delete[]tmpname;
+        tmpname = next_token_raw(cstat);
+        if (tmpname.empty()) {
             abort_compile(cstat, "I don't understand what version you want to compare to with $ifver.");
         }
-        if (!tmpptr || !ifloat(tmpptr)) {
+        if (!ifloat(tmpptr.c_str())) {
             verflt = 0.0;
         } else {
-            sscanf(tmpptr, "%lg", &verflt);
+            sscanf(tmpptr.c_str(), "%lg", &verflt);
         }
-        if (needFree)
-            delete[]tmpptr;
-        if (!tmpname || !ifloat(tmpname)) {
+        if (!ifloat(tmpname.c_str())) {
             checkflt = 0.0;
         } else {
-            sscanf(tmpname, "%lg", &checkflt);
+            sscanf(tmpname.c_str(), "%lg", &checkflt);
         }
-        delete[]tmpname;
         while (*cstat->next_char)
             cstat->next_char++;
         advance_line(cstat);
@@ -2399,18 +2349,16 @@ do_directive(COMPSTATE *cstat, char *direct)
             j = !j;
         if (!j) {
             i = 0;
-            while ((tmpptr = (char *) next_token_raw(cstat)) && (i || ((string_compare(tmpptr, "$else"))
+            while (!(tmpptr = next_token_raw(cstat)).empty() && (i || ((string_compare(tmpptr, "$else"))
                                                                        && (string_compare(tmpptr, "$endif"))))) {
-                if (is_preprocessor_conditional(tmpptr))
+                if (is_preprocessor_conditional(tmpptr.c_str()))
                     i++;
                 else if (!string_compare(tmpptr, "$endif"))
                     i--;
-                delete[]tmpptr;
             }
-            if (!tmpptr) {
+            if (tmpptr.empty()) {
                 abort_compile(cstat, "Unexpected end of file in $ifver clause.");
             }
-            delete[]tmpptr;
         }
 
     } else if (!string_compare(temp, "ifbeta")
@@ -2420,15 +2368,15 @@ do_directive(COMPSTATE *cstat, char *direct)
         struct match_data md;
         int vernum, checknum;
 
-        tmpname = (char *) next_token_raw(cstat);
-        if (!tmpname)
+        tmpname = next_token_raw(cstat);
+        if (tmpname.empty())
             abort_compile(cstat, "Unexpected end of file while doing $ifver.");
         if (string_compare(tmpname, "this")) {
             char tempa[BUFFER_LEN], tempb[BUFFER_LEN];
 
             strcpy(tempa, match_args);
             strcpy(tempb, match_cmdname);
-            init_match(cstat->descr, cstat->player, tmpname, NOTYPE, &md);
+            init_match(cstat->descr, cstat->player, tmpname.c_str(), NOTYPE, &md);
             match_registered(&md);
             match_absolute(&md);
             match_me(&md);
@@ -2438,7 +2386,6 @@ do_directive(COMPSTATE *cstat, char *direct)
         } else {
             i = cstat->program;
         }
-        delete[]tmpname;
         if (!OkObj(i)
             || (Typeof(i) == TYPE_GARBAGE))
             abort_compile(cstat, "I don't understand what object you want to check with $ifbeta or $ifalpha.");
@@ -2448,21 +2395,19 @@ do_directive(COMPSTATE *cstat, char *direct)
         } else {
             vernum = get_property_value(i, "_Alpha");
         }
-        tmpname = (char *) next_token_raw(cstat);
-        if (!tmpname || !*tmpname) {
-            delete[]tmpptr;
+        tmpname = next_token_raw(cstat);
+        if (tmpname.empty()) {
             abort_compile(cstat, "I don't understand what version you want to compare to with $alpha or $beta.");
         }
         if (vernum < 0)
             vernum = 0;
-        if (!tmpname || !number(tmpname)) {
+        if (tmpname.empty() || !number(tmpname.c_str())) {
             checknum = 1;
         } else {
-            checknum = atoi(tmpname);
+            checknum = atoi(tmpname.c_str());
             if (checknum <= 0)
                 checknum = 0;
         }
-        delete[]tmpname;
         while (*cstat->next_char)
             cstat->next_char++;
         advance_line(cstat);
@@ -2472,31 +2417,24 @@ do_directive(COMPSTATE *cstat, char *direct)
             j = !j;             /* ifnbeta or ifnalpha we want the opposite */
         if (!j) {
             i = 0;
-            while ((tmpptr = (char *) next_token_raw(cstat))
-                   && (i || ((string_compare(tmpptr, "$else"))
+            while (!(tmpptr = next_token_raw(cstat)).empty() && (i || ((string_compare(tmpptr, "$else"))
                              && (string_compare(tmpptr, "$endif"))))) {
-                if (is_preprocessor_conditional(tmpptr))
+                if (is_preprocessor_conditional(tmpptr.c_str()))
                     i++;
                 else if (!string_compare(tmpptr, "$endif"))
                     i--;
-                delete[]tmpptr;
             }
-            if (!tmpptr) {
+            if (tmpptr.empty()) {
                 abort_compile(cstat, "Unexpected end of file in $ifbeta or $ifalpha clause.");
             }
-            delete[]tmpptr;
         }
     } else if (!string_compare(temp, "pubdef")) {
-        char *holder = NULL;
-
-        tmpname = (char *) next_token_raw(cstat);
-        holder = tmpname;
-        if (!tmpname)
+        tmpname = next_token_raw(cstat);
+        if (tmpname.empty())
             abort_compile(cstat, "Unexpected end of file looking for $pubdef name.");
         if (string_compare(tmpname, ":")
-            && (index(tmpname, '/') || index(tmpname, ':')
-                || Prop_SeeOnly(tmpname) || Prop_Hidden(tmpname))) {
-            delete[]tmpname;
+            && (strchr(tmpname.c_str(), '/') || strchr(tmpname.c_str(), ':')
+                || Prop_SeeOnly(tmpname.c_str()) || Prop_Hidden(tmpname.c_str()))) {
             abort_compile(cstat, "Invalid $pubdef name.  No /, :, @, nor ~ are allowed.");
         } else {
             if (!string_compare(tmpname, ":")) {
@@ -2510,17 +2448,17 @@ do_directive(COMPSTATE *cstat, char *direct)
                     cstat->next_char++; /* eating leading spaces */
                 defstr = cstat->next_char;
 
-                if (*tmpname == '\\') {
-                    char *temppropstr = NULL;
+                if (tmpname[0] == '\\') {
+                    const char *temppropstr = NULL;
 
-                    (void) *tmpname++;
-                    sprintf(propname, "/_Defs/%s", tmpname);
-                    temppropstr = (char *) get_property_class(cstat->program, propname);
+                    tmpname.erase(0, 1);
+                    sprintf(propname, "/_Defs/%s", tmpname.c_str());
+                    temppropstr = get_property_class(cstat->program, propname);
                     if (temppropstr) {
                         doitset = 0;
                     }
                 } else {
-                    sprintf(propname, "/_Defs/%s", tmpname);
+                    sprintf(propname, "/_Defs/%s", tmpname.c_str());
                 }
 
                 if (doitset) {
@@ -2536,21 +2474,20 @@ do_directive(COMPSTATE *cstat, char *direct)
         while (*cstat->next_char)
             cstat->next_char++;
         advance_line(cstat);
-        delete[]holder;
 
     } else if (!string_compare(temp, "iflib")
                || !string_compare(temp, "ifnlib")) {
         struct match_data md;
 
-        tmpname = (char *) next_token_raw(cstat);
-        if (!tmpname)
+        tmpname = next_token_raw(cstat);
+        if (tmpname.empty())
             abort_compile(cstat, "Unexpected end of file while doing $include.");
         {
             char tempa[BUFFER_LEN], tempb[BUFFER_LEN];
 
             strcpy(tempa, match_args);
             strcpy(tempb, match_cmdname);
-            init_match(cstat->descr, cstat->player, tmpname, NOTYPE, &md);
+            init_match(cstat->descr, cstat->player, tmpname.c_str(), NOTYPE, &md);
             match_registered(&md);
             match_absolute(&md);
             match_me(&md);
@@ -2558,7 +2495,6 @@ do_directive(COMPSTATE *cstat, char *direct)
             strcpy(match_args, tempa);
             strcpy(match_cmdname, tempb);
         }
-        delete[]tmpname;
         if ((!OkObj(i)
              || (Typeof(i) == TYPE_GARBAGE)) ? 0 : (Typeof(i) == TYPE_PROGRAM)) {
             j = 1;
@@ -2569,18 +2505,16 @@ do_directive(COMPSTATE *cstat, char *direct)
             j = !j;
         if (!j) {
             i = 0;
-            while ((tmpptr = (char *) next_token_raw(cstat)) && (i || ((string_compare(tmpptr, "$else"))
+            while (!(tmpptr = next_token_raw(cstat)).empty() && (i || ((string_compare(tmpptr, "$else"))
                                                                        && (string_compare(tmpptr, "$endif"))))) {
-                if (is_preprocessor_conditional(tmpptr))
+                if (is_preprocessor_conditional(tmpptr.c_str()))
                     i++;
                 else if (!string_compare(tmpptr, "$endif"))
                     i--;
-                delete[]tmpptr;
             }
-            if (!tmpptr) {
+            if (tmpptr.empty()) {
                 abort_compile(cstat, "Unexpected end of file in $iflib clause.");
             }
-            delete[]tmpptr;
         }
 
     } else if (!string_compare(temp, "ansi")) {
@@ -2594,15 +2528,11 @@ do_directive(COMPSTATE *cstat, char *direct)
             cstat->next_char++;
         advance_line(cstat);
     } else if (!string_compare(temp, "libdef")) {
-        char *holder = NULL;
-
-        tmpname = (char *) next_token_raw(cstat);
-        holder = tmpname;
-        if (!tmpname)
+        tmpname = next_token_raw(cstat);
+        if (tmpname.empty())
             abort_compile(cstat, "Unexpected end of file looking for $lib/def name.");
 
-        if (index(tmpname, '/') || index(tmpname, ':') || Prop_SeeOnly(tmpname) || Prop_Hidden(tmpname)) {
-            delete[]tmpname;
+        if (strchr(tmpname.c_str(), '/') || strchr(tmpname.c_str(), ':') || Prop_SeeOnly(tmpname.c_str()) || Prop_Hidden(tmpname.c_str())) {
             abort_compile(cstat, "Invalid $libdef name. No /, :, @, nor ~ allowed.");
         } else {                /* okay string */
             char propname[BUFFER_LEN];
@@ -2611,19 +2541,19 @@ do_directive(COMPSTATE *cstat, char *direct)
 
             while (*cstat->next_char && isspace(*cstat->next_char))
                 cstat->next_char++; /* eat leading space */
-            if (*tmpname == '\\') {
-                char *temppropstr = NULL;
+            if (tmpname[0] == '\\') {
+                const char *temppropstr = NULL;
 
-                (void) *tmpname++;
-                sprintf(propname, "/_defs/%s", tmpname);
-                temppropstr = (char *) get_property_class(cstat->program, propname);
+                tmpname.erase(0, 1);
+                sprintf(propname, "/_defs/%s", tmpname.c_str());
+                temppropstr = get_property_class(cstat->program, propname);
                 if (temppropstr)
                     doitset = 0;
             } else {
-                sprintf(propname, "/_defs/%s", tmpname);
+                sprintf(propname, "/_defs/%s", tmpname.c_str());
             }
 
-            snprintf(defstr, sizeof(defstr), "#%i \"%s\" call", cstat->program, tmpname);
+            snprintf(defstr, sizeof(defstr), "#%i \"%s\" call", cstat->program, tmpname.c_str());
 
             if (doitset)
                 add_property(cstat->program, propname, defstr, 0);
@@ -2631,18 +2561,17 @@ do_directive(COMPSTATE *cstat, char *direct)
         while (*cstat->next_char)
             cstat->next_char++;
         advance_line(cstat);
-        delete[]holder;
     } else if (!string_compare(temp, "include")) {
-        tmpname = (char *) next_token_raw(cstat);
-        if (!tmpname)
+        tmpname = next_token_raw(cstat);
+        if (tmpname.empty())
             abort_compile(cstat, "Unexpected end of file while doing $include.");
-        if (!number(tmpname)) {
+        if (!number(tmpname.c_str())) {
             {
                 char tempa[BUFFER_LEN], tempb[BUFFER_LEN];
 
                 strcpy(tempa, match_args);
                 strcpy(tempb, match_cmdname);
-                init_match(cstat->descr, cstat->player, tmpname, NOTYPE, &md);
+                init_match(cstat->descr, cstat->player, tmpname.c_str(), NOTYPE, &md);
                 match_registered(&md);
                 match_absolute(&md);
                 match_me(&md);
@@ -2650,7 +2579,6 @@ do_directive(COMPSTATE *cstat, char *direct)
                 strcpy(match_args, tempa);
                 strcpy(match_cmdname, tempb);
             }
-            delete[]tmpname;
             if (!OkObj(i)
                 || (Typeof(i) == TYPE_GARBAGE))
                 abort_compile(cstat, "I don't understand what object you want to $include.");
@@ -2658,8 +2586,7 @@ do_directive(COMPSTATE *cstat, char *direct)
         } else {
             int inc_type;
 
-            inc_type = atoi(tmpname);
-            delete[]tmpname;
+            inc_type = atoi(tmpname.c_str());
             if (inc_type == 0) {
                 cstat->use_macros = 1;
                 include_defs(cstat, OWNER(cstat->program));
@@ -2673,11 +2600,10 @@ do_directive(COMPSTATE *cstat, char *direct)
         }
 
     } else if (!string_compare(temp, "undef")) {
-        tmpname = (char *) next_token_raw(cstat);
-        if (!tmpname)
+        tmpname = next_token_raw(cstat);
+        if (tmpname.empty())
             abort_compile(cstat, "Unexpected end of file looking for name to $undef.");
-        kill_def(cstat, tmpname);
-        delete[]tmpname;
+        kill_def(cstat, tmpname.c_str());
 
     } else if (!string_compare(temp, "echo")) {
         while (*cstat->next_char && isspace(*cstat->next_char))
@@ -2692,63 +2618,62 @@ do_directive(COMPSTATE *cstat, char *direct)
                || !string_compare(temp, "ifndef")) {
         char temp2[BUFFER_LEN];
 
-        tmpname = (char *) next_token_raw(cstat);
-        if (!tmpname)
+        tmpname = next_token_raw(cstat);
+        if (tmpname.empty())
             abort_compile(cstat, "Unexpected end of file looking for $ifdef condition.");
-        strcpy(temp2, tmpname);
-        delete[]tmpname;
+        strcpy(temp2, tmpname.c_str());
         for (i = 1; temp2[i] && (temp2[i] != '=') && (temp2[i] != '>')
              && (temp2[i] != '<'); i++) ;
-        tmpname = &(temp2[i]);
+        size_t oppos = (size_t) i;
         i = (temp2[i] == '>') ? 1 : ((temp2[i] == '=') ? 0 : ((temp2[i] == '<') ? -1 : -2));
-        *tmpname = '\0';
-        tmpname++;
-        tmpptr = (char *) expand_def(cstat, temp2);
-        if (i == -2) {
-            j = (!tmpptr);
-            if (tmpptr)
-                delete[]tmpptr;
-        } else {
-            if (!tmpptr) {
-                j = 1;
+        const char *cmpval = "";
+        if (i != -2) {
+            temp2[oppos] = '\0';
+            cmpval = &temp2[oppos + 1];
+        }
+        {
+            char *expansion = expand_def(cstat, temp2);
+            if (i == -2) {
+                j = (!expansion);
+                if (expansion)
+                    delete[]expansion;
             } else {
-                j = string_compare(tmpptr, tmpname);
-                j = !((!i && !j) || ((i * j) > 0));
-                delete[]tmpptr;
+                if (!expansion) {
+                    j = 1;
+                } else {
+                    j = string_compare(expansion, cmpval);
+                    j = !((!i && !j) || ((i * j) > 0));
+                    delete[]expansion;
+                }
             }
         }
         if (!string_compare(temp, "ifndef"))
             j = !j;
         if (j) {
             i = 0;
-            while ((tmpptr = (char *) next_token_raw(cstat)) && (i || ((string_compare(tmpptr, "$else"))
+            while (!(tmpptr = next_token_raw(cstat)).empty() && (i || ((string_compare(tmpptr, "$else"))
                                                                        && (string_compare(tmpptr, "$endif"))))) {
-                if (is_preprocessor_conditional(tmpptr))
+                if (is_preprocessor_conditional(tmpptr.c_str()))
                     i++;
                 else if (!string_compare(tmpptr, "$endif"))
                     i--;
-                delete[]tmpptr;
             }
-            if (!tmpptr) {
+            if (tmpptr.empty()) {
                 abort_compile(cstat, "Unexpected end of file in $ifdef clause.");
             }
-            delete[]tmpptr;
         }
 
     } else if (!string_compare(temp, "else")) {
         i = 0;
-        while ((tmpptr = (char *) next_token_raw(cstat))
-               && (i || (string_compare(tmpptr, "$endif")))) {
-            if (is_preprocessor_conditional(tmpptr))
+        while (!(tmpptr = next_token_raw(cstat)).empty() && (i || (string_compare(tmpptr, "$endif")))) {
+            if (is_preprocessor_conditional(tmpptr.c_str()))
                 i++;
             else if (!string_compare(tmpptr, "$endif"))
                 i--;
-            delete[]tmpptr;
         }
-        if (!tmpptr) {
+        if (tmpptr.empty()) {
             abort_compile(cstat, "Unexpected end of file in $else clause.");
         }
-        delete[]tmpptr;
 
     } else if (!string_compare(temp, "endif")) {
 
@@ -2760,34 +2685,32 @@ do_directive(COMPSTATE *cstat, char *direct)
 
 
 /* return string */
-const char *
+std::string
 do_string(COMPSTATE *cstat)
 {
-    static char buf[BUFFER_LEN];
-    int i = 0, quoted = 0;
+    std::string buf;
+    int quoted = 0;
 
-    buf[i] = *cstat->next_char;
+    buf.push_back(*cstat->next_char);
     cstat->next_char++;
-    i++;
     while ((quoted || *cstat->next_char != ENDSTRING) && *cstat->next_char) {
         if (*cstat->next_char == '\\' && !quoted) {
             quoted++;
             cstat->next_char++;
         } else if (*cstat->next_char == 'r' && quoted) {
-            buf[i++] = '\r';
+            buf.push_back('\r');
             cstat->next_char++;
             quoted = 0;
         } else if (*cstat->next_char == 'n' && quoted) {
-            buf[i++] = '\n';
+            buf.push_back('\n');
             cstat->next_char++;
             quoted = 0;
         } else if (*cstat->next_char == '[' && quoted) {
-            buf[i++] = ESCAPE_CHAR;
+            buf.push_back(ESCAPE_CHAR);
             cstat->next_char++;
             quoted = 0;
         } else {
-            buf[i] = *cstat->next_char;
-            i++;
+            buf.push_back(*cstat->next_char);
             cstat->next_char++;
             quoted = 0;
         }
@@ -2796,8 +2719,7 @@ do_string(COMPSTATE *cstat)
         abort_compile(cstat, "Unterminated string found at end of line.");
     }
     cstat->next_char++;
-    buf[i] = '\0';
-    return alloc_string(buf);
+    return buf;
 }
 
 
@@ -2809,28 +2731,23 @@ struct INTERMEDIATE *
 process_special(COMPSTATE *cstat, const char *token)
 {
     static char buf[BUFFER_LEN];
-    const char *tok;
+    std::string tok;
     struct INTERMEDIATE *nw;
 
     if (!string_compare(token, ":")) {
-        const char *proc_name;
+        std::string proc_name;
         int argsflag = 0;
 
         if (cstat->curr_proc)
             abort_compile(cstat, "Definition within definition.");
         proc_name = next_token(cstat);
-        if (!proc_name)
+        if (proc_name.empty())
             abort_compile(cstat, "Unexpected end of file within procedure.");
 
-        strcpy(buf, proc_name);
-        if (proc_name)
-            delete[]proc_name;
-        proc_name = buf;
-
-        if (*proc_name && buf[strlen(buf) - 1] == '[') {
+        if (proc_name.back() == '[') {
             argsflag = 1;
-            buf[strlen(buf) - 1] = '\0';
-            if (!*proc_name)
+            proc_name.pop_back();
+            if (proc_name.empty())
                 abort_compile(cstat, "Bad procedure name.");
         }
 
@@ -2841,7 +2758,7 @@ process_special(COMPSTATE *cstat, const char *token)
         nw->in.line = cstat->lineno;
         //nw->in.data.mufproc = (struct muf_proc_data *) malloc(sizeof(struct muf_proc_data));
         nw->in.data.mufproc = new muf_proc_data;
-        nw->in.data.mufproc->procname = string_dup(proc_name);
+        nw->in.data.mufproc->procname = string_dup(proc_name.c_str());
         nw->in.data.mufproc->vars = 0;
 
         nw->in.data.mufproc->args = 0;
@@ -2851,32 +2768,31 @@ process_special(COMPSTATE *cstat, const char *token)
         cstat->curr_proc = nw;
 
         if (argsflag) {
-            const char *varspec;
+            std::string varspec;
             const char *varname;
             int argsdone = 0;
             int outflag = 0;
 
             do {
                 varspec = next_token(cstat);
-                if (!varspec) {
+                if (varspec.empty()) {
                     free_intermediate_node(nw);
                     abort_compile(cstat, "Unexpected end of file within procedure arguments declaration.");
                 }
 
-                if (!strcmp(varspec, "]")) {
+                if (varspec == "]") {
                     argsdone = 1;
-                } else if (!strcmp(varspec, "--")) {
+                } else if (varspec == "--") {
                     outflag = 1;
                 } else if (!outflag) {
-                    varname = index(varspec, ':');
+                    varname = strchr(varspec.c_str(), ':');
                     if (varname) {
                         varname++;
                     } else {
-                        varname = varspec;
+                        varname = varspec.c_str();
                     }
                     if (*varname) {
                         if (add_scopedvar(cstat, varname, PROG_UNTYPED) < 0) {
-                            delete varspec;
                             free_intermediate_node(nw);
                             abort_compile(cstat, "Variable limit exceeded.");
                         }
@@ -2885,12 +2801,10 @@ process_special(COMPSTATE *cstat, const char *token)
                         nw->in.data.mufproc->args++;
                     }
                 }
-                if (varspec)
-                    delete[]varspec;
             } while (!argsdone);
         }
 
-        add_proc(cstat, proc_name, nw, PROG_UNTYPED);
+        add_proc(cstat, proc_name.c_str(), nw, PROG_UNTYPED);
 
         return nw;
     } else if (!string_compare(token, ";")) {
@@ -3383,10 +3297,10 @@ process_special(COMPSTATE *cstat, const char *token)
         if (cstat->curr_proc)
             abort_compile(cstat, "PUBLIC or WIZCALL declaration within procedure.");
         tok = next_token(cstat);
-        if ((!tok) || !call(cstat, tok))
+        if (tok.empty() || !call(cstat, tok.c_str()))
             abort_compile(cstat, "Subroutine unknown in PUBLIC or WIZCALL declaration.");
         for (p = cstat->procs; p; p = p->next)
-            if (!string_compare(p->name, tok))
+            if (!string_compare(p->name, tok.c_str()))
                 break;
         if (!p)
             abort_compile(cstat, "Subroutine unknown in PUBLIC or WIZCALL declaration.");
@@ -3395,9 +3309,7 @@ process_special(COMPSTATE *cstat, const char *token)
             cstat->currpubs = new publics;
 
             cstat->currpubs->next = NULL;
-            cstat->currpubs->subname = (char *) string_dup(tok);
-            if (tok)
-                delete[]tok;
+            cstat->currpubs->subname = (char *) string_dup(tok.c_str());
             cstat->currpubs->addr.no = get_address(cstat, p->code, 0);
             cstat->currpubs->mlev = wizflag ? wizlevel : 1;
             cstat->currpubs->self = selfflag;
@@ -3415,9 +3327,7 @@ process_special(COMPSTATE *cstat, const char *token)
 
                     pub = pub->next;
                     pub->next = NULL;
-                    pub->subname = (char *) string_dup(tok);
-                    if (tok)
-                        delete[]tok;
+                    pub->subname = (char *) string_dup(tok.c_str());
                     pub->addr.no = get_address(cstat, p->code, 0);
                     pub->mlev = wizflag ? wizlevel : 1;
                     pub->self = selfflag;
@@ -3429,21 +3339,17 @@ process_special(COMPSTATE *cstat, const char *token)
     } else if (!string_compare(token, "VAR")) {
         if (cstat->curr_proc) {
             tok = next_token(cstat);
-            if (!tok)
+            if (tok.empty())
                 abort_compile(cstat, "Unexpected end of program.");
-            if (add_scopedvar(cstat, tok, PROG_UNTYPED) < 0)
+            if (add_scopedvar(cstat, tok.c_str(), PROG_UNTYPED) < 0)
                 abort_compile(cstat, "Variable limit exceeded.");
-            if (tok)
-                delete[]tok;
             cstat->curr_proc->in.data.mufproc->vars ++;
         } else {
             tok = next_token(cstat);
-            if (!tok)
+            if (tok.empty())
                 abort_compile(cstat, "Unexpected end of program.");
-            if (!add_variable(cstat, tok, PROG_UNTYPED))
+            if (!add_variable(cstat, tok.c_str(), PROG_UNTYPED))
                 abort_compile(cstat, "Variable limit exceeded.");
-            if (tok)
-                delete[]tok;
         }
         return 0;
     } else if (!string_compare(token, "VAR!")) {
@@ -3451,12 +3357,10 @@ process_special(COMPSTATE *cstat, const char *token)
             struct INTERMEDIATE *nw;
 
             tok = next_token(cstat);
-            if (!tok)
+            if (tok.empty())
                 abort_compile(cstat, "Unexpected end of program.");
-            if (add_scopedvar(cstat, tok, PROG_UNTYPED) < 0)
+            if (add_scopedvar(cstat, tok.c_str(), PROG_UNTYPED) < 0)
                 abort_compile(cstat, "Variable limit exceeded.");
-            if (tok)
-                delete[]tok;
 
             nw = new_inst(cstat);
             nw->no = cstat->nowords++;
@@ -3473,19 +3377,15 @@ process_special(COMPSTATE *cstat, const char *token)
         if (cstat->curr_proc)
             abort_compile(cstat, "Local variable declared within procedure.");
         tok = next_token(cstat);
-        if (!tok || (add_localvar(cstat, tok, PROG_UNTYPED) == -1))
+        if (tok.empty() || (add_localvar(cstat, tok.c_str(), PROG_UNTYPED) == -1))
             abort_compile(cstat, "Local variable limit exceeded.");
-        if (tok)
-            delete[]tok;
         return 0;
     } else if (!string_compare(token, "SVAR")) {
         if (cstat->curr_proc)
             abort_compile(cstat, "Static variable declared within procedure.");
         tok = next_token(cstat);
-        if (!tok || (add_staticvar(cstat, tok, PROG_UNTYPED) == -1))
+        if (tok.empty() || (add_staticvar(cstat, tok.c_str(), PROG_UNTYPED) == -1))
             abort_compile(cstat, "Static variable limit exceeded.");
-        if (tok)
-            delete[]tok;
         return 0;
     } else {
         sprintf(buf, "Unrecognized special form %s found. (%d)", token, cstat->lineno);
@@ -4359,7 +4259,7 @@ free_intermediate_node(struct INTERMEDIATE *wd)
 
     if (wd->in.type == PROG_STRING) {
         if (wd->in.data.string)
-            delete[]wd->in.data.string;
+            delete wd->in.data.string;
     }
 
     if (wd->in.type == PROG_FUNCTION) {
@@ -4501,7 +4401,7 @@ copy_program(COMPSTATE *cstat)
                 code[i].data.fnumber = curr->in.data.fnumber;
                 break;
             case PROG_STRING:
-                code[i].data.string = curr->in.data.string ? alloc_prog_string(curr->in.data.string->data) : 0;
+                code[i].data.string = curr->in.data.string ? alloc_prog_string(curr->in.data.string->data.c_str()) : 0;
                 break;
             case PROG_FUNCTION:
                 //code[i].data.mufproc = (struct muf_proc_data *) malloc(sizeof(struct muf_proc_data));
@@ -4734,7 +4634,7 @@ size_prog(dbref prog)
             }
             byts += sizeof(struct muf_proc_data);
         } else if (c[i].type == PROG_STRING && c[i].data.string) {
-            byts += strlen(c[i].data.string->data) + 1;
+            byts += c[i].data.string->length() + 1;
             byts += sizeof(struct shared_string);
         } else if (c[i].type == PROG_ADD)
             byts += sizeof(struct prog_addr);

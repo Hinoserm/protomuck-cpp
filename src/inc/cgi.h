@@ -8,7 +8,7 @@
 extern char x2c(char *what);
 extern void unescape_url(char *url);
 extern char * getcgivar(char *cgiinput, char *param);
-extern void escape_url(char *out, char *in);
+extern void escape_url(char *out, const char *in);
 
 #define SPACE       ' '
 #define TAB         '\t'

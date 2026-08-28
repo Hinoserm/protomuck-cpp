@@ -1477,7 +1477,7 @@ mfn_muf(MFUNARGS)
     switch (rv->type) {
         case PROG_STRING:
             if (rv->data.string) {
-                strcpy(buf, rv->data.string->data);
+                strcpy(buf, rv->data.string->data.c_str());
                 CLEAR(rv);
                 return buf;
             } else {

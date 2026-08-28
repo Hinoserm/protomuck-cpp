@@ -107,7 +107,7 @@ getcgivar(char *cgistring, char *param)
 }
 
 void
-escape_url(char *out, char *in)
+escape_url(char *out, const char *in)
 {
     char *tmp = out;
     int cnt = 0;

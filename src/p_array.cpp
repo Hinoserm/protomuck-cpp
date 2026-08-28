@@ -1301,7 +1301,7 @@ prim_array_put_propvals(PRIM_PROTOTYPE)
             switch (oper4->type) {
                 case PROG_STRING:
                     pdat.flags = PROP_STRTYP;
-                    pdat.data.str = oper4->data.string ? oper4->data.string->data : NULL;
+                    pdat.data.str = oper4->data.string ? oper4->data.string->data.c_str() : NULL;
                     break;
                 case PROG_INTEGER:
                     pdat.flags = PROP_INTTYP;
@@ -1413,7 +1413,7 @@ prim_array_put_proplist(PRIM_PROTOTYPE)
             switch (oper4->type) {
                 case PROG_STRING:
                     pdat.flags = PROP_STRTYP;
-                    isempty = !(pdat.data.str = oper4->data.string ? oper4->data.string->data : NULL);
+                    isempty = !(pdat.data.str = oper4->data.string ? oper4->data.string->data.c_str() : NULL);
                     break;
                 case PROG_INTEGER:
                     pdat.flags = PROP_INTTYP;
@@ -1506,7 +1506,7 @@ prim_array_get_reflist(PRIM_PROTOTYPE)
         abort_interp("Non-null string required. (2)");
 
     ref = oper[1].data.objref;
-    strcpy(dir, oper[0].data.string->data);
+    strcpy(dir, oper[0].data.string->data.c_str());
 
     if (!prop_read_perms(ProgUID, ref, dir, mlev))
         abort_interp(tp_noperm_mesg);
@@ -1680,14 +1680,14 @@ prim_explode_array(PRIM_PROTOTYPE)
     CHECKOFLOW(1);
 
     {
-        const char *delimit = oper[0].data.string->data;
-        int delimlen = oper[0].data.string->length;
+        const char *delimit = oper[0].data.string->data.c_str();
+        int delimlen = oper[0].data.string->length();
 
         nu = new_array_packed(0, 0);
         if (!oper[1].data.string) {
             lastPtr = (char *) "";
         } else {
-            strcpy(buf, oper[1].data.string->data);
+            strcpy(buf, oper[1].data.string->data.c_str());
             tempPtr = lastPtr = buf;
             while (*tempPtr) {
                 if (!strncmp(tempPtr, delimit, delimlen)) {
@@ -1721,11 +1721,7 @@ prim_array_join(PRIM_PROTOTYPE)
 {
     struct inst *in;
     stk_array *arr;
-    char outbuf[BUFFER_LEN];
-    char *ptr;
     const char *text;
-    char *delim;
-    int tmplen;
     int done;
     struct inst temp1;
     char buf[BUFFER_LEN];
@@ -1736,9 +1732,10 @@ prim_array_join(PRIM_PROTOTYPE)
         abort_interp("Argument not a string pattern. (2)");
 
     arr = oper[1].data.array;
-    delim = (char *) DoNullInd(oper[0].data.string);
-    ptr = outbuf;
-    *outbuf = '\0';
+    const char *delim = DoNullInd(oper[0].data.string);
+    const size_t delimlen = oper[0].data.string ? oper[0].data.string->data.size() : 0;
+    std::string out;
+
     done = !array_first(arr, &temp1);
     while (!done) {
         in = array_getitem(arr, &temp1);
@@ -1765,30 +1762,25 @@ prim_array_join(PRIM_PROTOTYPE)
                 text = "<UNSUPPORTED>";
                 break;
         }
-        tmplen = strlen(text);
-        if (tmplen > BUFFER_LEN - (ptr - outbuf) - 1) {
-            strncpy(ptr, text, BUFFER_LEN - (ptr - outbuf) - 1);
-            outbuf[BUFFER_LEN - 1] = '\0';
+        size_t tlen = strlen(text);
+        size_t room = (size_t) BUFFER_LEN - 1 - out.size();
+        if (tlen > room) {
+            out.append(text, room);
             break;
-        } else {
-            strcpy(ptr, text);
-            ptr += tmplen;
         }
+        out.append(text, tlen);
         done = !array_next(arr, &temp1);
         if (!done) {
-            tmplen = strlen(delim);
-            if (tmplen > BUFFER_LEN - (ptr - outbuf) - 1) {
-                strncpy(ptr, delim, BUFFER_LEN - (ptr - outbuf) - 1);
-                outbuf[BUFFER_LEN - 1] = '\0';
+            room = (size_t) BUFFER_LEN - 1 - out.size();
+            if (delimlen > room) {
+                out.append(delim, room);
                 break;
-            } else {
-                strcpy(ptr, delim);
-                ptr += tmplen;
             }
+            out.append(delim, delimlen);
         }
     }
 
-    PushString(outbuf);
+    push(arg, top, std::move(out));
 }
 
 void
@@ -1796,20 +1788,16 @@ prim_array_interpret(PRIM_PROTOTYPE)
 {
     struct inst *in;
     stk_array *arr;
-    char outbuf[BUFFER_LEN];
-    char *ptr;
     const char *text;
     struct inst temp1;
     char buf[BUFFER_LEN];
-    int tmplen;
     int done;
 
     if (oper[0].type != PROG_ARRAY)
         abort_interp("Argument not an array. (1)");
 
     arr = oper[0].data.array;
-    ptr = outbuf;
-    *outbuf = '\0';
+    std::string out;
     done = !array_first(arr, &temp1);
     while (!done) {
         in = array_getitem(arr, &temp1);
@@ -1863,19 +1851,17 @@ prim_array_interpret(PRIM_PROTOTYPE)
                 break;
         }
 
-        tmplen = strlen(text);
-        if (tmplen > BUFFER_LEN - (ptr - outbuf) - 1) {
-            strncpy(ptr, text, BUFFER_LEN - (ptr - outbuf) - 1);
-            outbuf[BUFFER_LEN - 1] = '\0';
+        size_t tlen = strlen(text);
+        size_t room = (size_t) BUFFER_LEN - 1 - out.size();
+        if (tlen > room) {
+            out.append(text, room);
             break;
-        } else {
-            strcpy(ptr, text);
-            ptr += tmplen;
         }
+        out.append(text, tlen);
         done = !array_next(arr, &temp1);
     }
 
-    PushString(outbuf);
+    push(arg, top, std::move(out));
 }
 
 void
@@ -2300,7 +2286,7 @@ void
 prim_array_string_fragment(PRIM_PROTOTYPE)
 {
     stk_array *nu;
-    char *tempPtr;
+    const char *tempPtr;
     int nChunkSize = 0;
     int nCount = 0;
     int nStrLen = 0;
@@ -2322,8 +2308,8 @@ prim_array_string_fragment(PRIM_PROTOTYPE)
     nu = new_array_packed(0, 0);
 
     if (temp2.data.string) {
-        nStrLen = temp2.data.string->length;
-        tempPtr = temp2.data.string->data;
+        nStrLen = temp2.data.string->length();
+        tempPtr = temp2.data.string->data.c_str();
 
         while (nCount + nChunkSize < nStrLen) {
             strncpy(buf, tempPtr, nChunkSize);

@@ -253,8 +253,8 @@ prim_fwrite(PRIM_PROTOTYPE)
     if (!oper3->data.string)
         abort_interp("Arguement 3 is a null string.");
     offset = oper1->data.number;
-    filename = oper2->data.string->data;
-    writestring = oper3->data.string->data;
+    filename = oper2->data.string->data.c_str();
+    writestring = oper3->data.string->data.c_str();
 #ifdef SECURE_FILE_PRIMS
     if (!(valid_name(filename)))
         abort_interp("Invalid file name.");
@@ -281,7 +281,7 @@ prim_fwrite(PRIM_PROTOTYPE)
         fclose(fh);
         result = 1;
         if (tp_log_files)
-            log2filetime("logs/files", "#%d by %s FWRITE: %s \n", program, unparse_object(PSafe, PSafe), oper2->data.string->data);
+            log2filetime("logs/files", "#%d by %s FWRITE: %s \n", program, unparse_object(PSafe, PSafe), oper2->data.string->data.c_str());
     }
     CLEAR(oper1);
     CLEAR(oper2);
@@ -314,8 +314,8 @@ prim_fappend(PRIM_PROTOTYPE)
         abort_interp("Arguement 2 is not a string.");
     if (!oper2->data.string)
         abort_interp("Arguement 2 is a null string.");
-    filename = oper1->data.string->data;
-    writestring = oper2->data.string->data;
+    filename = oper1->data.string->data.c_str();
+    writestring = oper2->data.string->data.c_str();
 #ifdef SECURE_FILE_PRIMS
     if (!(valid_name(filename)))
         abort_interp("Invalid file name.");
@@ -341,7 +341,7 @@ prim_fappend(PRIM_PROTOTYPE)
         fclose(fh);
         result = 1;
         if (tp_log_files)
-            log2filetime("logs/files", "#%d by %s FAPPEND: %s \n", program, unparse_object(PSafe, PSafe), oper1->data.string->data);
+            log2filetime("logs/files", "#%d by %s FAPPEND: %s \n", program, unparse_object(PSafe, PSafe), oper1->data.string->data.c_str());
     }
     CLEAR(oper1);
     CLEAR(oper2);
@@ -374,7 +374,7 @@ prim_fread(PRIM_PROTOTYPE)
     if (!oper2->data.string)
         abort_interp("Argueemnt 2 is a null string.");
     offset = oper1->data.number;
-    filename = oper2->data.string->data;
+    filename = oper2->data.string->data.c_str();
 #ifdef SECURE_FILE_PRIMS
     if (!(valid_name(filename)))
         abort_interp("Invalid file name.");
@@ -406,7 +406,7 @@ prim_fread(PRIM_PROTOTYPE)
         fclose(fh);
 
         if (tp_log_files)
-            log2filetime("logs/files", "#%d by %s FREAD: %s \n", program, unparse_object(PSafe, PSafe), oper2->data.string->data);
+            log2filetime("logs/files", "#%d by %s FREAD: %s \n", program, unparse_object(PSafe, PSafe), oper2->data.string->data.c_str());
     }
 
     CLEAR(oper1);
@@ -460,7 +460,7 @@ prim_freadn(PRIM_PROTOTYPE)
     /*Value assignments */
     range = oper1->data.number;
     offset = oper2->data.number;
-    filename = oper3->data.string->data;
+    filename = oper3->data.string->data.c_str();
 #ifdef SECURE_FILE_PRIMS
     if (!(valid_name(filename)))
         abort_interp("Invalid file name.");
@@ -489,7 +489,7 @@ prim_freadn(PRIM_PROTOTYPE)
 /*      if (tempBuf[0] != EOF) */
 /*          result = 1; */
         if (tp_log_files)
-            log2filetime("logs/files", "#%d by %s FREADN: %s \n", program, unparse_object(PSafe, PSafe), oper3->data.string->data);
+            log2filetime("logs/files", "#%d by %s FREADN: %s \n", program, unparse_object(PSafe, PSafe), oper3->data.string->data.c_str());
     }
     CLEAR(oper1);
     CLEAR(oper2);
@@ -525,7 +525,7 @@ prim_fcr(PRIM_PROTOTYPE)
         abort_interp("Argument 1 is not a string.");
     if (!oper1->data.string)
         abort_interp("Argument 1 is a null string.");
-    filename = oper1->data.string->data;
+    filename = oper1->data.string->data.c_str();
 #ifdef SECURE_FILE_PRIMS
     if (!(valid_name(filename)))
         abort_interp("Invalid file name.");
@@ -544,7 +544,7 @@ prim_fcr(PRIM_PROTOTYPE)
         fclose(fh);
         result = 1;
         if (tp_log_files)
-            log2filetime("logs/files", "#%d by %s FCR: %s \n", program, unparse_object(PSafe, PSafe), oper1->data.string->data);
+            log2filetime("logs/files", "#%d by %s FCR: %s \n", program, unparse_object(PSafe, PSafe), oper1->data.string->data.c_str());
     }
     CLEAR(oper1);
     PushInt(result);
@@ -568,7 +568,7 @@ prim_fpublish(PRIM_PROTOTYPE)
         abort_interp("Arguement 1 is not a string.");
     if (!oper1->data.string)
         abort_interp("Arguement 1 is a null string.");
-    filename = oper1->data.string->data;
+    filename = oper1->data.string->data.c_str();
 #ifdef SECURE_FILE_PRIMS
     if (!(valid_name(filename)))
         abort_interp("Invalid file name.");
@@ -585,7 +585,7 @@ prim_fpublish(PRIM_PROTOTYPE)
     result = 0;
 #endif
     if (tp_log_files)
-        log2filetime("logs/files", "#%d by %s FCHMOD: %s \n", program, unparse_object(PSafe, PSafe), oper1->data.string->data);
+        log2filetime("logs/files", "#%d by %s FCHMOD: %s \n", program, unparse_object(PSafe, PSafe), oper1->data.string->data.c_str());
     CLEAR(oper1);
     PushInt(result);
 }
@@ -616,7 +616,7 @@ prim_bread(PRIM_PROTOTYPE)
     if (!oper2->data.string)
         abort_interp("Argueemnt 2 is a null string.");
     offset = oper1->data.number;
-    filename = oper2->data.string->data;
+    filename = oper2->data.string->data.c_str();
 #ifdef SECURE_FILE_PRIMS
     if (!(valid_name(filename)))
         abort_interp("Invalid file name.");
@@ -634,7 +634,7 @@ prim_bread(PRIM_PROTOTYPE)
         fseek(fh, (int) offset, SEEK_SET);
         result = fgetc(fh);
         if (tp_log_files)
-            log2filetime("logs/files", "#%d by %s BREAD: %s \n", program, unparse_object(PSafe, PSafe), oper2->data.string->data);
+            log2filetime("logs/files", "#%d by %s BREAD: %s \n", program, unparse_object(PSafe, PSafe), oper2->data.string->data.c_str());
         if (result == EOF) {
             result = -2;
         }
@@ -676,7 +676,7 @@ prim_bwrite(PRIM_PROTOTYPE)
     if (oper3->data.number < 0)
         abort_interp("Arguement 3 is a negative number.");
     offset = oper1->data.number;
-    filename = oper2->data.string->data;
+    filename = oper2->data.string->data.c_str();
     tempdat = oper3->data.number;
 #ifdef SECURE_FILE_PRIMS
     if (!(valid_name(filename)))
@@ -697,7 +697,7 @@ prim_bwrite(PRIM_PROTOTYPE)
         fclose(fh);
         result = 1;
         if (tp_log_files)
-            log2filetime("logs/files", "#%d by %s BWRITE : %s \n", program, unparse_object(PSafe, PSafe), oper2->data.string->data);
+            log2filetime("logs/files", "#%d by %s BWRITE : %s \n", program, unparse_object(PSafe, PSafe), oper2->data.string->data.c_str());
     }
     CLEAR(oper1);
     CLEAR(oper2);
@@ -729,7 +729,7 @@ prim_bappend(PRIM_PROTOTYPE)
         abort_interp("Arguement 2 is not an integer.");
     if (oper2->data.number < 0)
         abort_interp("Arguement 2 is a negative number.");
-    filename = oper1->data.string->data;
+    filename = oper1->data.string->data.c_str();
     tempdat = oper2->data.number;
 #ifdef SECURE_FILE_PRIMS
     if (!(valid_name(filename)))
@@ -748,7 +748,7 @@ prim_bappend(PRIM_PROTOTYPE)
         fputc(tempdat, fh);
         result = 1;
         if (tp_log_files)
-            log2filetime("logs/files", "#%d by %s BAPPEND : %s \n", program, unparse_object(PSafe, PSafe), oper1->data.string->data);
+            log2filetime("logs/files", "#%d by %s BAPPEND : %s \n", program, unparse_object(PSafe, PSafe), oper1->data.string->data.c_str());
     }
     fclose(fh);
     CLEAR(oper1);
@@ -775,7 +775,7 @@ prim_fsize(PRIM_PROTOTYPE)
         abort_interp("Arguement 1 is not a string.");
     if (!oper1->data.string)
         abort_interp("Arguement 1 is a null string.");
-    filename = oper1->data.string->data;
+    filename = oper1->data.string->data.c_str();
 #ifdef SECURE_FILE_PRIMS
     if (!(valid_name(filename)))
         abort_interp("Invalid file name.");
@@ -793,7 +793,7 @@ prim_fsize(PRIM_PROTOTYPE)
         fseek(fh, (int) 0, SEEK_END);
         offset = ftell(fh);
         if (tp_log_files)
-            log2filetime("logs/files", "#%d by %s FSIZE: %s \n", program, unparse_object(PSafe, PSafe), oper1->data.string->data);
+            log2filetime("logs/files", "#%d by %s FSIZE: %s \n", program, unparse_object(PSafe, PSafe), oper1->data.string->data.c_str());
         fclose(fh);
     }
     CLEAR(oper1);
@@ -818,7 +818,7 @@ prim_fstats(PRIM_PROTOTYPE)
         abort_interp("Arguement 1 is not a string.");
     if (!oper1->data.string)
         abort_interp("Arguement 1 is a null string.");
-    filename = oper1->data.string->data;
+    filename = oper1->data.string->data.c_str();
 #ifdef SECURE_FILE_PRIMS
     if (!(valid_name(filename)))
         abort_interp("Invalid file name.");
@@ -831,7 +831,7 @@ prim_fstats(PRIM_PROTOTYPE)
 #endif
     stat(filename, &fs);
     if (tp_log_files)
-        log2filetime("logs/files", "#%d by %s FSTATS : %s \n", program, unparse_object(PSafe, PSafe), oper1->data.string->data);
+        log2filetime("logs/files", "#%d by %s FSTATS : %s \n", program, unparse_object(PSafe, PSafe), oper1->data.string->data.c_str());
     CLEAR(oper1);
     CHECKOFLOW(6);
     PushInt(fs.st_gid);
@@ -913,7 +913,7 @@ prim_frm(PRIM_PROTOTYPE)
         abort_interp("Argument 1 is not a string.");
     if (!oper1->data.string)
         abort_interp("Argument 1 is a null string.");
-    filename = oper1->data.string->data;
+    filename = oper1->data.string->data.c_str();
 #ifdef SECURE_FILE_PRIMS
     if (!(valid_name(filename)))
         abort_interp("Invalid file name.");
@@ -926,7 +926,7 @@ prim_frm(PRIM_PROTOTYPE)
 #endif
     result = unlink(filename);
     if (tp_log_files)
-        log2filetime("logs/files", "#%d by %s FRM: %s \n", program, unparse_object(PSafe, PSafe), oper1->data.string->data);
+        log2filetime("logs/files", "#%d by %s FRM: %s \n", program, unparse_object(PSafe, PSafe), oper1->data.string->data.c_str());
     CLEAR(oper1);
     PushInt(result);
 }
@@ -954,8 +954,8 @@ prim_fren(PRIM_PROTOTYPE)
         abort_interp("Argument 2 is not a string.");
     if (!oper2->data.string)
         abort_interp("Argument 2 is a null string.");
-    newname = oper1->data.string->data;
-    oldname = oper2->data.string->data; /* ( s<old> s<new> -- i ) */
+    newname = oper1->data.string->data.c_str();
+    oldname = oper2->data.string->data.c_str(); /* ( s<old> s<new> -- i ) */
 #ifdef SECURE_FILE_PRIMS
     if (!(valid_name(newname)))
         abort_interp("Invalid file name. (2)");
@@ -978,7 +978,7 @@ prim_fren(PRIM_PROTOTYPE)
 #endif
     result = rename(oldname, newname);
     if (tp_log_files)
-        log2filetime("logs/files", "#%d by %s FREN: %s -> %s \n", program, unparse_object(PSafe, PSafe), oper2->data.string->data, oper1->data.string->data);
+        log2filetime("logs/files", "#%d by %s FREN: %s -> %s \n", program, unparse_object(PSafe, PSafe), oper2->data.string->data.c_str(), oper1->data.string->data.c_str());
     CLEAR(oper1);
     CLEAR(oper2);
     PushInt(result);
@@ -1025,7 +1025,7 @@ prim_freadto(PRIM_PROTOTYPE)
 
     /*Value Assignment */
     offset = oper2->data.number;
-    filename = oper3->data.string->data;
+    filename = oper3->data.string->data.c_str();
 #ifdef SECURE_FILE_PRIMS
     if (!(valid_name(filename)))
         abort_interp("Invalid file name.");
@@ -1036,12 +1036,12 @@ prim_freadto(PRIM_PROTOTYPE)
     if (filename == NULL)
         abort_interp("Invalid shortcut used.");
 #endif
-    if (!(strcasecmp(oper1->data.string->data, "\r")))
+    if (!(strcasecmp(oper1->data.string->data.c_str(), "\r")))
         checkChar = '\n';
-    else if (!(strcasecmp(oper1->data.string->data, "$EOF$")))
+    else if (!(strcasecmp(oper1->data.string->data.c_str(), "$EOF$")))
         checkChar = EOF;
     else
-        checkChar = oper1->data.string->data[0];
+        checkChar = oper1->data.string->data.c_str()[0];
 
     /* Routines */
     fh = fopen(filename, "r");
@@ -1064,7 +1064,7 @@ prim_freadto(PRIM_PROTOTYPE)
         if (tempBuf[0] != EOF)
             result = 1;
         if (tp_log_files)
-            log2filetime("logs/files", "#%d by %s FREADN: %s \n", program, unparse_object(PSafe, PSafe), oper3->data.string->data);
+            log2filetime("logs/files", "#%d by %s FREADN: %s \n", program, unparse_object(PSafe, PSafe), oper3->data.string->data.c_str());
     }
     CLEAR(oper1);
     CLEAR(oper2);
@@ -1103,7 +1103,7 @@ prim_fnameokp(PRIM_PROTOTYPE)
     if (!oper1->data.string)
         abort_interp("Arguement is an empty string.");
 
-    filename = oper1->data.string->data;
+    filename = oper1->data.string->data.c_str();
 #ifdef SECURE_FILE_PRIMS
     if (!(valid_name(filename)))
         result = 0;
@@ -1148,7 +1148,7 @@ prim_getdir(PRIM_PROTOTYPE)
         abort_interp("Arguement is an empty string.");
     CHECKOFLOW(1);
 
-    directoryName = oper1->data.string->data;
+    directoryName = oper1->data.string->data.c_str();
     result = 1;
 
 #ifdef SECURE_FILE_PRIMS
@@ -1216,7 +1216,7 @@ prim_mkdir(PRIM_PROTOTYPE)
         abort_interp("Arguement is an empty string.");
     CHECKOFLOW(1);
 
-    directoryName = oper1->data.string->data;
+    directoryName = oper1->data.string->data.c_str();
     result = 1;
 
 #ifdef SECURE_FILE_PRIMS
@@ -1258,7 +1258,7 @@ prim_rmdir(PRIM_PROTOTYPE)
         abort_interp("Argument 1 is not a string.");
     if (!oper1->data.string)
         abort_interp("Argument 1 is a null string.");
-    directoryName = oper1->data.string->data;
+    directoryName = oper1->data.string->data.c_str();
 
 #ifdef SECURE_FILE_PRIMS
     if (!(valid_name(directoryName)))
@@ -1272,7 +1272,7 @@ prim_rmdir(PRIM_PROTOTYPE)
 #endif
     result = rmdir(directoryName);
     if (tp_log_files)
-        log2filetime("logs/files", "#%d by %s RMDIR: %s \n", program, unparse_object(PSafe, PSafe), oper1->data.string->data);
+        log2filetime("logs/files", "#%d by %s RMDIR: %s \n", program, unparse_object(PSafe, PSafe), oper1->data.string->data.c_str());
     CLEAR(oper1);
     PushInt(result);
 }

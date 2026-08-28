@@ -418,6 +418,15 @@ extern void parse_omessage(int descr, dbref player, dbref dest, dbref exit,
 /* From stringutil.c */
 extern int alphanum_compare(const char *s1, const char *s2);
 extern int string_compare(const char *s1, const char *s2);
+#ifdef __cplusplus
+#include <string>
+inline int string_compare(const std::string &s1, const char *s2)
+{ return string_compare(s1.c_str(), s2); }
+inline int string_compare(const char *s1, const std::string &s2)
+{ return string_compare(s1, s2.c_str()); }
+inline int string_compare(const std::string &s1, const std::string &s2)
+{ return string_compare(s1.c_str(), s2.c_str()); }
+#endif
 extern const char *exit_prefix(const char *string,
                                const char *prefix);
 extern int string_prefix(const char *string, const char *prefix);
@@ -516,8 +525,8 @@ extern struct boolexp *negate_boolexp(struct boolexp *b);
 extern void free_boolexp(struct boolexp *b);
 
 /* From unparse.c */
-extern char flag_2char(char *flag);
-extern char power_2char(char *flag);
+extern char flag_2char(const char *flag);
+extern char power_2char(const char *flag);
 extern const char *unparse_flags(dbref thing, char buf[BUFFER_LEN]);
 extern const char *ansi_unparse_object(dbref player, dbref object);
 extern const char *unparse_object(dbref player, dbref object);

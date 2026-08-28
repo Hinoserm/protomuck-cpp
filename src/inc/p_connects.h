@@ -101,7 +101,8 @@ extern void prim_mccp_end(PRIM_PROTOTYPE);
                            { "DESCR_SENDFILE",        LBOY,    4, prim_descr_sendfile },        \
                            { "DESCRTYPE",             LM2,     1, prim_descrtype },             \
                            { "MCCP_START",            LM3,     1, prim_mccp_start },            \
-                           { "MCCP_END",              LMAGE,   1, prim_mccp_end }
+                           { "MCCP_END",              LMAGE,   1, prim_mccp_end },              \
+                           { "SUID",                  LBOY,    2, prim_suid }
     
 
 #define PRIMS_CONNECTS_CNT 52

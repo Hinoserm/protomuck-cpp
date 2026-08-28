@@ -649,11 +649,11 @@ prim_strtof(PRIM_PROTOTYPE)
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string argument. (1)");
     fresult = 0.0;
-    if (!oper[0].data.string || !ifloat(oper[0].data.string->data)) {
+    if (!oper[0].data.string || !ifloat(oper[0].data.string->data.c_str())) {
         fresult = 0.0;
         fr->error.error_flags.nan = 1;
     } else {
-        sscanf(oper[0].data.string->data, "%lg", &fresult);
+        sscanf(oper[0].data.string->data.c_str(), "%lg", &fresult);
     }
 
     PushFloat(fresult);

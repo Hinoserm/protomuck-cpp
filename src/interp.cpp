@@ -344,7 +344,7 @@ RCLEAR(struct inst *oper, const char *file, int line)
         break;
     case PROG_STRING:
         if (oper->data.string && --oper->data.string->links == 0)
-            delete[]oper->data.string;
+            delete oper->data.string;
         break;
     case PROG_LABEL:
         delete[]oper->data.labelname;
@@ -1056,7 +1056,7 @@ reload(struct frame *fr, int atop, int stop)
 int
 logical_false(struct inst *p)
 {
-    return ((p->type == PROG_STRING && (p->data.string == 0 || !(*p->data.string->data)))
+    return ((p->type == PROG_STRING && (p->data.string == 0 || !(*p->data.string->data.c_str())))
             || (p->type == PROG_MARK)
             || (p->type == PROG_ARRAY && (!p->data.array || !p->data.array->items))
             || (p->type == PROG_LOCK && p->data.lock == TRUE_BOOLEXP)
@@ -1752,7 +1752,7 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
 
                     pbs = MUCK::programRuntime(temp1->data.objref).pubs;
                     while (pbs) {
-                        tmpint = string_compare(temp2->data.string->data, pbs->subname);
+                        tmpint = string_compare(temp2->data.string->data.c_str(), pbs->subname);
                         if (!tmpint)
                             break;
                         pbs = pbs->next;
@@ -2225,13 +2225,29 @@ push(struct inst *stack, int *top, int type, voidptr res)
 void
 push(struct inst *stack, int *top, const std::string &str)
 {
-    push(stack, top, PROG_STRING, MIPSCAST alloc_prog_string_exact(str.c_str(), str.length(), -1));
+    push(stack, top, PROG_STRING, MIPSCAST alloc_prog_string_exact(str.c_str(), str.length(), -2));
 }
 
 void
 push(struct inst *stack, int *top, const char *str)
 {
     push(stack, top, PROG_STRING, MIPSCAST alloc_prog_string(str));
+}
+
+/* Move a std::string result onto the stack without copying it. */
+void
+push(struct inst *stack, int *top, std::string &&str)
+{
+    if (str.empty()) {
+        push(stack, top, PROG_STRING, MIPSCAST NULL);
+        return;
+    }
+    /* Mirror alloc_prog_string_exact's clamp precisely. */
+    if (str.size() > (size_t) BUFFER_LEN) {
+        str.resize(BUFFER_LEN - 1);
+        fprintf(stderr, "MUF String would have exceeded BUFFER_LEN\n");
+    }
+    push(stack, top, PROG_STRING, MIPSCAST new shared_string(std::move(str)));
 }
 
 void

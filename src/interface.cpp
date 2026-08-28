@@ -5870,7 +5870,7 @@ pdboot(int c)
 
 
 void
-pnotify(int count, char *outstr)
+pnotify(int count, const char *outstr)
 {
     struct descriptor_data *d;
 

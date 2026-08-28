@@ -95,8 +95,8 @@ extern void prim_wcharlen_slice(PRIM_PROTOTYPE);
 								{ "STRDECRYPT",				LM1, 2, prim_strdecrypt },					\
 								{ "NOTIFY_HTML",			LM1, 2, prim_notify_html },					\
 								{ "NOTIFY_HTML_EXCLUDE",	LM1, 2, prim_notify_html_exclude },			\
-								{ "HTML_NOCR",				LM1, 1, prim_notify_html_nocr },			\
-								{ "HTML_EXCLUDE_NOCR",		LM1, 1, prim_notify_html_exclude_nocr },	\
+								{ "HTML_NOCR",				LM1, 2, prim_notify_html_nocr },			\
+								{ "HTML_EXCLUDE_NOCR",		LM1, 2, prim_notify_html_exclude_nocr },	\
 								{ "MIDSTR",					LM1, 3, prim_midstr },						\
 								{ "CTOI",					LM1, 1, prim_ctoi },						\
 								{ "ITOC",					LM1, 1, prim_itoc },						\
