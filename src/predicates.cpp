@@ -9,6 +9,7 @@
 #include "params.h"
 #include "tune.h"
 #include "externs.h"
+#include "Modules.h"
 #include "reg.h"
 
 bool
@@ -62,7 +63,7 @@ bool
 can_link(dbref who, dbref what)
 {
     return (controls(who, what) || ((Typeof(what) == TYPE_EXIT)
-                                    && DBFETCH(what)->sp.exit.ndest == 0));
+                                    && MUCK::exitDestCount(what) == 0));
 }
 
 /*
@@ -77,13 +78,13 @@ could_doit(int descr, dbref player, dbref thing)
     dbref source, dest, owner;
 
     if (Typeof(thing) == TYPE_EXIT) {
-        if (DBFETCH(thing)->sp.exit.ndest == 0) {
+        if (MUCK::exitDestCount(thing) == 0) {
             return 0;
         }
 
         owner = OWNER(thing);
         source = DBFETCH(player)->location;
-        dest = *(DBFETCH(thing)->sp.exit.dest);
+        dest = MUCK::exitDestRef(thing, 0);
 
         if (dest == NIL)        /* unless its locked, anyone can use #-4 */
             return (eval_boolexp(descr, player, GETLOCK(thing), thing));
@@ -146,13 +147,13 @@ could_doit2(int descr, dbref player, dbref thing, char *prop, bool tryprog)
     dbref source, dest, owner;
 
     if (Typeof(thing) == TYPE_EXIT) {
-        if (DBFETCH(thing)->sp.exit.ndest == 0) {
+        if (MUCK::exitDestCount(thing) == 0) {
             return 0;
         }
 
         owner = OWNER(thing);
         source = DBFETCH(player)->location;
-        dest = *(DBFETCH(thing)->sp.exit.dest);
+        dest = MUCK::exitDestRef(thing, 0);
 
         if (dest == NIL)        /* unless its locked, anyone can use #-4 */
             return (eval_boolexp(descr, player, GETLOCK(thing), thing));
@@ -238,7 +239,7 @@ can_doit(int descr, dbref player, dbref thing, const char *default_fail_msg)
         return 0;
 
     if (OkObj(thing)) {
-        dbref dest = Typeof(thing) == TYPE_EXIT ? (DBFETCH(thing)->sp.exit.ndest ? DBFETCH(thing)->sp.exit.dest[0] : NOTHING) : NOTHING;
+        dbref dest = Typeof(thing) == TYPE_EXIT ? (MUCK::exitDestCount(thing) ? MUCK::exitDestRef(thing, 0) : NOTHING) : NOTHING;
 
         if (((FLAG2(player) & F2IMMOBILE) && !(FLAG2(thing) & F2IMMOBILE)) && (!OkObj(dest) || Typeof(dest) != TYPE_PROGRAM)
             ) {

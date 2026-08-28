@@ -1317,7 +1317,7 @@ prim_getlink(PRIM_PROTOTYPE)
         abort_interp("Illegal object referenced");
     switch (Typeof(oper[0].data.objref)) {
         case TYPE_EXIT:
-            ref = (DBFETCH(oper[0].data.objref)->sp.exit.ndest) ? (DBFETCH(oper[0].data.objref)->sp.exit.dest)[0] : NOTHING;
+            ref = (MUCK::exitDestCount(oper[0].data.objref)) ? MUCK::exitDestRef(oper[0].data.objref, 0) : NOTHING;
             break;
         case TYPE_PLAYER:
             ref = DBFETCH(oper[0].data.objref)->sp.player.home;
@@ -1351,9 +1351,11 @@ prim_getlinks(PRIM_PROTOTYPE)
 
     switch (Typeof(ref2)) {
         case TYPE_EXIT:
-            count = DBFETCH(ref2)->sp.exit.ndest;
+            count = MUCK::exitDestCount(ref2);
             for (i = 0; i < count; i++) {
-                PushObject((DBFETCH(ref2)->sp.exit.dest)[i]);
+                dbref d = MUCK::exitDestRef(ref2, i);
+
+                PushObject(d);
             }
             PushInt(count);
             break;
@@ -1437,11 +1439,7 @@ prim_setlink(PRIM_PROTOTYPE)
             abort_interp(tp_noperm_mesg);
         switch (Typeof(ref)) {
             case TYPE_EXIT:
-                DBSTORE(ref, sp.exit.ndest, 0);
-                if (DBFETCH(ref)->sp.exit.dest) {
-                    delete[]DBFETCH(ref)->sp.exit.dest;
-                    DBSTORE(ref, sp.exit.dest, NULL);
-                }
+                MUCK::database().get(ref)->As<MUCK::Exit>()->setDestRefs(NULL, 0);
                 if (MLevel(ref))
                     SetMLevel(ref, 0);
                 break;
@@ -1463,18 +1461,19 @@ prim_setlink(PRIM_PROTOTYPE)
             abort_interp("Can't link source to destination");
         switch (Typeof(ref)) {
             case TYPE_EXIT:
-                if (DBFETCH(ref)->sp.exit.ndest != 0) {
+                if (MUCK::exitDestCount(ref) != 0) {
                     if (!permissions(mlev, ProgUID, ref))
                         abort_interp(tp_noperm_mesg);
-                    if ((DBFETCH(ref)->sp.exit.dest)[0] != NIL)
+                    if (MUCK::exitDestRef(ref, 0) != NIL)
                         abort_interp("Exit is already linked");
                 }
                 if (exit_loop_check(ref, oper[0].data.objref))
                     abort_interp("Link would cause a loop");
-                DBFETCH(ref)->sp.exit.ndest = 1;
-                DBFETCH(ref)->sp.exit.dest = new dbref[1];
+                {
+                    dbref d = oper[0].data.objref;
 
-                (DBFETCH(ref)->sp.exit.dest)[0] = oper[0].data.objref;
+                    MUCK::database().get(ref)->As<MUCK::Exit>()->setDestRefs(&d, 1);
+                }
                 break;
             case TYPE_PLAYER:
                 if (!permissions(mlev, ProgUID, ref))
@@ -1660,8 +1659,8 @@ prim_newexit(PRIM_PROTOTYPE)
         DBFETCH(ref)->location = oper[1].data.objref;
         OWNER(ref) = OWNER(ProgUID);
         FLAGS(ref) = TYPE_EXIT;
-        DBFETCH(ref)->sp.exit.ndest = 0;
-        DBFETCH(ref)->sp.exit.dest = NULL;
+        DBFETCH(ref)->sp.exit.ndest = 0;   /* raw: mid-construction */
+        DBFETCH(ref)->sp.exit.dest = NULL; /* raw: mid-construction */
 
         /* link it in */
         PUSH(ref, DBFETCH(oper[1].data.objref)->exits);
@@ -1669,10 +1668,9 @@ prim_newexit(PRIM_PROTOTYPE)
 
         /* If autolinking, link it to NIL */
         if (tp_autolinking) {
-            DBFETCH(ref)->sp.exit.ndest = 1;
-            DBFETCH(ref)->sp.exit.dest = new dbref[1];
+            dbref nildest = NIL;
 
-            (DBFETCH(ref)->sp.exit.dest)[0] = NIL;
+            MUCK::database().get(ref)->As<MUCK::Exit>()->setDestRefs(&nildest, 1);
         }
         PushObject(ref);
     }
@@ -1881,9 +1879,9 @@ prim_nextentrance(PRIM_PROTOTYPE)
                         foundref = 1;
                     break;
                 case TYPE_EXIT:
-                    count = DBFETCH(ref)->sp.exit.ndest;
+                    count = MUCK::exitDestCount(ref);
                     for (i = 0; i < count; i++) {
-                        if (DBFETCH(ref)->sp.exit.dest[i] == linkref)
+                        if (MUCK::exitDestRef(ref, i) == linkref)
                             foundref = 1;
                     }
                     break;
@@ -2486,11 +2484,11 @@ array_getlinks(dbref obj)
                 break;
             }
             case TYPE_EXIT:{
-                for (count = 0; count < (DBFETCH(obj)->sp.exit.ndest); count++) {
+                for (count = 0; count < (MUCK::exitDestCount(obj)); count++) {
                     temp1.type = PROG_INTEGER;
                     temp1.data.number = count;
                     temp2.type = PROG_OBJECT;
-                    temp2.data.objref = (DBFETCH(obj)->sp.exit.dest)[count];
+                    temp2.data.objref = MUCK::exitDestRef(obj, count);
                     array_setitem(&nw, &temp1, &temp2);
                 }
                 CLEAR(&temp1);
@@ -2772,8 +2770,8 @@ prim_entrances_array(PRIM_PROTOTYPE)
     for (i = 0; i < MUCK::database().top(); i++) {
         switch (Typeof(i)) {
             case TYPE_EXIT:
-                for (j = DBFETCH(i)->sp.exit.ndest; j--;) {
-                    if (DBFETCH(i)->sp.exit.dest[j] == ref)
+                for (j = MUCK::exitDestCount(i); j--;) {
+                    if (MUCK::exitDestRef(i, j) == ref)
                         array_appendref(&nw, i);
                 }
                 break;

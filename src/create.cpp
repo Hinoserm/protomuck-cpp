@@ -81,13 +81,13 @@ exit_loop_check(dbref source, dbref dest)
     if (Typeof(dest) != TYPE_EXIT)
         return 0;
 
-    for (i = 0; i < DBFETCH(dest)->sp.exit.ndest; i++) {
-        if ((DBFETCH(dest)->sp.exit.dest)[i] == source) {
+    for (i = 0; i < MUCK::exitDestCount(dest); i++) {
+        if (MUCK::exitDestRef(dest, i) == source) {
             return 1;           /* Found a loop! */
         }
-        if (OkObj((DBFETCH(dest)->sp.exit.dest)[i])) {
-            if (Typeof((DBFETCH(dest)->sp.exit.dest)[i]) == TYPE_EXIT) {
-                if (exit_loop_check(source, (DBFETCH(dest)->sp.exit.dest)[i])) {
+        if (OkObj(MUCK::exitDestRef(dest, i))) {
+            if (Typeof(MUCK::exitDestRef(dest, i)) == TYPE_EXIT) {
+                if (exit_loop_check(source, MUCK::exitDestRef(dest, i))) {
                     return 1;   /* Found one recursively */
                 }
             }
@@ -157,8 +157,8 @@ do_open(int descr, dbref player, const char *direction, const char *linkto)
         DBFETCH(exit)->location = loc;
         OWNER(exit) = OWNER(player);
         FLAGS(exit) = TYPE_EXIT;
-        DBFETCH(exit)->sp.exit.ndest = 0;
-        DBFETCH(exit)->sp.exit.dest = NULL;
+        DBFETCH(exit)->sp.exit.ndest = 0;      /* raw: mid-construction */
+        DBFETCH(exit)->sp.exit.dest = NULL;    /* raw: mid-construction */
 
         /* link it in */
         PUSH(exit, DBFETCH(loc)->exits);
@@ -178,13 +178,9 @@ do_open(int descr, dbref player, const char *direction, const char *linkto)
                 int i;
                 int ndest = link_exit(descr, player, exit, (char *) qname, good_dest);
 
-                DBFETCH(exit)->sp.exit.ndest = ndest;
-                DBFETCH(exit)->sp.exit.dest = new dbref[ndest];
-
-                for (i = 0; i < ndest; i++) {
-                    (DBFETCH(exit)->sp.exit.dest)[i] = good_dest[i];
-                }
-                DBDIRTY(exit);
+                MUCK::database().get(exit)->As<MUCK::Exit>()
+                    ->setDestRefs(good_dest, ndest);
+                (void) i;
             }
         }
     }
@@ -349,9 +345,9 @@ do_link(int descr, dbref player, const char *thing_name, const char *dest_name)
     switch (Typeof(thing)) {
         case TYPE_EXIT:
             /* we're ok, check the usual stuff */
-            if (DBFETCH(thing)->sp.exit.ndest != 0) {
+            if (MUCK::exitDestCount(thing) != 0) {
                 if (controls(player, thing)) {
-                    if ((DBFETCH(thing)->sp.exit.dest)[0] != NIL) {
+                    if (MUCK::exitDestRef(thing, 0) != NIL) {
                         anotify_nolisten2(player, CINFO "That exit is already linked.");
                         return;
                     }
@@ -393,14 +389,8 @@ do_link(int descr, dbref player, const char *thing_name, const char *dest_name)
                 break;
             }
 
-            DBFETCH(thing)->sp.exit.ndest = ndest;
-            if (DBFETCH(thing)->sp.exit.dest)
-                delete DBFETCH(thing)->sp.exit.dest;
-
-            DBFETCH(thing)->sp.exit.dest = new dbref[ndest];
-
-            for (i = 0; i < ndest; i++)
-                (DBFETCH(thing)->sp.exit.dest)[i] = good_dest[i];
+            MUCK::database().get(thing)->As<MUCK::Exit>()
+                ->setDestRefs(good_dest, ndest);
             break;
         case TYPE_THING:
         case TYPE_PLAYER:
@@ -952,8 +942,8 @@ do_action(int descr, dbref player, const char *action_name, const char *source_n
     NAME(action) = alloc_string(action_name);
     DBFETCH(action)->location = NOTHING;
     OWNER(action) = OWNER(player);
-    DBFETCH(action)->sp.exit.ndest = 0;
-    DBFETCH(action)->sp.exit.dest = NULL;
+    DBFETCH(action)->sp.exit.ndest = 0;        /* raw: mid-construction */
+    DBFETCH(action)->sp.exit.dest = NULL;      /* raw: mid-construction */
     FLAGS(action) = TYPE_EXIT;
 
     set_source(player, action, source);
@@ -972,10 +962,9 @@ do_action(int descr, dbref player, const char *action_name, const char *source_n
         set_property(player, buf, &pdat);
     }
     if (tp_autolinking) {
-        DBFETCH(action)->sp.exit.ndest = 1;
-        DBFETCH(action)->sp.exit.dest = new dbref[1];
+        dbref nildest = NIL;
 
-        (DBFETCH(action)->sp.exit.dest)[0] = NIL;
+        MUCK::database().get(action)->As<MUCK::Exit>()->setDestRefs(&nildest, 1);
         sprintf(buf, CINFO "Linked to NIL.");
         anotify_nolisten2(player, buf);
     }

@@ -11,6 +11,7 @@
 #include "match.h"
 #include "msgparse.h"
 #include "externs.h"
+#include "Modules.h"
 #include "MacroTable.h"
 #include "ObjectStore.h"
 #include "FlatFileConverter.h"
@@ -1975,12 +1976,12 @@ prop_command(int descr, dbref player, const char *command, const char *arg, cons
                 notify_descriptor(descr, "Invalid program call from a command prop.");
                 return 1;
             } else {
-                if (OkObj((DBFETCH(progRef)->sp.exit.dest)[0])
-                    && Typeof((DBFETCH(progRef)->sp.exit.dest)[0]) == TYPE_ROOM) {
+                if (OkObj(MUCK::exitDestRef(progRef, 0))
+                    && Typeof(MUCK::exitDestRef(progRef, 0)) == TYPE_ROOM) {
                     if (Wizard(player) || Mage(where)
                         || controls(player, progRef) || (FLAGS(progRef)
                                                          & JUMP_OK))
-                        enter_room(descr, player, (int) (DBFETCH(progRef)->sp.exit.dest)[0], progRef);
+                        enter_room(descr, player, (int) MUCK::exitDestRef(progRef, 0), progRef);
                     else
                         notify_descriptor(descr, RED "Permission denied.");
                 } else {

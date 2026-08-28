@@ -67,7 +67,24 @@ class Exit : public Module {
     const char *moduleName() const override { return "exit"; }
     std::vector<DbObject *> destinations() const;
     void setDestinations(const std::vector<DbObject *> &dests);
+
+    /* Zero-copy transitional accessors for the legacy index-loop call
+     * sites: no allocation on the movement hot path, raw refs so the
+     * NIL and HOME sentinels survive. destRef returns NOTHING out of
+     * range. These go away when destinations become owned vectors. */
+    int destCount() const;
+    dbref destRef(int i) const;
+
+    /* Transitional raw setter: replaces the whole destination array,
+     * sentinels preserved, dirty flag set. n of 0 clears. */
+    void setDestRefs(const dbref *refs, int n);
 };
+
+/* Blanket-safe free helpers for mechanical call-site conversion:
+ * tolerate refs that are not exits (count 0, ref NOTHING), so guarded
+ * legacy expressions convert one for one. */
+int exitDestCount(dbref ref);
+dbref exitDestRef(dbref ref, int i);
 
 class MufProgram : public Module {
   public:

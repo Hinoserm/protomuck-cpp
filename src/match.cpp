@@ -359,10 +359,10 @@ match_exits(dbref first, struct match_data *md)
 
         /*
            if (FLAGS(exit) & HAVEN || !tp_require_has_mpi_arg) {
-           } else if (DBFETCH(exit)->sp.exit.dest) {
-           for (i = 0; i < DBFETCH(exit)->sp.exit.ndest; i++) {
-           if ((DBFETCH(exit)->sp.exit.dest)[i] != NIL)
-           if (Typeof((DBFETCH(exit)->sp.exit.dest)[i]) == TYPE_PROGRAM)
+           } else if (MUCK::exitDestCount(exit)) {
+           for (i = 0; i < MUCK::exitDestCount(exit); i++) {
+           if (MUCK::exitDestRef(exit, i) != NIL)
+           if (Typeof(MUCK::exitDestRef(exit, i)) == TYPE_PROGRAM)
            }
            }
          */

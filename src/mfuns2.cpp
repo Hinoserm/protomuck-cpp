@@ -149,12 +149,12 @@ mfn_links(MFUNARGS)
             break;
         case TYPE_EXIT:
             *buf = '\0';
-            cnt = DBFETCH(obj)->sp.exit.ndest;
+            cnt = MUCK::exitDestCount(obj);
             if (cnt) {
                 dbref obj2;
 
                 for (i = 0; i < cnt; i++) {
-                    obj2 = DBFETCH(obj)->sp.exit.dest[i];
+                    obj2 = MUCK::exitDestRef(obj, i);
                     ref2str(obj2, buf2);
                     if (strlen(buf) + strlen(buf2) + 2 < BUFFER_LEN) {
                         if (*buf)

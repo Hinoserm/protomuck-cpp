@@ -819,10 +819,10 @@ controls_link(dbref who, dbref what)
     switch (Typeof(what)) {
         case TYPE_EXIT:
         {
-            int i = DBFETCH(what)->sp.exit.ndest;
+            int i = MUCK::exitDestCount(what);
 
             while (i > 0) {
-                if (controls(who, DBFETCH(what)->sp.exit.dest[--i]))
+                if (controls(who, MUCK::exitDestRef(what, --i)))
                     return 1;
             }
             if (who == OWNER(DBFETCH(what)->location))
@@ -895,16 +895,17 @@ _do_unlink(int descr, dbref player, const char *name, int quiet)
             } else {
                 switch (Typeof(exit)) {
                     case TYPE_EXIT:
-                        if (DBFETCH(exit)->sp.exit.ndest != 0) {
+                        if (MUCK::exitDestCount(exit) != 0) {
                             DBFETCH(OWNER(exit))->sp.player.pennies += tp_link_cost;
                             DBDIRTY(OWNER(exit));
                         }
                         ts_modifyobject(player, exit);
-                        DBSTORE(exit, sp.exit.ndest, 0);
-                        if (DBFETCH(exit)->sp.exit.dest) {
-                            strcpy(destin, unparse_object(player, DBFETCH(exit)->sp.exit.dest[0]));
-                            delete[]DBFETCH(exit)->sp.exit.dest;
-                            DBSTORE(exit, sp.exit.dest, NULL);
+                        {
+                            MUCK::Exit *e = MUCK::database().get(exit)->As<MUCK::Exit>();
+
+                            if (e->destCount())
+                                strcpy(destin, unparse_object(player, e->destRef(0)));
+                            e->setDestRefs(NULL, 0);
                         }
                         if (!quiet)
                             anotify_fmt(player, CSUCC "%s unlinked from %s.", unparse_object(player, exit), destin);
@@ -983,7 +984,7 @@ do_relink(int descr, dbref player, const char *thing_name, const char *dest_name
     /* check if new target would be valid. */
     switch (Typeof(thing)) {
         case TYPE_EXIT:
-            if (DBFETCH(thing)->sp.exit.ndest != 0)
+            if (MUCK::exitDestCount(thing) != 0)
                 if (!controls(player, thing)) {
                     anotify(player, CFAIL "Permission denied.");
                     return;

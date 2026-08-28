@@ -36,8 +36,8 @@ print_owner(dbref player, dbref thing)
             break;
         case TYPE_EXIT:
             anotify_fmt(player, SYSYELLOW "Owner: %s", NAME(OWNER(thing)));
-            if (DBFETCH(thing)->sp.exit.ndest) {
-                ref = (DBFETCH(thing)->sp.exit.dest)[0];
+            if (MUCK::exitDestCount(thing)) {
+                ref = MUCK::exitDestRef(thing, 0);
                 if (ref == NIL || ref == HOME)
                     anotify_fmt(player, SYSCYAN "And is linked to: %s", ansi_unparse_object(MAN, ref));
                 else if (Typeof(ref) == TYPE_PROGRAM && FLAGS(ref) & VEHICLE) {
@@ -683,8 +683,8 @@ size_object(dbref i, int load)
 
     byts += size_properties(i, load);
 
-    if (Typeof(i) == TYPE_EXIT && DBFETCH(i)->sp.exit.dest) {
-        byts += sizeof(dbref) * DBFETCH(i)->sp.exit.ndest;
+    if (Typeof(i) == TYPE_EXIT) {
+        byts += sizeof(dbref) * MUCK::exitDestCount(i);
     } else if (Typeof(i) == TYPE_PLAYER && DBFETCH(i)->sp.player.password) {
         byts += strlen(DBFETCH(i)->sp.player.password) + 1;
     } else if (Typeof(i) == TYPE_PROGRAM) {
@@ -917,7 +917,7 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
                 anotify_nolisten(player, SYSBLUE "Exits:", 1);
                 DOLIST(exit, DBFETCH(thing)->exits) {
                     strcpy(buf, ansi_unparse_object(OWNER(player), exit));
-                    anotify_fmt(player, "%s " SYSCYAN "to %s", buf, ansi_unparse_object(OWNER(player), DBFETCH(exit)->sp.exit.ndest > 0 ? DBFETCH(exit)->sp.exit.dest[0] : NOTHING)
+                    anotify_fmt(player, "%s " SYSCYAN "to %s", buf, ansi_unparse_object(OWNER(player), MUCK::exitDestCount(exit) > 0 ? MUCK::exitDestRef(exit, 0) : NOTHING)
                         );
                 }
             } else {
@@ -949,7 +949,7 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
                 anotify_nolisten(player, SYSBLUE "Actions/exits:", 1);
                 DOLIST(exit, DBFETCH(thing)->exits) {
                     strcpy(buf, ansi_unparse_object(OWNER(player), exit));
-                    anotify_fmt(player, "%s " SYSCYAN "to %s", buf, ansi_unparse_object(OWNER(player), DBFETCH(exit)->sp.exit.ndest > 0 ? DBFETCH(exit)->sp.exit.dest[0] : NOTHING)
+                    anotify_fmt(player, "%s " SYSCYAN "to %s", buf, ansi_unparse_object(OWNER(player), MUCK::exitDestCount(exit) > 0 ? MUCK::exitDestRef(exit, 0) : NOTHING)
                         );
                 }
             } else {
@@ -973,7 +973,7 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
                 anotify_nolisten(player, SYSBLUE "Actions/exits:", 1);
                 DOLIST(exit, DBFETCH(thing)->exits) {
                     strcpy(buf, ansi_unparse_object(OWNER(player), exit));
-                    anotify_fmt(player, "%s " SYSCYAN "to %s", buf, ansi_unparse_object(player, DBFETCH(exit)->sp.exit.ndest > 0 ? DBFETCH(exit)->sp.exit.dest[0] : NOTHING)
+                    anotify_fmt(player, "%s " SYSCYAN "to %s", buf, ansi_unparse_object(player, MUCK::exitDestCount(exit) > 0 ? MUCK::exitDestRef(exit, 0) : NOTHING)
                         );
                 }
             } else {
@@ -986,17 +986,17 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
                 anotify_nolisten(player, buf, 1);
             }
             /* print destinations */
-            if (DBFETCH(thing)->sp.exit.ndest == 0)
+            if (MUCK::exitDestCount(thing) == 0)
                 break;
-            for (i = 0; i < DBFETCH(thing)->sp.exit.ndest; i++) {
-                switch ((DBFETCH(thing)->sp.exit.dest)[i]) {
+            for (i = 0; i < MUCK::exitDestCount(thing); i++) {
+                switch (MUCK::exitDestRef(thing, i)) {
                     case NOTHING:
                         break;
                     case HOME:
                         anotify_nolisten(player, SYSAQUA "Destination: *HOME*", 1);
                         break;
                     default:
-                        sprintf(buf, SYSAQUA "Destination: %s", ansi_unparse_object(OWNER(player), (DBFETCH(thing)->sp.exit.dest)[i]));
+                        sprintf(buf, SYSAQUA "Destination: %s", ansi_unparse_object(OWNER(player), MUCK::exitDestRef(thing, i)));
                         anotify_nolisten(player, buf, 1);
                         break;
                 }
@@ -1682,7 +1682,7 @@ checkflags(dbref what, struct flgchkdat check)
                 break;
             }
             case TYPE_EXIT:
-                if ((!DBFETCH(what)->sp.exit.ndest) != (!check.islinked))
+                if ((!MUCK::exitDestCount(what)) != (!check.islinked))
                     return (0);
                 break;
             case TYPE_PLAYER:
@@ -1734,15 +1734,15 @@ display_objinfo(dbref player, dbref obj, char output_type)
                     break;
                 }
                 case TYPE_EXIT:
-                    if (DBFETCH(obj)->sp.exit.ndest == 0) {
+                    if (MUCK::exitDestCount(obj) == 0) {
                         sprintf(buf, "%-38.512s  %.512s", buf2, "*UNLINKED*");
                         break;
                     }
-                    if (DBFETCH(obj)->sp.exit.ndest > 1) {
+                    if (MUCK::exitDestCount(obj) > 1) {
                         sprintf(buf, "%-38.512s  %.512s", buf2, "*METALINKED*");
                         break;
                     }
-                    sprintf(buf, "%-38.512s  %.512s", buf2, ansi_unparse_object(player, DBFETCH(obj)->sp.exit.dest[0]));
+                    sprintf(buf, "%-38.512s  %.512s", buf2, ansi_unparse_object(player, MUCK::exitDestRef(obj, 0)));
                     break;
                 case TYPE_PLAYER:
                     sprintf(buf, "%-38.512s  %.512s", buf2, ansi_unparse_object(player, DBFETCH(obj)->sp.player.home));
@@ -1932,8 +1932,8 @@ do_entrances(int descr, dbref player, const char *name, const char *flags)
         if (checkflags(i, check)) {
             switch (Typeof(i)) {
                 case TYPE_EXIT:
-                    for (j = DBFETCH(i)->sp.exit.ndest; j--;) {
-                        if (DBFETCH(i)->sp.exit.dest[j] == thing) {
+                    for (j = MUCK::exitDestCount(i); j--;) {
+                        if (MUCK::exitDestRef(i, j) == thing) {
                             display_objinfo(player, i, output_type);
                             total++;
                         }
@@ -2049,9 +2049,9 @@ exit_matches_name(dbref exit, const char *name)
 
     if (!OkObj(exit))
         return 0;
-    if (!DBFETCH(exit)->sp.exit.ndest)
+    if (!MUCK::exitDestCount(exit))
         return 0;
-    if (!OkObj((DBFETCH(exit)->sp.exit.dest)[0]))
+    if (!OkObj(MUCK::exitDestRef(exit, 0)))
         return 0;
 
     strcpy(buf, NAME(exit));
@@ -2062,7 +2062,7 @@ exit_matches_name(dbref exit, const char *name)
             *ptr2++ = '\0';
         while (*ptr2 == ';')
             ptr2++;
-        if (string_prefix(name, ptr) && DBFETCH(exit)->sp.exit.ndest && Typeof((DBFETCH(exit)->sp.exit.dest)[0]) == TYPE_PROGRAM)
+        if (string_prefix(name, ptr) && MUCK::exitDestCount(exit) && Typeof(MUCK::exitDestRef(exit, 0)) == TYPE_PROGRAM)
             return 1;
     }
     return 0;

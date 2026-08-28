@@ -228,6 +228,53 @@ Player::setPassword(const char *plaintext)
     return ::set_password(object()->ref(), plaintext);
 }
 
+int
+Exit::destCount() const
+{
+    return DBFETCH(object()->ref())->sp.exit.ndest;
+}
+
+dbref
+Exit::destRef(int i) const
+{
+    struct object *o = DBFETCH(object()->ref());
+
+    if (i < 0 || i >= o->sp.exit.ndest || !o->sp.exit.dest)
+        return NOTHING;
+    return o->sp.exit.dest[i];
+}
+
+int
+exitDestCount(dbref ref)
+{
+    DbObject *o = database().get(ref);
+    Exit *e = o ? o->As<Exit>() : nullptr;
+
+    return e ? e->destCount() : 0;
+}
+
+dbref
+exitDestRef(dbref ref, int i)
+{
+    DbObject *o = database().get(ref);
+    Exit *e = o ? o->As<Exit>() : nullptr;
+
+    return e ? e->destRef(i) : NOTHING;
+}
+
+void
+Exit::setDestRefs(const dbref *refs, int n)
+{
+    struct object *o = DBFETCH(object()->ref());
+
+    delete[] o->sp.exit.dest;
+    o->sp.exit.ndest = n;
+    o->sp.exit.dest = n > 0 ? new dbref[n] : NULL;
+    for (int i = 0; i < n; i++)
+        o->sp.exit.dest[i] = refs[i];
+    DBDIRTY(object()->ref());
+}
+
 std::vector<DbObject *>
 Exit::destinations() const
 {

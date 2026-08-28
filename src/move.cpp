@@ -317,7 +317,7 @@ can_move2(int descr, dbref player, const char *direction, int lev)
     matched = last_match_result(&md);
 
     if (OkObj(matched)) {
-        dbref dest = DBFETCH(matched)->sp.exit.ndest ? DBFETCH(matched)->sp.exit.dest[0] : NOTHING;
+        dbref dest = MUCK::exitDestCount(matched) ? MUCK::exitDestRef(matched, 0) : NOTHING;
 
         if ((FLAG2(player) & F2IMMOBILE) && !(FLAG2(matched) & F2IMMOBILE) && (!OkObj(dest) || Typeof(dest) != TYPE_PROGRAM)) {
             envpropqueue(descr, player, OkObj(player) ? getloc(player) : -1, matched, player, NOTHING, "@immobile", "Immobile", 1, 1);
@@ -357,8 +357,8 @@ trigger(int descr, dbref player, dbref exit, int pflag)
 
     sobjact = 0;
 
-    for (i = 0; i < DBFETCH(exit)->sp.exit.ndest; i++) {
-        dest = (DBFETCH(exit)->sp.exit.dest)[i];
+    for (i = 0; i < MUCK::exitDestCount(exit); i++) {
+        dest = MUCK::exitDestRef(exit, i);
         if (dest == HOME) {
             dest = DBFETCH(player)->sp.player.home;
         }
@@ -409,7 +409,7 @@ trigger(int descr, dbref player, dbref exit, int pflag)
                             parse_omessage(descr, player, dest, exit, GETODROP(exit), PNAME(player), "(@Odrop)");
                         }
 #ifdef DYNAMIC_LINKS
-                        dest = (DBFETCH(exit)->sp.exit.dest)[i];
+                        dest = MUCK::exitDestRef(exit, i);
                         if (Typeof(dest) != TYPE_ROOM)
                             break;
 #endif
@@ -435,7 +435,7 @@ trigger(int descr, dbref player, dbref exit, int pflag)
                                 parse_omessage(descr, player, dest, exit, GETODROP(exit), PNAME(player), "(@Odrop)");
                             }
 #ifdef DYNAMIC_LINKS
-                            dest = (DBFETCH(exit)->sp.exit.dest)[i];
+                            dest = MUCK::exitDestRef(exit, i);
                             if (Typeof(dest) != TYPE_THING)
                                 break;
 #endif
@@ -463,7 +463,7 @@ trigger(int descr, dbref player, dbref exit, int pflag)
                     break;
                 case TYPE_EXIT: /* It's a meta-link(tm)! */
                     ts_useobject(player, dest);
-                    trigger(descr, player, (DBFETCH(exit)->sp.exit.dest)[i], 0);
+                    trigger(descr, player, MUCK::exitDestRef(exit, i), 0);
                     break;
                 case TYPE_PLAYER:
                     if (pflag && DBFETCH(dest)->location != NOTHING) {
@@ -479,7 +479,7 @@ trigger(int descr, dbref player, dbref exit, int pflag)
                                 parse_omessage(descr, player, getloc(dest), exit, GETODROP(exit), PNAME(player), "(@Odrop)");
                             }
 #ifdef DYNAMIC_LINKS
-                            dest = (DBFETCH(exit)->sp.exit.dest)[i];
+                            dest = MUCK::exitDestRef(exit, i);
                             if (Typeof(dest) != TYPE_PLAYER)
                                 break;
 #endif
@@ -925,7 +925,7 @@ recycle(int descr, dbref player, dbref thing)
             if (!Mage(OWNER(thing)))
                 DBFETCH(OWNER(thing))->sp.player.pennies += tp_exit_cost;
             if (!Mage(OWNER(thing)))
-                if (DBFETCH(thing)->sp.exit.ndest != 0)
+                if (MUCK::exitDestCount(thing) != 0)
                     DBFETCH(OWNER(thing))->sp.player.pennies += tp_link_cost;
             DBDIRTY(OWNER(thing));
             break;
@@ -972,17 +972,18 @@ recycle(int descr, dbref player, dbref thing)
                 break;
             case TYPE_EXIT:
             {
-                int i, j;
+                MUCK::Exit *e = MUCK::database().get(rest)->As<MUCK::Exit>();
+                dbref keep[MAX_LINKS];
+                int i, j = 0;
 
-                for (i = j = 0; i < DBFETCH(rest)->sp.exit.ndest; i++) {
-                    if ((DBFETCH(rest)->sp.exit.dest)[i] != thing)
-                        (DBFETCH(rest)->sp.exit.dest)[j++] = (DBFETCH(rest)->sp.exit.dest)[i];
+                for (i = 0; i < e->destCount() && j < MAX_LINKS; i++) {
+                    if (e->destRef(i) != thing)
+                        keep[j++] = e->destRef(i);
                 }
-                if (j < DBFETCH(rest)->sp.exit.ndest) {
+                if (j < e->destCount()) {
                     DBFETCH(OWNER(rest))->sp.player.pennies += tp_link_cost;
                     DBDIRTY(OWNER(rest));
-                    DBFETCH(rest)->sp.exit.ndest = j;
-                    DBDIRTY(rest);
+                    e->setDestRefs(keep, j);
                 }
             }
                 if (OWNER(rest) == thing) {
