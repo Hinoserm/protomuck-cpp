@@ -21,6 +21,17 @@ ARRAY_EXPECT = [
     'ADONE:ok',
 ]
 
+PROP_EXPECT = [
+    'PSTR:hello', 'PINT:42', 'PFLT:3.5', 'PREF:1', 'PLOK:1',
+    'POVER:7', 'POVERSTR:7.', 'PDIRVAL:topval', 'PDIRCHILD:childval',
+    'PDIRP:1', 'PDIRP2:0', 'PDEEP:deep', 'PDEEPDIR:1',
+    'PORD:.d|2n|_u|A|b|C1|c2|x y|~t|',
+    'PCASE:one', 'PCASENAME:MiXeD', 'PCASE2:two',
+    'PRMDIR:0', 'PRMDEEP:gone', 'PZERO:keep', 'PEMPTY:keep',
+    'PADD:apval', 'PADDV:99', 'PENV:fromzero1',
+    'PBIG137:v137', 'PBIGN:200', 'PMPI:plain-mpi', 'PDONE:ok',
+]
+
 EXPECT = [
     'NUMBERP:1', 'STRINGCMP:0', 'STRCMP:0', 'STRNCMP:0', 'STRLEN:4',
     'STRCAT:concat', 'ATOI:42', 'ANSINOTIFY:ok', 'INTOSTR:7',
@@ -72,9 +83,10 @@ def main():
     sendl('connect One potrzebie')
     wait_for(b'Room Zero', 5)
     here = os.path.dirname(os.path.abspath(__file__))
-    for name in ('strtest', 'arrtest'):
+    for name in ('strtest', 'arrtest', 'proptest'):
         src = open(os.path.join(here, {'strtest': 'string_prims.muf',
-                                       'arrtest': 'array_prims.muf'}[name]),
+                                       'arrtest': 'array_prims.muf',
+                                       'proptest': 'prop_prims.muf'}[name]),
                    encoding='latin-1').read()
         sendl('@prog %s.muf' % name)
         sendl('i')
@@ -104,13 +116,13 @@ def main():
     text = buf.decode('latin-1', 'replace')
     open(os.path.join(gamedir, 'muftest_capture.txt'), 'w', encoding='latin-1').write(text)
     fails = 0
-    for want in EXPECT + ARRAY_EXPECT:
+    for want in EXPECT + ARRAY_EXPECT + PROP_EXPECT:
         if want in text:
             print('PASS', want)
         else:
             print('FAIL', want)
             fails += 1
-    total = len(EXPECT) + len(ARRAY_EXPECT)
+    total = len(EXPECT) + len(ARRAY_EXPECT) + len(PROP_EXPECT)
     print('%d/%d passed' % (total - fails, total))
     return 1 if fails else 0
 
