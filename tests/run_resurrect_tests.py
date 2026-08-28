@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
 # End-to-end test: deleted-object retention and @rollback resurrection.
 # Usage: restest.py <binary> <gamedir> <port>
-import socket, sys, time, select, os, subprocess, shutil, re
+import sys, os, shutil, re, time, socket, select
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import muckharness
 
 binpath, gamedir, port = sys.argv[1], sys.argv[2], int(sys.argv[3])
 os.chdir(gamedir)
 
 def start(infile):
-    srv = subprocess.Popen([binpath, infile, 'data/store', str(port)],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    time.sleep(2)
-    return srv
+    """The server detaches, so Popen's handle is a corpse and killing it
+    kills nothing; and "@shutdown muck=muck" only prints usage. Both
+    together used to leave the original server holding the port while
+    the test happily talked to it and called that a reboot."""
+    return muckharness.start(binpath, infile, 'data/store', port,
+                             login=None)
 
 class Conn:
     def __init__(self):
@@ -46,7 +51,7 @@ def check(name, cond, detail=''):
             print('  detail: ' + detail.strip()[:400])
 
 shutil.copy('minimal.db', 'live.db')
-srv = start('live.db')
+sess0 = start('live.db')
 c = Conn()
 c.pump(1.0)
 c.send('connect One potrzebie')
@@ -84,11 +89,10 @@ snap = c.cmd('@snapshot =t2', 5.0)
 rev2 = re.search(r'rev (\d+)', snap).group(1)
 c.cmd('@recycle #' + ref2, 3.0)
 c.cmd('@dump', 6.0)
-c.send('@shutdown muck=muck')
-c.pump(2.0)
-srv.wait(timeout=20)
+c.pump(0.5)
+muckharness.stop(sess0)
 
-srv = start('data/store')
+sess1 = start('data/store')
 c = Conn()
 c.pump(1.0)
 c.send('connect One potrzebie')
@@ -102,12 +106,8 @@ check('resurrected after reboot', 'Resurrected' in out, out)
 out = c.cmd('ex #%s=/' % ref2)
 check('prop back after reboot', 'twoprop:world' in out, out)
 
-c.send('@shutdown muck=muck')
-c.pump(2.0)
-try:
-    srv.wait(timeout=20)
-except subprocess.TimeoutExpired:
-    srv.kill()
+c.pump(0.5)
+muckharness.stop(sess1)
 
 print('%s: %d failures' % ('RESULT', len(fails)))
 sys.exit(1 if fails else 0)
