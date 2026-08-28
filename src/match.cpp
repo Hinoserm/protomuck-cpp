@@ -191,9 +191,27 @@ absolute_name(struct match_data *md)
         } else {
             return match;
         }
-    } else {
-        return NOTHING;
     }
+
+    /* uuid short-form: a run of six or more hex digits (dashes
+     * allowed) resolves like a git prefix when it names exactly one
+     * object. Six hex chars keeps ordinary names from ever matching. */
+    {
+        const char *p = md->match_name;
+        int hexes = 0;
+
+        while (*p && (isxdigit(*p) || *p == '-')) {
+            if (*p != '-')
+                hexes++;
+            p++;
+        }
+        if (!*p && hexes >= 6) {
+            match = MUCK::database().resolveUuidPrefix(md->match_name);
+            if (match != NOTHING && match != AMBIGUOUS)
+                return match;
+        }
+    }
+    return NOTHING;
 }
 
 void

@@ -27,11 +27,33 @@
 
 using json = nlohmann::json;
 
+extern void tune_save_parms_to_file(FILE *);
+extern void tune_load_parms_from_file(FILE *, dbref, int);
+
 namespace MUCK {
 
 ObjectStore g_objectStore;
 
 static const int STORE_FORMAT = 2;
+
+/* Dormant module data (docs section 4): entries in namespaces no
+ * loaded module claims, plus unrecognized attached-module names, are
+ * carried verbatim across load and save so unloading a module can
+ * never destroy its data. Keyed by uuid string. */
+static std::unordered_map<std::string, json> dormantEntries;
+static std::unordered_map<std::string, json> dormantModules;
+
+static bool
+knownNamespace(const std::string &k)
+{
+    if (k.empty())
+        return false;
+    if (k[0] == '/')
+        return true;            /* properties */
+    if (k.rfind("$core/", 0) == 0 || k.rfind("$type/", 0) == 0)
+        return true;
+    return false;
+}
 
 /* forward declarations: marker helpers are defined with the versioned
  * save path below but used by the manifest writer above it */
@@ -494,6 +516,19 @@ objectToJson(dbref i)
         }
     }
 
+    /* dormant module data rides along untouched */
+    {
+        auto d = dormantEntries.find(j["uuid"].get<std::string>());
+
+        if (d != dormantEntries.end())
+            for (auto it = d->second.begin(); it != d->second.end(); ++it)
+                e[it.key()] = it.value();
+        auto dm = dormantModules.find(j["uuid"].get<std::string>());
+
+        if (dm != dormantModules.end())
+            j["modules"] = dm->second;
+    }
+
     j["entries"] = e;
     return j;
 }
@@ -807,6 +842,30 @@ ObjectStore::writeManifest()
         ts.push_back(e);
     }
     m["tombstones"] = ts;
+
+    /* @tune parameters live in the manifest (docs section 6); the
+     * legacy parmfile.cfg is still written as an export for ops
+     * visibility, but the manifest is the authority on store boots. */
+    {
+        char *pbuf = NULL;
+        size_t plen = 0;
+        FILE *pf = open_memstream(&pbuf, &plen);
+
+        if (pf) {
+            tune_save_parms_to_file(pf);
+            fclose(pf);
+
+            json parms = json::array();
+            std::istringstream ps(std::string(pbuf, plen));
+            std::string line;
+
+            while (std::getline(ps, line))
+                if (!line.empty())
+                    parms.push_back(jstr(line.c_str()));
+            m["parms"] = parms;
+            free(pbuf);
+        }
+    }
     return atomicWrite(root_ + "/manifest.json", m.dump(1));
 }
 
@@ -1220,6 +1279,22 @@ ObjectStore::loadAll()
     rev_ = manifest.value("rev", 0L);
     markers_ = markersFromJson(manifest.value("markers", json::array()));
 
+    if (manifest.contains("parms")) {
+        std::string text;
+
+        for (const auto &l : manifest["parms"])
+            text += junstr(l.get<std::string>()) + "\n";
+
+        FILE *pf = fmemopen((void *) text.data(), text.size(), "r");
+
+        if (pf) {
+            tune_load_parms_from_file(pf, NOTHING, -1);
+            fclose(pf);
+            log_status("STORE: applied %d tune parms from the manifest\n",
+                       (int) manifest["parms"].size());
+        }
+    }
+
     if (manifest.contains("tombstones")) {
         std::vector<Database::Tombstone> list;
 
@@ -1273,8 +1348,19 @@ ObjectStore::loadAll()
                     fprintf(stderr, "STORE: skipping unparsable %s\n", e2->d_name);
                     continue;
                 }
-                if (j.contains("entries"))
+                if (j.contains("entries")) {
+                    json unknown = json::object();
+
+                    for (auto eit = j["entries"].begin();
+                         eit != j["entries"].end(); ++eit)
+                        if (!knownNamespace(eit.key()))
+                            unknown[eit.key()] = eit.value();
+                    if (!unknown.empty())
+                        dormantEntries[j.value("uuid", "")] = unknown;
+                    if (!j.value("modules", json::array()).empty())
+                        dormantModules[j.value("uuid", "")] = j["modules"];
                     j = v2ToV1(j, root_);
+                }
                 objectFromJsonPhase1(j, later);
             }
             closedir(d2);
@@ -1293,6 +1379,132 @@ ObjectStore::loadAll()
             MUCK::database().noteHole(i);
 
     return (dbref) top;
+}
+
+
+long
+ObjectStore::gcStore()
+{
+    long removed = 0;
+    std::unordered_set<std::string> liveChunks;
+    std::string objroot = root_ + "/objects";
+    DIR *d0 = opendir(objroot.c_str());
+
+    if (!d0)
+        return -1;
+
+    struct dirent *e0;
+
+    while ((e0 = readdir(d0)) != NULL) {
+        if (e0->d_name[0] == '.')
+            continue;
+
+        std::string l1 = objroot + "/" + e0->d_name;
+        DIR *d1 = opendir(l1.c_str());
+
+        if (!d1)
+            continue;
+
+        struct dirent *e1;
+
+        while ((e1 = readdir(d1)) != NULL) {
+            if (e1->d_name[0] == '.')
+                continue;
+
+            std::string l2 = l1 + "/" + e1->d_name;
+            DIR *d2 = opendir(l2.c_str());
+
+            if (!d2)
+                continue;
+
+            struct dirent *e2;
+
+            while ((e2 = readdir(d2)) != NULL) {
+                std::string fn = e2->d_name;
+                std::string full = l2 + "/" + fn;
+
+                if (fn.size() > 5 && fn.compare(fn.size() - 5, 5, ".json") == 0) {
+                    /* collect live chunk refs */
+                    std::ifstream f(full);
+                    json j = f ? json::parse(f, nullptr, false) : json();
+
+                    if (j.is_object() && j.contains("entries")
+                        && j["entries"].contains("$type/source"))
+                        for (const auto &h : j["entries"]["$type/source"]["v"])
+                            liveChunks.insert(h.get<std::string>());
+                } else if (fn.size() > 5 && fn.compare(fn.size() - 5, 5, ".hist") == 0) {
+                    /* prune unseen history; keep chunk refs of kept lines */
+                    std::ifstream f(full);
+                    std::string kept, line;
+                    std::vector<Marker> own;
+                    std::string objfile = full.substr(0, full.size() - 5) + ".json";
+                    std::ifstream of(objfile);
+                    json oj = of ? json::parse(of, nullptr, false) : json();
+
+                    if (oj.is_object())
+                        own = markersFromJson(oj.value("markers", json::array()));
+                    while (std::getline(f, line)) {
+                        json h = json::parse(line, nullptr, false);
+
+                        if (h.is_discarded())
+                            continue;
+                        if (markerInWindow(h.value("from", 0L), h.value("to", 0L),
+                                           markers_, own)) {
+                            kept += line + "\n";
+                            if (h.value("k", "") == "$type/source")
+                                for (const auto &c : h["v"])
+                                    liveChunks.insert(c.get<std::string>());
+                        } else {
+                            removed++;
+                        }
+                    }
+                    f.close();
+                    if (kept.empty())
+                        unlink(full.c_str());
+                    else
+                        atomicWrite(full, kept);
+                }
+            }
+            closedir(d2);
+        }
+        closedir(d1);
+    }
+    closedir(d0);
+
+    /* sweep the chunk pool */
+    std::string chroot = root_ + "/chunks";
+    DIR *c0 = opendir(chroot.c_str());
+
+    if (c0) {
+        struct dirent *ce;
+
+        while ((ce = readdir(c0)) != NULL) {
+            if (ce->d_name[0] == '.')
+                continue;
+
+            std::string cl = chroot + "/" + ce->d_name;
+            DIR *c1 = opendir(cl.c_str());
+
+            if (!c1)
+                continue;
+
+            struct dirent *cf;
+
+            while ((cf = readdir(c1)) != NULL) {
+                if (cf->d_name[0] == '.')
+                    continue;
+                if (!liveChunks.count(cf->d_name)) {
+                    unlink((cl + "/" + cf->d_name).c_str());
+                    removed++;
+                }
+            }
+            closedir(c1);
+        }
+        closedir(c0);
+    }
+
+    log_status("STOREGC: removed %ld dead history entries and chunks\n", removed);
+    return removed;
 }
 
 } /* namespace MUCK */

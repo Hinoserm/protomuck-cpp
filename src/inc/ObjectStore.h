@@ -74,6 +74,12 @@ class ObjectStore {
     const std::vector<Marker> &globalMarkers() const { return markers_; }
     std::vector<Marker> objectMarkers(dbref i) const;
 
+    /* Offline maintenance (the -storegc flag): drop history entries no
+     * retained marker can see and delete chunk files nothing
+     * references. Walks the whole store; run it at maintenance time,
+     * not from the dump path. Returns entries + chunks removed. */
+    long gcStore();
+
   private:
     std::string objectPath(dbref i) const;
     std::string histPath(dbref i) const;

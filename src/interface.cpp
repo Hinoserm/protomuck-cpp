@@ -420,7 +420,11 @@ main(int argc, char **argv)
 #endif /* USE_PS */
     for (i = 1; i < argc; i++) {
         if (!nomore_options && argv[i][0] == '-') {
-            if (!strcmp(argv[i], "-convert")) {
+            if (!strcmp(argv[i], "-storegc")) {
+                db_conversion_flag = 1;
+                extern bool store_gc_flag;
+                store_gc_flag = 1;
+            } else if (!strcmp(argv[i], "-convert")) {
                 db_conversion_flag = 1;
             } else if (!strcmp(argv[i], "-decompress")) {
                 db_decompression_flag = 1;

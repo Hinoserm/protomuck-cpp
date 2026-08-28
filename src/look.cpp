@@ -777,6 +777,16 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
 
 #ifdef VERBOSE_EXAMINE
     anotify_nolisten(player, flag_description(thing), 1);
+    {
+        const MUCK::Uuid &u = MUCK::database().uuidOf(thing);
+
+        if (!u.isNil()) {
+            sprintf(buf, SYSGREEN "UUID: " SYSYELLOW "%s" SYSGREEN
+                    "  (short: " SYSYELLOW "%s" SYSGREEN ")",
+                    u.toString().c_str(), u.shortString(12).c_str());
+            anotify_nolisten2(player, buf);
+        }
+    }
     if ((Typeof(thing) == TYPE_PLAYER) && (POWERS(thing)))
         anotify_nolisten(player, power_description(thing), 1);
 #endif /* VERBOSE_EXAMINE */

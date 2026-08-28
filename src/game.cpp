@@ -40,6 +40,8 @@ int dumper_pid;
 
 char dump_done;
 
+bool store_gc_flag = 0;
+
 /* This is the command, @autoarchive. */
 void
 do_autoarchive(int descr, dbref player)
@@ -539,7 +541,16 @@ init_game(const char *infile, const char *outfile)
     log_status_nowall("LOAD: %s (done)\n", infile);
     fprintf(stderr, "LOAD: %s (done)\n", infile);
 
-    tune_load_parmsfile(NOTHING); /* load @tune parms from file */
+    /* the manifest is the tune authority on store boots; reloading
+     * parmfile.cfg here would override it. Flat imports still take
+     * their parms from the file. */
+    if (!from_store)
+        tune_load_parmsfile(NOTHING);
+
+    if (store_gc_flag) {
+        log_status_nowall("STOREGC: starting maintenance pass\n");
+        MUCK::store().gcStore();
+    }
     /* set up dumper */
     delete[]dumpfile;
     dumpfile = alloc_string(outfile);

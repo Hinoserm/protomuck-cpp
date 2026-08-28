@@ -490,3 +490,37 @@ DELETION AND TOMBSTONES  (implemented)
     Tombstones persist in the manifest and age out per the
     tombstone_retention @tune parameter (days; -1 keeps forever, 0
     keeps none, default 90). Pruning happens at manifest write.
+
+
+VERSIONING, IMPLEMENTED  (@snapshot, @rollback, -storegc)
+
+    @snapshot                global snapshot (arch only)
+    @snapshot=label          labeled
+    @snapshot obj=label      one object
+    @snapshot obj=lbl!lock   locked marker: never ages out
+    @snapshot #list          list global markers
+    @snapshot obj=#list      list an object's markers
+    @rollback obj=rev        restore name, props, program source as of
+                             that revision (containment stays live)
+
+    Entries carry the rev at which their value took effect; a marker
+    captures the current era and advances it, so writes after a
+    snapshot stamp the next era and a read at the marker excludes
+    them. History lives in per-object .hist files (JSON lines with
+    the value and its [from, to) lifetime), written only when a
+    retained marker saw the old value. Unlocked markers age out per
+    the snapshot_retention @tune parameter (days; -1 forever).
+
+    protomuck -storegc <store> <store> walks the store at maintenance
+    time: drops history entries no retained marker can see and sweeps
+    unreferenced chunk files.
+
+    Dormant module data: entries in namespaces no loaded module claims
+    ride through load and save verbatim, so unloading a module can
+    never destroy its data.
+
+    Manifest carries the @tune parameters; on store boots the manifest
+    is the tune authority (parmfile.cfg remains a bootstrap fallback
+    and ops export). UUIDs: examine shows an object's uuid, and any
+    run of six or more hex digits resolves as a git-style unique
+    prefix anywhere object names are matched.
