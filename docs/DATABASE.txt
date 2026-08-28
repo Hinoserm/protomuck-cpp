@@ -1,0 +1,180 @@
+PROTOMUCK DATABASE REDESIGN
+===========================
+
+Design agreed 2026-08-27.  This document is the authority for the
+new-database branch.  Implementation lands in the steps listed at the
+bottom; where code and this document disagree during development, this
+document wins until amended.
+
+
+1. IDENTITY
+
+   Every object has two identities, both first class, both permanent:
+
+   UUID (version 7)
+       The primary key.  Time-ordered, minted at object creation, never
+       reused, never changed.  Stable across servers, suitable for
+       merging databases in the future.
+
+   dbref
+       The traditional #123 number.  Monotonic: a freshly created
+       object takes the next number, and numbers are NEVER reused.
+       dbref recycling is abolished; the aliasing bug where a stale
+       #500 silently retargets to a new object cannot return.  Large
+       gaps after mass deletion are accepted and are a feature: they
+       push developers and players toward UUIDs.
+
+   Short-form UUIDs are accepted on input wherever a unique prefix
+   resolves (like git), and listings display the short form.  Full
+   UUIDs are always stored on disk.
+
+   The garbage object type is abolished.  Deleting an object removes it
+   from both indexes and records a tombstone row: uuid, dbref, deleted
+   timestamp, deleting player uuid.  Tombstone retention is set by a
+   @tune parameter: from zero to forever, default on the order of 90
+   days.  Programs holding a deleted object receive an OBJECT_DELETED
+   mufevent.
+
+
+2. IN-MEMORY MODEL
+
+   Two hash maps own lookup: uuid -> object and dbref -> object.
+   There is NO dense array and NO db_top.  A mass-grief incident
+   creates no million-entry hole because there is nothing to hole.
+
+   Code holds typed pointers to objects, not dbrefs.  Resolution
+   through the maps happens at boundaries only: MUF primitive
+   arguments, player input, disk load.  Once resolved, the pointer is
+   used directly.  Eventually MUF gains an OBJECT type alongside DBREF
+   and the interpreter resolves stack values straight to pointers.
+
+   Deleted objects are unlinked from both maps but their memory is
+   never freed while the server runs, so no held pointer can dangle.
+   Holders can check IsDeleted().  Memory is reclaimed at restart.
+
+   Paging: the design must allow objects to be paged in from disk in
+   the future, though today everything stays in RAM.  Two rules follow:
+   all field access goes through accessor methods, never raw member
+   reads, and identity is always resident even when payload is not
+   (the maps hold a stub for every object from open).
+
+
+3. CLASS HIERARCHY
+
+   DatabaseObject          uuid, dbref, name, location, owner, flags,
+                           properties, timestamps.  Abstract base.
+   Container : DatabaseObject
+                           adds contents and exits vectors.
+   Room, Thing, Player : Container
+   Exit : DatabaseObject   adds destination list.  Holds nothing.
+   Program : DatabaseObject
+                           adds source text.  Holds nothing.
+
+   Types that cannot contain things do not have contents; calling
+   exit->Contents() is a compile error, not an empty list.
+
+   Player carries transient Session objects (connection descriptors,
+   output queues, telnet state).  Session is structurally separate and
+   can never serialize; a socket fd cannot be persisted by accident.
+   Persistent connection facts (last host, last connect time) are
+   ordinary versioned fields on Player.
+
+   Contents/exits are std::vector<T *>.  The old intrusive
+   location/contents/exits/next dbref chains are abolished.
+
+
+4. ON-DISK FORMAT
+
+   One JSON file per object, named by UUID, git-sharded two levels
+   deep to keep directories small:
+
+       data/objects/01/8f/018f3a2b-....json      current state
+       data/objects/01/8f/018f3a2b-....hist      append-only history
+
+   A manifest file at the data root stores the format version, the
+   global revision counter, the next dbref, the tombstone table, and
+   the @tune parameters (parmfile.cfg contents move into the manifest;
+   help files and logs explicitly do NOT move into the database).
+
+   Object references serialize as UUIDs, including the contents and
+   exits vectors.  Program source is stored inside the object file,
+   not in muf/<ref>.m.
+
+   Startup reads only the .json files; boot time is independent of
+   retained history.  .hist is read only for rollback or historical
+   queries.  Cold objects have no .hist file at all.
+
+   Writes are crash-safe: append history first, then atomically rename
+   the new .json over the old.  A crash between the two leaves a
+   harmless, detectable duplicate.
+
+   Flat-file support is stripped from the server.  A converter class
+   (absorbing the old db_read machinery) performs one-way import of
+   the old NeonMuck V2 format, minting UUIDs during load.
+
+
+5. VERSIONING (copy on write)
+
+   One global 64-bit revision counter, incremented by one per
+   snapshot, shared by whole-database snapshots and single-object
+   snapshots.  Objects do not have private counters; they have marker
+   lists.  A global snapshot records a marker in the manifest; a
+   single-object snapshot records a marker only in that object's
+   file.  Nothing ever walks the database to snapshot.
+
+   Every persistent value (props, name, flags, program lines, all of
+   it) is stamped with the revision at which it took effect.  Writing
+   a value:
+
+       - identical to current value: write nothing at all.  A program
+         rewriting 10,000 unchanged props inflates nothing.
+       - changed, and no snapshot has seen the old value: overwrite in
+         place.
+       - changed, and a retained snapshot references the old value:
+         move the old value to history, stamp the new one.
+
+   History therefore grows with snapshots x values-actually-changed,
+   never with write volume.
+
+   Deleting a prop writes a tombstone entry at the current rev, so a
+   historical read below that rev still sees it and a current read
+   does not.
+
+   Reading at revision R: newest entry per key with rev <= R.
+
+   Pruning: a history entry is droppable only when no retained marker
+   falls in its lifetime, AND it keeps the newest-below-oldest-marker
+   entry per key so aged-out revs cannot orphan a live value.
+
+   Retention is time-based on markers via @tune (like 30 days).  A
+   marker can be locked; locked markers never age out.  Use case: lock
+   a snapshot of one program before a risky edit, roll back if needed.
+
+   Program source lines are content-addressed within the object file
+   so a new version stores only changed lines.
+
+   Only state that serializes is versioned.  Memory-only state
+   (sessions, interpreter frames) has no COW and no revs.
+
+
+6. MIGRATION AND OPERATIONS
+
+   Development happens on the new-database branch; GinkoMUCK runs that
+   branch as the live test.  The importer converts data/neon.db once;
+   after verification the flat files are retired.
+
+   Steps:
+     1. New format working end to end: converter class absorbs the
+        flat-file reader, server loads old format, writes new format,
+        loads and runs from new format thereafter.  In-memory model
+        may temporarily remain the legacy struct during this step.
+     2. Rebuild the class skeleton to the hierarchy above, in small
+        sections: write new methods, hunt down old call sites,
+        modernize them.  Loop until the legacy struct and union are
+        gone.  Recycling and garbage removal land here.
+     3. Versioning: revision stamps, markers, history files, pruning,
+        @tune retention.
+     4. (with 3) Tombstone table and OBJECT_DELETED event.
+     5. Integration passes discussed case by case: player sessions
+        onto Player, MUF OBJECT type, tunables fully in manifest,
+        further consolidation of side files.
