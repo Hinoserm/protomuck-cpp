@@ -2,9 +2,12 @@ PROTOMUCK DATABASE REDESIGN
 ===========================
 
 Design agreed 2026-08-27, revised same day to the module architecture.
-This document is the authority for the new-database branch.  Where code
-and this document disagree during development, this document wins until
-amended.
+This document is the authority for the database.  Where code and this
+document disagree during development, this document wins until amended.
+
+There is ONE design here, not a history of designs.  When a decision
+changes, this document is rewritten to describe only what is now true;
+superseded mechanisms are deleted, not kept alongside.
 
 
 1. IDENTITY
@@ -28,19 +31,21 @@ amended.
    resolves (like git), and listings display the short form.  Full
    UUIDs are always stored on disk.
 
-   The garbage object type is abolished.  Deleting an object removes it
-   from both indexes and records a tombstone row: uuid, dbref, deleted
+   The garbage object type is abolished.  Deleting an object unlinks it
+   from the uuid index and records a tombstone row: uuid, dbref, deleted
    timestamp, deleting player uuid, and the store revision era at
-   deletion.  Programs holding a deleted object receive an
-   OBJECT_DELETED mufevent.
+   deletion.  The dbref keeps resolving to a dead shell (section 5), so
+   no held pointer or stale ref can dangle.  Programs holding a deleted
+   object are to receive an OBJECT_DELETED mufevent; that event is
+   DEFERRED pending design discussion and is not raised today.
 
    Deletion does NOT remove the object's store file.  The final state
    is flushed at delete time, and the file plus its history survive as
    long as any retained snapshot marker predates the deletion; every
    runtime function and primitive shows the object as deleted
    immediately, but @rollback <deadref>=<rev> resurrects it into its
-   original (never reused) slot as of that revision.  The manifest
-   sweep reclaims the files once no covering marker remains (locked
+   original (never reused) slot as of that revision.  Compaction
+   reclaims the files once no covering marker remains (locked
    snapshots pin them forever), and only then may the tombstone itself
    age out per the @tune retention parameter, from zero to forever,
    default on the order of 90 days.
@@ -117,23 +122,24 @@ amended.
                       traditional paths)
        ~vehicle/...   an individual feature module
 
-   PROPERTIES declares one entry per prop, giving per-prop versioning.
-   MUFPROG stores source inline as an ordered list of lines in its
-   $type/source entry; the whole-entry copy-on-write history covers
-   its versioning.
+   PROPERTIES declares one entry per prop and MUFPROG stores its
+   source inline as an ordered list of lines in one $type/source
+   entry.  Entries are the unit of CHANGE, not of versioning: the
+   object carries a single revision and its journal layers record
+   whichever entries moved (section 7).
 
-   The database versions, dedups, prunes, rolls back, and diffs
-   entries WITHOUT understanding them.  Modules alone know what the
-   keys mean, and rebuild their in-memory state from their entry slice
-   on load or rollback.  No module may define its own file format;
-   this rule is what makes central versioning and module-absent
-   durability possible.
+   The database journals, versions, prunes, and rolls back entries
+   WITHOUT understanding them.  Modules alone know what the keys mean,
+   and rebuild their in-memory state from their entry slice on load or
+   rollback.  No module may define its own file format; this rule is
+   what makes central versioning and module-absent durability
+   possible.
 
 
 4. MODULE DURABILITY
 
    Entries belonging to a module that is not currently loaded are
-   dormant: the database continues to load, carry, version-freeze, and
+   dormant: the database continues to load, carry, journal, and
    re-save them untouched.  The object keeps its attachment record.
    When the module returns, its data is exactly where it was.  Modules
    stamp a schema version inside their namespace so a newer module
@@ -165,10 +171,11 @@ amended.
 
    Operationally: --db-exclude-type NAME boots without that type
    module ("program" is accepted for muf_program).  Container types
-   (room, thing, player) cannot be excluded until the storage flip,
-   because the contents chains still live in their $type data.  Chunk
-   payloads referenced by dormant entries are carried to saves into a
-   fresh root, so a convert with exclusions active loses nothing.
+   (room, thing, player) cannot be excluded, because the containment
+   lists live in their $type data and an absent module would strand
+   every object inside them.  Dormant entries are self-contained
+   values, so a convert with exclusions active carries them into a
+   fresh root intact and loses nothing.
 
 
 5. IN-MEMORY MODEL
@@ -218,8 +225,8 @@ amended.
    One JSON file per object, named by UUID, git-sharded two levels
    deep to keep directories small:
 
-       data/objects/01/8f/018f3a2b-....json      current state
-       data/objects/01/8f/018f3a2b-....hist      append-only history
+       data/objects/01/8f/018f3a2b-....json      base state
+       data/objects/01/8f/018f3a2b-....hist      journal layers
 
    The object file records: the type module name, the list of
    individually attached feature modules, and the entries grouped by
@@ -233,92 +240,52 @@ amended.
    (parmfile.cfg moves into the manifest; help files and logs
    explicitly do NOT move into the database).
 
-   There is exactly ONE store format, and the loader refuses any
-   other format number.  While the design is in the prototype stage
-   there are no compatibility readers between iterations: a store
-   that predates the current shape is rebuilt by re-importing the
-   legacy flat database.  Format-number bumps happen only on explicit
-   authorization.
+   The store format is VERSION 1 and it is the ONLY version.  The
+   loader refuses any other format number outright.  There are no
+   compatibility readers and none will be written while the design is
+   in the prototype stage: when the schema changes, the store is
+   deleted and rebuilt by re-importing the legacy flat database.  The
+   format number is bumped only on explicit authorization, which is
+   what marks the format as stable enough to migrate rather than
+   rebuild.
 
-   Startup reads only the .json files; boot time is independent of
-   retained history.  .hist is read only for rollback or historical
-   queries.  Cold objects have no .hist file at all.
+   Loading reads the .json base and applies whatever layers the
+   .hist holds, so a compacted and an uncompacted object are
+   indistinguishable to the loader.  Cold objects have no .hist file
+   at all, and a freshly compacted one is a bare base again.
 
-   Writes are crash-safe: append history first, then atomically rename
-   the new .json over the old.  A crash between the two leaves a
-   harmless, detectable duplicate.
+   Writes are crash-safe and durable: write, fsync the file, rename,
+   fsync the directory.  A dump appends layers to .hist and commits
+   with the manifest; the .json is rewritten only by compaction.  A
+   reader can never see committed state whose bytes did not reach the
+   platter.
 
    Flat-file support is stripped from the server.  A converter class
    (absorbing the old db_read machinery) performs one-way import of
    the old NeonMuck V2 format, minting UUIDs during load.
 
 
-7. VERSIONING (copy on write)
+7. VERSIONING: THE JOURNAL
 
    One global 64-bit revision counter, incremented by one per
    snapshot, shared by whole-database snapshots and single-object
-   snapshots.  Objects do not have private counters; they have marker
-   lists.  A global snapshot records a marker in the manifest; a
+   snapshots.  A global snapshot records a marker in the manifest; a
    single-object snapshot records a marker only in that object's
-   file.  A marker only covers what is on disk, so a snapshot first
-   flushes dirty state (the whole dirty set for a global snapshot,
-   the one object for a scoped one) before recording the marker.
+   file.
 
-   Every entry is stamped with the revision at which its value took
-   effect.  Writing an entry:
-
-       - identical to current value: write nothing at all.  A program
-         rewriting 10,000 unchanged props inflates nothing.
-       - changed, and no retained snapshot has seen the old value:
-         overwrite in place.
-       - changed, and a retained snapshot references the old value:
-         move the old value to history, stamp the new one.
-
-   History therefore grows with snapshots x entries-actually-changed,
-   never with write volume.
-
-   Deleting an entry writes a tombstone entry at the current rev, so a
-   historical read below that rev still sees it and a current read
-   does not.
-
-   Reading at revision R: newest entry per key with rev <= R.
-
-   Pruning: a history entry is droppable only when no retained marker
-   falls in its lifetime, AND the newest entry below the oldest
-   retained marker is kept per key, so aging out revs cannot orphan a
-   live value.  The manifest sweep applies the same rule to whole
-   deleted objects: their file pair is reclaimed only when no retained
-   marker predates the deletion.
-
-   Retention is time-based on markers via @tune (like 30 days).  A
-   marker can be locked; locked markers never age out.  Use case: lock
-   a snapshot of one program before a risky edit, roll back if needed.
-
-   Only entries are versioned.  Transient module state has no COW and
-   no revs.
-
-
-7.1 THE JOURNAL: LAYERED VERSIONS AND THREADED PERSISTENCE
-
-   STATUS: DESIGNED, NOT IMPLEMENTED.  This subsection is the agreed
-   design; amend it before deviating.
-
-   Firing a snapshot must be cheap and persisting it must happen
-   behind the game.  Fork-based dumping approximated that by letting
-   the kernel copy-on-write the address space; it cannot survive
-   threads, because forking a multithreaded process freezes foreign
-   locks in the child.  This design replaces it, and replaces the
-   synchronous flush that @dump and @snapshot perform today.
-
-
-   THE MODEL: BASE PLUS LAYERS
+   ONE REVISION PER OBJECT, covering every field.  Properties are not
+   special: core fields, type-module fields, feature-module entries
+   and properties all version together under one number, each keyed
+   by its namespaced entry name.  There are no per-entry revision
+   stamps and no per-field version history.
 
    An object's stored state is a base plus a stack of journal layers:
 
        base       the object's full state as of some revision, held
                   in its .json file on disk.  NOT resident in memory.
-       layer N    every change made during era N: key -> new value,
-                  or a removal mark.  Layers stack in era order.
+       layer N    every change made during era N: entry key -> new
+                  value, or a removal mark.  Layers stack in era
+                  order.
        cache      base with every layer applied: the current state.
                   This is the live in-memory object, exactly the
                   structure the server uses today.
@@ -330,19 +297,43 @@ amended.
 
    Writing goes to two places: the cache is mutated as it is today,
    and the change is recorded in the TOP layer.  Recording is a hash
-   insert keyed by entry name; a value written ten thousand times in
-   one era occupies one slot, because the layer holds the latest
-   value per key, not a log of writes.  A write that does not change
-   the value records nothing.
+   insert keyed by entry name, so a value written ten thousand times
+   in one era occupies one slot: the layer holds the latest value per
+   key, not a log of writes.  A write that does not change the value
+   records nothing.  Removing an entry records a removal mark, so a
+   read below that era still sees the old value and a current read
+   does not.
 
    The top layer is therefore also the unsaved set: it replaces the
    OBJECT_CHANGED dirty flag entirely.  @stats counts an object as
    unsaved when its top layer is non-empty.
 
-   One revision number per object, covering every field.  Properties
-   are not special: core fields, type-module fields, feature-module
-   entries and properties all live in the same layer, keyed by their
-   namespaced entry name, and all move together with one rev.
+   History grows with eras x entries-actually-changed, never with
+   write volume.
+
+   Reading at revision R: the base with every layer up to R applied.
+
+   Retention is time-based on markers via @tune (like 30 days).  A
+   marker can be locked; locked markers never age out.  Use case:
+   lock a snapshot of one program before a risky edit, roll back if
+   needed.  Layers a retained marker still needs are kept; the rest
+   merge into the base (see compaction, 7.1).
+
+   Only entries are versioned.  Transient module state has no journal
+   and no revs.
+
+
+7.1 THREADED PERSISTENCE: FIRE, THEN WRITE BEHIND THE GAME
+
+   STATUS: DESIGNED, NOT IMPLEMENTED.  This subsection is the agreed
+   design; amend it before deviating.
+
+   Firing a snapshot must be cheap and persisting it must happen
+   behind the game.  Fork-based dumping approximated that by letting
+   the kernel copy-on-write the address space; it cannot survive
+   threads, because forking a multithreaded process freezes foreign
+   locks in the child.  This design replaces it, and replaces the
+   synchronous flush that @dump and @snapshot perform today.
 
 
    WHY THIS IS THREAD SAFE WITHOUT LOCKS
@@ -469,27 +460,29 @@ amended.
 
 8. MIGRATION AND OPERATIONS
 
-   Development happens on the new-database branch; GinkoMUCK runs that
-   branch as the live test.  The importer converts data/neon.db once;
-   after verification the flat files are retired.
+   Development happens on main; GinkoMUCK runs it as the live test.
+
+   This is VERSION 1 of the store, and it is the only version.  No
+   database predating the current schema is supported: the flat-file
+   converter is the sole import path, and whenever the schema changes
+   during development, Ginko's store is deleted and re-imported from
+   the original flat file (data/neon.db).  That is the migration
+   plan, and it stays the plan until the format is declared stable.
 
    Steps:
-     1. New format working end to end: converter class absorbs the
-        flat-file reader, server loads old format, writes new format,
-        loads and runs from new format thereafter.  The in-memory
-        model temporarily remains the legacy struct; the FILE format
-        is module-shaped from day one so step 2 does not change it.
-     2. Rebuild the in-memory model to DbObject plus modules, in small
-        sections: write new methods, hunt down old call sites,
-        modernize them.  Loop until the legacy struct and union are
-        gone.  Recycling and garbage removal land here.
-     3. Versioning: revision stamps, markers, history files,
-        pruning, @tune retention.
-     4. (with 3) Tombstone table and OBJECT_DELETED event.
-     5. Integration passes discussed case by case: sessions onto the
-        PLAYER module, MUF OBJECT type, tunables fully in manifest,
-        dlopen module delivery, further feature modules (VEHICLE as
-        the model case).
+     1. DONE.  New format end to end: the converter class absorbed the
+        flat-file reader, and the server loads and runs from the store
+        thereafter.
+     2. DONE.  The in-memory model is DbObject plus type and feature
+        modules; the legacy struct payload, its union, and dbref
+        recycling are gone.
+     3. Versioning: markers, rollback, retention, the tombstone
+        table.  DONE except the journal and threaded persistence,
+        which are sections 7 and 7.1.
+     4. Integration passes discussed case by case: MUF OBJECT type
+        and the OBJECT_DELETED event (both discussion-gated),
+        tunables fully in manifest, dlopen module delivery, further
+        feature modules (VEHICLE as the model case).
 
 
 =====================================================================
@@ -501,37 +494,49 @@ branch.  It grows as code lands.  Everything lives in namespace MUCK;
 headers are in src/inc/.
 
 
-Uuid  (Uuid.h, Uuid.cpp)
+UUID  (UUID.h, UUID.cpp)
 
-    Sixteen-byte UUID value type.
+    Sixteen-byte UUID value type.  Acronyms in class, datatype, and
+    function names are fully capitalized; this class sets the pattern.
 
-    Uuid::generate()              mint a fresh version 7 uuid
-    Uuid::parse(text)             canonical 36-char form; nil on error
-    Uuid::tryParse(text, out)     bool form of the above
+    UUID::generate()              mint a fresh version 7 uuid
+    UUID::nil()                   the all-zeros uuid
+    UUID::SIZE                    wire size in bytes (16)
+    UUID::parse(text)             canonical 36-char or bare 32-hex
+                                  form; nil on error.  const char *
+                                  and std::string overloads
+    UUID::tryParse(text, out)     bool form of the above
+    UUID::fromBytes(src)          16 raw bytes in
+    u.toBytes(dst)                16 raw bytes out
+    u.bytes(), u.setBytes(src)    direct access to the raw form
     u.toString()                  "018f3a2b-7c41-7e39-9f2a-..."
     u.shortString(n)              first n hex digits, default 8
     u.matchesPrefix(hex)          git-style prefix test
-    u.isNil()                     all-zero check
+    u.isNil(), explicit bool      emptiness
     ==, !=, <, std::hash          usable as any map key
 
     Version 7 means the top 48 bits are a millisecond timestamp:
-    uuids sort by creation time.  Two uuids minted the same instant
-    share a long prefix, so DISPLAY short forms may need more digits;
-    matchesPrefix handles any length.
+    uuids sort by creation time.  Objects minted in the same
+    millisecond (everything in a bulk import) share a long prefix, so
+    DISPLAY short forms may need more digits; matchesPrefix handles
+    any length.
+
+    A uuid held in flight is a UUID, never a string: strings appear
+    only at the JSON and user-input boundaries.
 
 
 Database identity  (Database.h)
 
-    database().uuidOf(ref)        uuid for a dbref (nil if invalid)
+    database().UUIDOf(ref)        uuid for a dbref (nil if invalid)
     database().refOf(uuid)        dbref for a uuid (NOTHING if none)
-    database().assignUuid(r, u)   bind identity (loader/importer only)
-    database().resolveUuidPrefix(s)
+    database().assignUUID(r, u)   bind identity (loader/importer only)
+    database().resolveUUIDPrefix(s)
                                   unique-prefix lookup; NOTHING or
                                   AMBIGUOUS on failure
 
-    newObject() mints a fresh uuid ALWAYS, including on a recycled
-    garbage slot: a reused dbref is a new object and never inherits
-    the old identity.
+    newObject() mints a fresh uuid and takes the next monotonic
+    dbref.  dbrefs are never reused, so a uuid is bound to its slot
+    for the life of the database.
 
 
 ObjectStore  (ObjectStore.h, ObjectStore.cpp)
@@ -539,33 +544,51 @@ ObjectStore  (ObjectStore.h, ObjectStore.cpp)
     The only database write path.  Layout:
 
         <root>/manifest.json
-        <root>/objects/aa/bb/<uuid>.json
+        <root>/objects/aa/bb/<uuid>.json    base state
+        <root>/objects/aa/bb/<uuid>.hist    journal layers
 
     ObjectStore::isStore(path)    manifest present?
     store().setRoot(path)         bind the data root
     store().saveAll(dirtyOnly)    write manifest + objects; dirtyOnly
-                                  skips objects without OBJECT_CHANGED
-                                  (forced full into a fresh root)
+                                  skips unchanged objects (forced full
+                                  into a fresh root)
     store().loadAll()             read an entire store
-    store().saveObject(ref)       rewrite one object
-    store().removeObject(ref)     delete one object file
+    store().saveObject(ref)       write one object
+    store().removeObject(ref)     delete one object's files outright
+    store().retireObject(ref)     flush a deleted object and return
+                                  the deletion revision; its files
+                                  stay until no marker covers them
+    store().resurrectObject(t, rev, err)
+                                  rebuild a tombstoned object into its
+                                  original slot as of a revision
+    store().snapshotGlobal/snapshotObject/rollbackObject
+    store().globalMarkers/objectMarkers/snapshotSummary
+    store().gcStore()             offline maintenance pass
 
-    Object file schema (format 1):
+    Object file schema:
 
         uuid, dbref, type         identity; type is the type module
                                   name: room, thing, exit, player,
-                                  muf_program (garbage only until the
-                                  legacy allocator dies in step 2)
+                                  muf_program
         modules                   individually attached feature
-                                  modules (empty for now)
-        core                      name, location, owner, flags[4],
-                                  powers[2], ts{...}
-        type_data                 per type: dropto/home/value/pennies/
-                                  password, contents[], exits[],
-                                  dests[], source[]
-        props                     flat array of {n, f, v}: full slash
-                                  path, raw flag word, value typed by
-                                  the flag's type bits
+                                  modules (empty for now: PROPERTIES
+                                  is global and lives in the manifest)
+        entries                   the whole object, as namespaced key
+                                  -> {type, value, flags, rev}:
+
+                                    $core/name, location, owner,
+                                        flags, powers, ts
+                                    $type/dropto, home, value,
+                                        pennies, password, contents,
+                                        exits, dests, source
+                                    /...     properties, keyed by
+                                             their full slash path
+                                    ~name/... feature modules
+
+        markers                   this object's own snapshot markers
+
+    Every key is spelled out: the store lives on compressed
+    filesystems, so abbreviations save nothing.
 
     Encodings and rules:
 
@@ -575,16 +598,17 @@ ObjectStore  (ObjectStore.h, ObjectStore.cpp)
         props       values the flat format never persisted (zero int,
                     empty string, NOTHING ref, TRUE_BOOLEXP lock) are
                     skipped; the compression flag is stripped and
-                    values always stored uncompressed; prop refs stay
-                    dbref integers until the step 2 memory rebuild
-        chains      contents and exits serialize as ordered uuid
+                    values always stored uncompressed; prop refs
+                    serialize as dbref integers
+        lists       contents and exits serialize as ordered uuid
                     lists validated against legacy chain corruption
-                    (location must equal container; one chain
-                    membership per object per save)
-        writes      content to <file>.tmp, then atomic rename
+                    (location must equal container; one membership
+                    per object per save)
+        writes      content to <file>.tmp, fsync, atomic rename,
+                    fsync the directory
 
     Loading is two-phase: phase one creates every object and assigns
-    identity, phase two wires refs, chains, and props (lock props
+    identity, phase two wires refs, containment, and props (lock props
     parse by dbref and need every target to exist).  Phase one must
     leave links NOTHING; phase two only wires.  Do not reorder this.
 
@@ -608,17 +632,16 @@ ProgramStore additions  (ProgramStore.h)
     programs().dropSource(ref)
 
     The in-memory cache is authoritative; the object store serializes
-    it inside the program's file.  muf/<ref>.m is read as a fallback
-    for flat-era installs and refreshed on write for compatibility,
-    and goes away entirely in a later step.
+    it inside the program's file.  There is NO muf/<ref>.m fallback:
+    the flat converter reads that directory once at import and
+    nothing else in the tree touches it.
 
 
 DbObject and modules  (DbObject.h, Modules.h, DbObject.cpp)  [step 2]
 
-    The modernized object model, currently implemented as VIEWS over
-    the legacy struct object so both worlds stay coherent while call
-    sites migrate.  Code written against this API will not change when
-    storage flips inside.
+    The modernized object model.  The storage flip is done: type and
+    feature modules own their own data, and what remains of struct
+    object is the core record embedded in DbObject.
 
     DbObject core:
         obj->uuid(), obj->ref()             identity
@@ -639,11 +662,10 @@ DbObject and modules  (DbObject.h, Modules.h, DbObject.cpp)  [step 2]
                                             invalid)
         database().get(uuid)
         database().Create<Thing>(name, owner)
-                                            typed creation; minimal for
-                                            now, the legacy create
-                                            paths still do per-type
-                                            setup and migrate here in
-                                            later sections
+                                            the single creation
+                                            gatekeeper; module
+                                            constructors own their own
+                                            defaults
 
     Type modules: Room (dropTo), Thing (home, value), Player (home,
     pennies, checkPassword, setPassword), Exit (destinations),
@@ -654,10 +676,10 @@ DbObject and modules  (DbObject.h, Modules.h, DbObject.cpp)  [step 2]
     Feature modules: Properties (getString, getInt, getFloat, getRef,
     setString, setInt, remove, exists), auto-attached to every object.
 
-    Migration pattern for step 2 sections: pick a legacy cluster (a
-    struct field family or free-function group), give the module the
-    method, repoint the call sites, delete the legacy declarations.
-    Loop until the sp union and the raw chains have no readers.
+    Migration pattern, still the rule for whatever legacy remains:
+    pick a cluster (a struct field family or free-function group),
+    give the module the method, repoint the call sites, delete the
+    legacy declarations.
 
 
 ENGINE INTERNALS  (Database.h, Database.cpp)  [step 2 cleanup pass]
@@ -675,7 +697,7 @@ ENGINE INTERNALS  (Database.h, Database.cpp)  [step 2 cleanup pass]
     a DBFETCH in flight is always safe. Capacity is 2^31 refs; a
     20-million-object game uses ~305 chunks (~160MB of pointers).
 
-    uuid index:  unordered_map<Uuid, DbObject*> guarded by the index
+    uuid index:  unordered_map<UUID, DbObject*> guarded by the index
     mutex (cold path).
 
     Threading contract:
@@ -717,11 +739,16 @@ DELETION AND TOMBSTONES  (implemented)
     Database::deleteObject(victim, deleter) is the single deletion
     gatekeeper, called from recycle_object after the object is emptied:
 
-        - removes the object's store file (while the uuid resolves)
-        - records a tombstone: uuid, dbref, deletion time, deleter uuid
+        - flushes the object's final state (while the uuid resolves)
+          and keeps its files for as long as a retained marker covers
+          them, so @rollback can resurrect it
+        - records a tombstone: uuid, dbref, deletion time, deleter
+          uuid, deletion revision
         - retires the uuid from the index
         - marks the shell deleted (isDeleted())
-        - raises the OBJECT_DELETED mufevent carrying the dbref
+
+    The OBJECT_DELETED mufevent is DEFERRED pending design
+    discussion; its broadcast is commented out, not removed.
 
     The slot itself remains a dead shell forever: legacy code sees
     TYPE_GARBAGE (and skips it, as it always has); nothing can ever
@@ -730,14 +757,19 @@ DELETION AND TOMBSTONES  (implemented)
     Tombstones persist in the manifest with the deletion revision
     (uuid, dbref, deleted_at, deleted_by, deleted_rev) and age out
     per the tombstone_retention @tune parameter (days; -1 keeps
-    forever, 0 keeps none, default 90). The sweep at manifest write
-    first reclaims a deleted object's file pair once no retained
-    marker predates its deletion; a tombstone may only age out after
-    its files are gone, so a covered file can never be orphaned into
-    loading as a live object.
+    forever, 0 keeps none, default 90). Reclaim runs at manifest
+    write today and moves into compaction when 7.1 lands; either way
+    the rule is the same: a deleted object's file pair goes only once
+    no retained marker predates its deletion, and a tombstone may
+    only age out after its files are gone, so a covered file can
+    never be orphaned into loading as a live object.
 
 
 VERSIONING, IMPLEMENTED  (@snapshot, @rollback, -storegc)
+
+    Sections 7 and 7.1 are the design.  Not yet built: firing is
+    still synchronous and change is still found by diffing at save
+    time.  Nothing a wizard types changes when the journal lands.
 
     @snapshot                global snapshot (arch only)
     @snapshot =label         labeled (note the space; the command
@@ -752,21 +784,13 @@ VERSIONING, IMPLEMENTED  (@snapshot, @rollback, -storegc)
     @rollback #deadref=rev   resurrect a recycled object into its
                              original slot as of that revision
 
-    A snapshot flushes dirty state before recording its marker, so
-    the marker covers the world as it stands. Entries carry the rev
-    at which their value took effect; a marker captures the current
-    era and advances it, so writes after a snapshot stamp the next
-    era and a read at the marker excludes them. History lives in
-    per-object .hist files (JSON lines with the value and its
-    [from, to) lifetime), written only when a retained marker saw the
-    old value. Unlocked markers age out per the snapshot_retention
+    A marker captures the current era and advances it, so writes
+    after a snapshot belong to the next era and a read at the marker
+    excludes them. History lives in per-object .hist files, one JSON
+    object per line, each carrying a value and its [from, to)
+    lifetime. Unlocked markers age out per the snapshot_retention
     @tune parameter (days; -1 forever). Examine shows the rollback
     points: "Snapshots: N available (oldest date)".
-
-    Every key in the store is spelled out (the store sits on
-    compressed filesystems, so abbreviations save nothing): entries
-    are {type, value, flags, rev} with type tags string, int, float,
-    ref, list; history records add key, from, to.
 
     protomuck -storegc <store> <store> walks the store at maintenance
     time and drops history entries no retained marker can see.
@@ -797,10 +821,9 @@ STEP 2 BURNDOWN STATE  (updated as the loop advances)
                            editor program, insert mode, read block,
                            ignore cache) lives in PlayerSession on the
                            PLAYER module, reached with
-                           MUCK::playerSession(ref). The union fields
-                           for session state are deleted; sp.player
-                           holds only home, pennies, password until the
-                           storage flip. Session state is memory-only
+                           MUCK::playerSession(ref). Home, pennies,
+                           and the password hash are owned by the
+                           PLAYER module. Session state is memory-only
                            and never serialized.
 
         sp.program  DONE   Interpreter and editor state (compiled code,
@@ -851,22 +874,25 @@ STEP 2 BURNDOWN STATE  (updated as the loop advances)
 
     Step 2 is COMPLETE.
 
-    REMAINING REQUIREMENTS (added 2026-08-28):
-
-    Properties as an optional module. The property system is
-    redesigned as a first-class OPTIONAL feature module with the
-    standard dormancy guarantee: a MUCK booted without the module
+    Properties as an optional module: DONE. The property system is a
+    first-class OPTIONAL feature module with the standard dormancy
+    guarantee (a MUCK booted with --db-exclude-module properties
     keeps every property intact across save, snapshot, and reload,
-    with the data unreachable until the module returns. The engine
-    is a bespoke high-performance structure, 100% compatible with
-    all existing MUF code, and carries the DISKBASE concept forward
-    as an optional value-residency mode (metadata always resident,
-    values fetchable on demand). Full design: docs/PROPERTIES.txt.
+    unreachable until the module returns), built on a bespoke
+    adaptive radix tree that is 100% compatible with existing MUF
+    code. Full design: docs/PROPERTIES.txt.
+
+    REMAINING WORK:
+
+    The journal and threaded persistence (sections 7 and 7.1).
 
     Editor text off struct line. The MUF editor and compiler work
     on std::vector<std::string> directly; the hand-managed struct
     line linked list (newLine, free_prog_text, the line-splice code
     in the editor) is abolished. ProgramRuntime.first dies with it.
+
+    Discussion-gated, do not start without asking: the MUF OBJECT
+    stack type and the OBJECT_DELETED event.
 
     Site conversion idioms (use these, keep them consistent):
 
@@ -876,6 +902,5 @@ STEP 2 BURNDOWN STATE  (updated as the loop advances)
         expression contexts use an immediately invoked lambda; see
         p_db.cpp for examples.
 
-    Raw union access in an object-construction sequence is permitted
-    until Create<T> absorbs the legacy create paths; tag such lines
-    with a mid-construction comment.
+    There is no raw type payload left to access: the sp union is
+    deleted and every creation path runs through Create<T>.
