@@ -95,7 +95,7 @@ Notifying Prims (I/O):
   NOTIFY              NOTIFY_EXCLUDE              NOTIFY_EXCEPT
   ANSI_NOTIFY         ANSI_NOTIFY_EXCLUDE         ANSI_NOTIFY_EXCEPT
   NOTIFY_HTML         NOTIFY_HTML_EXCLUDE         NOTIFY_HTML_EXCEPT
-  NOTIFY_HTML_NOCR    NOTIFY_HTML_EXCLUDE_NOCR    HTML_NOCR_EXCEPT
+  HTML_NOCR           HTML_EXCLUDE_NOCR           HTML_NOCR_EXCEPT
   NOTIFY_DESCRIPTOR   ARRAY_NOTIFY                DESCRFLUSH
   STOPMIDI            PLAYMIDI                    COMMANDTEXT
   ARRAY_ANSI_NOTIFY   ARRAY_NOTIFY_HTML           ANSI_NOTIFY_DESCRIPTOR
@@ -187,14 +187,14 @@ ARRAY_NINTERSECT    ARRAY_INTERSECT     ARRAY_NDIFF         ARRAY_DIFF
 ARRAY_JOIN          ARRAY_REVERSE       DESCR_ARRAY         DICTIONARY?
 ARRAY_GET_PROPDIRS  ARRAY_GET_PROPVALS  ARRAY_PUT_PROPVALS  ARRAY_NOTIFY
 ARRAY_GET_PROPLIST  ARRAY_PUT_PROPLIST  ARRAY_INSERTITEM    ARRAY_ANSI_NOTIFY
-ARRAY_GET_REFLIST   ARRAY_PUT_REFLIST   ARRAY_JOIN          ARRAY_NOTIFY_HTML
+ARRAY_GET_REFLIST   ARRAY_PUT_REFLIST   EXPLODE_ARRAY       ARRAY_NOTIFY_HTML
 CONTENTS_ARRAY      EXITS_ARRAY         ARRAY_FINDVAL       FIND_ARRAY
 ENTRANCES_ARRAY     ONLINE_ARRAY        ARRAY_EXCLUDEVAL    REGFIND_ARRAY
 GETOBJINFO          GETDESCRINFO        ARRAY_EXTRACT       ARRAY_FILTER_FLAGS
 ARRAY_MATCHVAL      ARRAY_MATCHKEY      ARRAY_FILTER_SMART  ARRAY_FILTER_PROP
 ARRAY_REGMATCHVAL   ARRAY_REGMATCHKEY   ARRAY_REGSUB        ARRAY_REGFILTER_PROP
 ARRAY_CUT           ARRAY_COMPARE       ARRAY_SORT_INDEXED  ARRAY_NESTED_GET
-ARRAY_SUM           ARRAY_GETLINKS      ARRAY_FMTSTRINGS    ARRAY_NESTED_SET
+ARRAY_SUM           GETLINKS_ARRAY      ARRAY_FMTSTRINGS    ARRAY_NESTED_SET
 ARRAY_STRING_FRAGMENT                                       ARRAY_NESTED_DEL
 
             }ARRAY     }LIST     }DICT     }JOIN    }CAT      }TELL    
@@ -834,7 +834,7 @@ performed where n1 is a variable type.  This is mainly useful in
 calculating an offset for a variable array. + and - may also be
 performed on dbrefs.
 ~
-LOGICAL OPERATORS|<|>|<=|>=|=|!=|LESS THAN|GREATER THAN|EQUALS|EQUAL|NOT EQUALS|NOT EQUAL
+COMPARISON OPERATORS|RELATIONAL OPERATORS|<|>|<=|>=|=|!=|LESS THAN|GREATER THAN|EQUALS|EQUAL|NOT EQUALS|NOT EQUAL
 
 < > = != <= >= ( n1 n2 -- i )
 --------------------------
@@ -3654,7 +3654,7 @@ $echo <string>
 
 Type 'man dir2' for more directives and 'man dir list' for a listing.
 ~
-DIR2|DIRECTIVES2|DIRECTIVE2|$IFDEF|$IFNDEF|IFDEF|IFNDEF|VERSION|__VERSION
+DIR2|DIRECTIVES2|DIRECTIVE2|$IFDEF|$IFNDEF|IFDEF|IFNDEF|__VERSION|__NEON|__PROTO
 
 __version
   A pre$defined macro that contains the current server version.
@@ -3780,7 +3780,7 @@ $cleardefs [ALL]
 
 See 'man dir7' for more directives and 'man dir list' for a listing.
 ~~~~~
-|DIR7|DIRECTIVES7|$ifbeta|$ifalpha|$ifver|$iflibver|$ifauthor|$iflib|$ifcancall
+DIR7|DIRECTIVES7|$ifbeta|$ifalpha|$ifver|$iflibver|$ifauthor|$iflib|$ifcancall
 Note: In all cases, you can replace <library/prog dbref> with the word: this
       to indicate the program being compiled. These are all $if $else $endif
       constructions. Refer to $ifdef $else $endif for details on usage.
@@ -3802,6 +3802,7 @@ Some special defines that can be checked via $ifdef:
     HAVE_MUF_EDIT_PRIMS - If $ifdef'd, means the MUF editing prims are compiled.
     HAVE_PCRE           - If $ifdef'd, means the regexp prims are compiled in.
     HAVE_IGNORES        - If $ifdef'd, means the ignore prims are compiled in.
+    HAVE_JSON           - If $ifdef'd, means JSON support is compiled in.
 
 See 'man dir8' for more information on directives.
 
@@ -4267,7 +4268,7 @@ _look/  = This propqueue tends to be handled by MUF look front ends, and
 
 See: PROPQUEUES5 for additional propqueues.
 ~~~~
-PROPQUEUES5|PROPQUEUE5|LOGIN|DISCLOGIN|DUMPWARN|@DUMPWARN|DUMP|@DUMP|@SHUTDOWN
+PROPQUEUES5|PROPQUEUE5|LOGIN|DISCLOGIN|DUMPWARN|@DUMPWARN|@DUMP|@SHUTDOWN
 
 @login = Called when a connection is made to the login screen. The initial
         argument is 'Login', command @ is 'Queued event.', trig is #0, 
@@ -6005,14 +6006,14 @@ ARRAY_NINTERSECT    ARRAY_INTERSECT     ARRAY_NDIFF         ARRAY_DIFF
 ARRAY_JOIN          ARRAY_REVERSE       DESCR_ARRAY         DICTIONARY?
 ARRAY_GET_PROPDIRS  ARRAY_GET_PROPVALS  ARRAY_PUT_PROPVALS  ARRAY_NOTIFY
 ARRAY_GET_PROPLIST  ARRAY_PUT_PROPLIST  ARRAY_INSERTITEM    ARRAY_ANSI_NOTIFY
-ARRAY_GET_REFLIST   ARRAY_PUT_REFLIST   ARRAY_JOIN          ARRAY_NOTIFY_HTML
+ARRAY_GET_REFLIST   ARRAY_PUT_REFLIST   EXPLODE_ARRAY       ARRAY_NOTIFY_HTML
 CONTENTS_ARRAY      EXITS_ARRAY         ARRAY_FINDVAL       FIND_ARRAY
 ENTRANCES_ARRAY     ONLINE_ARRAY        ARRAY_EXCLUDEVAL    REGFIND_ARRAY
 GETOBJINFO          GETDESCRINFO        ARRAY_EXTRACT       ARRAY_FILTER_FLAGS
 ARRAY_MATCHVAL      ARRAY_MATCHKEY      ARRAY_FILTER_SMART  ARRAY_FILTER_PROP
 ARRAY_REGMATCHVAL   ARRAY_REGMATCHKEY   ARRAY_REGSUB        ARRAY_REGFILTER_PROP
 ARRAY_CUT           ARRAY_COMPARE       ARRAY_SORT_INDEXED  ARRAY_NESTED_GET
-ARRAY_SUM           ARRAY_GETLINKS      ARRAY_FMTSTRINGS    ARRAY_NESTED_SET
+ARRAY_SUM           GETLINKS_ARRAY      ARRAY_FMTSTRINGS    ARRAY_NESTED_SET
 ARRAY_STRING_FRAGMENT                                       ARRAY_NESTED_DEL
 
             }ARRAY     }LIST     }DICT     }JOIN     }CAT     }TELL    
@@ -6118,7 +6119,7 @@ dbref numbers.
 
 See: ARRAY PRIMS
 ~
-}DICT|}LIST|}JOIN|}ARRAY
+}JOIN|}ARRAY
 ------------
 }dict ( { x1 x2 x3 ... xn -- dict )
 }list ( { x1 x2 x3 ... xn -- array )
@@ -6713,6 +6714,7 @@ Returns 1 if the item on the top of the stack is a
 dictionary style array.
 
 See: ARRAY PRIMS, ARRAY?
+~~~~
 }DICT
 
 }dict ( mark @n ?n ... @1 ?1 -- dict )
@@ -7160,7 +7162,34 @@ the current seed string. Until they are implemented, use RANDOM or
 FRAND instead.
 
 See: RANDOM, FRAND
-~~~
+~~~~
+DEG2RAD|RAD2DEG
+
+Deg2Rad ( n1 -- f )
+Rad2Deg ( n1 -- f )
+-------------------
+Level: M1 Apprentice
+n1 = An angle.
+f  = The same angle in the other unit.
+
+Built in defines for converting angles between degrees and radians.
+Deg2Rad expands to "pi 180 / *" and Rad2Deg to "180 pi / *". The
+trigonometric prims all work in radians.
+
+See: SIN, COS, TAN, ATAN2, PI
+~~~~
+MAX_VARIABLE_COUNT
+
+max_variable_count ( -- i )
+---------------------------
+Level: M1 Apprentice
+i = The variable slot limit.
+
+A built in define that expands to the maximum number of variables of
+one kind (global, local, or static) a program may declare.
+
+See: VAR, LVAR, SVAR, VARIABLE
+~~~~
 TOKENSPLIT
            
 tokensplit ( s1 s2 s3 -- s4 s5 s6 )
@@ -10781,7 +10810,7 @@ For an example, see: LABELS2
  
 See: JMP, EXIT, ADDRESS
 ~~~~~
-LABELS2|MUF LABELS2|LABEL2|MUFLABELS2|LABELS2|LABEL2
+LABELS2|MUF LABELS2|LABEL2|MUFLABELS2
 
 MUF Labels, example
 -------------------
@@ -11080,6 +11109,9 @@ Refer to their individual manpages for which options they support.
                      always be matched against at least twice unless the string
                      is not found at all.)
     REG_EXTENDED    (Allows PCRE comments, etc.  See PCRE docs.)
+    REG_CAPTURE     (REGMATCH only: allow plain parenthesis to capture.
+                     By default REGMATCH treats all parenthesis as
+                     grouping only, for speed.)
 
 Options are combined through simple addition. Example:
 
@@ -11299,14 +11331,15 @@ is suitable for use as a more precise alternative to smatch.
 
   Since this primitive is only designed for matching, it automatically assumes
 that any parenthesis in the match pattern were provided for grouping purposes
-only.  There is no need to optimize the pattern further.
+only.  There is no need to optimize the pattern further.  Pass the
+REG_CAPTURE flag to disable this and treat parenthesis normally.
 
   If you intend to match a large number of strings against the same pattern,
 using ARRAY_REGMATCHVAL combined with an array of strings is more efficient
 due to the additional optimizations it performs.
   
 Supported PCRE option flags:
-    REG_NONE, REG_ICASE, REG_EXTENDED
+    REG_NONE, REG_ICASE, REG_EXTENDED, REG_CAPTURE
 
 See: REGULAR EXPRESSIONS, PCRE FLAGS, ARRAY_REGMATCHVAL
 ~~~

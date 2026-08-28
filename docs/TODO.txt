@@ -27,6 +27,13 @@ Known code bugs found during the 2026-08-27 man.txt audit
 
 * compile.cpp: SSL_SOCKETS / SSL_SOCKOPEN defines are inserted twice.
 
+* compile.cpp: the SSL_SOCKOPEN define expands to SSL_NBSOCKOPEN,
+  which does not exist as a prim or define anywhere. Any program
+  using SSL_SOCKOPEN fails to compile with "Unrecognized word
+  SSL_NBSOCKOPEN". Either implement an SSL outbound-connect prim or
+  remove the define. Deliberately left undocumented in man.txt until
+  resolved.
+
 * p_connects.cpp prim_descrtype: local "p" is uninitialized when the
   descriptor type matches no known CT_* constant; strcpy(dtype, p)
   is then undefined behavior.
