@@ -233,6 +233,13 @@ amended.
    (parmfile.cfg moves into the manifest; help files and logs
    explicitly do NOT move into the database).
 
+   There is exactly ONE store format, and the loader refuses any
+   other format number.  While the design is in the prototype stage
+   there are no compatibility readers between iterations: a store
+   that predates the current shape is rebuilt by re-importing the
+   legacy flat database.  Format-number bumps happen only on explicit
+   authorization.
+
    Startup reads only the .json files; boot time is independent of
    retained history.  .hist is read only for rollback or historical
    queries.  Cold objects have no .hist file at all.
@@ -253,7 +260,9 @@ amended.
    snapshots.  Objects do not have private counters; they have marker
    lists.  A global snapshot records a marker in the manifest; a
    single-object snapshot records a marker only in that object's
-   file.  Nothing ever walks the database to snapshot.
+   file.  A marker only covers what is on disk, so a snapshot first
+   flushes dirty state (the whole dirty set for a global snapshot,
+   the one object for a scoped one) before recording the marker.
 
    Every entry is stamped with the revision at which its value took
    effect.  Writing an entry:
@@ -549,29 +558,46 @@ DELETION AND TOMBSTONES  (implemented)
     TYPE_GARBAGE (and skips it, as it always has); nothing can ever
     occupy that dbref again.
 
-    Tombstones persist in the manifest and age out per the
-    tombstone_retention @tune parameter (days; -1 keeps forever, 0
-    keeps none, default 90). Pruning happens at manifest write.
+    Tombstones persist in the manifest with the deletion revision
+    (uuid, dbref, deleted_at, deleted_by, deleted_rev) and age out
+    per the tombstone_retention @tune parameter (days; -1 keeps
+    forever, 0 keeps none, default 90). The sweep at manifest write
+    first reclaims a deleted object's file pair once no retained
+    marker predates its deletion; a tombstone may only age out after
+    its files are gone, so a covered file can never be orphaned into
+    loading as a live object.
 
 
 VERSIONING, IMPLEMENTED  (@snapshot, @rollback, -storegc)
 
     @snapshot                global snapshot (arch only)
-    @snapshot=label          labeled
+    @snapshot =label         labeled (note the space; the command
+                             parser needs a left-hand argument slot)
     @snapshot obj=label      one object
     @snapshot obj=lbl!lock   locked marker: never ages out
     @snapshot #list          list global markers
-    @snapshot obj=#list      list an object's markers
+    @snapshot obj=#list      list an object's markers (works on a
+                             dead shell through its tombstone)
     @rollback obj=rev        restore name, props, program source as of
                              that revision (containment stays live)
+    @rollback #deadref=rev   resurrect a recycled object into its
+                             original slot as of that revision
 
-    Entries carry the rev at which their value took effect; a marker
-    captures the current era and advances it, so writes after a
-    snapshot stamp the next era and a read at the marker excludes
-    them. History lives in per-object .hist files (JSON lines with
-    the value and its [from, to) lifetime), written only when a
-    retained marker saw the old value. Unlocked markers age out per
-    the snapshot_retention @tune parameter (days; -1 forever).
+    A snapshot flushes dirty state before recording its marker, so
+    the marker covers the world as it stands. Entries carry the rev
+    at which their value took effect; a marker captures the current
+    era and advances it, so writes after a snapshot stamp the next
+    era and a read at the marker excludes them. History lives in
+    per-object .hist files (JSON lines with the value and its
+    [from, to) lifetime), written only when a retained marker saw the
+    old value. Unlocked markers age out per the snapshot_retention
+    @tune parameter (days; -1 forever). Examine shows the rollback
+    points: "Snapshots: N available (oldest date)".
+
+    Every key in the store is spelled out (the store sits on
+    compressed filesystems, so abbreviations save nothing): entries
+    are {type, value, flags, rev} with type tags string, int, float,
+    ref, list; history records add key, from, to.
 
     protomuck -storegc <store> <store> walks the store at maintenance
     time and drops history entries no retained marker can see.
