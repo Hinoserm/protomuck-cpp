@@ -844,24 +844,10 @@ main(int argc, char **argv)
 #endif
 
         if (restart_flag) {
-            char portlist[BUFFER_LEN];
-            char numbuf[16];
-
-            portlist[0] = '\0';
-            for (i = 0; i < numsocks; i++) {
-                if ((listener_port[i] != tp_textport)
-#ifdef NEWHTTPD                 /* hinoserm */
-                    && (listener_port[i] != tp_wwwport) /* hinoserm */
-#endif /* hinoserm */
-                    && (listener_port[i] != tp_puebloport)) {
-                    sprintf(numbuf, "%d", listener_port[i]);
-                    if (*portlist) {
-                        strcat(portlist, " ");
-                    }
-                    strcat(portlist, numbuf);
-                }
-            }
-            execl("restart", "restart", portlist, (char *) 0);
+            /* The restart script owns startup: store paths are baked in
+             * and listener ports come from parmfile.cfg, so the legacy
+             * portlist argument is gone. */
+            execl("restart", "restart", (char *) 0);
         }
     }
 
