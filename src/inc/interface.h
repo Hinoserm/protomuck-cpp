@@ -267,7 +267,7 @@ extern char *time_format_2(time_t dt);
 extern int msec_diff(struct timeval now, struct timeval then);
 extern void pboot(int c);
 extern void pdboot(int c);
-extern void pnotify(int c, char *outstr);
+extern void pnotify(int c, const char *outstr);
 extern int pset_idletime(dbref player, int idle_time);
 extern int pdescr(int c);
 extern int pdescrcount(void);

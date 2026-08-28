@@ -33,7 +33,7 @@ disassemble(dbref player, dbref program)
                 sprintf(buf, "%d: (line %d) MARK", i, curr->line);
                 break;
             case PROG_STRING:
-                sprintf(buf, "%d: (line %d) STRING: \"%s\"", i, curr->line, curr->data.string ? curr->data.string->data : "");
+                sprintf(buf, "%d: (line %d) STRING: \"%s\"", i, curr->line, curr->data.string ? curr->data.string->data.c_str() : "");
                 break;
             case PROG_ARRAY:
                 sprintf(buf, "%d: (line %d) ARRAY: %d items", i, curr->line, curr->data.array ? curr->data.array->items : 0);

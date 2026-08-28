@@ -50,7 +50,7 @@ insttotext(struct frame *fr, int lev, struct inst *theinst, char *buffer, int bu
             char *obuf = new char[strmax+1];
             bool truncated = false;
 
-            size_t len = escapestr(obuf, strmax+1, theinst->data.string->data, theinst->data.string->length, &truncated);
+            size_t len = escapestr(obuf, strmax+1, theinst->data.string->data.c_str(), theinst->data.string->length(), &truncated);
 
             //sprintf(buffer, "\"%1.*s", (len), obuf);
             //sprintf(buffer, "\"%1.*s", len - truncated, obuf);

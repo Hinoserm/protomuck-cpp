@@ -17,7 +17,7 @@ typedef void * voidptr;
 #define UPCASE(x) (toupper(x))
 #define DOWNCASE(x) (tolower(x))
 
-#define DoNullInd(x) ((x) ? (x) -> data : "")
+#define DoNullInd(x) ((x) ? (x)->data.c_str() : "")
   
 extern void do_abort_silent(struct frame *fr);
 

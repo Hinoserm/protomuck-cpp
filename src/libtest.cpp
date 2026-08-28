@@ -394,7 +394,7 @@ __prim_notify_descriptor_nocr(PRIM_PROTOTYPE)
         return;
     }
     if (oper1->data.string) {
-        strcpy(buf, oper1->data.string->data);
+        strcpy(buf, oper1->data.string->data.c_str());
         notify_descriptor_raw(oper2->data.number, buf, strlen(buf) + 1);
     }
     CLEAR(oper1);

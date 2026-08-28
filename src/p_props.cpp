@@ -69,21 +69,21 @@ prim_getpropfval(PRIM_PROTOTYPE)
         abort_interp("Non-object argument (1)");
     CHECKREMOTE(oper[1].data.objref);
     {
-        char *type;
+        const char *type;
 
-        type = oper[0].data.string->data;
+        type = oper[0].data.string->data.c_str();
         while ((type = index(type, PROPDIR_DELIMITER)))
             if (!(*(++type)))
                 abort_interp("Cannot access a propdir directly.");
     }
 
-    if (!prop_read_perms(ProgUID, oper[1].data.objref, oper[0].data.string->data, mlev))
+    if (!prop_read_perms(ProgUID, oper[1].data.objref, oper[0].data.string->data.c_str(), mlev))
         abort_interp(tp_noperm_mesg);
 
     {
         char type[BUFFER_LEN];
 
-        strcpy(type, oper[0].data.string->data);
+        strcpy(type, oper[0].data.string->data.c_str());
         fresult = get_property_fvalue(oper[1].data.objref, type);
 
 #ifdef LOG_PROPS
@@ -111,21 +111,21 @@ prim_getpropval(PRIM_PROTOTYPE)
         abort_interp("Non-object argument (1)");
     CHECKREMOTE(oper[1].data.objref);
     {
-        char *type;
+        const char *type;
 
-        type = oper[0].data.string->data;
+        type = oper[0].data.string->data.c_str();
         while ((type = index(type, PROPDIR_DELIMITER)))
             if (!(*(++type)))
                 abort_interp("Cannot access a propdir directly");
     }
 
-    if (!prop_read_perms(ProgUID, oper[1].data.objref, oper[0].data.string->data, mlev))
+    if (!prop_read_perms(ProgUID, oper[1].data.objref, oper[0].data.string->data.c_str(), mlev))
         abort_interp(tp_noperm_mesg);
 
     {
         char type[BUFFER_LEN];
 
-        strcpy(type, oper[0].data.string->data);
+        strcpy(type, oper[0].data.string->data.c_str());
         result = get_property_value(oper[1].data.objref, type);
 
 #ifdef LOG_PROPS
@@ -155,17 +155,17 @@ prim_getprop(PRIM_PROTOTYPE)
     CHECKREMOTE(oper[1].data.objref);
     {
         char type[BUFFER_LEN];
-        char *tmpptr;
+        const char *tmpptr;
 
-        tmpptr = oper[0].data.string->data;
+        tmpptr = oper[0].data.string->data.c_str();
         while ((tmpptr = index(tmpptr, PROPDIR_DELIMITER)))
             if (!(*(++tmpptr)))
                 abort_interp("Cannot access a propdir directly");
 
-        if (!prop_read_perms(ProgUID, oper[1].data.objref, oper[0].data.string->data, mlev))
+        if (!prop_read_perms(ProgUID, oper[1].data.objref, oper[0].data.string->data.c_str(), mlev))
             abort_interp(tp_noperm_mesg);
 
-        strcpy(type, oper[0].data.string->data);
+        strcpy(type, oper[0].data.string->data.c_str());
         obj2 = oper[1].data.objref;
         prptr = get_property(obj2, type);
 
@@ -230,18 +230,18 @@ prim_getpropstr(PRIM_PROTOTYPE)
     CHECKREMOTE(oper[1].data.objref);
     {
         char type[BUFFER_LEN];
-        char *tmpptr;
+        const char *tmpptr;
         PropPtr ptr;
 
-        tmpptr = oper[0].data.string->data;
+        tmpptr = oper[0].data.string->data.c_str();
         while ((tmpptr = index(tmpptr, PROPDIR_DELIMITER)))
             if (!(*(++tmpptr)))
                 abort_interp("Cannot access a propdir directly");
 
-        if (!prop_read_perms(ProgUID, oper[1].data.objref, oper[0].data.string->data, mlev))
+        if (!prop_read_perms(ProgUID, oper[1].data.objref, oper[0].data.string->data.c_str(), mlev))
             abort_interp(tp_noperm_mesg);
 
-        strcpy(type, oper[0].data.string->data);
+        strcpy(type, oper[0].data.string->data.c_str());
         ptr = get_property(oper[1].data.objref, type);
         if (!ptr) {
             temp = "";
@@ -344,20 +344,20 @@ prim_envprop(PRIM_PROTOTYPE)
         abort_interp("Non-object argument (1)");
     CHECKREMOTE(oper[1].data.objref);
     {
-        char *type;
+        const char *type;
         char tname[BUFFER_LEN];
         dbref what, ref;
         PropPtr ptr;
 
-        type = oper[0].data.string->data;
+        type = oper[0].data.string->data.c_str();
         while ((type = index(type, PROPDIR_DELIMITER)))
             if (!(*(++type)))
                 abort_interp("Cannot access a propdir directly");
-        strcpy(tname, oper[0].data.string->data);
+        strcpy(tname, oper[0].data.string->data.c_str());
         what = oper[1].data.objref;
         ptr = envprop(&what, tname, 0);
         if (what != NOTHING) {
-            if (!prop_read_perms(ProgUID, what, oper[0].data.string->data, mlev))
+            if (!prop_read_perms(ProgUID, what, oper[0].data.string->data.c_str(), mlev))
                 abort_interp(tp_noperm_mesg);
         }
         PushObject(what);
@@ -415,18 +415,18 @@ prim_envpropstr(PRIM_PROTOTYPE)
         abort_interp("Non-object argument (1)");
     CHECKREMOTE(oper[1].data.objref);
     {
-        char *type;
+        const char *type;
         char tname[BUFFER_LEN];
         dbref what;
         PropPtr ptr;
         const char *temp;
         char buf[BUFFER_LEN];
 
-        type = oper[0].data.string->data;
+        type = oper[0].data.string->data.c_str();
         while ((type = index(type, PROPDIR_DELIMITER)))
             if (!(*(++type)))
                 abort_interp("Cannot access a propdir directly");
-        strcpy(tname, oper[0].data.string->data);
+        strcpy(tname, oper[0].data.string->data.c_str());
         what = oper[1].data.objref;
         ptr = envprop(&what, tname, 0);
         if (!ptr) {
@@ -467,7 +467,7 @@ prim_envpropstr(PRIM_PROTOTYPE)
 #endif
 
         if (what != NOTHING) {
-            if (!prop_read_perms(ProgUID, what, oper[0].data.string->data, mlev))
+            if (!prop_read_perms(ProgUID, what, oper[0].data.string->data.c_str(), mlev))
                 abort_interp(tp_noperm_mesg);
             /* if (Typeof(what) != TYPE_PLAYER)
              *     ts_lastuseobject(what); */
@@ -499,30 +499,30 @@ prim_setprop(PRIM_PROTOTYPE)
     if ((mlev < LM2) && (!permissions(mlev, ProgUID, oper[2].data.objref)))
         abort_interp(tp_noperm_mesg);
 
-    if (!prop_write_perms(ProgUID, oper[2].data.objref, oper[1].data.string->data, mlev))
+    if (!prop_write_perms(ProgUID, oper[2].data.objref, oper[1].data.string->data.c_str(), mlev))
         abort_interp(tp_noperm_mesg);
 
     {
-        char *tmpe;
+        const char *tmpe;
         char tname[BUFFER_LEN];
 
-        tmpe = oper[1].data.string->data;
+        tmpe = oper[1].data.string->data.c_str();
         while (*tmpe && *tmpe != '\r' && *tmpe != ':' && *tmpe != '\n')
             tmpe++;
         if (*tmpe)
             abort_interp("Illegal propname");
 
-        tmpe = oper[1].data.string->data;
+        tmpe = oper[1].data.string->data.c_str();
         while ((tmpe = index(tmpe, PROPDIR_DELIMITER)))
             if (!(*(++tmpe)))
                 abort_interp("Cannot access a propdir directly");
 
-        strcpy(tname, oper[1].data.string->data);
+        strcpy(tname, oper[1].data.string->data.c_str());
 
         switch (oper[0].type) {
             case PROG_STRING:
                 pdat.flags = PROP_STRTYP;
-                pdat.data.str = oper[0].data.string ? oper[0].data.string->data : NULL;
+                pdat.data.str = oper[0].data.string ? oper[0].data.string->data.c_str() : NULL;
                 break;
             case PROG_INTEGER:
                 pdat.flags = PROP_INTTYP;
@@ -570,28 +570,28 @@ prim_addprop(PRIM_PROTOTYPE)
     if ((mlev < LM2) && (!permissions(mlev, ProgUID, oper[3].data.objref)))
         abort_interp(tp_noperm_mesg);
 
-    if (!prop_write_perms(ProgUID, oper[3].data.objref, oper[2].data.string->data, mlev))
+    if (!prop_write_perms(ProgUID, oper[3].data.objref, oper[2].data.string->data.c_str(), mlev))
         abort_interp(tp_noperm_mesg);
 
     {
         const char *temp;
-        char *tmpe;
+        const char *tmpe;
         char tname[BUFFER_LEN];
 
-        temp = (oper[1].data.string ? oper[1].data.string->data : 0);
-        tmpe = oper[2].data.string->data;
+        temp = (oper[1].data.string ? oper[1].data.string->data.c_str() : 0);
+        tmpe = oper[2].data.string->data.c_str();
         while (*tmpe && *tmpe != '\r')
             tmpe++;
         if (*tmpe)
             abort_interp("CRs not allowed in propname");
 
-        tmpe = oper[2].data.string->data;
+        tmpe = oper[2].data.string->data.c_str();
 
         while ((tmpe = index(tmpe, PROPDIR_DELIMITER)))
             if (!(*(++tmpe)))
                 abort_interp("Cannot access a propdir directly");
 
-        strcpy(tname, oper[2].data.string->data);
+        strcpy(tname, oper[2].data.string->data.c_str());
 
         /* if ((temp) || (oper[0].data.number)) */
         {
@@ -626,7 +626,7 @@ prim_nextprop(PRIM_PROTOTYPE)
 
     ref = oper[1].data.objref;
     (void) strcpy(buf, ((oper[0].data.string)
-                        && (oper[0].data.string->data)) ? oper[0].data.string->data : "");
+                        && (oper[0].data.string->data.c_str())) ? oper[0].data.string->data.c_str() : "");
     {
         char *tmpname;
 
@@ -673,7 +673,7 @@ prim_propdirp(PRIM_PROTOTYPE)
     if (!oper[0].data.string)
         abort_interp("Null string not allowed (2)");
     ref = oper[1].data.objref;
-    (void) strcpy(buf, oper[0].data.string->data ? oper[0].data.string->data : "");
+    (void) strcpy(buf, oper[0].data.string->data.c_str() ? oper[0].data.string->data.c_str() : "");
 
     result = is_propdir(ref, buf);
 
@@ -708,8 +708,8 @@ prim_parsempi(PRIM_PROTOTYPE)
         abort_interp("Integer of 0 or 1 expected (4)");
     CHECKREMOTE(oper[3].data.objref);
 
-    temp = (oper[2].data.string) ? oper[2].data.string->data : (const char *) "";
-    ptr = (char *) ((oper[1].data.string) ? (char *) oper[1].data.string->data : "");
+    temp = (oper[2].data.string) ? oper[2].data.string->data.c_str() : (const char *) "";
+    ptr = (char *) ((oper[1].data.string) ? (char *) oper[1].data.string->data.c_str() : "");
     if (temp && *temp && ptr) {
         result = oper[0].data.number & (~MPI_ISLISTENER);
         ptr = do_parse_mesg(fr->descr, player, oper[3].data.objref, temp, ptr, buf, result);
@@ -745,20 +745,20 @@ prim_parseprop(PRIM_PROTOTYPE)
     CHECKREMOTE(oper[3].data.objref);
     {
         char type[BUFFER_LEN];
-        char *tmpptr;
+        const char *tmpptr;
 
-        tmpptr = oper[2].data.string->data;
+        tmpptr = oper[2].data.string->data.c_str();
         while ((tmpptr = index(tmpptr, PROPDIR_DELIMITER)))
             if (!(*(++tmpptr)))
                 abort_interp("Cannot access a propdir directly.");
 
-        if (!prop_read_perms(ProgUID, oper[3].data.objref, oper[2].data.string->data, mlev))
+        if (!prop_read_perms(ProgUID, oper[3].data.objref, oper[2].data.string->data.c_str(), mlev))
             abort_interp(tp_noperm_mesg);
 
-        if (mlev < 3 && !permissions(mlev, PSafe, oper[3].data.objref) && prop_write_perms(ProgUID, oper[3].data.objref, oper[2].data.string->data, mlev))
+        if (mlev < 3 && !permissions(mlev, PSafe, oper[3].data.objref) && prop_write_perms(ProgUID, oper[3].data.objref, oper[2].data.string->data.c_str(), mlev))
             abort_interp(tp_noperm_mesg);
 
-        strcpy(type, oper[2].data.string->data);
+        strcpy(type, oper[2].data.string->data.c_str());
         temp = get_property_class(oper[3].data.objref, type);
 
 #ifdef LOG_PROPS
@@ -766,7 +766,7 @@ prim_parseprop(PRIM_PROTOTYPE)
 #endif
 
     }
-    ptr = (char *) ((oper[1].data.string) ? (char *) oper[1].data.string->data : "");
+    ptr = (char *) ((oper[1].data.string) ? (char *) oper[1].data.string->data.c_str() : "");
     if (temp) {
         result = oper[0].data.number & (~MPI_ISLISTENER);
         if (tp_old_parseprop) {
@@ -804,8 +804,8 @@ prim_propqueue(PRIM_PROTOTYPE)
     {
         dbref obj1 = oper[3].data.objref;
         dbref obj2 = oper[1].data.objref;
-        char *str1 = string_dup(oper[2].data.string->data);
-        char *str2 = string_dup(oper[0].data.string->data);
+        char *str1 = string_dup(oper[2].data.string->data.c_str());
+        char *str2 = string_dup(oper[0].data.string->data.c_str());
 
         propqueue(fr->descr, player, OkObj(player) ? getloc(player) : -1, obj1, obj2, NOTHING, str1, str2, 1, 1);
 
@@ -837,8 +837,8 @@ prim_envpropqueue(PRIM_PROTOTYPE)
     {
         dbref obj1 = oper[3].data.objref;
         dbref obj2 = oper[1].data.objref;
-        char *str1 = string_dup(oper[2].data.string->data);
-        char *str2 = string_dup(oper[0].data.string->data);
+        char *str1 = string_dup(oper[2].data.string->data.c_str());
+        char *str2 = string_dup(oper[0].data.string->data.c_str());
 
         propqueue(fr->descr, player, OkObj(player) ? getloc(player) : -1, obj1, obj2, NOTHING, str1, str2, 1, 1);
 
@@ -926,7 +926,7 @@ prim_islockedp(PRIM_PROTOTYPE)
     CHECKREMOTE(oper[1].data.objref);
     CHECKREMOTE(oper[2].data.objref);
 
-    strcpy(buf, oper[0].data.string->data);
+    strcpy(buf, oper[0].data.string->data.c_str());
     ref = oper[2].data.objref;
     ref2 = oper[1].data.objref;
 
@@ -971,7 +971,7 @@ prim_checklock(PRIM_PROTOTYPE)
     CHECKREMOTE(oper[1].data.objref);
     CHECKREMOTE(oper[2].data.objref);
 
-    strcpy(buf, oper[0].data.string->data);
+    strcpy(buf, oper[0].data.string->data.c_str());
     ref = oper[2].data.objref;
     ref2 = oper[1].data.objref;
 
@@ -1009,7 +1009,7 @@ prim_array_filter_prop(PRIM_PROTOTYPE)
         abort_interp("Argument not a non-null string. (2)");
     if (oper[0].type != PROG_STRING)
         abort_interp("Argument not a string pattern. (3)");
-    ptr = oper[1].data.string->data;
+    ptr = oper[1].data.string->data.c_str();
     while ((ptr = index(ptr, PROPDIR_DELIMITER)))
         if (!(*(++ptr)))
             abort_interp("Cannot access a propdir directly.");
@@ -1083,7 +1083,7 @@ prim_array_filter_smart(PRIM_PROTOTYPE)
         switch (oper[0].type) {
             case PROG_STRING:
                 if (oper[0].data.string) {
-                    strcpy(val_str, oper[0].data.string->data);
+                    strcpy(val_str, oper[0].data.string->data.c_str());
                     val_int = atoi(val_str);
                     val_ref = (dbref) atoi(val_str);
                     if (ifloat(val_str))
@@ -1114,7 +1114,7 @@ prim_array_filter_smart(PRIM_PROTOTYPE)
         }
     }
 
-    ptr = oper[1].data.string->data;
+    ptr = oper[1].data.string->data.c_str();
     while ((ptr = index(ptr, PROPDIR_DELIMITER)))
         if (!(*(++ptr)))
             abort_interp("Cannot access a propdir directly.");
@@ -1252,11 +1252,11 @@ prim_reflist_find(PRIM_PROTOTYPE)
         abort_interp("Empty string argument (2)");
     if (oper[0].type != PROG_OBJECT)
         abort_interp("Non-object argument (3)");
-    if (!prop_read_perms(ProgUID, oper[2].data.objref, oper[1].data.string->data, mlev))
+    if (!prop_read_perms(ProgUID, oper[2].data.objref, oper[1].data.string->data.c_str(), mlev))
         abort_interp("Permission denied.");
     CHECKREMOTE(oper[2].data.objref);
 
-    result = reflist_find(oper[2].data.objref, oper[1].data.string->data, oper[0].data.objref);
+    result = reflist_find(oper[2].data.objref, oper[1].data.string->data.c_str(), oper[0].data.objref);
 
     PushInt(result);
 }
@@ -1272,11 +1272,11 @@ prim_reflist_add(PRIM_PROTOTYPE)
         abort_interp("Empty string argument (2)");
     if (oper[0].type != PROG_OBJECT)
         abort_interp("Non-object argument (3)");
-    if (!prop_write_perms(ProgUID, oper[2].data.objref, oper[1].data.string->data, mlev))
+    if (!prop_write_perms(ProgUID, oper[2].data.objref, oper[1].data.string->data.c_str(), mlev))
         abort_interp("Permission denied.");
     CHECKREMOTE(oper[2].data.objref);
 
-    reflist_add(oper[2].data.objref, oper[1].data.string->data, oper[0].data.objref);
+    reflist_add(oper[2].data.objref, oper[1].data.string->data.c_str(), oper[0].data.objref);
 }
 
 void
@@ -1290,11 +1290,11 @@ prim_reflist_del(PRIM_PROTOTYPE)
         abort_interp("Empty string argument (2)");
     if (oper[0].type != PROG_OBJECT)
         abort_interp("Non-object argument (3)");
-    if (!prop_write_perms(ProgUID, oper[2].data.objref, oper[1].data.string->data, mlev))
+    if (!prop_write_perms(ProgUID, oper[2].data.objref, oper[1].data.string->data.c_str(), mlev))
         abort_interp("Permission denied.");
     CHECKREMOTE(oper[2].data.objref);
 
-    reflist_del(oper[2].data.objref, oper[1].data.string->data, oper[0].data.objref);
+    reflist_del(oper[2].data.objref, oper[1].data.string->data.c_str(), oper[0].data.objref);
 }
 
 void
@@ -1330,13 +1330,13 @@ prim_parsepropex(PRIM_PROTOTYPE)
 
     CHECKREMOTE(oper[3].data.objref);
 
-    if (has_suffix_char(oper[2].data.string->data, PROPDIR_DELIMITER))
+    if (has_suffix_char(oper[2].data.string->data.c_str(), PROPDIR_DELIMITER))
         abort_interp("Cannot access a propdir directly.");
 
-    if (!prop_read_perms(ProgUID, oper[3].data.objref, oper[2].data.string->data, mlev))
+    if (!prop_read_perms(ProgUID, oper[3].data.objref, oper[2].data.string->data.c_str(), mlev))
         abort_interp("Permission denied.");
 
-    mpi = get_property_class(oper[3].data.objref, oper[2].data.string->data);
+    mpi = get_property_class(oper[3].data.objref, oper[2].data.string->data.c_str());
     vars = oper[1].data.array;
     novars = array_count(vars);
 
@@ -1355,7 +1355,7 @@ prim_parsepropex(PRIM_PROTOTYPE)
                 CLEAR(&idx);
                 abort_interp("Empty string keys not supported. (3)");
             }
-            if (strlen(idx.data.string->data) > MAX_MFUN_NAME_LEN) {
+            if (strlen(idx.data.string->data.c_str()) > MAX_MFUN_NAME_LEN) {
                 CLEAR(&idx);
                 abort_interp("Key too long to be an MPI variable. (3)");
             }
@@ -1373,7 +1373,7 @@ prim_parsepropex(PRIM_PROTOTYPE)
                     break;
             }
 
-            if (string_compare(idx.data.string->data, "how") == 0)
+            if (string_compare(idx.data.string->data.c_str(), "how") == 0)
                 hashow = 1;
         } while (array_next(vars, &idx)) ;
         }
@@ -1414,7 +1414,7 @@ prim_parsepropex(PRIM_PROTOTYPE)
                                 break;
                         }
                         var_buf[BUFFER_LEN - 1] = '\0';
-                        new_mvar(idx.data.string->data, var_buf);
+                        new_mvar(idx.data.string->data.c_str(), var_buf);
                     } while (array_next(vars, &idx)) ;
                     }
                     }
@@ -1538,7 +1538,7 @@ prim_parsepropex(PRIM_PROTOTYPE)
                                 if (!(valid_object(&oper[4])))
                                     abort_interp("Invalid object argument (1)");
 
-                                result = copy_props(oper[4].data.objref, oper[2].data.objref, oper[3].data.string->data, oper[1].data.string->data, oper[0].data.number);
+                                result = copy_props(oper[4].data.objref, oper[2].data.objref, oper[3].data.string->data.c_str(), oper[1].data.string->data.c_str(), oper[0].data.number);
 
                                 CHECKOFLOW(1);
                                 PushInt(result);

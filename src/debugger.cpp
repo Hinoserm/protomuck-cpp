@@ -471,7 +471,6 @@ static struct muf_proc_data temp_muf_proc_data = {
     NULL
 };
 
-struct shared_string shstr;
 
 int
 muf_debugger(int descr, dbref player, dbref program, const char *text, struct frame *fr)

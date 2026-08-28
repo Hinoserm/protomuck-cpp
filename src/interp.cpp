@@ -343,7 +343,7 @@ RCLEAR(struct inst *oper, const char *file, int line)
         break;
     case PROG_STRING:
         if (oper->data.string && --oper->data.string->links == 0)
-            delete[]oper->data.string;
+            delete oper->data.string;
         break;
     case PROG_LABEL:
         delete[]oper->data.labelname;
@@ -1055,7 +1055,7 @@ reload(struct frame *fr, int atop, int stop)
 int
 logical_false(struct inst *p)
 {
-    return ((p->type == PROG_STRING && (p->data.string == 0 || !(*p->data.string->data)))
+    return ((p->type == PROG_STRING && (p->data.string == 0 || !(*p->data.string->data.c_str())))
             || (p->type == PROG_MARK)
             || (p->type == PROG_ARRAY && (!p->data.array || !p->data.array->items))
             || (p->type == PROG_LOCK && p->data.lock == TRUE_BOOLEXP)
@@ -1752,7 +1752,7 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
 
                     pbs = DBFETCH(temp1->data.objref)->sp.program.pubs;
                     while (pbs) {
-                        tmpint = string_compare(temp2->data.string->data, pbs->subname);
+                        tmpint = string_compare(temp2->data.string->data.c_str(), pbs->subname);
                         if (!tmpint)
                             break;
                         pbs = pbs->next;

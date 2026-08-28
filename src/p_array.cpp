@@ -1301,7 +1301,7 @@ prim_array_put_propvals(PRIM_PROTOTYPE)
             switch (oper4->type) {
                 case PROG_STRING:
                     pdat.flags = PROP_STRTYP;
-                    pdat.data.str = oper4->data.string ? oper4->data.string->data : NULL;
+                    pdat.data.str = oper4->data.string ? oper4->data.string->data.c_str() : NULL;
                     break;
                 case PROG_INTEGER:
                     pdat.flags = PROP_INTTYP;
@@ -1413,7 +1413,7 @@ prim_array_put_proplist(PRIM_PROTOTYPE)
             switch (oper4->type) {
                 case PROG_STRING:
                     pdat.flags = PROP_STRTYP;
-                    isempty = !(pdat.data.str = oper4->data.string ? oper4->data.string->data : NULL);
+                    isempty = !(pdat.data.str = oper4->data.string ? oper4->data.string->data.c_str() : NULL);
                     break;
                 case PROG_INTEGER:
                     pdat.flags = PROP_INTTYP;
@@ -1506,7 +1506,7 @@ prim_array_get_reflist(PRIM_PROTOTYPE)
         abort_interp("Non-null string required. (2)");
 
     ref = oper[1].data.objref;
-    strcpy(dir, oper[0].data.string->data);
+    strcpy(dir, oper[0].data.string->data.c_str());
 
     if (!prop_read_perms(ProgUID, ref, dir, mlev))
         abort_interp(tp_noperm_mesg);
@@ -1680,14 +1680,14 @@ prim_explode_array(PRIM_PROTOTYPE)
     CHECKOFLOW(1);
 
     {
-        const char *delimit = oper[0].data.string->data;
-        int delimlen = oper[0].data.string->length;
+        const char *delimit = oper[0].data.string->data.c_str();
+        int delimlen = oper[0].data.string->length();
 
         nu = new_array_packed(0, 0);
         if (!oper[1].data.string) {
             lastPtr = (char *) "";
         } else {
-            strcpy(buf, oper[1].data.string->data);
+            strcpy(buf, oper[1].data.string->data.c_str());
             tempPtr = lastPtr = buf;
             while (*tempPtr) {
                 if (!strncmp(tempPtr, delimit, delimlen)) {
@@ -2300,7 +2300,7 @@ void
 prim_array_string_fragment(PRIM_PROTOTYPE)
 {
     stk_array *nu;
-    char *tempPtr;
+    const char *tempPtr;
     int nChunkSize = 0;
     int nCount = 0;
     int nStrLen = 0;
@@ -2322,8 +2322,8 @@ prim_array_string_fragment(PRIM_PROTOTYPE)
     nu = new_array_packed(0, 0);
 
     if (temp2.data.string) {
-        nStrLen = temp2.data.string->length;
-        tempPtr = temp2.data.string->data;
+        nStrLen = temp2.data.string->length();
+        tempPtr = temp2.data.string->data.c_str();
 
         while (nCount + nChunkSize < nStrLen) {
             strncpy(buf, tempPtr, nChunkSize);

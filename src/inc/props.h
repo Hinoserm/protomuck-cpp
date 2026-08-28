@@ -4,7 +4,7 @@
 /* Property struct */
 
 union pdata_u {
-    char *str;
+    const char *str;
     struct boolexp *lok;
     int val;
     double fval;

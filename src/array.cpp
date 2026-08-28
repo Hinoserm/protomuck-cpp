@@ -130,8 +130,8 @@ array_tree_compare(array_iter *a, array_iter *b, int case_sens, int objname, boo
                 return -1;
             }
         } else if (a->type == PROG_OBJECT && b->type == PROG_STRING && objname && valid_obj(a->data.objref)) {
-            char *astr = (char *) NAME(a->data.objref);
-            char *bstr = (b->data.string) ? b->data.string->data : pad_char;
+            const char *astr = NAME(a->data.objref);
+            const char *bstr = (b->data.string) ? b->data.string->data.c_str() : pad_char;
 
             if (case_sens) {
                 if (natural)
@@ -145,8 +145,8 @@ array_tree_compare(array_iter *a, array_iter *b, int case_sens, int objname, boo
                     return string_compare(astr, bstr);
             }
         } else if (a->type == PROG_STRING && b->type == PROG_OBJECT && objname && valid_obj(b->data.objref)) {
-            char *astr = (a->data.string) ? a->data.string->data : pad_char;
-            char *bstr = (char *) NAME(b->data.objref);
+            const char *astr = (a->data.string) ? a->data.string->data.c_str() : pad_char;
+            const char *bstr = NAME(b->data.objref);
 
             if (case_sens) {
                 if (natural)
@@ -165,8 +165,8 @@ array_tree_compare(array_iter *a, array_iter *b, int case_sens, int objname, boo
     /* Indexes are of same type if we reached here. */
     if (a->type == PROG_OBJECT && objname && valid_obj(a->data.objref)
         && valid_obj(b->data.objref)) {
-        char *astr = (char *) NAME(a->data.objref);
-        char *bstr = (char *) NAME(b->data.objref);
+        const char *astr = NAME(a->data.objref);
+        const char *bstr = NAME(b->data.objref);
 
         if (case_sens) {
             if (natural)
@@ -200,8 +200,8 @@ array_tree_compare(array_iter *a, array_iter *b, int case_sens, int objname, boo
         }
     } else if (a->type == PROG_STRING) {
         char pad_char[] = "";
-        char *astr = (a->data.string) ? a->data.string->data : pad_char;
-        char *bstr = (b->data.string) ? b->data.string->data : pad_char;
+        const char *astr = (a->data.string) ? a->data.string->data.c_str() : pad_char;
+        const char *bstr = (b->data.string) ? b->data.string->data.c_str() : pad_char;
 
         if (case_sens) {
             if (natural)
@@ -1813,7 +1813,7 @@ array_get_intkey_strval(stk_array *arr, int key)
     } else if (!value->data.string) {
         return "";
     } else {
-        return value->data.string->data;
+        return value->data.string->data.c_str();
     }
 }
 

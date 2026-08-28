@@ -48,7 +48,7 @@ copyobj(dbref player, dbref old, dbref nw)
 }
 
 int
-check_flag1(char *flag)
+check_flag1(const char *flag)
 {
     if (string_prefix("dark", flag) || string_prefix("debugging", flag))
         return DARK;
@@ -91,7 +91,7 @@ check_flag1(char *flag)
 }
 
 int
-check_flag2(char *flag, int *nbol)
+check_flag2(const char *flag, int *nbol)
 {
     *nbol = 0;
 
@@ -152,7 +152,7 @@ check_flag2(char *flag, int *nbol)
 }
 
 int
-check_mlev(char *flag, int *truewiz)
+check_mlev(const char *flag, int *truewiz)
 {
     *truewiz = 0;
 
@@ -187,7 +187,7 @@ check_mlev(char *flag, int *truewiz)
 }
 
 int
-check_flag4(char *flag)
+check_flag4(const char *flag)
 {
     char buf[32];
     int i = 0;
@@ -295,7 +295,7 @@ flag_set_perms2(dbref ref, int flag, int mlev, dbref prog)
 }
 
 int
-has_flagp(dbref ref, char *flag, int mlev)
+has_flagp(dbref ref, const char *flag, int mlev)
 {
     int truwiz = 0, tmp1 = 0, tmp2 = 0, lev = 0, tmp5 = 0, tmp4 = 0, rslt = 0, result = 0;
 
@@ -346,7 +346,7 @@ has_flagp(dbref ref, char *flag, int mlev)
 }
 
 int
-check_power(char *power)
+check_power(const char *power)
 {
     int tmp = 0;
 
@@ -840,8 +840,8 @@ prim_match(PRIM_PROTOTYPE)
 
         (void) strcpy(buf, match_args);
         (void) strcpy(tmppp, match_cmdname);
-        init_match(fr->descr, PSafe, oper[0].data.string->data, NOTYPE, &md);
-        if (oper[0].data.string->data[0] == REGISTERED_TOKEN) {
+        init_match(fr->descr, PSafe, oper[0].data.string->data.c_str(), NOTYPE, &md);
+        if (oper[0].data.string->data.c_str()[0] == REGISTERED_TOKEN) {
             match_registered(&md);
         } else if (player != NOTHING) {
             match_all_exits(&md);
@@ -933,10 +933,10 @@ prim_isflagp(PRIM_PROTOTYPE)
 
     if (oper[0].type != PROG_STRING)
         abort_interp("String expected.");
-    result = (check_flag1(oper[0].data.string->data)
-              || check_flag4(oper[0].data.string->data)
-              || check_flag2(oper[0].data.string->data, &tmp)
-              || check_mlev(oper[0].data.string->data, &tmp));
+    result = (check_flag1(oper[0].data.string->data.c_str())
+              || check_flag4(oper[0].data.string->data.c_str())
+              || check_flag2(oper[0].data.string->data.c_str(), &tmp)
+              || check_mlev(oper[0].data.string->data.c_str(), &tmp));
 
     PushInt(result);
 }
@@ -947,7 +947,7 @@ prim_set(PRIM_PROTOTYPE)
 {
     int tmp2 = 0;
     int tmp4 = 0;
-    char *flag;
+    const char *flag;
     int tWiz = 0;
     int i, tmp, result = 0;
     dbref ref;
@@ -962,7 +962,7 @@ prim_set(PRIM_PROTOTYPE)
         abort_interp("Db is read-only");
     ref = oper[1].data.objref;
     CHECKREMOTE(ref);
-    flag = oper[0].data.string->data;
+    flag = oper[0].data.string->data.c_str();
     tmp = 0;
 
     while (*flag == '!') {
@@ -1093,7 +1093,7 @@ prim_flagp(PRIM_PROTOTYPE)
     ref = oper[1].data.objref;
     CHECKREMOTE(ref);
     {
-        char *flag = oper[0].data.string->data;
+        const char *flag = oper[0].data.string->data.c_str();
 
         result = has_flagp(ref, flag, mlev);
         if (result == -1)
@@ -1120,7 +1120,7 @@ prim_powerp(PRIM_PROTOTYPE)
         abort_interp("Invalid object");
     if (Typeof(oper[1].data.objref) != TYPE_PLAYER)
         abort_interp("Not a valid player");
-    pow = check_power(oper[0].data.string->data);
+    pow = check_power(oper[0].data.string->data.c_str());
     if (pow)
         if (POWERS(oper[1].data.objref) & pow)
             result = 1;
@@ -1138,7 +1138,7 @@ prim_ispowerp(PRIM_PROTOTYPE)
         abort_interp("Invalid argument type (2)");
     if (!(oper[0].data.string))
         abort_interp("Empty string argument (2)");
-    pow = check_power(oper[0].data.string->data);
+    pow = check_power(oper[0].data.string->data.c_str());
     result = !(!pow);
 
     PushInt(result);
@@ -1654,7 +1654,7 @@ prim_newexit(PRIM_PROTOTYPE)
         ref = new_object(ProgUID);
 
         /* initialize everything */
-        NAME(ref) = alloc_string(oper[0].data.string->data);
+        NAME(ref) = alloc_string(oper[0].data.string->data.c_str());
         DBFETCH(ref)->location = oper[1].data.objref;
         OWNER(ref) = OWNER(ProgUID);
         FLAGS(ref) = TYPE_EXIT;
@@ -1728,7 +1728,7 @@ prim_setlockstr(PRIM_PROTOTYPE)
         abort_interp(tp_noperm_mesg);
     if (tp_db_readonly)
         abort_interp(DBRO_MESG);
-    result = setlockstr(fr->descr, PSafe, ref, oper[0].data.string ? oper[0].data.string->data : (char *) "");
+    result = setlockstr(fr->descr, PSafe, ref, oper[0].data.string ? oper[0].data.string->data.c_str() : (char *) "");
 
 
     PushInt(result);
@@ -1767,7 +1767,7 @@ prim_part_pmatch(PRIM_PROTOTYPE)
     if (!oper[0].data.string)
         abort_interp("Empty string argument");
 
-    ref = partial_pmatch(oper[0].data.string->data);
+    ref = partial_pmatch(oper[0].data.string->data.c_str());
 
     PushObject(ref);
 }
@@ -1776,7 +1776,7 @@ prim_part_pmatch(PRIM_PROTOTYPE)
 void
 prim_checkpassword(PRIM_PROTOTYPE)
 {
-    char *ptr;
+    const char *ptr;
     char pad_char[] = "";
     dbref ref;
     int result;
@@ -1788,7 +1788,7 @@ prim_checkpassword(PRIM_PROTOTYPE)
         abort_interp("Player dbref expected (1)");
     if (oper[0].type != PROG_STRING)
         abort_interp("Password string expected (2)");
-    ptr = oper[0].data.string ? oper[0].data.string->data : pad_char;
+    ptr = oper[0].data.string ? oper[0].data.string->data.c_str() : pad_char;
     result = check_password(ref, ptr);
 
     PushInt(result);
@@ -1806,7 +1806,7 @@ prim_pmatch(PRIM_PROTOTYPE)
         abort_interp("Non-string argument.");
     if (!oper[0].data.string)
         abort_interp("Empty string argument.");
-    buff = strcpy(buf, oper[0].data.string->data);
+    buff = strcpy(buf, oper[0].data.string->data.c_str());
     while (isspace(*buff))
         buff++;
     if (*buff == '#') {
@@ -1909,13 +1909,13 @@ prim_newplayer(PRIM_PROTOTYPE)
         abort_interp("Non-string argument.");
     if (!oper[1].data.string)
         abort_interp("Empty string argument.");
-    if (!ok_player_name(oper[1].data.string->data)
-        || !ok_password(oper[0].data.string->data))
+    if (!ok_player_name(oper[1].data.string->data.c_str())
+        || !ok_password(oper[0].data.string->data.c_str()))
         abort_interp("Invalid player name or password.");
     if (tp_db_readonly)
         abort_interp("The MUCK is read only.");
 
-    ref = create_player(ProgUID, oper[1].data.string->data, oper[0].data.string->data);
+    ref = create_player(ProgUID, oper[1].data.string->data.c_str(), oper[0].data.string->data.c_str());
     if (ref != NOTHING)
         log_status("PCRE[MUF]: %s(%d) by %s(%d)\n", NAME(ref), (int) ref, OkObj(player) ? NAME(player) : "(Login)", player);
 
@@ -1926,7 +1926,7 @@ void
 prim_copyplayer(PRIM_PROTOTYPE)
 {
     dbref newplayer, ref;
-    char *name, *password;
+    const char *name, *password;
     struct object *newp;
 
     if (oper[0].type != PROG_STRING)
@@ -1942,8 +1942,8 @@ prim_copyplayer(PRIM_PROTOTYPE)
         abort_interp("Player dbref expected (1)");
     CHECKREMOTE(ref);
 
-    name = oper[1].data.string->data;
-    password = oper[0].data.string->data;
+    name = oper[1].data.string->data.c_str();
+    password = oper[0].data.string->data.c_str();
 
     if (!ok_player_name(name) || !ok_password(password))
         abort_interp("Invalid player name or password.");
@@ -2219,7 +2219,7 @@ prim_compiledp(PRIM_PROTOTYPE)
 void
 prim_setpassword(PRIM_PROTOTYPE)
 {
-    char *ptr, *ptr2;
+    const char *ptr, *ptr2;
     char pad_char[] = "";
     dbref ref;
 
@@ -2237,8 +2237,8 @@ prim_setpassword(PRIM_PROTOTYPE)
     if (!oper[0].data.string)
         abort_interp("NULL passwords cannot be set when MALLOC_PROFILING is turned on");
 #endif
-    ptr = oper[1].data.string ? oper[1].data.string->data : pad_char;
-    ptr2 = oper[0].data.string ? oper[0].data.string->data : pad_char;
+    ptr = oper[1].data.string ? oper[1].data.string->data.c_str() : pad_char;
+    ptr2 = oper[0].data.string ? oper[0].data.string->data.c_str() : pad_char;
     if (ref != NOTHING && !check_password(ref, ptr))
         abort_interp("Incorrect password");
     set_password(ref, ptr2);
@@ -2247,7 +2247,7 @@ prim_setpassword(PRIM_PROTOTYPE)
 void
 prim_newpassword(PRIM_PROTOTYPE)
 {
-    char *ptr2;
+    const char *ptr2;
     char pad_char[] = "";
     dbref ref;
 
@@ -2259,7 +2259,7 @@ prim_newpassword(PRIM_PROTOTYPE)
     if (!oper[0].data.string)
         abort_interp("NULL passwords cannot be set when MALLOC_PROFILING is turned on"); /* Why? -hinoserm */
 #endif
-    ptr2 = oper[0].data.string ? oper[0].data.string->data : pad_char;
+    ptr2 = oper[0].data.string ? oper[0].data.string->data.c_str() : pad_char;
     ref = oper[1].data.objref;
 
     if (!valid_player(&oper[1]))
@@ -2338,10 +2338,10 @@ prim_newprogram(PRIM_PROTOTYPE)
         abort_interp(NOBUILD_MESG);
     if (!oper[0].data.string)
         abort_interp("An empty string was passed.(2)");
-    if (!ok_name(oper[0].data.string->data))
+    if (!ok_name(oper[0].data.string->data.c_str()))
         abort_interp("Invalid name (2)");
 
-    ref = new_program(PSafe, oper[0].data.string->data);
+    ref = new_program(PSafe, oper[0].data.string->data.c_str());
 
     PushObject(ref);
 }

@@ -40,10 +40,10 @@ prim_fmtstring(PRIM_PROTOTYPE)
     }
     /* We now have the non-null format string, parse it */
     result = 0;                 /* End of current string, must be smaller than BUFFER_LEN */
-    slen = strlen(oper[0].data.string->data);
+    slen = strlen(oper[0].data.string->data.c_str());
     scnt = 0;
     tstop = 0;
-    strcpyn(sstr, sizeof(sstr), oper[0].data.string->data);
+    strcpyn(sstr, sizeof(sstr), oper[0].data.string->data.c_str());
 
     while ((scnt < slen) && (result < BUFFER_LEN)) {
         if (sstr[scnt] == FMTTOKEN) {
@@ -132,7 +132,7 @@ prim_fmtstring(PRIM_PROTOTYPE)
                 oper2 = POP();
                 if (('s' == sstr[scnt]) && (PROG_STRING == oper2->type)
                     && (oper2->data.string)) {
-                    ptr = oper2->data.string->data;
+                    ptr = (char *) oper2->data.string->data.c_str();
 
                     i = 0;
                     while ((-1 == slen2 || i < slen2) && *ptr) {
@@ -240,7 +240,7 @@ prim_fmtstring(PRIM_PROTOTYPE)
                             CLEAR(oper2);
                             abort_interp("Format specified string argument not found.");
                         }
-                        sprintf(tbuf, sfmt, ((oper2->data.string) ? oper2->data.string->data : ""));
+                        sprintf(tbuf, sfmt, ((oper2->data.string) ? oper2->data.string->data.c_str() : ""));
                         tlen = strlen(tbuf);
                         if (slrj == 2) {
                             tnum = 0;
@@ -532,12 +532,12 @@ prim_split(PRIM_PROTOTYPE)
     if (!oper[1].data.string) {
         result = 0;
     } else {
-        strcpy(buf, oper[1].data.string->data);
-        pname = strstr(buf, oper[0].data.string->data);
+        strcpy(buf, oper[1].data.string->data.c_str());
+        pname = strstr(buf, oper[0].data.string->data.c_str());
         if (!pname) {
             result = -1;
         } else {
-            temp = pname + oper[0].data.string->length;
+            temp = pname + oper[0].data.string->length();
             *pname = '\0';
             result = 1;
         }
@@ -584,15 +584,15 @@ prim_rsplit(PRIM_PROTOTYPE)
     if (!oper[1].data.string) {
         result = 0;
     } else {
-        strcpy(buf, oper[1].data.string->data);
-        if (oper[0].data.string->length > oper[1].data.string->length) {
+        strcpy(buf, oper[1].data.string->data.c_str());
+        if (oper[0].data.string->length() > oper[1].data.string->length()) {
             result = -1;
         } else {
-            temp = buf + (oper[1].data.string->length - oper[0].data.string->length);
+            temp = buf + (oper[1].data.string->length() - oper[0].data.string->length());
             hold = NULL;
             while ((temp != (buf - 1)) && (!hold)) {
-                if (*temp == *(oper[0].data.string->data))
-                    if (!strncmp(temp, oper[0].data.string->data, oper[0].data.string->length))
+                if (*temp == *(oper[0].data.string->data.c_str()))
+                    if (!strncmp(temp, oper[0].data.string->data.c_str(), oper[0].data.string->length()))
                         hold = temp;
                 temp--;
             }
@@ -600,7 +600,7 @@ prim_rsplit(PRIM_PROTOTYPE)
                 result = -1;
             } else {
                 *hold = '\0';
-                hold += oper[0].data.string->length;
+                hold += oper[0].data.string->length();
                 result = 1;
             }
         }
@@ -642,7 +642,7 @@ prim_ctoi(PRIM_PROTOTYPE)
     if (!oper[0].data.string) {
         c = '\0';
     } else {
-        c = oper[0].data.string->data[0];
+        c = oper[0].data.string->data.c_str()[0];
     }
     result = c;
 
@@ -692,7 +692,7 @@ prim_stod(PRIM_PROTOTYPE)
     if (!oper[0].data.string) {
         ref = NOTHING;
     } else {
-        const char *ptr = oper[0].data.string->data;
+        const char *ptr = oper[0].data.string->data.c_str();
         const char *nptr = NULL;
 
         while (isspace(*ptr))
@@ -753,16 +753,16 @@ prim_midstr(PRIM_PROTOTYPE)
     if (!oper[2].data.string) {
         result = 1;
     } else {
-        if (oper[1].data.number > oper[2].data.string->length) {
+        if (oper[1].data.number > oper[2].data.string->length()) {
             result = 1;
         } else {
             start = oper[1].data.number - 1;
-            if ((oper[0].data.number + start) > oper[2].data.string->length) {
-                range = oper[2].data.string->length - start;
+            if ((oper[0].data.number + start) > oper[2].data.string->length()) {
+                range = oper[2].data.string->length() - start;
             } else {
                 range = oper[0].data.number;
             }
-            bcopy(oper[2].data.string->data + start, buf, range);
+            bcopy(oper[2].data.string->data.c_str() + start, buf, range);
             buf[range] = '\0';
         }
     }
@@ -782,7 +782,7 @@ prim_numberp(PRIM_PROTOTYPE)
     if (oper[0].type != PROG_STRING || !oper[0].data.string)
         result = 0;
     else
-        result = number(oper[0].data.string->data);
+        result = number(oper[0].data.string->data.c_str());
 
     PushInt(result);
 }
@@ -802,7 +802,7 @@ prim_stringcmp(PRIM_PROTOTYPE)
     else if (!(oper[1].data.string && oper[0].data.string))
         result = oper[0].data.string ? -1 : 1;
     else {
-        result = string_compare(oper[1].data.string->data, oper[0].data.string->data);
+        result = string_compare(oper[1].data.string->data.c_str(), oper[0].data.string->data.c_str());
     }
 
 
@@ -824,7 +824,7 @@ prim_strcmp(PRIM_PROTOTYPE)
     else if (!(oper[1].data.string && oper[0].data.string))
         result = oper[0].data.string ? -1 : 1;
     else {
-        result = strcmp(oper[1].data.string->data, oper[0].data.string->data);
+        result = strcmp(oper[1].data.string->data.c_str(), oper[0].data.string->data.c_str());
     }
 
 
@@ -849,7 +849,7 @@ prim_strncmp(PRIM_PROTOTYPE)
     else if (!(oper[2].data.string && oper[1].data.string))
         result = oper[1].data.string ? -1 : 1;
     else
-        result = strncmp(oper[2].data.string->data, oper[1].data.string->data, oper[0].data.number);
+        result = strncmp(oper[2].data.string->data.c_str(), oper[1].data.string->data.c_str(), oper[0].data.number);
 
 
 
@@ -875,16 +875,16 @@ prim_strcut(PRIM_PROTOTYPE)
         PushNullStr;
         PushNullStr;
     } else {
-        if (temp1.data.number > temp2.data.string->length) {
+        if (temp1.data.number > temp2.data.string->length()) {
             temp2.data.string->links++;
             PushStrRaw(temp2.data.string);
             PushNullStr;
         } else {
-            bcopy(temp2.data.string->data, buf, temp1.data.number);
+            bcopy(temp2.data.string->data.c_str(), buf, temp1.data.number);
             buf[temp1.data.number] = '\0';
             PushString(buf);
-            if (temp2.data.string->length > temp1.data.number) {
-                bcopy(temp2.data.string->data + temp1.data.number, buf, temp2.data.string->length - temp1.data.number + 1);
+            if (temp2.data.string->length() > temp1.data.number) {
+                bcopy(temp2.data.string->data.c_str() + temp1.data.number, buf, temp2.data.string->length() - temp1.data.number + 1);
                 PushString(buf);
             } else {
                 PushNullStr;
@@ -905,7 +905,7 @@ prim_strlen(PRIM_PROTOTYPE)
     if (!oper[0].data.string)
         result = 0;
     else
-        result = oper[0].data.string->length;
+        result = oper[0].data.string->length();
 
     PushInt(result);
 }
@@ -925,15 +925,15 @@ prim_strcat(PRIM_PROTOTYPE)
     } else if (!oper[0].data.string) {
         oper[1].data.string->links++;
         PushStrRaw(oper[1].data.string);
-    } else if (oper[0].data.string->length + oper[1].data.string->length > (BUFFER_LEN) - 1) {
+    } else if (oper[0].data.string->length() + oper[1].data.string->length() > (BUFFER_LEN) - 1) {
         abort_interp("Operation would result in overflow.");
     } else {
         struct shared_string *string;
-        char *buf = new char[oper[1].data.string->length + oper[0].data.string->length + 1];
+        char *buf = new char[oper[1].data.string->length() + oper[0].data.string->length() + 1];
 
-        bcopy(oper[1].data.string->data, buf, oper[1].data.string->length);
-        bcopy(oper[0].data.string->data, buf + oper[1].data.string->length, oper[0].data.string->length + 1);
-        string = alloc_prog_string_exact(buf, oper[1].data.string->length + oper[0].data.string->length, -2);
+        bcopy(oper[1].data.string->data.c_str(), buf, oper[1].data.string->length());
+        bcopy(oper[0].data.string->data.c_str(), buf + oper[1].data.string->length(), oper[0].data.string->length() + 1);
+        string = alloc_prog_string_exact(buf, oper[1].data.string->length() + oper[0].data.string->length(), -2);
 
         delete[] buf;
 
@@ -949,7 +949,7 @@ prim_atoi(PRIM_PROTOTYPE)
     if (oper[0].type != PROG_STRING || !oper[0].data.string)
         result = 0;
     else
-        result = atoi(oper[0].data.string->data);
+        result = atoi(oper[0].data.string->data.c_str());
 
     PushInt(result);
 }
@@ -970,7 +970,7 @@ prim_notify_descriptor(PRIM_PROTOTYPE)
     if (oper[0].data.string) {
         char buf[BUFFER_LEN * 2];
 
-        strcpy(buf, oper[0].data.string->data);
+        strcpy(buf, oper[0].data.string->data.c_str());
 
         struct descriptor_data *d = descrdata_by_descr(oper[1].data.number);
 
@@ -1006,7 +1006,7 @@ prim_ansi_notify_descriptor(PRIM_PROTOTYPE)
         return;
     }
     if (oper[0].data.string) {
-        strcpy(buf, oper[0].data.string->data);
+        strcpy(buf, oper[0].data.string->data.c_str());
         anotify_descriptor(oper[1].data.number, buf);
     }
 
@@ -1057,9 +1057,9 @@ prim_notify(PRIM_PROTOTYPE)
         char buf[BUFFER_LEN * 2];
 
         if (tp_m1_name_notify && mlev < LM2 && PSafe != oper[1].data.objref) {
-            prefix_message(buf, oper[0].data.string->data, PNAME(PSafe), BUFFER_LEN, 1);
+            prefix_message(buf, oper[0].data.string->data.c_str(), PNAME(PSafe), BUFFER_LEN, 1);
         } else {
-            strcpy(buf, oper[0].data.string->data);
+            strcpy(buf, oper[0].data.string->data.c_str());
         }
         notify_listeners(fr->descr, PSafe, program, oper[1].data.objref, getloc(PSafe), buf, 1);
     }
@@ -1089,9 +1089,9 @@ prim_notify_html(PRIM_PROTOTYPE)
 
     if (oper[0].data.string) {
         if (tp_m1_name_notify && mlev < LM2 && PSafe != oper[1].data.objref) {
-            prefix_message(buf, oper[0].data.string->data, PNAME(PSafe), BUFFER_LEN - 1, 1);
+            prefix_message(buf, oper[0].data.string->data.c_str(), PNAME(PSafe), BUFFER_LEN - 1, 1);
         } else {
-            strcpy(buf, oper[0].data.string->data);
+            strcpy(buf, oper[0].data.string->data.c_str());
         }
         strcat(buf, "\r");
         notify_html_listeners(fr->descr, PSafe, program, oper[1].data.objref, getloc(PSafe), buf, 1);
@@ -1122,9 +1122,9 @@ prim_notify_html_nocr(PRIM_PROTOTYPE)
 
     if (oper[0].data.string) {
         if (tp_m1_name_notify && mlev < LM2 && PSafe != oper[1].data.objref) {
-            prefix_message(buf, oper[0].data.string->data, PNAME(PSafe), BUFFER_LEN, 1);
+            prefix_message(buf, oper[0].data.string->data.c_str(), PNAME(PSafe), BUFFER_LEN, 1);
         } else {
-            strcpy(buf, oper[0].data.string->data);
+            strcpy(buf, oper[0].data.string->data.c_str());
         }
         notify_html_listeners(fr->descr, PSafe, program, oper[1].data.objref, getloc(PSafe), buf, 1);
     }
@@ -1146,9 +1146,9 @@ prim_ansi_notify(PRIM_PROTOTYPE)
 
     if (oper[0].data.string) {
         if (tp_m1_name_notify && mlev < LM2 && PSafe != oper[1].data.objref) {
-            prefix_message(buf, oper[0].data.string->data, PNAME(PSafe), BUFFER_LEN, 1);
+            prefix_message(buf, oper[0].data.string->data.c_str(), PNAME(PSafe), BUFFER_LEN, 1);
         } else {
-            strcpy(buf, oper[0].data.string->data);
+            strcpy(buf, oper[0].data.string->data.c_str());
         }
         ansi_notify_listeners(fr->descr, PSafe, program, oper[1].data.objref, getloc(PSafe), buf, 1);
     }
@@ -1170,7 +1170,7 @@ prim_notify_exclude(PRIM_PROTOTYPE)
         abort_interp("Non-string message argument (top)");
 
     if (tp_m1_name_notify && oper[0].data.string && mlev < LM2 && PSafe != oper[1].data.objref) {
-        prefix_message(buf, oper[0].data.string->data, PNAME(PSafe), BUFFER_LEN, 1);
+        prefix_message(buf, oper[0].data.string->data.c_str(), PNAME(PSafe), BUFFER_LEN, 1);
     } else {
         strcpy(buf, DoNullInd(oper[0].data.string));
     }
@@ -1242,7 +1242,7 @@ prim_ansi_notify_exclude(PRIM_PROTOTYPE)
         abort_interp("Non-string message argument (top)");
 
     if (tp_m1_name_notify && oper[0].data.string && mlev < LM2 && PSafe != oper[1].data.objref) {
-        prefix_message(buf, oper[0].data.string->data, PNAME(PSafe), BUFFER_LEN, 1);
+        prefix_message(buf, oper[0].data.string->data.c_str(), PNAME(PSafe), BUFFER_LEN, 1);
     } else {
         strcpy(buf, DoNullInd(oper[0].data.string));
     }
@@ -1319,7 +1319,7 @@ prim_notify_html_exclude(PRIM_PROTOTYPE)
         abort_interp("Non-string message argument (top)");
 
     if (tp_m1_name_notify && oper[0].data.string && mlev < LM2 && PSafe != oper[1].data.objref) {
-        prefix_message(buf, oper[0].data.string->data, PNAME(PSafe), BUFFER_LEN, 1);
+        prefix_message(buf, oper[0].data.string->data.c_str(), PNAME(PSafe), BUFFER_LEN, 1);
     } else {
         strcpy(buf, DoNullInd(oper[0].data.string));
     }
@@ -1397,7 +1397,7 @@ prim_notify_html_exclude_nocr(PRIM_PROTOTYPE)
         abort_interp("Non-string message argument (top)");
 
     if (tp_m1_name_notify && oper[0].data.string && mlev < LM2 && PSafe != oper[1].data.objref) {
-        prefix_message(buf, oper[0].data.string->data, PNAME(PSafe), BUFFER_LEN, 1);
+        prefix_message(buf, oper[0].data.string->data.c_str(), PNAME(PSafe), BUFFER_LEN, 1);
     } else {
         strcpy(buf, DoNullInd(oper[0].data.string));
     }
@@ -1501,7 +1501,7 @@ prim_explode(PRIM_PROTOTYPE)
         abort_interp("Empty string argument (2)");
     {
         int i;
-        const char *delimit = temp1.data.string->data;
+        const char *delimit = temp1.data.string->data.c_str();
 
         if (!temp2.data.string) {
             result = 1;
@@ -1510,12 +1510,12 @@ prim_explode(PRIM_PROTOTYPE)
             return;
         } else {
             result = 0;
-            bcopy(temp2.data.string->data, buf, temp2.data.string->length + 1);
-            for (i = temp2.data.string->length - 1; i >= 0; i--) {
-                if (!strncmp(buf + i, delimit, temp1.data.string->length)) {
+            bcopy(temp2.data.string->data.c_str(), buf, temp2.data.string->length() + 1);
+            for (i = temp2.data.string->length() - 1; i >= 0; i--) {
+                if (!strncmp(buf + i, delimit, temp1.data.string->length())) {
                     buf[i] = '\0';
                     CHECKOFLOW(1);
-                    PushString((buf + i + temp1.data.string->length));
+                    PushString((buf + i + temp1.data.string->length()));
                     result++;
                 }
             }
@@ -1553,16 +1553,16 @@ prim_subst(PRIM_PROTOTYPE)
 
         buf[0] = '\0';
         if (oper[2].data.string) {
-            bcopy(oper[2].data.string->data, xbuf, oper[2].data.string->length + 1);
-            match = oper[0].data.string->data;
+            bcopy(oper[2].data.string->data.c_str(), xbuf, oper[2].data.string->length() + 1);
+            match = oper[0].data.string->data.c_str();
             replacement = DoNullInd(oper[1].data.string);
-            k = *replacement ? oper[1].data.string->length : 0;
+            k = *replacement ? oper[1].data.string->length() : 0;
             while (xbuf[i]) {
-                if (!strncmp(xbuf + i, match, oper[0].data.string->length)) {
+                if (!strncmp(xbuf + i, match, oper[0].data.string->length())) {
                     if ((j + k + 1) > BUFFER_LEN)
                         abort_interp("Operation would result in overflow.");
                     strcat(buf, replacement);
-                    i += oper[0].data.string->length;
+                    i += oper[0].data.string->length();
                     j += k;
                 } else {
                     if ((j + 1) > BUFFER_LEN)
@@ -1597,18 +1597,18 @@ prim_instr(PRIM_PROTOTYPE)
         result = 0;
     } else {
 
-        const char *remaining = oper[1].data.string->data;
-        const char *match = oper[0].data.string->data;
+        const char *remaining = oper[1].data.string->data.c_str();
+        const char *match = oper[0].data.string->data.c_str();
         int step = 1;
 
         result = 0;
         do {
-            if (!strncmp(remaining, match, oper[0].data.string->length)) {
-                result = remaining - oper[1].data.string->data + 1;
+            if (!strncmp(remaining, match, oper[0].data.string->length())) {
+                result = remaining - oper[1].data.string->data.c_str() + 1;
                 break;
             }
             remaining += step;
-        } while (remaining >= oper[1].data.string->data && *remaining);
+        } while (remaining >= oper[1].data.string->data.c_str() && *remaining);
     }
 
 
@@ -1633,20 +1633,20 @@ prim_rinstr(PRIM_PROTOTYPE)
         result = 0;
     } else {
 
-        const char *remaining = oper[1].data.string->data;
-        const char *match = oper[0].data.string->data;
+        const char *remaining = oper[1].data.string->data.c_str();
+        const char *match = oper[0].data.string->data.c_str();
         int step = -1;
 
-        remaining += oper[1].data.string->length - 1;
+        remaining += oper[1].data.string->length() - 1;
 
         result = 0;
         do {
-            if (!strncmp(remaining, match, oper[0].data.string->length)) {
-                result = remaining - oper[1].data.string->data + 1;
+            if (!strncmp(remaining, match, oper[0].data.string->length())) {
+                result = remaining - oper[1].data.string->data.c_str() + 1;
                 break;
             }
             remaining += step;
-        } while (remaining >= oper[1].data.string->data && *remaining);
+        } while (remaining >= oper[1].data.string->data.c_str() && *remaining);
     }
 
 
@@ -1666,7 +1666,7 @@ prim_pronoun_sub(PRIM_PROTOTYPE)
     if (oper[0].type != PROG_STRING)
         abort_interp("Invalid argument (2)");
     if (oper[0].data.string) {
-        strcpy(buf, pronoun_substitute(fr->descr, oper[1].data.objref, oper[0].data.string->data));
+        strcpy(buf, pronoun_substitute(fr->descr, oper[1].data.objref, oper[0].data.string->data.c_str()));
     } else {
         buf[0] = '\0';
     }
@@ -1686,7 +1686,7 @@ prim_toupper(PRIM_PROTOTYPE)
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string argument.");
     if (oper[0].data.string) {
-        strcpy(buf, oper[0].data.string->data);
+        strcpy(buf, oper[0].data.string->data.c_str());
     } else {
         buf[0] = '\0';
     }
@@ -1707,7 +1707,7 @@ prim_tolower(PRIM_PROTOTYPE)
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string argument.");
     if (oper[0].data.string) {
-        strcpy(buf, oper[0].data.string->data);
+        strcpy(buf, oper[0].data.string->data.c_str());
     } else {
         buf[0] = '\0';
     }
@@ -1828,10 +1828,10 @@ prim_strencrypt(PRIM_PROTOTYPE)
     if (oper[1].type != PROG_STRING || oper[0].type != PROG_STRING) {
         abort_interp("Non-string argument.");
     }
-    if (!oper[0].data.string || !*(oper[0].data.string->data)) {
+    if (!oper[0].data.string || !*(oper[0].data.string->data.c_str())) {
         abort_interp("Key cannot be a null string. (2)");
     }
-    ptr = strencrypt(DoNullInd(oper[1].data.string), oper[0].data.string->data);
+    ptr = strencrypt(DoNullInd(oper[1].data.string), oper[0].data.string->data.c_str());
 
 
     PushString(ptr);
@@ -1846,10 +1846,10 @@ prim_strdecrypt(PRIM_PROTOTYPE)
     if (oper[1].type != PROG_STRING || oper[0].type != PROG_STRING) {
         abort_interp("Non-string argument.");
     }
-    if (!oper[0].data.string || !*(oper[0].data.string->data)) {
+    if (!oper[0].data.string || !*(oper[0].data.string->data.c_str())) {
         abort_interp("Key cannot be a null string. (2)");
     }
-    ptr = strdecrypt(DoNullInd(oper[1].data.string), oper[0].data.string->data);
+    ptr = strdecrypt(DoNullInd(oper[1].data.string), oper[0].data.string->data.c_str());
 
 
     PushString(ptr);
@@ -1871,14 +1871,14 @@ prim_tokensplit(PRIM_PROTOTYPE)
         abort_interp("Not a string argument. (2)");
     if (oper[0].type != PROG_STRING)
         abort_interp("Not a string argument. (3)");
-    if (!oper[1].data.string || oper[1].data.string->length < 1)
+    if (!oper[1].data.string || oper[1].data.string->length() < 1)
         abort_interp("Invalid null delimiter string. (2)");
     if (oper[0].data.string) {
-        esc = oper[0].data.string->data[0];
+        esc = oper[0].data.string->data.c_str()[0];
     } else {
         esc = '\0';
     }
-    escisdel = index(oper[1].data.string->data, esc) != 0;
+    escisdel = index(oper[1].data.string->data.c_str(), esc) != 0;
     strcpy(buf, DoNullInd(oper[2].data.string));
     ptr = buf;
     out = outbuf;
@@ -1888,7 +1888,7 @@ prim_tokensplit(PRIM_PROTOTYPE)
             if (!*ptr)
                 break;
         } else {
-            delim = oper[1].data.string->data;
+            delim = (char *) oper[1].data.string->data.c_str();
             while (*delim) {
                 if (*delim == *ptr)
                     break;
@@ -1934,14 +1934,14 @@ prim_parse_ansi(PRIM_PROTOTYPE)
 
     if (oper[0].data.number < 0 || oper[0].data.number > 3)
         abort_interp("Integer out of range of 0 - 3.");
-    if (!oper[1].data.string || oper[1].data.string->length < 1) {
+    if (!oper[1].data.string || oper[1].data.string->length() < 1) {
 
 
         PushNullStr;
     } else {
 
         ctype = oper[0].data.number;
-        sprintf(buf3, "%s", oper[1].data.string->data);
+        sprintf(buf3, "%s", oper[1].data.string->data.c_str());
 
 
 
@@ -1977,18 +1977,18 @@ prim_parse_neon(PRIM_PROTOTYPE)
     ref = oper[2].data.objref;
 
 
-    if (!oper[0].data.string || oper[0].data.string->length < 1) {
+    if (!oper[0].data.string || oper[0].data.string->length() < 1) {
         sprintf(buf5, "%s", ANSINORMAL);
     } else {
-        sprintf(buf5, "%s", oper[0].data.string->data);
+        sprintf(buf5, "%s", oper[0].data.string->data.c_str());
     }
 
-    if (!oper[1].data.string || oper[1].data.string->length < 1) {
+    if (!oper[1].data.string || oper[1].data.string->length() < 1) {
 
 
         PushNullStr;
     } else {
-        sprintf(buf3, "%s", oper[1].data.string->data);
+        sprintf(buf3, "%s", oper[1].data.string->data.c_str());
 
 
         sprintf(buf4, "%s", parse_ansi(ref, buf, buf3, buf5));
@@ -2011,7 +2011,7 @@ prim_unparse_ansi(PRIM_PROTOTYPE)
 
     if (oper[0].data.number < 0 || oper[0].data.number > 3)
         abort_interp("Integer out of range of 0-3.");
-    if (!oper[1].data.string || oper[1].data.string->length < 1) {
+    if (!oper[1].data.string || oper[1].data.string->length() < 1) {
 
 
         PushNullStr;
@@ -2021,7 +2021,7 @@ prim_unparse_ansi(PRIM_PROTOTYPE)
         buf[0] = '\0';
         buf3[0] = '\0';
         buf4[0] = '\0';
-        sprintf(buf3, "%s", oper[1].data.string->data);
+        sprintf(buf3, "%s", oper[1].data.string->data.c_str());
 
 
 
@@ -2055,14 +2055,14 @@ prim_escape_ansi(PRIM_PROTOTYPE)
 
     if (oper[0].data.number < 0 || oper[0].data.number > 3)
         abort_interp("Integer out of range of 0-3.");
-    if (!oper[1].data.string || oper[1].data.string->length < 1) {
+    if (!oper[1].data.string || oper[1].data.string->length() < 1) {
 
 
         PushNullStr;
     } else {
 
         ctype = oper[0].data.number;
-        sprintf(buf3, "%s", oper[1].data.string->data);
+        sprintf(buf3, "%s", oper[1].data.string->data.c_str());
 
 
 
@@ -2084,7 +2084,7 @@ prim_escape_ansi(PRIM_PROTOTYPE)
 void
 prim_ansi_strlen(PRIM_PROTOTYPE)
 {
-    char *ptr;
+    const char *ptr;
     int i;
 
     if (oper[0].type != PROG_STRING)
@@ -2100,7 +2100,7 @@ prim_ansi_strlen(PRIM_PROTOTYPE)
 
     i = 0;
 
-    ptr = oper[0].data.string->data;
+    ptr = oper[0].data.string->data.c_str();
 
     while (*ptr) {
         if (*ptr++ == ESCAPE_CHAR) {
@@ -2125,7 +2125,7 @@ prim_ansi_strlen(PRIM_PROTOTYPE)
 void
 prim_ansi_strcut(PRIM_PROTOTYPE)
 {
-    char *ptr;
+    const char *ptr;
     char *op;
     char outbuf1[BUFFER_LEN];
     char outbuf2[BUFFER_LEN];
@@ -2146,15 +2146,15 @@ prim_ansi_strcut(PRIM_PROTOTYPE)
 
     loc = 0;
 
-    if (oper[0].data.number >= oper[1].data.string->length) {
-        strcpy(buf, oper[1].data.string->data);
+    if (oper[0].data.number >= oper[1].data.string->length()) {
+        strcpy(buf, oper[1].data.string->data.c_str());
 
 
         PushString(buf);
         PushNullStr;
         return;
     } else if (oper[0].data.number <= 0) {
-        strcpy(buf, oper[1].data.string->data);
+        strcpy(buf, oper[1].data.string->data.c_str());
 
 
         PushNullStr;
@@ -2162,7 +2162,7 @@ prim_ansi_strcut(PRIM_PROTOTYPE)
         return;
     }
 
-    ptr = oper[1].data.string->data;
+    ptr = oper[1].data.string->data.c_str();
 
     *outbuf2 = '\0';
     op = outbuf1;
@@ -2187,7 +2187,7 @@ prim_ansi_strcut(PRIM_PROTOTYPE)
         }
     }
     *op = '\0';
-    memcpy((void *) outbuf2, (const void *) ptr, oper[1].data.string->length - (ptr - oper[1].data.string->data) + 1);
+    memcpy((void *) outbuf2, (const void *) ptr, oper[1].data.string->length() - (ptr - oper[1].data.string->data.c_str()) + 1);
 
 
 
@@ -2213,7 +2213,7 @@ prim_ansi_strip(PRIM_PROTOTYPE)
         return;
     }
 
-    strip_ansi(buf, oper[0].data.string->data);
+    strip_ansi(buf, oper[0].data.string->data.c_str());
 
     PushString(buf);
 }
@@ -2241,12 +2241,12 @@ prim_ansi_midstr(PRIM_PROTOTYPE)
     start = oper[1].data.number - 1;
     range = oper[0].data.number;
 
-    if (!oper[2].data.string || start > oper[2].data.string->length || range == 0) {
+    if (!oper[2].data.string || start > oper[2].data.string->length() || range == 0) {
         PushNullStr;
         return;
     }
 
-    ptr = oper[2].data.string->data;
+    ptr = oper[2].data.string->data.c_str();
     op = buf;
     loc = 0;
 
@@ -2323,7 +2323,7 @@ prim_textattr(PRIM_PROTOTYPE)
         strcpy(buf, DoNullInd(oper[1].data.string));
     } else {
         *buf = '\0';
-        ptr = oper[0].data.string->data;
+        ptr = oper[0].data.string->data.c_str();
         ptr2 = attr;
         while (!done) {
             switch (*ptr) {
@@ -2401,12 +2401,12 @@ prim_textattr(PRIM_PROTOTYPE)
             }
         }
         totallen = strlen(buf);
-        totallen += oper[1].data.string->length;
+        totallen += oper[1].data.string->length();
         totallen += strlen(ANSI_RESET);
         if (totallen >= BUFFER_LEN) {
             abort_interp("Operation would result in too long of a string.");
         }
-        strcat(buf, oper[1].data.string->data);
+        strcat(buf, oper[1].data.string->data.c_str());
     }
     strcat(buf, ANSI_RESET);
 
@@ -2428,9 +2428,9 @@ prim_flag_2char(PRIM_PROTOTYPE)
         abort_interp("Top argument must be a string. (1)");
     if (!oper[0].data.string)
         abort_interp("Empty string given. (1)");
-    flag_str = new char[strlen(oper[0].data.string->data) + 1];
+    flag_str = new char[strlen(oper[0].data.string->data.c_str()) + 1];
 
-    strcpy(flag_str, oper[0].data.string->data);
+    strcpy(flag_str, oper[0].data.string->data.c_str());
     while (*flag_str == '!') {
         n = !n;
         (void) flag_str++;
@@ -2460,9 +2460,9 @@ prim_power_2char(PRIM_PROTOTYPE)
         abort_interp("Top argument must be a string. (1)");
     if (!oper[0].data.string)
         abort_interp("Empty string given. (1)");
-    power_str = new char[strlen(oper[0].data.string->data) + 1];
+    power_str = new char[strlen(oper[0].data.string->data.c_str()) + 1];
 
-    strcpy(power_str, oper[0].data.string->data);
+    strcpy(power_str, oper[0].data.string->data.c_str());
     while (*power_str == '!') {
         n = !n;
         (void) power_str++;
@@ -2610,7 +2610,7 @@ prim_array_fmtstrings(PRIM_PROTOTYPE)
                         if (('s' == sstr[scnt])
                             && (PROG_STRING == oper3->type)
                             && (oper3->data.string)) {
-                            ptr = oper3->data.string->data;
+                            ptr = (char *) oper3->data.string->data.c_str();
 
                             i = 0;
                             while ((-1 == slen2 || i < slen2) && *ptr) { /* adapted from prim_ansi_strlen */
@@ -3061,7 +3061,7 @@ prim_base64encode(PRIM_PROTOTYPE)
         std::string tmp;
         
         try {
-            std::string in(oper[0].data.string->data, oper[0].data.string->length);
+            std::string in(oper[0].data.string->data.c_str(), oper[0].data.string->length());
             tmp = http_encode64(in);
         }
         catch(std::exception & e) {
@@ -3089,7 +3089,7 @@ prim_base64decode(PRIM_PROTOTYPE)
         std::string tmp;
 
         try {
-            tmp = http_decode64(oper[0].data.string->data);
+            tmp = http_decode64(oper[0].data.string->data.c_str());
         }
         catch(std::exception & e) {
             abort_interp(e.what());
@@ -3110,10 +3110,10 @@ prim_str2hex(PRIM_PROTOTYPE)
     if (!oper[0].data.string) {
         PushNullStr;
     } else {
-        if (oper[0].data.string->length * 2 >= BUFFER_LEN)
+        if (oper[0].data.string->length() * 2 >= BUFFER_LEN)
             abort_interp("Resultant string would overflow buffer.");
 
-        std::string in(oper[0].data.string->data, oper[0].data.string->length); 
+        std::string in(oper[0].data.string->data.c_str(), oper[0].data.string->length()); 
         std::string out = strToHex(in, 1);
 
         PushString(out);
@@ -3132,7 +3132,7 @@ prim_hex2str(PRIM_PROTOTYPE)
         std::string out;
 
         try {
-            std::string in(oper[0].data.string->data, oper[0].data.string->length);
+            std::string in(oper[0].data.string->data.c_str(), oper[0].data.string->length());
             out = hexToStr(in);
         }
         catch(std::exception & e) {
@@ -3159,7 +3159,7 @@ prim_hex2base64str(PRIM_PROTOTYPE)
         std::string tmp;
 
         try {
-            tmp = hexToStr(oper[0].data.string->data);
+            tmp = hexToStr(oper[0].data.string->data.c_str());
         }
         catch(std::exception & e) {
             abort_interp(e.what());
@@ -3187,7 +3187,7 @@ prim_base64str2hex(PRIM_PROTOTYPE)
     if (!oper[0].data.string) {
         PushNullStr;
     } else {
-        result = http_decode64(oper[0].data.string->data, oper[0].data.string->length, buf);
+        result = http_decode64(oper[0].data.string->data.c_str(), oper[0].data.string->length(), buf);
         if (result <= 0) {
             PushNullStr;
         } else if (result * 2 >= BUFFER_LEN) {
@@ -3242,7 +3242,7 @@ prim_wcharlen_slice(PRIM_PROTOTYPE)
         return;
     }
 
-    result = wcharlen_slice(DoNullInd(oper[1].data.string), oper[0].data.number, oper[1].data.string->length);
+    result = wcharlen_slice(DoNullInd(oper[1].data.string), oper[0].data.number, oper[1].data.string->length());
 
     if (result == -1) {
         /* Let's abort for now, just to see how often we get these. */

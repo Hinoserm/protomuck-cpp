@@ -791,7 +791,7 @@ prim_array_regfilter_prop(PRIM_PROTOTYPE)
         abort_interp("Non-integer argument (4)");
 
 
-    ptr = oper[2].data.string->data;
+    ptr = oper[2].data.string->data.c_str();
     while ((ptr = index(ptr, PROPDIR_DELIMITER)))
         if (!(*(++ptr)))
             abort_interp("Cannot access a propdir directly.");

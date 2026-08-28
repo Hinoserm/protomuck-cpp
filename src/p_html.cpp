@@ -74,7 +74,7 @@ prim_playmidi(PRIM_PROTOTYPE)
     if (!valid_object(&oper[2]))
         abort_interp("Invalid object argument (1)");
     CHECKOFLOW(1);
-    strcpy(buf2, oper[1].data.string->data);
+    strcpy(buf2, oper[1].data.string->data.c_str());
     sprintf(buf3, "%d", oper[0].data.number);
     strcpy(buf, p_playmidi(oper[2].data.objref, buf2, buf3));
 
@@ -94,8 +94,8 @@ prim_commandtext(PRIM_PROTOTYPE)
         abort_interp("String argument expected (2)");
     if (!valid_object(&oper[2]))
         abort_interp("Invalid object reference (1)");
-    strcpy(buf2, oper[1].data.string->data);
-    strcpy(buf3, oper[0].data.string->data);
+    strcpy(buf2, oper[1].data.string->data.c_str());
+    strcpy(buf3, oper[0].data.string->data.c_str());
     strcpy(buf, p_commandtext(oper[2].data.objref, buf2, buf3));
 
     PushString(buf);
@@ -109,7 +109,7 @@ prim_unescape_url(PRIM_PROTOTYPE)
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string argument. (1)");
     if (oper[0].data.string) {
-        strcpy(buf, oper[0].data.string->data);
+        strcpy(buf, oper[0].data.string->data.c_str());
         unescape_url(buf);      /* Found in cgi.c */
 
         PushString(buf);
@@ -127,7 +127,7 @@ prim_escape_url(PRIM_PROTOTYPE)
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string argument. (1)");
     if (oper[0].data.string) {
-        escape_url(buf, oper[0].data.string->data); /* Found in cgi.c */
+        escape_url(buf, oper[0].data.string->data.c_str()); /* Found in cgi.c */
 
         PushString(buf);
     } else {

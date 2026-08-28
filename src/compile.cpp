@@ -1118,7 +1118,7 @@ IntermediateIsString(struct INTERMEDIATE *ptr, const char *val)
     const char *myval;
 
     if (ptr && ptr->in.type == PROG_STRING) {
-        myval = ptr->in.data.string ? ptr->in.data.string->data : "";
+        myval = ptr->in.data.string ? ptr->in.data.string->data.c_str() : "";
         if (!strcmp(myval, val))
             return 1;
     }
@@ -1242,7 +1242,7 @@ OptimizeIntermediate(COMPSTATE *cstat)
                             if (IntermediateIsInteger(curr->next->next, 0)) {
                                 if (IntermediateIsPrimitive(curr->next->next->next, EqualsNo)) {
                                     if (curr->in.data.string)
-                                        delete[]curr->in.data.string;
+                                        delete curr->in.data.string;
                                     curr->in.type = PROG_PRIMITIVE;
                                     curr->in.data.number = NotNo;
                                     RemoveNextIntermediate(cstat, curr);
@@ -1258,7 +1258,7 @@ OptimizeIntermediate(COMPSTATE *cstat)
                             if (IntermediateIsInteger(curr->next->next, 0)) {
                                 if (IntermediateIsPrimitive(curr->next->next->next, EqualsNo)) {
                                     if (curr->in.data.string)
-                                        delete[]curr->in.data.string;
+                                        delete curr->in.data.string;
                                     curr->in.type = PROG_PRIMITIVE;
                                     curr->in.data.number = NotNo;
                                     RemoveNextIntermediate(cstat, curr);
@@ -4354,7 +4354,7 @@ free_intermediate_node(struct INTERMEDIATE *wd)
 
     if (wd->in.type == PROG_STRING) {
         if (wd->in.data.string)
-            delete[]wd->in.data.string;
+            delete wd->in.data.string;
     }
 
     if (wd->in.type == PROG_FUNCTION) {
@@ -4496,7 +4496,7 @@ copy_program(COMPSTATE *cstat)
                 code[i].data.fnumber = curr->in.data.fnumber;
                 break;
             case PROG_STRING:
-                code[i].data.string = curr->in.data.string ? alloc_prog_string(curr->in.data.string->data) : 0;
+                code[i].data.string = curr->in.data.string ? alloc_prog_string(curr->in.data.string->data.c_str()) : 0;
                 break;
             case PROG_FUNCTION:
                 //code[i].data.mufproc = (struct muf_proc_data *) malloc(sizeof(struct muf_proc_data));
@@ -4727,7 +4727,7 @@ size_prog(dbref prog)
             }
             byts += sizeof(struct muf_proc_data);
         } else if (c[i].type == PROG_STRING && c[i].data.string) {
-            byts += strlen(c[i].data.string->data) + 1;
+            byts += strlen(c[i].data.string->data.c_str()) + 1;
             byts += sizeof(struct shared_string);
         } else if (c[i].type == PROG_ADD)
             byts += sizeof(struct prog_addr);

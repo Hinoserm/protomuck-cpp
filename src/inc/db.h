@@ -6,6 +6,7 @@
 #include "config.h"
 #include <stdio.h>
 #include <math.h>
+#include <string>
 #ifndef WIN_VC
 # include <time.h>
 #include <sys/time.h>
@@ -598,10 +599,16 @@ struct line {
 #define ADDR_SIZE       256     /* maximum size of the system and call stacks */
 
 struct shared_string {		    /* for sharing strings in programs */
-    int     links;		        /* number of pointers to this struct */
-    int     length;		        /* length of string data */
-    int     wclength;
-    char    data[1];		    /* shared string data */
+    int         links;		    /* number of pointers to this struct */
+    int         wclength;       /* cached wide-character length, or -2 */
+    std::string data;		    /* shared string data */
+
+    shared_string(const char *s, size_t len, int wcl = -2)
+        : links(1), wclength(wcl), data(s, len) {}
+    shared_string(std::string &&s, int wcl = -2)
+        : links(1), wclength(wcl), data(std::move(s)) {}
+
+    int length() const { return (int) data.size(); }
 };
 
 struct prog_addr {              /* for 'addres references */

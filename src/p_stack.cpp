@@ -296,12 +296,12 @@ sort0(const void *op1, const void *op2)
         return -1;
     if (!o2->data.string)
         return 1;
-    if (!o1->data.string->data)
+    if (!o1->data.string->data.c_str())
         return -1;
-    if (!o2->data.string->data)
+    if (!o2->data.string->data.c_str())
         return 1;
 
-    return strcmp(o1->data.string->data, o2->data.string->data);
+    return strcmp(o1->data.string->data.c_str(), o2->data.string->data.c_str());
 }
 
 int
@@ -317,12 +317,12 @@ sort1(const void *op1, const void *op2)
         return 1;
     if (!o2->data.string)
         return -1;
-    if (!o1->data.string->data)
+    if (!o1->data.string->data.c_str())
         return 1;
-    if (!o2->data.string->data)
+    if (!o2->data.string->data.c_str())
         return -1;
 
-    return -strcmp(o1->data.string->data, o2->data.string->data);
+    return -strcmp(o1->data.string->data.c_str(), o2->data.string->data.c_str());
 }
 
 int
@@ -338,12 +338,12 @@ sort2(const void *op1, const void *op2)
         return -1;
     if (!o2->data.string)
         return 1;
-    if (!o1->data.string->data)
+    if (!o1->data.string->data.c_str())
         return -1;
-    if (!o2->data.string->data)
+    if (!o2->data.string->data.c_str())
         return 1;
 
-    return strcasecmp(o1->data.string->data, o2->data.string->data);
+    return strcasecmp(o1->data.string->data.c_str(), o2->data.string->data.c_str());
 }
 
 int
@@ -359,12 +359,12 @@ sort3(const void *op1, const void *op2)
         return 1;
     if (!o2->data.string)
         return -1;
-    if (!o1->data.string->data)
+    if (!o1->data.string->data.c_str())
         return 1;
-    if (!o2->data.string->data)
+    if (!o2->data.string->data.c_str())
         return -1;
 
-    return -strcasecmp(o1->data.string->data, o2->data.string->data);
+    return -strcasecmp(o1->data.string->data.c_str(), o2->data.string->data.c_str());
 }
 
 int
@@ -631,7 +631,7 @@ prim_checkargs(PRIM_PROTOTYPE)
         /* if null string, then no args expected. */
         return;
     }
-    strcpy(buf, oper[0].data.string->data); /* copy into local buffer */
+    strcpy(buf, oper[0].data.string->data.c_str()); /* copy into local buffer */
     currpos = strlen(buf) - 1;
     stackpos = *top - 1;
 
@@ -905,7 +905,7 @@ prim_interp(PRIM_PROTOTYPE)
     CHECKREMOTE(oper[1].data.objref);
 
     strcpy(buf, match_args);
-    strcpy(match_args, oper[0].data.string ? oper[0].data.string->data : "");
+    strcpy(match_args, oper[0].data.string ? oper[0].data.string->data.c_str() : "");
     fr->level++;
     interp_set_depth(fr);
     tmpfr = interp(fr->descr, player, DBFETCH(player)->location, oper[2].data.objref, oper[1].data.objref, PREEMPT, STD_HARDUID, 0);

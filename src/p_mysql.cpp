@@ -409,7 +409,7 @@ prim_sqlquery_t(PRIM_PROTOTYPE)
     //}
     //tr = new tsql_data;
     //tr->myconn = myconn;
-    //tr->query = alloc_string(oper[0].data.string->data);
+    //tr->query = alloc_string(oper[0].data.string->data.c_str());
     //tr->id = tid = mysql_thread_ids++;
     //mysql_register_frame(fr, tid);
     //tr->pid = fr->pid;
@@ -426,7 +426,7 @@ prim_sqlquery_t(PRIM_PROTOTYPE)
     //if (result)
     //    abort_interp("Unable to create thread");
 
-    tid = mysql_queue_query(fr, oper[1].data.mysql->hostname, oper[1].data.mysql->username, oper[1].data.mysql->password, oper[1].data.mysql->database, oper[1].data.mysql->timeout, oper[0].data.string->data);
+    tid = mysql_queue_query(fr, oper[1].data.mysql->hostname, oper[1].data.mysql->username, oper[1].data.mysql->password, oper[1].data.mysql->database, oper[1].data.mysql->timeout, oper[0].data.string->data.c_str());
 
     PushInt(tid);
     return;
@@ -465,16 +465,16 @@ prim_sqlconnect(PRIM_PROTOTYPE)
         abort_interp("Username cannot be an empty string.");
     /* copy data over */
     if (oper[4].data.string)    /* null host is assumed to be localhost */
-        strcpy(hostname, oper[4].data.string->data);
+        strcpy(hostname, oper[4].data.string->data.c_str());
     else
         strcpy(hostname, "");
-    strcpy(username, oper[3].data.string->data);
+    strcpy(username, oper[3].data.string->data.c_str());
     if (oper[2].data.string)    /* null passwords are possible. */
-        strcpy(password, oper[2].data.string->data);
+        strcpy(password, oper[2].data.string->data.c_str());
     else
         strcpy(password, "");
     if (oper[1].data.string)    /* null databases are possible. */
-        strcpy(database, oper[1].data.string->data);
+        strcpy(database, oper[1].data.string->data.c_str());
     else
         strcpy(database, "");
     timeout = oper[0].data.number;
@@ -543,7 +543,7 @@ prim_sqlquery(PRIM_PROTOTYPE)
     if (!oper[1].data.mysql->connected)
         abort_interp("This MySQL connection is closed.");
 
-    strcpy(query, oper[0].data.string->data);
+    strcpy(query, oper[0].data.string->data.c_str());
     tempsql = oper[1].data.mysql->mysql_conn;
     if (mysql_query(tempsql, query)) { /* Query failed */
         errno = -1;

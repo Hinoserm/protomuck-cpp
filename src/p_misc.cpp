@@ -125,7 +125,7 @@ prim_timefmt(PRIM_PROTOTYPE)
         abort_interp("Invalid argument (2)");
     tt = (time_t) oper[0].data.number;
     time_tm = localtime(&tt);
-    if (!format_time(buf, BUFFER_LEN, oper[1].data.string->data, time_tm))
+    if (!format_time(buf, BUFFER_LEN, oper[1].data.string->data.c_str(), time_tm))
         abort_interp("Operation would result in overflow");
     CHECKOFLOW(1);
 
@@ -689,7 +689,7 @@ prim_parselock(PRIM_PROTOTYPE)
     if (oper[0].type != PROG_STRING)
         abort_interp("Invalid argument");
     if (oper[0].data.string != (struct shared_string *) NULL) {
-        lok = parse_boolexp(fr->descr, ProgUID, oper[0].data.string->data, 0);
+        lok = parse_boolexp(fr->descr, ProgUID, oper[0].data.string->data.c_str(), 0);
     } else {
         lok = TRUE_BOOLEXP;
     }
@@ -769,7 +769,7 @@ prim_cancallp(PRIM_PROTOTYPE)
 
         pbs = DBFETCH(oper[1].data.objref)->sp.program.pubs;
         while (pbs) {
-            if (!string_compare(oper[0].data.string->data, pbs->subname))
+            if (!string_compare(oper[0].data.string->data.c_str(), pbs->subname))
                 break;
             pbs = pbs->next;
         }
@@ -819,7 +819,7 @@ prim_event_exists(PRIM_PROTOTYPE)
     /* str: eventID to look for */
     if (oper[0].type != PROG_STRING || !oper[0].data.string)
         abort_interp("Expected a non-null string eventid to search for.");
-    result = muf_event_exists(fr, oper[0].data.string->data);
+    result = muf_event_exists(fr, oper[0].data.string->data.c_str());
 
     PushInt(result);
 }
@@ -882,7 +882,7 @@ prim_pnameokp(PRIM_PROTOTYPE)
     if (!oper[0].data.string)
         result = 0;
     else
-        result = ok_player_name(oper[0].data.string->data);
+        result = ok_player_name(oper[0].data.string->data.c_str());
 
     PushInt(result);
 }
@@ -897,7 +897,7 @@ prim_nameokp(PRIM_PROTOTYPE)
     if (!oper[0].data.string)
         result = 0;
     else
-        result = ok_name(oper[0].data.string->data);
+        result = ok_name(oper[0].data.string->data.c_str());
 
     PushInt(result);
 }
@@ -1050,9 +1050,9 @@ prim_htoi(PRIM_PROTOTYPE)
         abort_interp("Non-string argument. (1)");
     result = 0;
     if (oper[0].data.string) {
-        for (tmp = 0; oper[0].data.string->data[tmp]; ++tmp) {
-            result += (oper[0].data.string->data[tmp] >= 'A' ? ((oper[0].data.string->data[tmp] & 0xdf) - 'A') + 10 : (oper[0].data.string->data[tmp] - '0'));
-            if (oper[0].data.string->data[tmp + 1] != '\0')
+        for (tmp = 0; oper[0].data.string->data.c_str()[tmp]; ++tmp) {
+            result += (oper[0].data.string->data.c_str()[tmp] >= 'A' ? ((oper[0].data.string->data.c_str()[tmp] & 0xdf) - 'A') + 10 : (oper[0].data.string->data.c_str()[tmp] - '0'));
+            if (oper[0].data.string->data.c_str()[tmp + 1] != '\0')
                 result *= 16;
         }
     }
@@ -1082,7 +1082,7 @@ prim_MD5hash(PRIM_PROTOTYPE)
     if (!oper[0].data.string) {
         MD5hex((char *) hexout, "", 0);
     } else {
-        MD5hex((char *) hexout, oper[0].data.string->data, oper[0].data.string->length);
+        MD5hex((char *) hexout, oper[0].data.string->data.c_str(), oper[0].data.string->length());
     }
 
     PushString(hexout);
@@ -1098,7 +1098,7 @@ prim_SHA1hash(PRIM_PROTOTYPE)
     if (!oper[0].data.string) {
         SHA1hex((char *) hexout, "", 0);
     } else {
-        SHA1hex((char *) hexout, oper[0].data.string->data, oper[0].data.string->length);
+        SHA1hex((char *) hexout, oper[0].data.string->data.c_str(), oper[0].data.string->length());
     }
 
     PushString(hexout);
@@ -1128,18 +1128,18 @@ prim_onevent(PRIM_PROTOTYPE)
         abort_interp("Internal error.  Invalid address. (1)");
     if (program != oper[1].data.addr->progref)
         abort_interp("Destination address outside current program. (1)");
-    if ((e = muf_interrupt_find(fr, oper[2].data.string->data))) {
+    if ((e = muf_interrupt_find(fr, oper[2].data.string->data.c_str()))) {
         delete e->event;
     } else {
         e = new muf_interrupt;
-        e->id = alloc_string(oper[2].data.string->data);
+        e->id = alloc_string(oper[2].data.string->data.c_str());
         e->prev = NULL;
         e->next = fr->interrupts;
         if (fr->interrupts)
             fr->interrupts->prev = e;
         fr->interrupts = e;
     }
-    e->event = alloc_string(oper[3].data.string->data);
+    e->event = alloc_string(oper[3].data.string->data.c_str());
     e->addr = oper[1].data.addr->data;
     e->keep = (oper[0].data.number != 0);
 
