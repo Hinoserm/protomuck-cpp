@@ -168,14 +168,14 @@ do_teleport(int descr, dbref player, const char *arg1, const char *arg2)
             if (destination == HOME) {
                 switch (Typeof(victim)) {
                     case TYPE_PLAYER:
-                        destination = DBFETCH(victim)->sp.player.home;
+                        destination = MUCK::playerHomeRef(victim);
                         if (parent_loop_check(victim, destination))
-                            destination = DBFETCH(OWNER(victim))->sp.player.home;
+                            destination = MUCK::playerHomeRef(OWNER(victim));
                         break;
                     case TYPE_THING:
                         destination = [&]{ MUCK::Thing *t = MUCK::database().get(victim)->As<MUCK::Thing>(); return (t && t->home()) ? t->home()->ref() : NOTHING; }();
                         if (parent_loop_check(victim, destination)) {
-                            destination = DBFETCH(OWNER(victim))->sp.player.home;
+                            destination = MUCK::playerHomeRef(OWNER(victim));
                             if (parent_loop_check(victim, destination)) {
                                 destination = (dbref) 0;
                             }
@@ -211,8 +211,8 @@ do_teleport(int descr, dbref player, const char *arg1, const char *arg2)
         default:
             switch (Typeof(victim)) {
                 case TYPE_PLAYER:
-                    if (!controls(player, victim) || ((!controls(player, destination)) && (!(FLAGS(destination) & JUMP_OK)) && (destination != DBFETCH(victim)->sp.player.home)
-                        ) || ((!controls(player, getloc(victim))) && (!(FLAGS(getloc(victim)) & JUMP_OK)) && (getloc(victim) != DBFETCH(victim)->sp.player.home)
+                    if (!controls(player, victim) || ((!controls(player, destination)) && (!(FLAGS(destination) & JUMP_OK)) && (destination != MUCK::playerHomeRef(victim))
+                        ) || ((!controls(player, getloc(victim))) && (!(FLAGS(getloc(victim)) & JUMP_OK)) && (getloc(victim) != MUCK::playerHomeRef(victim))
                         ) || ((Typeof(destination) == TYPE_THING) && !controls(player, getloc(destination))
                         )
                         ) {

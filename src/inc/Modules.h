@@ -85,6 +85,9 @@ class Exit : public Module {
  * legacy expressions convert one for one. */
 int exitDestCount(dbref ref);
 dbref exitDestRef(dbref ref, int i);
+dbref playerHomeRef(dbref ref);
+int playerPennies(dbref ref);
+void playerAddPennies(dbref ref, int delta);
 
 class MufProgram : public Module {
   public:

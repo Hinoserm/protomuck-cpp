@@ -262,6 +262,34 @@ exitDestRef(dbref ref, int i)
     return e ? e->destRef(i) : NOTHING;
 }
 
+dbref
+playerHomeRef(dbref ref)
+{
+    DbObject *o = database().get(ref);
+    Player *p = o ? o->As<Player>() : nullptr;
+
+    return (p && p->home()) ? p->home()->ref() : NOTHING;
+}
+
+int
+playerPennies(dbref ref)
+{
+    DbObject *o = database().get(ref);
+    Player *p = o ? o->As<Player>() : nullptr;
+
+    return p ? p->pennies() : 0;
+}
+
+void
+playerAddPennies(dbref ref, int delta)
+{
+    DbObject *o = database().get(ref);
+    Player *p = o ? o->As<Player>() : nullptr;
+
+    if (p)
+        p->setPennies(p->pennies() + delta);
+}
+
 void
 Exit::setDestRefs(const dbref *refs, int n)
 {

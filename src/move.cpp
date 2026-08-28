@@ -34,12 +34,12 @@ moveto(dbref what, dbref where)
         case HOME:
             switch (Typeof(what)) {
                 case TYPE_PLAYER:
-                    where = DBFETCH(what)->sp.player.home;
+                    where = MUCK::playerHomeRef(what);
                     break;
                 case TYPE_THING:
                     where = [&]{ MUCK::Thing *t = MUCK::database().get(what)->As<MUCK::Thing>(); return (t && t->home()) ? t->home()->ref() : NOTHING; }();
                     if (parent_loop_check(what, where))
-                        where = DBFETCH(OWNER(what))->sp.player.home;
+                        where = MUCK::playerHomeRef(OWNER(what));
                     break;
                 case TYPE_ROOM:
                     where = GLOBAL_ENVIRONMENT;
@@ -146,7 +146,7 @@ enter_room(int descr, dbref player, dbref loc, dbref exit)
 
     /* check for room == HOME */
     if (loc == HOME)
-        loc = DBFETCH(player)->sp.player.home; /* home */
+        loc = MUCK::playerHomeRef(player); /* home */
     /* check for room == NIL */
     if (loc == NIL)
         loc = Typeof(player) == TYPE_PLAYER ? tp_player_start : OWNER(player);
@@ -231,9 +231,9 @@ enter_room(int descr, dbref player, dbref loc, dbref exit)
     if (tp_penny_rate != 0) {
         /* check for pennies */
         if (!controls(player, loc)
-            && DBFETCH(player)->sp.player.pennies <= tp_max_pennies && RANDOM() % tp_penny_rate == 0) {
+            && MUCK::playerPennies(player) <= tp_max_pennies && RANDOM() % tp_penny_rate == 0) {
             anotify_fmt(player, CINFO "You found a %s!", tp_penny);
-            DBFETCH(OWNER(player))->sp.player.pennies++;
+            MUCK::playerAddPennies(OWNER(player), 1);
             DBDIRTY(OWNER(player));
         }
     }
@@ -258,13 +258,13 @@ send_home(int descr, dbref thing, int puppethome)
             /* send his possessions home first! */
             /* that way he sees them when he arrives */
             send_contents(descr, thing, HOME);
-            enter_room(descr, thing, DBFETCH(thing)->sp.player.home, DBFETCH(thing)->location);
+            enter_room(descr, thing, MUCK::playerHomeRef(thing), DBFETCH(thing)->location);
             break;
         case TYPE_THING:
             if (puppethome)
                 send_contents(descr, thing, HOME);
             if (FLAGS(thing) & (ZOMBIE | LISTENER)) {
-                enter_room(descr, thing, DBFETCH(thing)->sp.player.home, DBFETCH(thing)->location);
+                enter_room(descr, thing, MUCK::playerHomeRef(thing), DBFETCH(thing)->location);
                 break;
             }
             moveto(thing, HOME); /* home */
@@ -360,7 +360,7 @@ trigger(int descr, dbref player, dbref exit, int pflag)
     for (i = 0; i < MUCK::exitDestCount(exit); i++) {
         dest = MUCK::exitDestRef(exit, i);
         if (dest == HOME) {
-            dest = DBFETCH(player)->sp.player.home;
+            dest = MUCK::playerHomeRef(player);
         }
         if (dest == NIL) {      /* null destination, do nothing but the succ statements. */
             if (GETSUCC(exit)) {
@@ -901,7 +901,7 @@ recycle(int descr, dbref player, dbref thing)
     switch (Typeof(thing)) {
         case TYPE_ROOM:
             if (!Mage(OWNER(thing)))
-                DBFETCH(OWNER(thing))->sp.player.pennies += tp_room_cost;
+                MUCK::playerAddPennies(OWNER(thing), tp_room_cost);
             DBDIRTY(OWNER(thing));
             for (first = DBFETCH(thing)->exits; first != NOTHING; first = rest) {
                 rest = DBFETCH(first)->next;
@@ -912,8 +912,7 @@ recycle(int descr, dbref player, dbref thing)
             break;
         case TYPE_THING:
             if (!Mage(OWNER(thing)))
-                DBFETCH(OWNER(thing))->sp.player.pennies +=
-                    MUCK::database().get(thing)->As<MUCK::Thing>()->value();
+                MUCK::playerAddPennies(OWNER(thing), MUCK::database().get(thing)->As<MUCK::Thing>()->value());
             DBDIRTY(OWNER(thing));
             for (first = DBFETCH(thing)->exits; first != NOTHING; first = rest) {
                 rest = DBFETCH(first)->next;
@@ -923,10 +922,10 @@ recycle(int descr, dbref player, dbref thing)
             break;
         case TYPE_EXIT:
             if (!Mage(OWNER(thing)))
-                DBFETCH(OWNER(thing))->sp.player.pennies += tp_exit_cost;
+                MUCK::playerAddPennies(OWNER(thing), tp_exit_cost);
             if (!Mage(OWNER(thing)))
                 if (MUCK::exitDestCount(thing) != 0)
-                    DBFETCH(OWNER(thing))->sp.player.pennies += tp_link_cost;
+                    MUCK::playerAddPennies(OWNER(thing), tp_link_cost);
             DBDIRTY(OWNER(thing));
             break;
         case TYPE_PROGRAM:
@@ -955,10 +954,11 @@ recycle(int descr, dbref player, dbref thing)
                 break;
             case TYPE_THING:
                 if ([&]{ MUCK::Thing *t = MUCK::database().get(rest)->As<MUCK::Thing>(); return (t && t->home()) ? t->home()->ref() : NOTHING; }() == thing) {
-                    if (DBFETCH(OWNER(rest))->sp.player.home == thing)
-                        DBSTORE(OWNER(rest), sp.player.home, tp_player_start);
+                    if (MUCK::playerHomeRef(OWNER(rest)) == thing)
+                        MUCK::database().get(OWNER(rest))->As<MUCK::Player>()
+                            ->setHome(MUCK::database().get(tp_player_start));
                     MUCK::database().get(rest)->As<MUCK::Thing>()->setHome(
-                        MUCK::database().get(DBFETCH(OWNER(rest))->sp.player.home));
+                        MUCK::database().get(MUCK::playerHomeRef(OWNER(rest))));
                     DBDIRTY(rest);
                 }
                 if (DBFETCH(rest)->exits == thing) {
@@ -981,7 +981,7 @@ recycle(int descr, dbref player, dbref thing)
                         keep[j++] = e->destRef(i);
                 }
                 if (j < e->destCount()) {
-                    DBFETCH(OWNER(rest))->sp.player.pennies += tp_link_cost;
+                    MUCK::playerAddPennies(OWNER(rest), tp_link_cost);
                     DBDIRTY(OWNER(rest));
                     e->setDestRefs(keep, j);
                 }
@@ -1006,9 +1006,9 @@ recycle(int descr, dbref player, dbref thing)
                         anotify_nolisten2(rest, CINFO "The program you were editing has been recycled.  Exiting Editor.");
                     }
                 }
-                if (DBFETCH(rest)->sp.player.home == thing) {
-                    DBFETCH(rest)->sp.player.home = tp_player_start;
-                    DBDIRTY(rest);
+                if (MUCK::playerHomeRef(rest) == thing) {
+                    MUCK::database().get(rest)->As<MUCK::Player>()
+                        ->setHome(MUCK::database().get(tp_player_start));
                 }
                 if (DBFETCH(rest)->exits == thing) {
                     DBFETCH(rest)->exits = DBFETCH(thing)->next;

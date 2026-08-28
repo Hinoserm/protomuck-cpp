@@ -49,7 +49,7 @@ do_give(int descr, dbref player, const char *recipient, int amount)
                 if (Typeof(who) != TYPE_PLAYER) {
                     anotify_nolisten2(player, CFAIL "You can only give to other players.");
                     return;
-                } else if (DBFETCH(who)->sp.player.pennies + amount > tp_max_pennies) {
+                } else if (MUCK::playerPennies(who) + amount > tp_max_pennies) {
                     anotify_fmt(player, SYSRED "That player doesn't need that many %s!", tp_pennies);
                     return;
                 }
@@ -64,7 +64,7 @@ do_give(int descr, dbref player, const char *recipient, int amount)
         /* he can do it */
         switch (Typeof(who)) {
             case TYPE_PLAYER:
-                DBFETCH(who)->sp.player.pennies += amount;
+                MUCK::playerAddPennies(who, amount);
                 sprintf(buf, CSUCC "You give %d %s to %s.", amount, amount == 1 ? tp_penny : tp_pennies, NAME(who));
                 anotify_nolisten2(player, buf);
                 sprintf(buf, CNOTE "%s gives you %d %s.", NAME(player), amount, amount == 1 ? tp_penny : tp_pennies);

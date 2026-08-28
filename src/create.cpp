@@ -374,7 +374,7 @@ do_link(int descr, dbref player, const char *thing_name, const char *dest_name)
                     /* pay the owner for his loss */
                     dbref owner = OWNER(thing);
 
-                    DBFETCH(owner)->sp.player.pennies += tp_exit_cost;
+                    MUCK::playerAddPennies(owner, tp_exit_cost);
                     DBDIRTY(owner);
                 }
             }
@@ -384,7 +384,7 @@ do_link(int descr, dbref player, const char *thing_name, const char *dest_name)
 
             if (!(ndest = link_exit(descr, player, thing, (char *) dest_name, good_dest))) {
                 anotify_nolisten2(player, CFAIL "No destinations linked.");
-                DBFETCH(player)->sp.player.pennies += tp_link_cost; /* Refund! */
+                MUCK::playerAddPennies(player, tp_link_cost); /* Refund! */
                 DBDIRTY(player);
                 break;
             }
@@ -424,7 +424,7 @@ do_link(int descr, dbref player, const char *thing_name, const char *dest_name)
                 MUCK::database().get(thing)->As<MUCK::Thing>()
                     ->setHome(MUCK::database().get(dest));
             } else
-                DBFETCH(thing)->sp.player.home = dest;
+                MUCK::database().get(thing)->As<MUCK::Player>()->setHome(MUCK::database().get(dest));
             sprintf(buf, CSUCC "%s's home set to %s.", NAME(thing), unparse_object(player, dest));
             anotify_nolisten2(player, buf);
             break;

@@ -531,8 +531,8 @@ payfor(dbref who, int cost)
     if (Mage(who) || (POWERS(who) & POW_NO_PAY)) {
         return 1;
 
-    } else if (DBFETCH(who)->sp.player.pennies >= cost) {
-        DBFETCH(who)->sp.player.pennies -= cost;
+    } else if (MUCK::playerPennies(who) >= cost) {
+        MUCK::playerAddPennies(who, -cost);
         DBDIRTY(who);
         return 1;
     } else

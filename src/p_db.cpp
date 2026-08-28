@@ -414,7 +414,7 @@ prim_addpennies(PRIM_PROTOTYPE)
     ref = oper[1].data.objref;
 
     if (Typeof(ref) == TYPE_PLAYER) {
-        result = DBFETCH(ref)->sp.player.pennies;
+        result = MUCK::playerPennies(ref);
         if ((result + oper[0].data.number) < 0)
             abort_interp("Result would be negative");
         if (mlev < LWIZ)
@@ -422,7 +422,7 @@ prim_addpennies(PRIM_PROTOTYPE)
                 if ((result + oper[0].data.number) > tp_max_pennies)
                     abort_interp("Would exceed MAX_PENNIES");
         result += oper[0].data.number;
-        DBFETCH(ref)->sp.player.pennies += oper[0].data.number;
+        MUCK::playerAddPennies(ref, oper[0].data.number);
         DBDIRTY(ref);
     } else if (Typeof(ref) == TYPE_THING) {
         if (mlev < LMAGE)
@@ -590,7 +590,7 @@ prim_pennies(PRIM_PROTOTYPE)
     CHECKREMOTE(oper[0].data.objref);
     switch (Typeof(oper[0].data.objref)) {
         case TYPE_PLAYER:
-            result = DBFETCH(oper[0].data.objref)->sp.player.pennies;
+            result = MUCK::playerPennies(oper[0].data.objref);
             break;
         case TYPE_THING:
             result = MUCK::database().get(oper[0].data.objref)->As<MUCK::Thing>()->value();
@@ -1320,7 +1320,7 @@ prim_getlink(PRIM_PROTOTYPE)
             ref = (MUCK::exitDestCount(oper[0].data.objref)) ? MUCK::exitDestRef(oper[0].data.objref, 0) : NOTHING;
             break;
         case TYPE_PLAYER:
-            ref = DBFETCH(oper[0].data.objref)->sp.player.home;
+            ref = MUCK::playerHomeRef(oper[0].data.objref);
             break;
         case TYPE_THING:
             ref = [&]{ MUCK::Thing *t = MUCK::database().get(oper[0].data.objref)->As<MUCK::Thing>(); return (t && t->home()) ? t->home()->ref() : NOTHING; }();
@@ -1360,7 +1360,7 @@ prim_getlinks(PRIM_PROTOTYPE)
             PushInt(count);
             break;
         case TYPE_PLAYER:
-            ref = DBFETCH(ref2)->sp.player.home;
+            ref = MUCK::playerHomeRef(ref2);
             count = 1;
             PushObject(ref);
             PushInt(count);
@@ -1478,7 +1478,7 @@ prim_setlink(PRIM_PROTOTYPE)
             case TYPE_PLAYER:
                 if (!permissions(mlev, ProgUID, ref))
                     abort_interp(tp_noperm_mesg);
-                DBFETCH(ref)->sp.player.home = oper[0].data.objref;
+                MUCK::database().get(ref)->As<MUCK::Player>()->setHome(MUCK::database().get(oper[0].data.objref));
                 break;
             case TYPE_THING:
                 if (!permissions(mlev, ProgUID, ref))
@@ -1576,7 +1576,7 @@ prim_newobject(PRIM_PROTOTYPE)
         if ((loc = DBFETCH(PSafe)->location) != NOTHING && controls(PSafe, loc)) {
             MUCK::database().get(ref)->As<MUCK::Thing>()->setHome(MUCK::database().get(loc)); /* home */
         } else {
-            MUCK::database().get(ref)->As<MUCK::Thing>()->setHome(MUCK::database().get(DBFETCH(PSafe)->sp.player.home));
+            MUCK::database().get(ref)->As<MUCK::Thing>()->setHome(MUCK::database().get(MUCK::playerHomeRef(PSafe)));
             /* set to player's home instead */
         }
     }
@@ -1860,14 +1860,14 @@ prim_nextentrance(PRIM_PROTOTYPE)
     if (!valid_object(&oper[0]) && ref != NOTHING)
         abort_interp("Invalid reference object (1)");
     if (linkref == HOME)
-        linkref = DBFETCH(PSafe)->sp.player.home;
+        linkref = MUCK::playerHomeRef(PSafe);
     (void) ref++;
     for (; ref < MUCK::database().top(); ref++) {
         oper[0].data.objref = ref;
         if (valid_object(&oper[0])) {
             switch (Typeof(ref)) {
                 case TYPE_PLAYER:
-                    if (DBFETCH(ref)->sp.player.home == linkref)
+                    if (MUCK::playerHomeRef(ref) == linkref)
                         foundref = 1;
                     break;
                 case TYPE_ROOM:
@@ -1973,8 +1973,8 @@ prim_copyplayer(PRIM_PROTOTYPE)
 #endif
 
     OWNER(newplayer) = newplayer;
-    newp->sp.player.home = DBFETCH(ref)->sp.player.home;
-    newp->sp.player.pennies = DBFETCH(ref)->sp.player.pennies;
+    newp->sp.player.home = MUCK::playerHomeRef(ref);       /* raw: mid-construction */
+    newp->sp.player.pennies = MUCK::playerPennies(ref);    /* raw: mid-construction */
     newp->sp.player.password = NULL;
     newp->sp.player.curr_prog = NOTHING;
     DBFETCH(newplayer)->sp.player.insert_mode = 0;
@@ -1983,9 +1983,9 @@ prim_copyplayer(PRIM_PROTOTYPE)
     set_password(newplayer, password);
 
     /* link him to player_start */
-    PUSH(newplayer, DBFETCH(DBFETCH(ref)->sp.player.home)->contents);
+    PUSH(newplayer, DBFETCH(MUCK::playerHomeRef(ref))->contents);
     add_player(newplayer);
-    newp->location = DBFETCH(ref)->sp.player.home;
+    newp->location = MUCK::playerHomeRef(ref);
     DBDIRTY(newplayer);
     DBDIRTY(tp_player_start);
     if (MLevel(newplayer) > LM3)
@@ -2120,9 +2120,9 @@ prim_movepennies(PRIM_PROTOTYPE)
     ref = oper[2].data.objref;
     ref2 = oper[1].data.objref;
     if (Typeof(ref) == TYPE_PLAYER) {
-        result = DBFETCH(ref)->sp.player.pennies;
+        result = MUCK::playerPennies(ref);
         if (Typeof(ref2) == TYPE_PLAYER) {
-            result2 = DBFETCH(ref2)->sp.player.pennies;
+            result2 = MUCK::playerPennies(ref2);
             if (mlev < 4) {
                 if (result < (result - oper[0].data.number))
                     abort_interp("Would roll over player's score. (1)");
@@ -2134,8 +2134,8 @@ prim_movepennies(PRIM_PROTOTYPE)
                     abort_interp("Would exceed MAX_PENNIES. (2)");
             }
             result2 += oper[0].data.number;
-            DBFETCH(ref)->sp.player.pennies += -(oper[0].data.number);
-            DBFETCH(ref2)->sp.player.pennies += oper[0].data.number;
+            MUCK::playerAddPennies(ref, -(oper[0].data.number));
+            MUCK::playerAddPennies(ref2, oper[0].data.number);
             DBDIRTY(ref);
             DBDIRTY(ref2);
         } else if (Typeof(ref2) == TYPE_THING) {
@@ -2146,7 +2146,7 @@ prim_movepennies(PRIM_PROTOTYPE)
                 abort_interp("Would roll over player's score. (1)");
             if ((result - oper[0].data.number) < 0)
                 abort_interp("Result would be negative. (1)");
-            DBFETCH(ref)->sp.player.pennies += -(oper[0].data.number);
+            MUCK::playerAddPennies(ref, -(oper[0].data.number));
             { MUCK::Thing *t = MUCK::database().get(ref2)->As<MUCK::Thing>(); t->setValue(t->value() + oper[0].data.number); }
             DBDIRTY(ref);
             DBDIRTY(ref2);
@@ -2160,13 +2160,13 @@ prim_movepennies(PRIM_PROTOTYPE)
         if (result < 1)
             abort_interp("Result must be positive. (1)");
         if (Typeof(ref2) == TYPE_PLAYER) {
-            result2 = DBFETCH(ref2)->sp.player.pennies;
+            result2 = MUCK::playerPennies(ref2);
             if (result2 > (result2 + oper[0].data.number))
                 abort_interp("Would roll over player's score. (2)");
             if ((result2 + oper[0].data.number) > tp_max_pennies)
                 abort_interp("Would exceed MAX_PENNIES. (2)");
             { MUCK::Thing *t = MUCK::database().get(ref)->As<MUCK::Thing>(); t->setValue(t->value() - oper[0].data.number); }
-            DBFETCH(ref2)->sp.player.pennies += oper[0].data.number;
+            MUCK::playerAddPennies(ref2, oper[0].data.number);
             DBDIRTY(ref);
             DBDIRTY(ref2);
         } else if (Typeof(ref2) == TYPE_THING) {
@@ -2477,7 +2477,7 @@ array_getlinks(dbref obj)
                 temp1.type = PROG_INTEGER;
                 temp1.data.number = count++;
                 temp2.type = PROG_OBJECT;
-                temp2.data.objref = DBFETCH(obj)->sp.player.home;
+                temp2.data.objref = MUCK::playerHomeRef(obj);
                 array_setitem(&nw, &temp1, &temp2);
                 CLEAR(&temp1);
                 CLEAR(&temp2);
@@ -2640,14 +2640,14 @@ prim_getobjinfo(PRIM_PROTOTYPE)
             temp1.type = PROG_STRING;
             temp1.data.string = alloc_prog_string("HOME");
             temp2.type = PROG_OBJECT;
-            temp2.data.objref = DBFETCH(ref)->sp.player.home;
+            temp2.data.objref = MUCK::playerHomeRef(ref);
             array_setitem(&nw, &temp1, &temp2);
             CLEAR(&temp1);
             CLEAR(&temp2);
             temp1.type = PROG_STRING;
             temp1.data.string = alloc_prog_string("PENNIES");
             temp2.type = PROG_INTEGER;
-            temp2.data.number = DBFETCH(ref)->sp.player.pennies;
+            temp2.data.number = MUCK::playerPennies(ref);
             array_setitem(&nw, &temp1, &temp2);
             CLEAR(&temp1);
             CLEAR(&temp2);
@@ -2776,7 +2776,7 @@ prim_entrances_array(PRIM_PROTOTYPE)
                 }
                 break;
             case TYPE_PLAYER:
-                if (DBFETCH(i)->sp.player.home == ref)
+                if (MUCK::playerHomeRef(i) == ref)
                     array_appendref(&nw, i);
                 break;
             case TYPE_THING:

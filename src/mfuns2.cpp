@@ -81,7 +81,7 @@ mfn_owner(MFUNARGS)
     if (obj == PERMDENIED)
         ABORT_MPI("OWNER", tp_noperm_mesg);
     if (obj == HOME)
-        obj = DBFETCH(player)->sp.player.home;
+        obj = MUCK::playerHomeRef(player);
     return ref2str(OWNER(obj), buf);
 }
 
@@ -99,7 +99,7 @@ mfn_controls(MFUNARGS)
     if (obj == PERMDENIED)
         ABORT_MPI("CONTROLS", "Permission denied. (1)");
     if (obj == HOME)
-        obj = DBFETCH(player)->sp.player.home;
+        obj = MUCK::playerHomeRef(player);
     if (argc > 1) {
         obj2 = mesg_dbref_raw(descr, player, what, perms, argv[1]);
         if (obj2 == AMBIGUOUS || obj2 == NOTHING || obj2 == UNKNOWN)
@@ -107,7 +107,7 @@ mfn_controls(MFUNARGS)
         if (obj2 == PERMDENIED)
             ABORT_MPI("CONTROLS", "Permission denied. (2)");
         if (obj2 == HOME)
-            obj2 = DBFETCH(player)->sp.player.home;
+            obj2 = MUCK::playerHomeRef(player);
         if (Typeof(obj2) != TYPE_PLAYER)
             obj2 = OWNER(obj2);
     } else {
@@ -142,7 +142,7 @@ mfn_links(MFUNARGS)
             break;
         }
         case TYPE_PLAYER:
-            obj = DBFETCH(obj)->sp.player.home;
+            obj = MUCK::playerHomeRef(obj);
             break;
         case TYPE_THING:
             obj = [&]{ MUCK::Thing *t = MUCK::database().get(obj)->As<MUCK::Thing>(); return (t && t->home()) ? t->home()->ref() : NOTHING; }();

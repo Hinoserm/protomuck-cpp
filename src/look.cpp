@@ -765,7 +765,7 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
             break;
         case TYPE_PLAYER:
             sprintf(buf, "%.*s" SYSNORMAL "  %s: %d  ",
-                    (int) (BUFFER_LEN - strlen(NAME(OWNER(thing))) - 35), ansi_unparse_object(OWNER(player), thing), tp_cpennies, DBFETCH(thing)->sp.player.pennies);
+                    (int) (BUFFER_LEN - strlen(NAME(OWNER(thing))) - 35), ansi_unparse_object(OWNER(player), thing), tp_cpennies, MUCK::playerPennies(thing));
             break;
         case TYPE_EXIT:
         case TYPE_PROGRAM:
@@ -959,7 +959,7 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
         case TYPE_PLAYER:
 
             /* print home */
-            sprintf(buf, SYSAQUA "Home: %s", ansi_unparse_object(OWNER(player), DBFETCH(thing)->sp.player.home)); /* home */
+            sprintf(buf, SYSAQUA "Home: %s", ansi_unparse_object(OWNER(player), MUCK::playerHomeRef(thing))); /* home */
             anotify_nolisten(player, buf, 1);
 
             /* print location if player can link to it */
@@ -1033,7 +1033,7 @@ do_score(dbref player)
 {
     char buf[BUFFER_LEN];
 
-    sprintf(buf, CINFO "You have %d %s.", DBFETCH(player)->sp.player.pennies, DBFETCH(player)->sp.player.pennies == 1 ? tp_penny : tp_pennies);
+    sprintf(buf, CINFO "You have %d %s.", MUCK::playerPennies(player), MUCK::playerPennies(player) == 1 ? tp_penny : tp_pennies);
 
     anotify_nolisten(player, buf, 1);
 }
@@ -1745,7 +1745,7 @@ display_objinfo(dbref player, dbref obj, char output_type)
                     sprintf(buf, "%-38.512s  %.512s", buf2, ansi_unparse_object(player, MUCK::exitDestRef(obj, 0)));
                     break;
                 case TYPE_PLAYER:
-                    sprintf(buf, "%-38.512s  %.512s", buf2, ansi_unparse_object(player, DBFETCH(obj)->sp.player.home));
+                    sprintf(buf, "%-38.512s  %.512s", buf2, ansi_unparse_object(player, MUCK::playerHomeRef(obj)));
                     break;
                 case TYPE_THING:
                     sprintf(buf, "%-38.512s  %.512s", buf2,
@@ -1940,7 +1940,7 @@ do_entrances(int descr, dbref player, const char *name, const char *flags)
                     }
                     break;
                 case TYPE_PLAYER:
-                    if (DBFETCH(i)->sp.player.home == thing) {
+                    if (MUCK::playerHomeRef(i) == thing) {
                         display_objinfo(player, i, output_type);
                         total++;
                     }

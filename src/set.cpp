@@ -841,7 +841,7 @@ controls_link(dbref who, dbref what)
 
         case TYPE_PLAYER:
         {
-            if (controls(who, DBFETCH(what)->sp.player.home))
+            if (controls(who, MUCK::playerHomeRef(what)))
                 return 1;
             return 0;
         }
@@ -896,7 +896,7 @@ _do_unlink(int descr, dbref player, const char *name, int quiet)
                 switch (Typeof(exit)) {
                     case TYPE_EXIT:
                         if (MUCK::exitDestCount(exit) != 0) {
-                            DBFETCH(OWNER(exit))->sp.player.pennies += tp_link_cost;
+                            MUCK::playerAddPennies(OWNER(exit), tp_link_cost);
                             DBDIRTY(OWNER(exit));
                         }
                         ts_modifyobject(player, exit);
@@ -930,7 +930,8 @@ _do_unlink(int descr, dbref player, const char *name, int quiet)
                         break;
                     case TYPE_PLAYER:
                         ts_modifyobject(player, exit);
-                        DBSTORE(exit, sp.player.home, tp_player_start);
+                        MUCK::database().get(exit)->As<MUCK::Player>()
+                            ->setHome(MUCK::database().get(tp_player_start));
                         if (!quiet)
                             anotify_fmt(player, CSUCC "%s's home reset to default player start room.", NAME(exit));
                         break;
@@ -990,7 +991,7 @@ do_relink(int descr, dbref player, const char *thing_name, const char *dest_name
                     return;
                 }
             if (!Wizard(OWNER(player))
-                && (DBFETCH(player)->sp.player.pennies < (tp_link_cost + tp_exit_cost))) {
+                && (MUCK::playerPennies(player) < (tp_link_cost + tp_exit_cost))) {
                 anotify_fmt(player, CFAIL "It costs %d %s to link this exit.", (tp_link_cost + tp_exit_cost), (tp_link_cost + tp_exit_cost == 1) ? tp_penny : tp_pennies);
                 return;
             }

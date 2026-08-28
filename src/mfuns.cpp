@@ -1605,7 +1605,7 @@ mfn_nearby(MFUNARGS)
     if (obj == PERMDENIED)
         ABORT_MPI("NEARBY", "Permission denied (arg1).");
     if (obj == HOME)
-        obj = DBFETCH(player)->sp.player.home;
+        obj = MUCK::playerHomeRef(player);
     if (argc > 1) {
         obj2 = mesg_dbref_raw(descr, player, what, perms, argv[1]);
         if (obj2 == UNKNOWN || obj2 == AMBIGUOUS || obj2 == NOTHING)
@@ -1613,7 +1613,7 @@ mfn_nearby(MFUNARGS)
         if (obj2 == PERMDENIED)
             ABORT_MPI("NEARBY", "Permission denied (arg2).");
         if (obj2 == HOME)
-            obj2 = DBFETCH(player)->sp.player.home;
+            obj2 = MUCK::playerHomeRef(player);
     } else {
         obj2 = what;
     }
@@ -1644,7 +1644,7 @@ mfn_money(MFUNARGS)
             sprintf(buf, "%d", MUCK::database().get(obj)->As<MUCK::Thing>()->value());
             break;
         case TYPE_PLAYER:
-            sprintf(buf, "%d", DBFETCH(obj)->sp.player.pennies);
+            sprintf(buf, "%d", MUCK::playerPennies(obj));
             break;
         default:
             strcpy(buf, "0");

@@ -5,6 +5,7 @@
 #include "db.h"
 #include "inst.h"
 #include "externs.h"
+#include "Modules.h"
 #include "match.h"
 #include "interface.h"
 #include "params.h"
@@ -2264,7 +2265,7 @@ newpermissions(int mlev, dbref player, dbref thing, bool true_c)
     if (mlev < 0 || mlev > LMAN)
         return 0;
     if (OkObj(player) && thing == -3)
-        thing = DBFETCH(player)->sp.player.home;
+        thing = MUCK::playerHomeRef(player);
     /* never do this check if one object or the other is invalid */
     if (OkObj(thing)) {
         if (((Protect(thing) && !(mlev >= LBOY)

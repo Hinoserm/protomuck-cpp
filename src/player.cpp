@@ -7,6 +7,7 @@
 #include "tune.h"
 #include "interface.h"
 #include "externs.h"
+#include "Modules.h"
 
 static hash_tab player_list[PLAYER_HASH_SIZE];
 
@@ -323,15 +324,15 @@ create_player(dbref creator, const char *name, const char *password)
 
     if (OkObj(tp_player_start)) {
         DBFETCH(player)->location = tp_player_start;
-        DBFETCH(player)->sp.player.home = tp_player_start;
+        MUCK::database().get(player)->As<MUCK::Player>()->setHome(MUCK::database().get(tp_player_start));
     } else {
         DBFETCH(player)->location = GLOBAL_ENVIRONMENT;
-        DBFETCH(player)->sp.player.home = GLOBAL_ENVIRONMENT;
+        MUCK::database().get(player)->As<MUCK::Player>()->setHome(MUCK::database().get(GLOBAL_ENVIRONMENT));
     }
 
     OWNER(player) = player;
     newp->exits = NOTHING;
-    newp->sp.player.pennies = tp_start_pennies;
+    newp->sp.player.pennies = tp_start_pennies;    /* raw: mid-construction */
     newp->sp.player.password = NULL; /* this has to stay here. -hinoserm */
     newp->sp.player.curr_prog = NOTHING;
     newp->sp.player.insert_mode = 0;
