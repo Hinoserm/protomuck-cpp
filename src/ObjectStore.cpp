@@ -3094,15 +3094,28 @@ ObjectStore::persist(const CaptureSet &set)
     }
     dumpLanded_.store(true);
 
-    /* Post-commit housekeeping, in order: segments an earlier landed
-     * manifest already recorded as distributed can leave the disk;
-     * then fold pending segments down to the lag bound (all of them
-     * for a sync barrier), so the per-object files trail the journal
-     * by a bounded, replayable amount. Folding repeats are coalesced
-     * per object and era, which is what turns a hot object's line per
-     * dump into one history append per era. */
+    /* Post-commit housekeeping: segments an earlier landed manifest
+     * already recorded as distributed can leave the disk; then fold
+     * pending segments down to the lag bound (all of them for a sync
+     * barrier). Folding repeats are coalesced per object and era,
+     * which is what turns a hot object's line per dump into one
+     * history append per era.
+     *
+     * ONLY WHEN THE QUEUE IS IDLE (barriers excepted): housekeeping
+     * behind commit N must never delay commit N+1. After a mass
+     * import, folding the giant first segment took long enough that
+     * the next dump's completion waited most of a minute behind it. */
+    bool queueBusy;
+    {
+        std::unique_lock<std::mutex> qhold(queueMutex_);
+
+        queueBusy = !queue_.empty();
+    }
     unlinkDistributedSegments(set.distributedAtBuild);
-    distributeSegments(set.distributeAll ? 0 : kJournalLag);
+    if (set.distributeAll)
+        distributeSegments(0);
+    else if (!queueBusy)
+        distributeSegments(kJournalLag);
 
     /* Compaction rides BEHIND the commit: a reclaimed object must
      * leave the committed index before its files leave the disk, and
