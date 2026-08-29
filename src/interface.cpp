@@ -328,6 +328,8 @@ show_program_usage(char *prog)
     fprintf(stderr, "       --db-exclude-module NAME\n");
     fprintf(stderr, "                         boot without the NAME feature module (e.g.\n");
     fprintf(stderr, "                         properties); its data rides dormant, kept.\n");
+    fprintf(stderr, "       --force-load      boot even when the object store fails its\n");
+    fprintf(stderr, "                         integrity checks; damaged data is skipped.\n");
     fprintf(stderr, "       -pwconvert        convert passwords to hashed format on next save.\n");
     fprintf(stderr, "       -decompress       when saving db, save in uncompressed format.\n");
     fprintf(stderr, "       -nosanity         don't do db sanity checks at startup time.\n");
@@ -440,6 +442,8 @@ main(int argc, char **argv)
                 db_conversion_flag = 1;
                 extern bool store_gc_flag;
                 store_gc_flag = 1;
+            } else if (!strcmp(argv[i], "--force-load")) {
+                MUCK::ObjectStore::setForceLoad(true);
             } else if (!strcmp(argv[i], "-convert")) {
                 db_conversion_flag = 1;
             } else if (!strcmp(argv[i], "--db-exclude-type")) {

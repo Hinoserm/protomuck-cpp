@@ -51,6 +51,15 @@ class ObjectStore {
      * for normal objects. */
     static std::string placeholderTypeName(dbref ref);
 
+    /* --force-load: boot even when the store fails its load-time
+     * integrity checks (corrupt files, missing objects, damaged
+     * history). Every problem is still reported; the damaged data is
+     * skipped. Without the flag, any problem refuses the boot:
+     * silently regressing objects to older state is worse than not
+     * starting. */
+    static void setForceLoad(bool v);
+    static bool forceLoad();
+
     /* Bind the store to its data root. Creates the directory tree on
      * first save if needed. */
     void setRoot(const char *path) { root_ = path; }

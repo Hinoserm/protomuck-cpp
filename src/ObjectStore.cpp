@@ -100,6 +100,20 @@ ObjectStore::typeExcluded(const std::string &name)
     return excludedTypes.count(name) != 0;
 }
 
+static bool forceLoadFlag = false;
+
+void
+ObjectStore::setForceLoad(bool v)
+{
+    forceLoadFlag = v;
+}
+
+bool
+ObjectStore::forceLoad()
+{
+    return forceLoadFlag;
+}
+
 static std::set<std::string> excludedModules;
 
 bool
@@ -1134,6 +1148,26 @@ ObjectStore::buildManifest()
     }
     m["rev"] = rev_;
     m["markers"] = markersToJson(markers_);
+
+    /* The committed object index: which uuid owns each dbref, for
+     * every object that has (or is about to have, in the set this
+     * manifest rides with) a base file on disk. The manifest is the
+     * commit point, so this index is what makes a crash-torn dump
+     * unambiguous at the next boot: a file the index does not name is
+     * an uncommitted leftover to discard, a file the index names but
+     * that is missing is damage, and when two files claim one dbref
+     * the index says which one is real. */
+    {
+        json idx = json::object();
+
+        for (dbref i = 0; i < MUCK::database().top(); i++) {
+            DbObject *o = MUCK::database().get(i);
+
+            if (o && o->baseWritten() && !o->uuid().isNil())
+                idx[std::to_string(i)] = o->uuid().toString();
+        }
+        m["index"] = idx;
+    }
     m["global_modules"] = { "properties" };
     m["hash_passwords"] = (bool) MUCK::PasswordHash::enabled;
     m["hash_version"] = MUCK::PasswordHash::version;
@@ -1658,11 +1692,21 @@ ObjectStore::loadAll()
     std::ifstream mf(root_ + "/manifest.json");
     std::vector<PendingLinks> later;
 
-    if (!mf)
+    if (!mf) {
+        fprintf(stderr, "STORE: cannot open %s/manifest.json; without "
+                "the manifest there is no committed state to boot "
+                "from.\n", root_.c_str());
+        log_status("DIE: store manifest missing\n");
         return -1;
+    }
     json manifest = json::parse(mf, nullptr, false);
-    if (manifest.is_discarded())
+    if (manifest.is_discarded()) {
+        fprintf(stderr, "STORE: %s/manifest.json is not valid JSON "
+                "(truncated or corrupt); restore it from backup.\n",
+                root_.c_str());
+        log_status("DIE: store manifest unparsable\n");
         return -1;
+    }
 
     if (manifest.value("format", 0) != STORE_FORMAT) {
         fprintf(stderr,
@@ -1727,6 +1771,30 @@ ObjectStore::loadAll()
 
     /* ensureTop pre-initialized every slot as a garbage shell */
 
+    /* --- load-time integrity state (docs/DATABASE.txt 6) ---
+     *
+     * problems: damage. Anything here refuses the boot unless
+     * --force-load was given; booting past damaged or missing files
+     * silently regresses objects to older state.
+     *
+     * uncommitted: normal crash recovery, not damage. The manifest is
+     * the commit point; a file its index does not name was written by
+     * a dump that never committed, and is discarded (after the boot
+     * is known to proceed) exactly as any other unsaved change is
+     * lost at a crash. Without the discard, the dbref such a file
+     * claims can be reassigned by the recovered world, and the next
+     * boot would find two files claiming one slot. */
+    std::vector<std::string> problems;
+    std::vector<std::string> uncommitted;
+    auto damaged = [&problems](const std::string &msg) {
+        fprintf(stderr, "STORE: %s\n", msg.c_str());
+        problems.push_back(msg);
+    };
+    const json *index = manifest.contains("index")
+        && manifest["index"].is_object() ? &manifest["index"] : nullptr;
+    std::map<int, std::string> refClaimed;  /* dbref -> file, dup check */
+    std::set<std::string> jsonSeen, histSeen;
+
     std::string objroot = root_ + "/objects";
     DIR *d0 = opendir(objroot.c_str());
 
@@ -1751,40 +1819,115 @@ ObjectStore::loadAll()
             struct dirent *e2;
             while ((e2 = readdir(d2)) != NULL) {
                 size_t n = strlen(e2->d_name);
+                std::string full = l2 + "/" + e2->d_name;
+
+                if (n > 5 && !strcmp(e2->d_name + n - 5, ".hist")) {
+                    histSeen.insert(full);
+                    continue;
+                }
                 if (n < 6 || strcmp(e2->d_name + n - 5, ".json"))
+                    continue;   /* stray .tmp leftovers are not damage */
+                jsonSeen.insert(full);
+                std::ifstream f(full);
+                if (!f) {
+                    damaged(full + ": cannot open for reading");
                     continue;
-                std::ifstream f(l2 + "/" + e2->d_name);
-                if (!f)
-                    continue;
+                }
                 json j = json::parse(f, nullptr, false);
                 if (j.is_discarded()) {
-                    fprintf(stderr, "STORE: skipping unparsable %s\n", e2->d_name);
+                    damaged(full + ": not valid JSON (truncated or corrupt)");
                     continue;
                 }
                 UUID fileUUID = UUID::parse(j.value("uuid", ""));
+                dbref claimed = (dbref) j.value("dbref", -1);
+
+                if (fileUUID.isNil()) {
+                    damaged(full + ": missing or unparsable uuid");
+                    continue;
+                }
+                if (fileUUID.toString() + ".json" != e2->d_name) {
+                    damaged(full + ": file name does not match the uuid "
+                            "inside it (" + fileUUID.toString() + ")");
+                    continue;
+                }
+                if (claimed < 0) {
+                    damaged(full + ": missing or unparsable dbref");
+                    continue;
+                }
+                if (index) {
+                    /* the committed index says which uuid owns this
+                     * dbref; a file it does not name is an uncommitted
+                     * leftover from an interrupted dump */
+                    auto it = index->find(std::to_string(claimed));
+
+                    if (it == index->end()
+                        || it->get<std::string>() != fileUUID.toString()) {
+                        uncommitted.push_back(full);
+                        continue;
+                    }
+                } else if (claimed >= top) {
+                    /* no index (store written before it existed): a
+                     * dbref past the committed top is still provably
+                     * uncommitted */
+                    uncommitted.push_back(full);
+                    continue;
+                }
+                {
+                    auto dup = refClaimed.find(claimed);
+
+                    if (dup != refClaimed.end()) {
+                        damaged(full + " and " + dup->second
+                                + " both claim dbref #"
+                                + std::to_string(claimed));
+                        continue;
+                    }
+                    refClaimed[claimed] = full;
+                }
 
                 /* The stored object is its base plus the layers its
                  * history holds, applied in era order: that is what
                  * makes a compacted and an uncompacted object
                  * indistinguishable here (docs/DATABASE.txt 6). */
                 {
-                    std::string base = l2 + "/" + e2->d_name;
-                    std::ifstream hf(base.substr(0, base.size() - 5) + ".hist");
+                    std::string base = full;
+                    std::string histFile =
+                        base.substr(0, base.size() - 5) + ".hist";
+                    std::ifstream hf(histFile);
 
                     if (hf && j.contains("entries")) {
                         std::string line;
+                        long lineNo = 0;
 
                         while (std::getline(hf, line)) {
                             json layer = json::parse(line, nullptr, false);
 
-                            if (layer.is_discarded() || !layer.contains("entries"))
+                            lineNo++;
+                            if (layer.is_discarded()) {
+                                damaged(histFile + " line "
+                                        + std::to_string(lineNo)
+                                        + ": not valid JSON (truncated "
+                                        "or corrupt); the changes it "
+                                        "carried are lost");
                                 continue;
-                            /* a history line written by the old
+                            }
+                            /* a history line written by the retired
                              * copy-on-write path describes an OLD
-                             * value and carries "key"; a journal layer
-                             * describes new values and does not */
-                            if (layer.contains("key"))
+                             * value and carries "key"; nothing writes
+                             * those any more */
+                            if (layer.contains("key")) {
+                                damaged(histFile + " line "
+                                        + std::to_string(lineNo)
+                                        + ": legacy copy-on-write "
+                                        "record; this store predates "
+                                        "the current format");
                                 continue;
+                            }
+                            if (!layer.contains("entries")) {
+                                damaged(histFile + " line "
+                                        + std::to_string(lineNo)
+                                        + ": no entries map");
+                                continue;
+                            }
                             if (layer.contains("type"))
                                 j["type"] = layer["type"];
                             for (auto lit = layer["entries"].begin();
@@ -1842,6 +1985,12 @@ ObjectStore::loadAll()
 
                     j = fileToLoadShape(j, root_);
                     objectFromJsonPhase1(j, later);
+                    /* it came off disk, so it has a base there. This
+                     * includes recycled shells: their retained files
+                     * must stay in the manifest index, or the next
+                     * boot would discard them as uncommitted. */
+                    if (DbObject *bo = MUCK::database().get(claimed))
+                        bo->setBaseWritten(true);
                     if (!fileMarkers.empty()) {
                         dbref mref = (dbref) j.value("dbref", -1);
                         DbObject *mo = mref >= 0
@@ -1872,21 +2021,67 @@ ObjectStore::loadAll()
                     }
                     continue;
                 }
-                fprintf(stderr,
-                        "STORE: %s has no entry model; this store "
-                        "predates the current format. Rebuild it by "
-                        "re-importing the legacy flat database.\n",
-                        e2->d_name);
-                closedir(d2);
-                closedir(d1);
-                closedir(d0);
-                return -1;
+                damaged(full + ": no entry model; this store predates "
+                        "the current format. Rebuild it by re-importing "
+                        "the legacy flat database.");
             }
             closedir(d2);
         }
         closedir(d1);
     }
     closedir(d0);
+
+    /* orphaned history: layers with no base beside them cannot be
+     * applied to anything, so the state they carried is unreachable */
+    for (const auto &h : histSeen) {
+        std::string beside = h.substr(0, h.size() - 5) + ".json";
+
+        if (!jsonSeen.count(beside))
+            damaged(h + ": history with no object file beside it");
+    }
+
+    /* every object the committed index names must have loaded */
+    if (index)
+        for (auto it = index->begin(); it != index->end(); ++it) {
+            int r = atoi(it.key().c_str());
+
+            if (!refClaimed.count(r))
+                damaged("object #" + it.key() + " (uuid "
+                        + it.value().get<std::string>()
+                        + "): file missing from the store");
+        }
+
+    if (!problems.empty()) {
+        if (!forceLoadFlag) {
+            fprintf(stderr,
+                    "STORE: %d integrity problem(s); refusing to boot. "
+                    "Fix the store or restore it from backup, or start "
+                    "with --force-load to boot anyway with the damaged "
+                    "data skipped.\n", (int) problems.size());
+            log_status("DIE: store integrity: %d problem(s) at load\n",
+                       (int) problems.size());
+            return -1;
+        }
+        fprintf(stderr,
+                "STORE: --force-load: booting despite %d integrity "
+                "problem(s); the damaged data was skipped.\n",
+                (int) problems.size());
+        log_status("STORE: --force-load boot with %d problem(s)\n",
+                   (int) problems.size());
+    }
+
+    /* Now that the boot is going ahead, discard uncommitted leftovers
+     * from an interrupted dump: the dbref such a file claims can be
+     * reassigned by the recovered world, and the change it carried is
+     * exactly as lost as any other change the crash threw away.
+     * Deferred to here so a refused boot never modifies the store it
+     * is refusing to load. */
+    for (const auto &u : uncommitted) {
+        log_status("STORE: discarding uncommitted %s from an "
+                   "interrupted dump\n", u.c_str());
+        unlink(u.c_str());
+        unlink((u.substr(0, u.size() - 5) + ".hist").c_str());
+    }
 
     for (const auto &pl : later)
         objectFromJsonPhase2(pl);

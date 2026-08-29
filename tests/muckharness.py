@@ -104,7 +104,11 @@ def start(binpath, infile, store, port, login='connect One potrzebie'):
                            'die, and connecting now would silently talk to '
                            'it instead of the new one' % port)
 
-    subprocess.Popen([binpath, infile, store, str(port)],
+    # -port, not a positional: the legacy positional-port parser eats
+    # the FIRST port argument as a bare "enable sockets" toggle and
+    # binds the default port instead, so a single positional port is
+    # silently ignored.
+    subprocess.Popen([binpath, '-port', str(port), infile, store],
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     deadline = time.time() + 30

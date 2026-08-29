@@ -49,7 +49,9 @@ class S:
 
 
 def start(infile):
-    srv = subprocess.Popen([binpath, infile, 'data/store', str(port)],
+    # -port, not positional: the legacy positional-port parser ignores
+    # a single positional port (see muckharness.py)
+    srv = subprocess.Popen([binpath, '-port', str(port), infile, 'data/store'],
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     time.sleep(2)
     s = S()
@@ -61,13 +63,20 @@ def start(infile):
 N = 30
 shutil.copy('minimal.db', 'live.db')
 srv, sess = start('live.db')
+refs = []
 for i in range(N):
-    sess.cmd('@create Crash%d' % i, 0.15)
+    # capture the real dbref instead of assuming where creates start:
+    # that depends on how many objects the seed db happens to have
+    out = sess.cmd('@create Crash%d' % i, 0.15)
+    m = re.search(r'#(\d+)', out)
+    refs.append(int(m.group(1)) if m else -1)
+check('every created object yielded a dbref', all(r >= 0 for r in refs),
+      repr(refs))
 sess.cmd('@dump', 8.0)          # this state must survive
 
 # dirty more, then die mid-write without a clean shutdown
 for i in range(N):
-    sess.cmd('@set #%d=/x:%d' % (5 + i, i), 0.1)
+    sess.cmd('@set #%d=/x:%d' % (refs[i], i), 0.1)
 sess.s.sendall(b'@dump\r\n')
 time.sleep(0.02)
 os.kill(int(open('protomuck.pid').read().strip()), signal.SIGKILL)
@@ -79,7 +88,7 @@ time.sleep(1)
 
 srv, sess = start('data/store')
 survived = sum(1 for i in range(N)
-               if 'Crash%d' % i in sess.cmd('ex #%d' % (5 + i), 0.25))
+               if 'Crash%d' % i in sess.cmd('ex #%d' % refs[i], 0.25))
 check('every committed object survived the kill', survived == N,
       'survived %d/%d' % (survived, N))
 check('database is intact', 'total objects' in sess.cmd('@stats', 3.0))
