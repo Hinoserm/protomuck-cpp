@@ -72,6 +72,21 @@ def trigger(sess, name, marker, timeout=300):
     sys.exit(1)
 
 
+def dump_and_commit(sess, timeout=900):
+    """Fire @dump; return (layers, fire-to-commit seconds) from the
+    completion notice the server sends when the manifest lands."""
+    mark = len(sess.buf)
+    sess.s.sendall(b'@dump\r\n')
+    end = time.time() + timeout
+    while time.time() < end:
+        sess.pump(0.2)
+        m = re.search(rb'Dump complete: (\d+) object\(s\) in ([0-9.]+)s',
+                      sess.buf[mark:])
+        if m:
+            return int(m.group(1)), float(m.group(2))
+    return -1, -1.0
+
+
 def timed_cmd(sess, cmd, timeout=600):
     """Round-trip: how long until the game thread answers again."""
     token = 'MARK%d' % random.randrange(1 << 30)
@@ -191,9 +206,12 @@ install(sess, 'churn', CHURN % {'count': 200, 'top': top,
                                 'whale': '#%d' % bigwhale,
                                 'wprops': WHALES[-1]})
 
-# the monster first dump: everything is dirty
-d = timed_cmd(sess, '@dump', timeout=3600)
-perf('first_full_dump_stall_s', '%.2f' % d)
+# the monster first dump: everything is dirty. The stall is the
+# game-thread seal; the commit figure is fire-to-manifest, i.e. the
+# whole dump as the operator experiences it.
+nlay, dsec = dump_and_commit(sess, timeout=3600)
+perf('first_full_dump_commit_layers', nlay)
+perf('first_full_dump_commit_s', '%.1f' % dsec)
 mb, nh, _ = store_stats()
 perf('store_size_mb_initial', mb)
 
@@ -218,6 +236,8 @@ for target in targets:
 
     d = timed_cmd(sess, '@dump')
     perf('dump_stall_s_at_%d' % target, '%.2f' % d)
+    nlay, dsec = dump_and_commit(sess)
+    perf('dump_commit_s_at_%d' % target, '%.1f (%d layers)' % (dsec, nlay))
     d = timed_cmd(sess, '@snapshot')
     count += 1
     perf('snapshot_stall_s_at_%d' % target, '%.2f' % d)

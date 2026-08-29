@@ -4209,9 +4209,21 @@ process_commands(void)
 
     /* the dump thread raised this when a dump's manifest committed;
      * the message is posted from here because walling walks the
-     * descriptor list, which that thread must never do */
-    if (MUCK::store().takeDumpLanded() && tp_dbdump_warning)
-        wall_and_flush(tp_dumpdone_mesg);
+     * descriptor list, which that thread must never do. Whoever ran
+     * @dump gets the real numbers: how many objects landed and how
+     * long fire-to-commit took. */
+    if (MUCK::store().takeDumpLanded()) {
+        if (tp_dbdump_warning)
+            wall_and_flush(tp_dumpdone_mesg);
+
+        dbref dumper = MUCK::store().takeDumpRequester();
+
+        if (dumper >= 0)
+            anotify_fmt(dumper, CSUCC
+                        "Dump complete: %ld object(s) in %.1fs.",
+                        MUCK::store().lastDumpLayers(),
+                        MUCK::store().lastDumpMillis() / 1000.0);
+    }
 
     do {
         nprocessed = 0;

@@ -95,11 +95,13 @@ do_dump(dbref player, const char *newfile)
             sprintf(buf, CINFO "Dumping to file %s...", dumpfile);
         }
         anotify_nolisten2(player, buf);
+        /* the completion notice (object count, fire-to-commit time)
+         * comes back to this player when the manifest lands */
+        MUCK::store().setDumpRequester(player);
         dump_db_now();
-        /* the fire returned; the dump thread is still writing. The
-         * dumpdone message walls when the manifest actually commits,
-         * so saying "Done." here would be a lie by up to however long
-         * the disk takes. */
+        /* the fire returned; the dump thread is still writing. Saying
+         * "Done." here would be a lie by however long the disk takes;
+         * the real completion notice arrives from the commit. */
         anotify_nolisten2(player, CINFO "Dump fired; the disk write "
                           "completes in the background.");
         if (*newfile)

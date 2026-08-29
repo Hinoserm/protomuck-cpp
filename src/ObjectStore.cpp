@@ -2376,6 +2376,21 @@ ObjectStore::loadAll()
                     + " outside the manifest's range");
             continue;
         }
+        /* The manifest is newer truth than the journal: an object a
+         * LATER manifest dropped from the committed index (reclaimed
+         * after its creation was journaled but before distribution)
+         * must stay gone, not be resurrected from its segment. */
+        if (index) {
+            auto iit = index->find(std::to_string(claimed));
+
+            if (iit == index->end()
+                || iit->get<std::string>() != kv.first) {
+                log_status("STORE: journal object uuid %s (#%d) is no "
+                           "longer in the committed index; discarded\n",
+                           kv.first.c_str(), claimed);
+                continue;
+            }
+        }
         {
             auto dup = refClaimed.find(claimed);
 

@@ -185,10 +185,12 @@ check('doomed object is in the committed index', uuid_doomed is not None)
 sess.cmd('@recycle #%d' % dref, 1.0)
 sess.cmd('@dump', 3.0)
 time.sleep(1)
-# still retained: the locked marker predates the deletion
-files = glob.glob(STORE + '/objects/*/*/%s.json' % uuid_doomed)
+# still retained: the locked marker predates the deletion. Retention
+# means the committed index still names it; its bytes may sit in the
+# journal or in per-object files, whichever distribution has reached.
 check('recycled object is retained while a snapshot predates it',
-      len(files) == 1, repr(files))
+      manifest()['index'].get(str(dref)) == uuid_doomed,
+      repr(manifest()['index'].get(str(dref))))
 stop(sess)
 
 # unlock and age out the last marker
