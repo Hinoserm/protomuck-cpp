@@ -469,12 +469,14 @@ superseded mechanisms are deleted, not kept alongside.
    sets is permitted as an optimization.
 
    ONLY A DUMP WRITES.  @dump and the dump interval are the only
-   things that hand work to the writer.  A deletion and a snapshot
-   both SEAL, because a layer has to capture its values at the era
-   boundary it belongs to, but sealing and writing are separate
-   concerns: sealed sets are HELD in memory and go out with the next
-   dump.  Without that, a mass recycle would mean one manifest rewrite
-   per object deleted.
+   things that hand work to the writer.  A snapshot SEALS, because a
+   layer has to capture its values at the era boundary it belongs to,
+   but sealing and writing are separate concerns: a snapshot's sealed
+   set is HELD in memory and goes out with the next dump.  A deletion
+   does not even seal: its entries ($core/deleted plus the clears)
+   ride the top layer to the next fire like any other change, which
+   is the whole of what deletion-is-an-entry means.  A mass recycle
+   therefore costs nothing at the store until the next dump.
 
    A crash before the next dump loses those changes, which is exactly
    what a crash has always cost: everything since the last dump.

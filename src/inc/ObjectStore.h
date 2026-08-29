@@ -163,7 +163,6 @@ class ObjectStore {
      * compaction work, and reclaims recycled shells no retained
      * snapshot can revive; the frozen orders ride in the set. */
     CaptureSet fire(bool compact = false);
-    CaptureSet fireObject(dbref i);
 
     /* Hold a frozen set until the next dump. Sealing and WRITING are
      * separate concerns: a snapshot or a deletion has to seal, because

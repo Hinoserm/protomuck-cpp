@@ -2254,53 +2254,6 @@ ObjectStore::loadAll()
 /* Fire and persist (docs/DATABASE.txt 7.1)                           */
 /* ------------------------------------------------------------------ */
 
-/* Seal one object only: deletion and scoped snapshots need exactly
- * their own object's layer on disk, not everyone else's. */
-ObjectStore::CaptureSet
-ObjectStore::fireObject(dbref i)
-{
-    CaptureSet set;
-
-    set.rev = rev_;
-    chainClaimed.clear();
-
-    DbObject *o = MUCK::database().get(i);
-
-    if (!o)
-        return set;
-
-    JournalLayer *top = o->journal().peek();
-    SealedLayer sealed;
-
-    sealed.era = top ? top->era() : rev_;
-    sealed.ref = i;
-    sealed.uuid = MUCK::database().UUIDOf(i).toString();
-    sealed.typeName = typeNameOf(i);
-    sealed.entries = json::object();
-
-    if (!o->baseWritten()) {
-        sealed.entries = objectToJson(i);
-        sealed.full = true;
-        o->setBaseWritten(true);
-    } else if (top && !top->empty()) {
-        for (const std::string &key : top->keys()) {
-            json v = entryValueOf(i, key);
-
-            sealed.entries[key] = v.is_null() ? json() : v;
-        }
-    } else {
-        /* nothing to seal for this object, but the set still commits:
-         * an empty set with no manifest would fail persist outright */
-        set.manifest = buildManifest();
-        return set;
-    }
-    o->journal().discardTop();
-    forgetDirty(i);
-    set.layers.push_back(std::move(sealed));
-    set.manifest = buildManifest();
-    return set;
-}
-
 /* Decide one object's compaction work (game thread, fire time).
  * Returns false when the object has no base on disk and so needs no
  * order. Mutates live state for its decisions: prunes the object's
