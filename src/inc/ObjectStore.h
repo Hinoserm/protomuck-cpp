@@ -202,6 +202,10 @@ class ObjectStore {
     /* True while the dump thread has work outstanding. */
     bool persistPending();
 
+    /* The committed-index blob cached inside buildManifest is stale;
+     * rebuilt on the next manifest build. Game thread only. */
+    void invalidateIndexBlob() { indexBlobDirty_ = true; }
+
     /* True once since the last call if a dump's manifest committed.
      * The game loop polls this and posts the dump-done message; the
      * dump thread itself must not wall (walling walks the descriptor
@@ -245,6 +249,11 @@ class ObjectStore {
     bool dumpThreadStop_ = false;
     bool persisting_ = false;
     std::atomic<bool> dumpLanded_{false};
+
+    /* serialized committed-index, spliced into the manifest; rebuilt
+     * only when membership changes (see storeIndexInvalidate) */
+    std::string indexBlob_;
+    bool indexBlobDirty_ = true;
 
     std::string root_;
     long rev_ = 0;

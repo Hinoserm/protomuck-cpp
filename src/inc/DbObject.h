@@ -37,6 +37,11 @@ class DbObject;
 class Database;
 class Properties;
 
+/* Defined in ObjectStore.cpp: the manifest's committed-index blob is
+ * cached and only rebuilt when index membership changes, which is
+ * exactly a baseWritten transition. */
+void storeIndexInvalidate();
+
 /* A scoped snapshot marker: one rollback point recorded against a
  * single object by @snapshot <obj>. The object's file carries the
  * same list for the dump thread and offline compaction; this copy
@@ -189,7 +194,12 @@ class DbObject {
      * object has none, so its first persist writes a full base rather
      * than a layer over nothing. */
     bool baseWritten() const { return baseWritten_; }
-    void setBaseWritten(bool v) { baseWritten_ = v; }
+    void setBaseWritten(bool v) {
+        if (baseWritten_ != v) {
+            baseWritten_ = v;
+            storeIndexInvalidate();     /* index membership changed */
+        }
+    }
 
     /* --- object-level locking (striped; see Database) --- */
     void lockShared() const;

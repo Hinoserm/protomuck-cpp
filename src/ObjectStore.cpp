@@ -1138,26 +1138,6 @@ ObjectStore::buildManifest()
      * this only serializes whatever survived */
     m["rev"] = rev_;
     m["markers"] = markersToJson(markers_);
-
-    /* The committed object index: which uuid owns each dbref, for
-     * every object that has (or is about to have, in the set this
-     * manifest rides with) a base file on disk. The manifest is the
-     * commit point, so this index is what makes a crash-torn dump
-     * unambiguous at the next boot: a file the index does not name is
-     * an uncommitted leftover to discard, a file the index names but
-     * that is missing is damage, and when two files claim one dbref
-     * the index says which one is real. */
-    {
-        json idx = json::object();
-
-        for (dbref i = 0; i < MUCK::database().top(); i++) {
-            DbObject *o = MUCK::database().get(i);
-
-            if (o && o->baseWritten() && !o->uuid().isNil())
-                idx[std::to_string(i)] = o->uuid().toString();
-        }
-        m["index"] = idx;
-    }
     m["global_modules"] = { "properties" };
     m["hash_passwords"] = (bool) MUCK::PasswordHash::enabled;
     m["hash_version"] = MUCK::PasswordHash::version;
@@ -1223,7 +1203,47 @@ ObjectStore::buildManifest()
             free(pbuf);
         }
     }
-    return m.dump(1);
+
+    /* The committed object index: which uuid owns each dbref, for
+     * every object that has (or is about to have, in the set this
+     * manifest rides with) a base file on disk. The manifest is the
+     * commit point, so this index is what makes a crash-torn dump
+     * unambiguous at the next boot: a file the index does not name is
+     * an uncommitted leftover to discard, a file the index names but
+     * that is missing is damage, and when two files claim one dbref
+     * the index says which one is real.
+     *
+     * Serializing a 100k-entry index costs the game thread most of a
+     * second, so the serialized blob is CACHED and spliced into the
+     * manifest text; membership only changes on a baseWritten
+     * transition (creation's first dump, reclamation), which
+     * invalidates it (storeIndexInvalidate). */
+    if (indexBlobDirty_) {
+        json idx = json::object();
+
+        for (dbref i = 0; i < MUCK::database().top(); i++) {
+            DbObject *o = MUCK::database().get(i);
+
+            if (o && o->baseWritten() && !o->uuid().isNil())
+                idx[std::to_string(i)] = o->uuid().toString();
+        }
+        indexBlob_ = idx.dump();
+        indexBlobDirty_ = false;
+    }
+
+    std::string out = m.dump(1);
+    size_t brace = out.rfind('}');
+
+    if (brace != std::string::npos)
+        out.insert(brace, std::string(",\n \"index\": ") + indexBlob_ + "\n");
+    return out;
+}
+
+/* the manifest's cached index blob is stale (a baseWritten flip) */
+void
+storeIndexInvalidate()
+{
+    g_objectStore.invalidateIndexBlob();
 }
 
 /* Build on the game thread, write on the dump thread: the manifest

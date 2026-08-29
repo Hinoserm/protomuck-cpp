@@ -56,6 +56,10 @@ sess = start(binpath, 'live.db', STORE, port)
 for i in range(5):
     sess.cmd('@create Thing%d' % i, 0.3)
 sess.cmd('@dump', 5.0)
+# an explicit snapshot pins the layers that follow: without a marker
+# the sweep (correctly) folds everything into the bases and the
+# damaged-history scenarios would have no .hist files to damage
+sess.cmd('@snapshot', 2.0)
 for i in range(5):
     sess.cmd('@set Thing%d=/color:blue' % i, 0.2)
 sess.cmd('@dump', 5.0)
