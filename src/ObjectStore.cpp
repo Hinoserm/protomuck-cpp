@@ -1129,10 +1129,11 @@ static const long kJournalLag = 8;
 
 /* A single capture is split into segments of at most this many
  * layers. Folding yields to pending commits between segments, so
- * this bounds how long any commit can wait behind housekeeping:
- * one small segment's fold, even right after a mass import wrote
- * a hundred thousand layers in one dump. */
-static const long kSegmentLayers = 5000;
+ * this is the quantum bounding how long any commit can wait behind
+ * housekeeping, even right after a mass import wrote a hundred
+ * thousand layers in one dump: measured, a fold of 5000 full-object
+ * lines held a waiting commit for seconds, so the quantum is 1000. */
+static const long kSegmentLayers = 1000;
 
 bool
 ObjectStore::isStore(const char *path)
