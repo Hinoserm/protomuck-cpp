@@ -435,9 +435,16 @@ superseded mechanisms are deleted, not kept alongside.
 
    Game thread    the only mutator.  Owns the cache and the top
                   layer.  Fires captures.  NEVER writes the store.
-   Dump thread    one long-lived worker; the ONLY writer to the store
-                  during normal operation.  Consumes sealed layers.
-                  NEVER touches a live object.
+   Dump thread    one long-lived worker: writes journal segments and
+                  the manifest, nothing else.  Consumes sealed
+                  layers.  NEVER touches a live object.
+   Folder thread  one long-lived worker: the only thing that touches
+                  per-object files during normal operation.  Folds
+                  committed segments into bases and sidecars and runs
+                  sweep compaction, one unit per wake.  A commit can
+                  therefore never wait behind housekeeping, not even
+                  a hundred-megabyte object being folded.  NEVER
+                  touches a live object.
 
 
    FIRING
@@ -491,12 +498,11 @@ superseded mechanisms are deleted, not kept alongside.
    coalesces repeated same-era lines per object, so a property
    ticking on a hot object costs one history append per era, not one
    per dump.  An idle game distributes nothing and writes nothing.
-   Housekeeping must never delay a commit: folding runs only while
-   the queue is idle and yields between segments the moment new work
-   arrives, so the most any commit waits behind housekeeping is one
-   bounded segment's fold.
+   Housekeeping never delays a commit, structurally: folding and
+   sweep compaction run on the FOLDER THREAD, not the dump thread,
+   so a commit's latency is always segment write plus manifest.
    Rollback and every other file reader take the sync barrier, which
-   now also forces distribution, so read paths see current files.
+   waits for the folder to catch up, so read paths see current files.
    A clean shutdown distributes everything and leaves the journal
    empty; a crash leaves segments for the loader to replay: the
    manifest's committed watermark bounds what is real (segments past

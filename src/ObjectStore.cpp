@@ -1845,7 +1845,7 @@ ObjectStore::saveAll(bool dirtyOnly)
      * at boot would regress it. Mark everything distributed, commit,
      * then drop the segments. */
     journalDistributed_.store(journalSeq_);
-    journalLandedCommitted_ = journalSeq_;
+    journalLandedCommitted_.store(journalSeq_);
     if (!writeManifest())
         return -1;
     unlinkDistributedSegments(journalSeq_);
@@ -1897,7 +1897,7 @@ ObjectStore::loadAll()
     markers_ = markersFromJson(manifest.value("markers", json::array()));
     journalSeq_ = manifest.value("journal_committed", 0L);
     journalDistributed_.store(manifest.value("journal_distributed", 0L));
-    journalLandedCommitted_ = journalSeq_;
+    journalLandedCommitted_.store(journalSeq_);
     journalUnlinked_ = journalDistributed_.load();
 
     if (manifest.contains("parms")) {
@@ -3021,25 +3021,16 @@ ObjectStore::distributeOneSegment(long seq)
 /* Fold committed segments until at most keepAtMost remain pending.
  * Never runs past the last LANDED manifest's committed watermark:
  * folding an uncommitted segment would let changes a crash is
- * supposed to discard leak into the per-object files. Yields between
- * segments the moment a commit is waiting (keepAtMost < 0 forces a
- * full, non-yielding fold: the sync barriers). */
+ * supposed to discard leak into the per-object files. Used inline by
+ * the offline paths (gc, clean shutdown after the threads join); the
+ * live folder thread folds one segment per wake instead. */
 void
 ObjectStore::distributeSegments(long keepAtMost)
 {
-    bool force = keepAtMost < 0;
-
-    if (force)
+    if (keepAtMost < 0)
         keepAtMost = 0;
-    while (journalLandedCommitted_ - journalDistributed_.load()
+    while (journalLandedCommitted_.load() - journalDistributed_.load()
            > keepAtMost) {
-        if (!force) {
-            std::unique_lock<std::mutex> qhold(queueMutex_);
-
-            if (!queue_.empty())
-                return;         /* a commit is waiting; yield */
-        }
-
         long s = journalDistributed_.load() + 1;
 
         if (distributeOneSegment(s) < 0) {
@@ -3122,7 +3113,7 @@ ObjectStore::persist(const CaptureSet &set)
 
     if (!atomicWrite(root_ + "/manifest.json", set.manifest))
         return false;
-    journalLandedCommitted_ = set.committedAtBuild;
+    journalLandedCommitted_.store(set.committedAtBuild);
     /* the game loop polls this and posts the dump-done message; the
      * stats feed the completion notice to whoever ran @dump */
     lastDumpLayers_.store(layersSinceCommit_.exchange(0));
@@ -3135,66 +3126,40 @@ ObjectStore::persist(const CaptureSet &set)
     }
     dumpLanded_.store(true);
 
-    /* Post-commit housekeeping: segments an earlier landed manifest
-     * already recorded as distributed can leave the disk; then fold
-     * pending segments down to the lag bound (all of them for a sync
-     * barrier). Folding repeats are coalesced per object and era,
-     * which is what turns a hot object's line per dump into one
-     * history append per era.
-     *
-     * ONLY WHEN THE QUEUE IS IDLE (barriers excepted): housekeeping
-     * behind commit N must never delay commit N+1. After a mass
-     * import, folding the giant first segment took long enough that
-     * the next dump's completion waited most of a minute behind it. */
-    bool queueBusy;
-    {
-        std::unique_lock<std::mutex> qhold(queueMutex_);
-
-        queueBusy = !queue_.empty();
-    }
+    /* Housekeeping belongs to the folder thread, never to this one:
+     * a commit must not wait behind folding or compaction. Hand it
+     * the sweep orders, wake it (the landed watermark above is what
+     * lets it advance), and move on. Segments an earlier landed
+     * manifest recorded as distributed can leave the disk now; the
+     * folder only reads above that watermark. Compaction ordering
+     * stays safe because a reclaimed object left the committed index
+     * in THIS manifest, and its files go whenever the folder gets
+     * there; a crash in between reads as uncommitted leftovers. */
     unlinkDistributedSegments(set.distributedAtBuild);
-    if (set.distributeAll)
-        distributeSegments(-1);         /* barrier: fold everything */
-    else if (!queueBusy)
-        distributeSegments(kJournalLag);
+    {
+        std::unique_lock<std::mutex> lk(folderMutex_);
 
-    /* Compaction rides BEHIND the commit: a reclaimed object must
-     * leave the committed index before its files leave the disk, and
-     * layer merging only rewrites content the manifest never names.
-     * Failures here are not failures of the set; the data is intact
-     * and the next sweep simply finds the same work again. */
-    if (!set.compactions.empty()) {
-        long merged = 0, reclaimed = 0;
+        for (const CompactOrder &ord : set.compactions)
+            folderOrders_.push_back(ord);
+    }
+    folderCv_.notify_one();
 
-        for (const CompactOrder &ord : set.compactions) {
-            /* housekeeping never delays a commit: yield the moment
-             * new work queues. Skipped orders self-heal: a reclaim's
-             * files read as uncommitted leftovers at the next boot,
-             * and the sweep cursor returns on its next wrap. */
-            {
-                std::unique_lock<std::mutex> qhold(queueMutex_);
+    if (set.distributeAll) {
+        /* a sync barrier: file readers behind syncNow need every
+         * per-object file current before drain() returns, so wait
+         * for the folder to fold everything and go idle */
+        folderLagTarget_.store(0);
+        folderCv_.notify_one();
+        {
+            std::unique_lock<std::mutex> lk(folderMutex_);
 
-                if (!queue_.empty())
-                    break;
-            }
-            if (ord.reclaim)
-                reclaimed++;
-            /* one poisoned object must not fail the set: the layers
-             * and manifest above are already durably committed, and
-             * failing here would retry (and falsely report losing)
-             * a dump that in fact landed */
-            try {
-                merged += compactObjectFile(root_, ord);
-            } catch (const std::exception &e) {
-                fprintf(stderr, "STORE: compaction of %s failed: %s\n",
-                        ord.uuid.c_str(), e.what());
-            }
+            folderIdleCv_.wait(lk, [this] {
+                return !folderBusy_ && folderOrders_.empty()
+                    && journalDistributed_.load()
+                       >= journalLandedCommitted_.load();
+            });
         }
-        /* stderr, not log_status: this thread must not walk the
-         * descriptor list */
-        if (merged || reclaimed)
-            fprintf(stderr, "STORE: sweep merged %ld layer(s), "
-                    "reclaimed %ld object(s)\n", merged, reclaimed);
+        folderLagTarget_.store(kJournalLag);
     }
     return true;
 }
@@ -3211,11 +3176,86 @@ ObjectStore::persist(const CaptureSet &set)
 void
 ObjectStore::ensureDumpThread()
 {
+    ensureFolderThread();
     if (dumpThreadRunning_)
         return;
     dumpThreadRunning_ = true;
     dumpThreadStop_ = false;
     dumpThread_ = std::thread(&ObjectStore::dumpThreadMain, this);
+}
+
+void
+ObjectStore::ensureFolderThread()
+{
+    if (folderRunning_)
+        return;
+    folderRunning_ = true;
+    folderStop_ = false;
+    folderThread_ = std::thread(&ObjectStore::folderThreadMain, this);
+}
+
+/* The folder: folds committed journal segments into the per-object
+ * files and executes sweep compaction orders, one unit of work per
+ * wake, so a stop or a barrier is honored promptly. This is the only
+ * thread that touches per-object files during normal operation; the
+ * dump thread touches only segments and the manifest, which is why a
+ * commit can never wait behind a hundred-megabyte whale being
+ * folded. */
+void
+ObjectStore::folderThreadMain()
+{
+    for (;;) {
+        CompactOrder ord;
+        bool haveOrder = false;
+
+        {
+            std::unique_lock<std::mutex> lk(folderMutex_);
+
+            folderCv_.wait(lk, [this] {
+                return folderStop_ || !folderOrders_.empty()
+                    || journalLandedCommitted_.load()
+                       - journalDistributed_.load()
+                       > folderLagTarget_.load();
+            });
+            if (folderStop_)
+                break;
+            folderBusy_ = true;
+            if (!folderOrders_.empty()) {
+                ord = std::move(folderOrders_.front());
+                folderOrders_.pop_front();
+                haveOrder = true;
+            }
+        }
+
+        try {
+            if (haveOrder) {
+                compactObjectFile(root_, ord);
+            } else {
+                long s = journalDistributed_.load() + 1;
+
+                if (distributeOneSegment(s) < 0)
+                    rename(journalSegmentPath(s).c_str(),
+                           (journalSegmentPath(s) + ".damaged").c_str());
+                journalDistributed_.store(s);
+            }
+        } catch (const std::exception &e) {
+            fprintf(stderr, "STORE: folder work failed: %s\n", e.what());
+        }
+
+        {
+            std::unique_lock<std::mutex> lk(folderMutex_);
+
+            folderBusy_ = false;
+        }
+        folderIdleCv_.notify_all();
+    }
+
+    {
+        std::unique_lock<std::mutex> lk(folderMutex_);
+
+        folderBusy_ = false;
+    }
+    folderIdleCv_.notify_all();
 }
 
 void
@@ -3363,6 +3403,14 @@ ObjectStore::persistPending()
 void
 ObjectStore::requestDumpStop()
 {
+    if (folderRunning_) {
+        {
+            std::unique_lock<std::mutex> lk(folderMutex_);
+
+            folderStop_ = true;
+        }
+        folderCv_.notify_all();
+    }
     if (!dumpThreadRunning_)
         return;
     {
@@ -3390,13 +3438,39 @@ ObjectStore::stopDumpThread()
         dumpThread_.join();
     dumpThreadRunning_ = false;
 
-    /* The worker is gone, so its machinery is safe to run inline: a
-     * clean shutdown leaves the store fully at rest (bases and
+    if (folderRunning_) {
+        {
+            std::unique_lock<std::mutex> lk(folderMutex_);
+
+            folderStop_ = true;
+        }
+        folderCv_.notify_all();
+        if (folderThread_.joinable())
+            folderThread_.join();
+        folderRunning_ = false;
+    }
+
+    /* The workers are gone, so their machinery is safe to run inline:
+     * a clean shutdown leaves the store fully at rest (bases and
      * sidecars current, journal empty, watermarks committed), and the
      * next boot replays nothing. A crash skips all of this and the
      * loader replays the journal instead. */
     if (!root_.empty()) {
-        distributeSegments(-1);
+        {
+            std::unique_lock<std::mutex> lk(folderMutex_);
+
+            while (!folderOrders_.empty()) {
+                try {
+                    compactObjectFile(root_, folderOrders_.front());
+                } catch (const std::exception &e) {
+                    fprintf(stderr, "STORE: compaction of %s failed: "
+                            "%s\n", folderOrders_.front().uuid.c_str(),
+                            e.what());
+                }
+                folderOrders_.pop_front();
+            }
+        }
+        distributeSegments(0);
         writeManifest();
         unlinkDistributedSegments(journalDistributed_.load());
     }
@@ -3456,7 +3530,7 @@ ObjectStore::gcStore()
      * the per-object files and must see everything (offline mode,
      * single-threaded, so calling the dump thread's machinery
      * directly is safe) */
-    journalLandedCommitted_ = journalSeq_;
+    journalLandedCommitted_.store(journalSeq_);
     distributeSegments(-1);
 
     /* the retention ladder decides which snapshots remain */

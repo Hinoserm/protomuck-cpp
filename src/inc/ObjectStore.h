@@ -305,13 +305,37 @@ class ObjectStore {
     /* highest segment a LANDED manifest has committed: distribution
      * must never run ahead of this, or uncommitted changes would leak
      * into the per-object files and survive the crash that was
-     * supposed to discard them. Dump thread only. */
-    long journalLandedCommitted_ = 0;
+     * supposed to discard them. Written by the dump thread, read by
+     * the folder thread. */
+    std::atomic<long> journalLandedCommitted_{0};
 
     std::string journalSegmentPath(long seq) const;
     long distributeOneSegment(long seq);
     void distributeSegments(long keepAtMost);
     void unlinkDistributedSegments(long upTo);
+
+    /* --- the folder thread ---
+     *
+     * Housekeeping (folding segments into per-object files, sweep
+     * compaction) lives on its own worker so a commit NEVER queues
+     * behind it: one segment line can be a hundred-megabyte whale,
+     * and no quantum trick makes folding that yield mid-object. The
+     * folder is the only thread that touches per-object files during
+     * normal operation; the dump thread touches only segments and
+     * the manifest. Sync barriers lower folderLagTarget_ to zero and
+     * wait on folderIdleCv_ until everything is folded. */
+    void folderThreadMain();
+    void ensureFolderThread();
+
+    std::thread folderThread_;
+    std::mutex folderMutex_;
+    std::condition_variable folderCv_;      /* work available */
+    std::condition_variable folderIdleCv_;  /* caught up */
+    std::deque<CompactOrder> folderOrders_;
+    bool folderRunning_ = false;
+    bool folderStop_ = false;
+    bool folderBusy_ = false;
+    std::atomic<long> folderLagTarget_{8};
 
     /* serialized committed-index, spliced into the manifest; rebuilt
      * only when membership changes (see storeIndexInvalidate) */
