@@ -111,7 +111,8 @@ def start(binpath, infile, store, port, login='connect One potrzebie'):
     subprocess.Popen([binpath, '-port', str(port), infile, store],
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-    deadline = time.time() + 30
+    # generous: sanitizer builds boot an order of magnitude slower
+    deadline = time.time() + 120
     while not _port_busy(port) and time.time() < deadline:
         time.sleep(0.25)
     if not _port_busy(port):
