@@ -111,8 +111,9 @@ def start(binpath, infile, store, port, login='connect One potrzebie'):
     subprocess.Popen([binpath, '-port', str(port), infile, store],
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-    # generous: sanitizer builds boot an order of magnitude slower
-    deadline = time.time() + 120
+    # generous: sanitizer builds and hundred-thousand-object stores
+    # boot much slower than the minimal db
+    deadline = time.time() + 300
     while not _port_busy(port) and time.time() < deadline:
         time.sleep(0.25)
     if not _port_busy(port):

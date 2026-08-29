@@ -16,6 +16,7 @@
 
 #include <cctype>
 #include <cstring>
+#include <mutex>
 #include <new>
 #include <string>
 #include <vector>
@@ -24,6 +25,17 @@
 #include "inc/PropNode.h"
 
 namespace MUCK {
+
+/* True while the parallel loader is building trees from several
+ * threads; the node pools lock themselves for the duration. The
+ * single-threaded game loop never pays more than the branch. */
+bool propPoolsThreadSafe = false;
+
+void
+setPropPoolsThreadSafe(bool on)
+{
+    propPoolsThreadSafe = on;
+}
 
 /* ------------------------------------------------------------------ */
 /* Key folding                                                        */
@@ -215,8 +227,9 @@ struct NodePool {
         alignas(T) unsigned char raw[sizeof(T)];
     };
     Slot *free_ = nullptr;
+    std::mutex m_;
 
-    T *take()
+    T *takeUnlocked()
     {
         if (!free_) {
             const int N = 256;
@@ -234,7 +247,22 @@ struct NodePool {
         return new (s->raw) T();
     }
 
-    void give(T *p)
+    T *take()
+    {
+        /* the pools are shared: the parallel loader's phase-two
+         * workers build many objects' trees at once, and an unlocked
+         * freelist under that was a segfault at a hundred thousand
+         * objects. The flag keeps the single-threaded game loop on
+         * the branch-only fast path. */
+        if (propPoolsThreadSafe) {
+            std::lock_guard<std::mutex> g(m_);
+
+            return takeUnlocked();
+        }
+        return takeUnlocked();
+    }
+
+    void giveUnlocked(T *p)
     {
         p->~T();
 
@@ -242,6 +270,17 @@ struct NodePool {
 
         s->next = free_;
         free_ = s;
+    }
+
+    void give(T *p)
+    {
+        if (propPoolsThreadSafe) {
+            std::lock_guard<std::mutex> g(m_);
+
+            giveUnlocked(p);
+            return;
+        }
+        giveUnlocked(p);
     }
 };
 

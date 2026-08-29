@@ -26,6 +26,11 @@ namespace MUCK {
 
 class PropNode;
 
+/* The shared node pools lock themselves while this is on; the
+ * parallel loader flips it around phase two. Single-threaded
+ * operation pays one branch. */
+void setPropPoolsThreadSafe(bool on);
+
 class PropertyTree {
   public:
     PropertyTree() {}

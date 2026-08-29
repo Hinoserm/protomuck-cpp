@@ -2708,6 +2708,10 @@ ObjectStore::loadAll()
         if (later.size() < 64)
             nthreads = 1;
 
+        /* the ART node pools are shared allocators; they lock
+         * themselves while phase two builds trees from many threads */
+        setPropPoolsThreadSafe(nthreads > 1);
+
         std::atomic<size_t> nextPl(0);
         auto phase2Worker = [&]() {
             for (;;) {
@@ -2729,6 +2733,7 @@ ObjectStore::loadAll()
             for (auto &th : pool)
                 th.join();
         }
+        setPropPoolsThreadSafe(false);
     }
 
     /* the player name lookup table is runtime state the flat importer
