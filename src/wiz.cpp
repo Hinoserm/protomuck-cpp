@@ -1811,29 +1811,34 @@ do_rollback(int descr, dbref player, const char *arg1, const char *arg2)
 
     /* a dead shell with a tombstone is a deleted object whose file is
      * still covered by a snapshot: bring it back whole */
-    if (Typeof(thing) == TYPE_GARBAGE) {
+    /* A recycled object is not a special case: its deletion is an
+     * entry like any other, so rolling back past it brings the object
+     * back through exactly the same path as any other rollback. Only a
+     * tombstoned object is beyond reach, because its data is gone. */
+    bool wasDeleted = MUCK::database().get(thing)
+        && MUCK::database().get(thing)->isDeleted();
+
+    if (wasDeleted) {
         MUCK::Database::Tombstone t;
 
-        if (!MUCK::database().findTombstone(thing, &t)) {
+        if (MUCK::database().findTombstone(thing, &t)) {
             anotify_nolisten2(player, CFAIL
-                "That object is recycled and left no tombstone.");
+                "That object's data has been reclaimed; nothing is left "
+                "to roll back to.");
             return;
         }
-
-        std::string rerr;
-
-        if (!MUCK::store().resurrectObject(t, rev, &rerr)) {
-            anotify_fmt(player, CFAIL "Resurrection failed: %s.",
-                        rerr.c_str());
-            return;
-        }
-        anotify_fmt(player, CSUCC "Resurrected %s as of rev %ld.",
-                    unparse_object(player, thing), rev);
-        return;
     }
 
     if (!MUCK::store().rollbackObject(thing, rev)) {
         anotify_nolisten2(player, CFAIL "Rollback failed: no stored state for that object at that revision.");
+        return;
+    }
+
+    if (wasDeleted && MUCK::database().get(thing)
+        && !MUCK::database().get(thing)->isDeleted()) {
+        anotify_fmt(player, CSUCC "Restored %s as of rev %ld; it was "
+                    "recycled after that.",
+                    unparse_object(player, thing), rev);
         return;
     }
     anotify_fmt(player, CSUCC

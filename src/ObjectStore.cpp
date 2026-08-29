@@ -521,6 +521,16 @@ entryValueOf(dbref i, const std::string &key)
             (long) o->ts.created, (long) o->ts.modified, (long) o->ts.lastused,
             (long) o->ts.usecount, (long) o->ts.dcreated,
             (long) o->ts.dmodified, (long) o->ts.dlastused }));
+    if (key == "$core/deleted") {
+        DbObject *d = MUCK::database().get(i);
+
+        /* absent when alive: that absence is exactly what makes a
+         * rollback to an earlier revision bring the object back */
+        if (!d || !d->isDeleted())
+            return json();
+        return entry("list", json::array({ (long) d->deletedAt(),
+                                           (int) d->deletedBy() }));
+    }
 
     /* --- $type --- */
     if (key == "$type/contents")
@@ -655,6 +665,12 @@ objectToJson(dbref i)
         (long) o->ts.created, (long) o->ts.modified, (long) o->ts.lastused,
         (long) o->ts.usecount, (long) o->ts.dcreated,
         (long) o->ts.dmodified, (long) o->ts.dlastused }));
+    {
+        json del = entryValueOf(i, "$core/deleted");
+
+        if (!del.is_null())
+            e["$core/deleted"] = del;
+    }
 
     /* --- $type: the type module's fields --- */
     switch (MUCK::typeOf(i)) {
@@ -808,6 +824,17 @@ objectFromJsonPhase1(const json &j, std::vector<PendingLinks> &later)
     o->ts.dmodified = (dbref) ts.value("dmodified", -1);
     o->ts.dlastused = (dbref) ts.value("dlastused", -1);
 
+    /* A recycled object is not a special kind of file: it is an
+     * ordinary object whose latest state carries the deletion entry.
+     * Roll back past that entry and it is simply alive again. */
+    if (j.contains("deleted") && j["deleted"].is_array()
+        && j["deleted"].size() >= 2) {
+        MUCK::database().get(i)->markDeleted(j["deleted"][0].get<long>(),
+                                             (dbref) j["deleted"][1].get<int>());
+    } else if (DbObject *dd = MUCK::database().get(i)) {
+        dd->markAlive();
+    }
+
     /* props load in phase two: lock props reference other objects by
      * dbref, and the parser rejects targets that have not loaded yet */
     if (PropDirPtr pd_ = MUCK::propRoot(i))
@@ -891,6 +918,9 @@ fileToLoadShape(const json &j, const std::string &root)
     }
     core["ts"] = ts;
     out["core"] = core;
+
+    if (e.contains("$core/deleted"))
+        out["deleted"] = e["$core/deleted"]["value"];
 
     json td;
     for (const char *k : { "dropto", "home", "value", "pennies",
@@ -1108,60 +1138,31 @@ ObjectStore::buildManifest()
     m["hash_passwords"] = (bool) MUCK::PasswordHash::enabled;
     m["hash_version"] = MUCK::PasswordHash::version;
 
-    /* Deleted-object retention: a tombstoned object's file and hist
-     * survive while any retained snapshot marker, global or the
-     * object's own, predates the deletion; @rollback resurrects from
-     * them. Once no covering marker remains, the files are reclaimed,
-     * and the tombstone itself ages out per tp_tombstone_retention
-     * only after its files are gone. */
+    /* Tombstones age out once their objects' data is long gone.
+     * Reclaiming the data itself, and creating the tombstone that
+     * records it, belong to compaction: this only ages the record. */
     {
-        long snapCutoff = tp_snapshot_retention >= 0
-            ? (long) current_systime - (long) tp_snapshot_retention * 86400L
-            : -1;
         long tombCutoff = tp_tombstone_retention >= 0
             ? (long) current_systime - (long) tp_tombstone_retention * 86400L
             : -1;
-        std::vector<Database::Tombstone> kept;
-        int reclaimed = 0, pruned = 0;
 
-        for (const auto &t : MUCK::database().tombstones()) {
-            std::string path = UUIDObjectPath(root_, t.uuid.toString());
-            struct stat st;
-            bool haveFile = stat(path.c_str(), &st) == 0;
+        if (tombCutoff >= 0) {
+            std::vector<Database::Tombstone> kept;
+            int pruned = 0;
 
-            if (haveFile) {
-                std::vector<Marker> own;
-                std::ifstream pf(path);
-                json pj = pf ? json::parse(pf, nullptr, false) : json();
-
-                if (pj.is_object())
-                    own = markersFromJson(pj.value("markers", json::array()));
-                if (snapCutoff >= 0)
-                    own.erase(std::remove_if(own.begin(), own.end(),
-                                             [snapCutoff](const Marker &om) {
-                                                 return !om.locked
-                                                     && om.when < snapCutoff;
-                                             }),
-                              own.end());
-                if (!markerInWindow(0, t.deletedRev, markers_, own)) {
-                    unlink(path.c_str());
-                    unlink((path.substr(0, path.size() - 5) + ".hist").c_str());
-                    haveFile = false;
-                    reclaimed++;
+            for (const auto &t : MUCK::database().tombstones()) {
+                if (t.deletedAt < tombCutoff) {
+                    pruned++;
+                    continue;
                 }
+                kept.push_back(t);
             }
-            if (!haveFile && tombCutoff >= 0 && t.deletedAt < tombCutoff) {
-                pruned++;
-                continue;
-            }
-            kept.push_back(t);
+            if (pruned)
+                log_status("STORE: pruned %d aged tombstone%s\n",
+                           pruned, pruned == 1 ? "" : "s");
+            if (pruned)
+                MUCK::database().setTombstones(std::move(kept));
         }
-        if (reclaimed || pruned)
-            log_status("STORE: reclaimed %d deleted object file%s, "
-                       "pruned %d tombstone%s\n",
-                       reclaimed, reclaimed == 1 ? "" : "s",
-                       pruned, pruned == 1 ? "" : "s");
-        MUCK::database().setTombstones(std::move(kept));
     }
     json ts = json::array();
     for (const auto &t : MUCK::database().tombstones()) {
@@ -1329,7 +1330,10 @@ ObjectStore::retireObject(dbref i)
     /* Flush the object's final state as a journal layer so its
      * history survives; a full base rewrite would drop the layers a
      * rollback needs. */
-    enqueue(fireObject(i));
+    /* Seal the object's final state, but do not write: only a dump
+     * writes. A crash before the next dump loses the deletion, the
+     * same way it loses any other unsaved change. */
+    hold(fireObject(i));
     return rev_;
 }
 
@@ -1356,7 +1360,7 @@ ObjectStore::snapshotGlobal(const char *label, bool locked)
      * same file. */
     set.manifest = buildManifest();
     set.hasMarker = true;
-    enqueue(std::move(set));
+    hold(std::move(set));
     log_status("SNAPSHOT: global rev %ld (%s)%s\n", m.rev,
                m.label.empty() ? "unlabeled" : m.label.c_str(),
                locked ? " LOCKED" : "");
@@ -1372,9 +1376,10 @@ ObjectStore::snapshotObject(dbref i, const char *label, bool locked)
      * state, not whatever the last dump happened to capture */
     /* The era is global, so seal EVERY object before it advances: a
      * scoped snapshot must not strand another object's pending
-     * layer in the era that just ended. */
-    enqueue(fire());
-    drain();                    /* the marker goes into the file below */
+     * layer in the era that just ended. The marker goes into the
+     * object's file below, which needs what was sealed to be on disk,
+     * so this one case does write. */
+    syncNow();
 
     std::ifstream pf(path);
 
@@ -1414,7 +1419,13 @@ ObjectStore::snapshotObject(dbref i, const char *label, bool locked)
 std::vector<ObjectStore::Marker>
 ObjectStore::objectMarkers(dbref i) const
 {
-    const_cast<ObjectStore *>(this)->drain();
+    /* Deliberately no barrier. This feeds examine's snapshot count,
+     * which is an ordinary command: forcing a flush here made every
+     * examine write the store, and an examine issued between creating
+     * an object and setting its properties captured the object's base
+     * before it had any. A marker taken but not yet written simply
+     * does not appear in the count, which is harmless; the paths that
+     * RECONSTRUCT state (rollback) take the barrier instead. */
 
     std::string path;
 
@@ -1494,7 +1505,7 @@ ObjectStore::rollbackObject(dbref i, long rev)
 {
     /* rolling back to a marker whose set has not landed yet would
      * find no stored state */
-    drain();
+    syncNow();
 
     std::ifstream pf(objectPath(i));
 
@@ -1513,12 +1524,66 @@ ObjectStore::rollbackObject(dbref i, long rev)
                     std::istreambuf_iterator<char>());
 
     json e = entriesAtRev(j, hist, rev);
+
+    if (e.empty())
+        return false;           /* nothing reconstructable at that rev */
+
     /* Everything a rollback restores goes through the setters, so the
      * restored state is journalled like any other change. Writing the
      * fields directly would leave the rollback unrecorded, and the
      * next restart would replay the pre-rollback state over it. */
+
+    /* Life and death are just another entry. If the target revision
+     * has no deletion entry then the object was alive then, so it is
+     * alive now: that is the whole of resurrection, and it needs no
+     * path of its own. */
+    if (e.contains("$core/deleted")) {
+        const json &d = e["$core/deleted"]["value"];
+
+        if (DbObject *o = MUCK::database().get(i))
+            o->markDeleted(d.is_array() && d.size() > 0 ? d[0].get<long>() : 0,
+                           d.is_array() && d.size() > 1
+                           ? (dbref) d[1].get<int>() : NOTHING);
+        MUCK::database().retireUUID(i);
+    } else {
+        MUCK::database().reviveHole(i);
+    }
+
+    /* Flags carry the type, and rolling back past a recycle has to put
+     * the type back or the object stays a garbage shell wearing the
+     * right name and properties. */
+    if (e.contains("$core/flags")) {
+        const json &fl = e["$core/flags"]["value"];
+
+        if (fl.is_array() && fl.size() >= 4) {
+            MUCK::setType(i, (MUCK::ObjectType) (fl[0].get<int>() & TYPE_MASK));
+            MUCK::setFlags(i, fl[0].get<int>());
+            MUCK::setFlags2(i, fl[1].get<int>());
+            MUCK::setFlags3(i, fl[2].get<int>());
+            MUCK::setFlags4(i, fl[3].get<int>());
+        }
+    }
+
     if (e.contains("$core/name"))
         MUCK::setName(i, junstr(e["$core/name"]["value"].get<std::string>()).c_str());
+
+    /* Owner and location come back too. Recycling clears both, so an
+     * object revived without them is owned by nobody and nowhere, and
+     * anything that prints its owner's name walks off a null. */
+    if (e.contains("$core/owner"))
+        MUCK::setOwner(i, refFromJson(e["$core/owner"]["value"]));
+    if (e.contains("$core/location")) {
+        dbref loc = refFromJson(e["$core/location"]["value"]);
+
+        if (loc != NOTHING && MUCK::database().valid(loc)
+            && MUCK::typeOf(loc) != ObjectType::Garbage) {
+            MUCK::setLocation(i, loc);
+            if (MUCK::typeOf(i) == TYPE_EXIT)
+                MUCK::attachExit(loc, i);
+            else
+                MUCK::attachContent(loc, i);
+        }
+    }
 
     /* properties: wipe and rebuild from the snapshot. The wipe has to
      * be journalled too, or the properties it removed come back. */
@@ -1561,7 +1626,7 @@ bool
 ObjectStore::resurrectObject(const MUCK::Database::Tombstone &t, long rev,
                              std::string *err)
 {
-    drain();
+    syncNow();
 
     std::string path = UUIDObjectPath(root_, t.uuid.toString());
     std::ifstream pf(path);
@@ -1786,13 +1851,11 @@ ObjectStore::loadAll()
         MUCK::database().setTombstones(std::move(list));
     }
 
-    /* deleted objects keep their files while snapshots cover them;
-     * they load as dead shells, not live objects */
-    std::unordered_set<UUID> deadUUIDs;
-
-    for (const auto &t : MUCK::database().tombstones())
-        deadUUIDs.insert(t.uuid);
-
+    /* A recycled object still has a file for as long as a snapshot
+     * can reach it, and it loads like any other object: its deletion
+     * entry is what makes it dead. Only a tombstone means the data is
+     * actually gone, and a tombstoned object has no file left to
+     * load. */
     MUCK::database().ensureTop(top);
 
     /* ensureTop pre-initialized every slot as a garbage shell */
@@ -1832,9 +1895,6 @@ ObjectStore::loadAll()
                     continue;
                 }
                 UUID fileUUID = UUID::parse(j.value("uuid", ""));
-
-                if (deadUUIDs.count(fileUUID))
-                    continue;
 
                 /* The stored object is its base plus the layers its
                  * history holds, applied in era order: that is what
@@ -1950,8 +2010,17 @@ ObjectStore::loadAll()
     for (const auto &pl : later)
         objectFromJsonPhase2(pl);
 
-    /* holes (deleted objects) stay dead shells; mark them so modern
-     * code sees isDeleted() */
+    /* A recycled object keeps its file and its state, so it loaded
+     * like anything else; it is dead because its entry says so, and
+     * its uuid stops resolving exactly as it did when it was
+     * recycled. */
+    for (dbref i = 0; i < top; i++)
+        if (DbObject *o = MUCK::database().get(i))
+            if (o->isDeleted())
+                MUCK::database().retireUUID(i);
+
+    /* holes (never-written slots) stay dead shells; mark them so
+     * modern code sees isDeleted() */
     for (dbref i = 0; i < top; i++)
         if (MUCK::typeOf(i) == ObjectType::Garbage)
             MUCK::database().noteHole(i);
@@ -2161,14 +2230,11 @@ ObjectStore::persist(const CaptureSet &set)
      * set with no manifest is a programming error, not a fallback:
      * falling back to writeManifest() here would read live state from
      * the wrong thread. */
-    if (set.manifest.empty()) {
-        /* stderr only: log_status walls connected wizards, which walks
-         * the descriptor list and writes to sockets, and this runs on
-         * the dump thread */
-        fprintf(stderr, "DUMP: capture set for rev %ld carried no "
-                "manifest\n", set.rev);
-        return false;
-    }
+    /* A set with no manifest is a HELD set: its layers are now on
+     * disk, and the manifest of the set behind it commits them. The
+     * manifest is still the commit point, just shared. */
+    if (set.manifest.empty())
+        return true;
     return atomicWrite(root_ + "/manifest.json", set.manifest);
 }
 
@@ -2260,6 +2326,30 @@ ObjectStore::dumpThreadMain()
 }
 
 void
+ObjectStore::hold(CaptureSet set)
+{
+    if (set.layers.empty())
+        return;                 /* nothing sealed, nothing to hold */
+    held_.push_back(std::move(set));
+}
+
+void
+ObjectStore::flushHeld(CaptureSet set)
+{
+    /* Held sets were sealed earlier, so they go out first: the eras
+     * they describe only make sense in the order they were sealed. */
+    for (CaptureSet &h : held_) {
+        /* the manifest each held set carried is stale by now; the one
+         * this dump builds supersedes it, and the manifest is the
+         * commit point for everything ahead of it */
+        h.manifest.clear();
+        enqueue(std::move(h));
+    }
+    held_.clear();
+    enqueue(std::move(set));
+}
+
+void
 ObjectStore::enqueue(CaptureSet set)
 {
     /* A set with nothing to write and no manifest would fail persist
@@ -2273,6 +2363,16 @@ ObjectStore::enqueue(CaptureSet set)
         queue_.push_back(std::move(set));
     }
     queueCv_.notify_one();
+}
+
+void
+ObjectStore::syncNow()
+{
+    /* Anything sealed but held is not on disk yet, and reading stored
+     * state without it would read a world missing its most recent
+     * changes. Push it out, then wait. */
+    flushHeld(fire());
+    drain();
 }
 
 void
@@ -2435,6 +2535,31 @@ ObjectStore::gcStore()
                     for (const auto &m : own)
                         if (oldest < 0 || m.rev < oldest)
                             oldest = m.rev;
+
+                    /* A recycled object whose lifetime no retained
+                     * marker can still reach is finally gone: remove
+                     * its data and leave a tombstone as the record
+                     * that the dbref was used. Until this moment the
+                     * object still loads (dead) and a rollback can
+                     * bring it back. */
+                    if (oj["entries"].contains("$core/deleted")
+                        && oldest < 0) {
+                        const json &d = oj["entries"]["$core/deleted"]["value"];
+                        Database::Tombstone t;
+
+                        t.uuid = UUID::parse(oj.value("uuid", ""));
+                        t.ref = (dbref) oj.value("dbref", -1);
+                        t.deletedAt = d.is_array() && d.size() > 0
+                            ? d[0].get<long>() : (long) current_systime;
+                        t.deletedRev = oj.value("rev", 0L);
+                        MUCK::database().addTombstone(t);
+
+                        f.close();
+                        unlink(full.c_str());
+                        unlink(objfile.c_str());
+                        removed++;
+                        continue;
+                    }
 
                     bool merged = false;
 

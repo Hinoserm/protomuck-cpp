@@ -564,7 +564,7 @@ next_timequeue_event(void)
                     char bbuf[BUFFER_LEN];
                     dbref plyr;
 
-                    sprintf(bbuf, ">> %.4000s %.*s", MUCK::getName(event->uid), (int) (4000 - strlen(MUCK::getName(event->uid))), pronoun_substitute(event->descr, event->uid, cbuf));
+                    sprintf(bbuf, ">> %.4000s %.*s", MUCK::getName(event->uid), (int) (4000 - strlen(DoNull(MUCK::getName(event->uid)))), pronoun_substitute(event->descr, event->uid, cbuf));
                     plyr = CONTENTS(event->loc);
                     for (; plyr != NOTHING; plyr = NEXTOBJ(plyr)) {
                         if (Typeof(plyr) == TYPE_PLAYER && plyr != event->uid)

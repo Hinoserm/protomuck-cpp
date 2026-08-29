@@ -80,30 +80,43 @@ class Database {
     dbref parent(dbref obj);
 
     /* --- deletion (the modern gatekeeper) --- */
-    /* Records a tombstone, removes the object's store file, retires
-     * its uuid from the index, marks the shell deleted, and raises the
-     * OBJECT_DELETED mufevent. dbrefs are NEVER reused; the slot stays
-     * a dead shell so stale holders resolve to something inspectable
-     * instead of someone else's object. Callers (recycle_object) have
-     * already emptied and unlinked the object. */
+    /* Records the deletion as a journal ENTRY and retires the uuid
+     * from the index. Nothing is written and nothing is destroyed:
+     * the object's file stays exactly as it is, and the object is dead
+     * because its latest state says so. Undoing it is therefore an
+     * ordinary rollback to any revision before the entry.
+     *
+     * dbrefs are NEVER reused; the slot stays a dead shell so stale
+     * holders resolve to something inspectable instead of someone
+     * else's object. Callers (recycle_object) have already emptied and
+     * unlinked the object. */
     void deleteObject(dbref victim, dbref deleter);
 
+    /* A tombstone is NOT created at deletion. It is created when the
+     * object's data is finally gone: once no retained snapshot can
+     * still reach the object, compaction removes its files and leaves
+     * a tombstone as the record that the dbref was used and its state
+     * no longer exists. */
     struct Tombstone {
         UUID uuid;
         dbref ref;
         long deletedAt;
         UUID deletedBy;
-        /* store revision era at deletion: a snapshot marker with
-         * rev < deletedRev was taken while the object was alive and
-         * pins its store file until the marker ages out */
+        /* the era the object was recycled in */
         long deletedRev = 0;
     };
     const std::vector<Tombstone> &tombstones() const { return tombstones_; }
     void setTombstones(std::vector<Tombstone> list);
+    void addTombstone(const Tombstone &t);
     bool findTombstone(dbref ref, Tombstone *out) const;
     void removeTombstone(const UUID &u);
-    /* Clear the deleted mark on a shell being resurrected. */
+    /* Clear the deleted mark on a shell coming back through a
+     * rollback, and put its uuid back in the index. */
     void reviveHole(dbref ref);
+
+    /* Stop resolving this object's uuid: it has been recycled. The
+     * dbref keeps pointing at it, as it always has. */
+    void retireUUID(dbref ref);
 
     /* ============================================================ */
     /* LEGACY BRIDGE. Everything below exists only while the old    */

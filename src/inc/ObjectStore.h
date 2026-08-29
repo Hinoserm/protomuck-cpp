@@ -145,10 +145,26 @@ class ObjectStore {
     CaptureSet fire();
     CaptureSet fireObject(dbref i);
 
-    /* Hand a frozen set to the dump thread and return immediately.
-     * This is what makes @dump and @snapshot cheap: the game records
-     * the moment, the disk catches up behind it. */
+    /* Hold a frozen set until the next dump. Sealing and WRITING are
+     * separate concerns: a snapshot or a deletion has to seal, because
+     * a layer captures values at its era boundary, but neither needs
+     * to touch the disk. Only @dump and the dump interval write, so a
+     * mass recycle cannot turn into one manifest rewrite per object.
+     * A crash before the next dump loses those changes, exactly as it
+     * loses any other unsaved change. */
+    void hold(CaptureSet set);
+
+    /* Hand everything held, plus the set just fired, to the dump
+     * thread and return. This is the dump. */
+    void flushHeld(CaptureSet set);
+
+    /* Hand a frozen set to the dump thread and return immediately. */
     void enqueue(CaptureSet set);
+
+    /* Put everything held on disk and wait for it. Any read of stored
+     * state takes this: a held set is not on disk, and reading without
+     * it would see a world missing its most recent changes. */
+    void syncNow();
 
     /* Block until the dump thread has written everything queued.
      * Rollback, resurrection, marker reads, shutdown and @restart all
@@ -195,6 +211,8 @@ class ObjectStore {
     std::condition_variable queueCv_;
     std::condition_variable idleCv_;
     std::deque<CaptureSet> queue_;
+    /* sealed but deliberately not yet written; drained by a dump */
+    std::vector<CaptureSet> held_;
     bool dumpThreadRunning_ = false;
     bool dumpThreadStop_ = false;
     bool persisting_ = false;

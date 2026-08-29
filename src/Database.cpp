@@ -270,30 +270,28 @@ Database::deleteObject(dbref victim, dbref deleter)
     if (!o)
         return;
 
-    /* Flush the final state while the uuid still resolves. The file
-     * and its history stay on disk as long as a retained snapshot
-     * marker covers the object's lifetime, so @rollback can restore
-     * it; the manifest sweep reclaims it once coverage ages out. */
-    long drev = 0;
+    /* Deletion is an ENTRY, not a mechanism of its own. The object's
+     * file is left exactly as it is and a journal record says it was
+     * recycled; the object is dead because its latest state says so.
+     *
+     * That makes undoing it an ordinary rollback: at any revision
+     * before this one the entry simply is not there yet, so the
+     * object is alive with no special path to restore it, nothing to
+     * order against a tombstone table, and nothing to write here.
+     * Like any other change it reaches disk at the next dump. */
+    o->deletedAt_ = (long) current_systime;
+    o->deletedBy_ = deleter;
+    o->deleted_ = true;
+    journalRecord(victim, "$core/deleted");
 
-    if (store().active())
-        drev = store().retireObject(victim);
-
-    Tombstone t;
-    t.uuid = o->uuid();
-    t.ref = victim;
-    t.deletedAt = (long) current_systime;
-    t.deletedBy = UUIDOf(deleter);
-    t.deletedRev = drev < 0 ? 0 : drev;
-
+    /* The uuid index stops resolving to it; the dbref keeps pointing
+     * at the dead shell, as it always has. */
     {
         std::unique_lock<std::shared_mutex> hold(indexMutex_);
 
-        tombstones_.push_back(t);
         if (!o->uuid_.isNil())
             byUUID_.erase(o->uuid_);
     }
-    o->deleted_ = true;
 
     /* OBJECT_DELETED broadcast disabled pending design discussion.
     struct inst temp;
@@ -302,6 +300,14 @@ Database::deleteObject(dbref victim, dbref deleter)
     temp.data.objref = victim;
     broadcast_muf_event((char *) "OBJECT_DELETED", &temp, 1, 0);
     */
+}
+
+void
+Database::addTombstone(const Tombstone &t)
+{
+    std::unique_lock<std::shared_mutex> hold(indexMutex_);
+
+    tombstones_.push_back(t);
 }
 
 void
@@ -343,8 +349,28 @@ Database::reviveHole(dbref ref)
 {
     DbObject *o = get(ref);
 
-    if (o)
-        o->deleted_ = false;
+    if (!o)
+        return;
+    o->markAlive();
+
+    std::unique_lock<std::shared_mutex> hold(indexMutex_);
+
+    if (!o->uuid_.isNil())
+        byUUID_[o->uuid_] = o;
+}
+
+void
+Database::retireUUID(dbref ref)
+{
+    DbObject *o = get(ref);
+
+    if (!o)
+        return;
+
+    std::unique_lock<std::shared_mutex> hold(indexMutex_);
+
+    if (!o->uuid_.isNil())
+        byUUID_.erase(o->uuid_);
 }
 
 dbref

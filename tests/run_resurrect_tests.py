@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
-# End-to-end test: deleted-object retention and @rollback resurrection.
+# Recycling is a journal entry, not a mechanism of its own.
+#
+# The object's file is left exactly as it is and a layer records that
+# it was recycled; the object is dead because its latest state says so.
+# So undoing it is an ORDINARY rollback: at any revision before that
+# entry the object was alive, and rolling back there brings it back
+# with no special path, nothing to order against a tombstone, and no
+# write at delete time. A tombstone appears only when compaction
+# finally reclaims the data, which is the point of no return.
 # Usage: restest.py <binary> <gamedir> <port>
 import sys, os, shutil, re, time, socket, select
 
@@ -72,7 +80,7 @@ c.cmd('@recycle #' + ref, 3.0)
 out = c.cmd('ex #' + ref)
 check('shows deleted', 'garbage' in out.lower(), out)
 out = c.cmd('@rollback #%s=%s' % (ref, rev), 5.0)
-check('resurrected', 'Resurrected' in out, out)
+check('rollback revives it', 'Restored' in out, out)
 out = c.cmd('ex #' + ref)
 check('name back', 'Relic' in out, out)
 check('snapshot line shown', 'Snapshots:' in out, out)
@@ -102,7 +110,7 @@ check('still deleted after reboot', 'garbage' in out.lower(), out)
 out = c.cmd('ex #' + ref)
 check('first relic alive after reboot', 'Relic' in out, out)
 out = c.cmd('@rollback #%s=%s' % (ref2, rev2), 5.0)
-check('resurrected after reboot', 'Resurrected' in out, out)
+check('rollback revives it after reboot', 'Restored' in out, out)
 out = c.cmd('ex #%s=/' % ref2)
 check('prop back after reboot', 'twoprop:world' in out, out)
 

@@ -87,6 +87,15 @@ class DbObject {
     void setOwner(DbObject *owner);
 
     bool isDeleted() const { return deleted_; }
+    /* When it was recycled and by whom. Persisted as the $core/deleted
+     * entry, so a rollback to an earlier revision brings the object
+     * back simply by not having that entry yet. */
+    long deletedAt() const { return deletedAt_; }
+    dbref deletedBy() const { return deletedBy_; }
+    void markDeleted(long when, dbref by) {
+        deletedAt_ = when; deletedBy_ = by; deleted_ = true;
+    }
+    void markAlive() { deleted_ = false; deletedAt_ = 0; deletedBy_ = -1; }
 
     /* --- permissions --- */
     /* Effective MUF/wizard level from the W-bits, folded by the
@@ -196,6 +205,8 @@ class DbObject {
     std::vector<DbObject *> contents_;
     std::vector<DbObject *> exits_;
     bool deleted_ = false;
+    long deletedAt_ = 0;
+    dbref deletedBy_ = -1;
     /* the type the attached modules were built for; Invalid forces a
      * rebuild on first access */
     ObjectType moduleType_ = ObjectType::Invalid;

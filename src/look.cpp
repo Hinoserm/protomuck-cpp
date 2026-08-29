@@ -686,7 +686,7 @@ size_object(dbref i, int load)
     byts = sizeof(struct object);
 
     if (MUCK::getName(i))
-        byts += strlen(MUCK::getName(i)) + 1;
+        byts += strlen(DoNull(MUCK::getName(i))) + 1;
 
     byts += size_properties(i, load);
 
@@ -760,22 +760,22 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
     switch (Typeof(thing)) {
         case TYPE_ROOM:
             sprintf(buf, "%.*s" SYSNORMAL "  Owner: %s  Parent: ",
-                    (int) (BUFFER_LEN - strlen(MUCK::getName(MUCK::getOwner(thing))) - 35), ansi_unparse_object(MUCK::getOwner(player), thing), MUCK::getName(MUCK::getOwner(thing)));
+                    (int) (BUFFER_LEN - strlen(DoNull(MUCK::getName(MUCK::getOwner(thing)))) - 35), ansi_unparse_object(MUCK::getOwner(player), thing), MUCK::getName(MUCK::getOwner(thing)));
             strcat(buf, ansi_unparse_object(MUCK::getOwner(player), MUCK::getLocation(thing)));
             break;
         case TYPE_THING:
             sprintf(buf, "%.*s" SYSNORMAL "  Owner: %s  Value: %d",
-                    (int) (BUFFER_LEN - strlen(MUCK::getName(MUCK::getOwner(thing))) - 35), ansi_unparse_object(MUCK::getOwner(player), thing), MUCK::getName(MUCK::getOwner(thing)),
+                    (int) (BUFFER_LEN - strlen(DoNull(MUCK::getName(MUCK::getOwner(thing)))) - 35), ansi_unparse_object(MUCK::getOwner(player), thing), MUCK::getName(MUCK::getOwner(thing)),
                     MUCK::database().get(thing)->As<MUCK::Thing>()->value());
             break;
         case TYPE_PLAYER:
             sprintf(buf, "%.*s" SYSNORMAL "  %s: %d  ",
-                    (int) (BUFFER_LEN - strlen(MUCK::getName(MUCK::getOwner(thing))) - 35), ansi_unparse_object(MUCK::getOwner(player), thing), tp_cpennies, MUCK::playerPennies(thing));
+                    (int) (BUFFER_LEN - strlen(DoNull(MUCK::getName(MUCK::getOwner(thing)))) - 35), ansi_unparse_object(MUCK::getOwner(player), thing), tp_cpennies, MUCK::playerPennies(thing));
             break;
         case TYPE_EXIT:
         case TYPE_PROGRAM:
         case TYPE_UNSUPPORTED:
-            sprintf(buf, "%.*s" SYSNORMAL "  Owner: %s", (int) (BUFFER_LEN - strlen(MUCK::getName(MUCK::getOwner(thing))) - 35), ansi_unparse_object(MUCK::getOwner(player), thing), MUCK::getName(MUCK::getOwner(thing)));
+            sprintf(buf, "%.*s" SYSNORMAL "  Owner: %s", (int) (BUFFER_LEN - strlen(DoNull(MUCK::getName(MUCK::getOwner(thing)))) - 35), ansi_unparse_object(MUCK::getOwner(player), thing), MUCK::getName(MUCK::getOwner(thing)));
             break;
         case TYPE_GARBAGE:
         default:

@@ -288,7 +288,9 @@ dump_database_internal(void)
     } else {
         /* Fire and return: the dump thread writes the sealed layers
          * behind the game. docs/DATABASE.txt 7.1. */
-        MUCK::store().enqueue(MUCK::store().fire());
+        /* The dump is the only thing that writes: it hands the writer
+         * everything held since last time, plus what just sealed. */
+        MUCK::store().flushHeld(MUCK::store().fire());
     }
 
     /* Write out the macros */
