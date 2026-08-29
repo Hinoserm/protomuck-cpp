@@ -822,7 +822,7 @@ struct PendingLinks {
 
 /* Phase one of load: create the object, set scalars, stash refs. */
 static void
-objectFromJsonPhase1(const json &j, std::vector<PendingLinks> &later)
+objectFromJsonPhase1(json &j, std::vector<PendingLinks> &later)
 {
     dbref i = (dbref) j.value("dbref", -1);
     std::string type = j.value("type", "garbage");
@@ -914,12 +914,16 @@ objectFromJsonPhase1(const json &j, std::vector<PendingLinks> &later)
     }
 
     PendingLinks pl;
+
     pl.ref = i;
-    pl.td = td;
-    pl.core = core;
+    /* MOVE the subtrees rather than copy: at a hundred thousand
+     * objects these copies were most of the serial apply cost. The
+     * caller's json is dead after this call; both call sites agree. */
+    pl.td = std::move(j["type_data"]);
+    pl.core = std::move(j["core"]);
     if (j.contains("props"))
-        pl.props = j["props"];
-    later.push_back(pl);
+        pl.props = std::move(j["props"]);
+    later.push_back(std::move(pl));
 }
 
 /* Translate an object file's entry model into the flat load shape
@@ -1889,6 +1893,13 @@ ObjectStore::saveAll(bool dirtyOnly)
 struct PreparedFile {
     std::string path;
     json j;
+    json shape;                 /* fileToLoadShape output */
+    json fileEntries;           /* the (pruned) entry map, for phase 2 */
+    json fileMods;
+    json fileMarkers;
+    json dormantUnknown;        /* unknown-namespace slice */
+    json dormantTypeInfoJ;      /* unsupported-type record */
+    std::string tname;
     UUID fileUUID;
     dbref claimed = -1;
     long delEra = -1;
@@ -1896,11 +1907,13 @@ struct PreparedFile {
     std::vector<std::string> problems;
     bool uncommitted = false;
     bool skip = false;
+    bool noEntries = false;
+    bool unsupported = false;
 };
 
 static void
 prepareStoreFile(const std::string &full, PreparedFile &out,
-                 const json *index, int top,
+                 const json *index, int top, const std::string &root,
                  const std::map<std::string,
                                 std::vector<json> > &journalReplay)
 {
@@ -1968,7 +1981,8 @@ prepareStoreFile(const std::string &full, PreparedFile &out,
         return;
     }
     if (!j.contains("entries")) {
-        /* pass C reports this one; the shape must survive to it */
+        /* the applier reports this one */
+        out.noEntries = true;
         return;
     }
 
@@ -2073,6 +2087,53 @@ prepareStoreFile(const std::string &full, PreparedFile &out,
             out.consumedUUID = jr->first;
         }
     }
+    if (!j.contains("entries")) {
+        /* a journal full-line replacement without an entry model */
+        out.noEntries = true;
+        return;
+    }
+
+    /* Dormant detection and the load shape, off the serial path; the
+     * shared dormant maps themselves are written by the applier. */
+    out.tname = j.value("type", "garbage");
+    out.unsupported = !storedTypeSupported(out.tname);
+    {
+        json unknown = json::object();
+
+        for (auto eit = j["entries"].begin();
+             eit != j["entries"].end(); ++eit)
+            if (!knownNamespace(eit.key())
+                || (out.unsupported
+                    && eit.key().rfind("$type/", 0) == 0))
+                unknown[eit.key()] = eit.value();
+        out.dormantUnknown = std::move(unknown);
+    }
+    out.fileMods = j.value("modules", json::array());
+    out.fileMarkers = j.value("markers", json::array());
+    if (out.unsupported) {
+        /* The type module is absent: keep its slice dormant, remember
+         * what the object would have been, and load only the core. */
+        json info;
+        int bits = 0;
+        const json &ents = j["entries"];
+        auto fl = ents.find("$core/flags");
+
+        if (fl != ents.end() && (*fl)["value"].is_array())
+            bits = (*fl)["value"][0].get<int>() & TYPE_MASK;
+        info["name"] = out.tname;
+        info["bits"] = bits;
+        out.dormantTypeInfoJ = std::move(info);
+
+        for (auto eit = j["entries"].begin();
+             eit != j["entries"].end();)
+            if (eit.key().rfind("$type/", 0) == 0)
+                eit = j["entries"].erase(eit);
+            else
+                ++eit;
+    }
+    out.shape = fileToLoadShape(j, root);
+    out.fileEntries = std::move(j["entries"]);
+    out.j = json();             /* the raw parse is dead; free it */
 }
 
 dbref
@@ -2340,93 +2401,46 @@ ObjectStore::loadAll()
         if (!prep.consumedUUID.empty())
             journalReplay.erase(prep.consumedUUID);
 
-        if (j.contains("entries")) {
-                    json unknown = json::object();
-                    std::string tname = j.value("type", "garbage");
-                    bool unsupported = !storedTypeSupported(tname);
+        if (prep.noEntries) {
+            damaged(full + ": no entry model; this store predates "
+                    "the current format. Rebuild it by re-importing "
+                    "the legacy flat database.");
+            return;
+        }
 
-                    for (auto eit = j["entries"].begin();
-                         eit != j["entries"].end(); ++eit)
-                        if (!knownNamespace(eit.key())
-                            || (unsupported
-                                && eit.key().rfind("$type/", 0) == 0))
-                            unknown[eit.key()] = eit.value();
-                    if (!unknown.empty())
-                        dormantEntries[fileUUID] = unknown;
-                    if (!j.value("modules", json::array()).empty())
-                        dormantModules[fileUUID] = j["modules"];
+        /* the heavy json work (dormant detection, the load shape) was
+         * done by the worker; what remains is shared-table inserts and
+         * phase one's field pokes */
+        if (!prep.dormantUnknown.empty())
+            dormantEntries[fileUUID] = std::move(prep.dormantUnknown);
+        if (!prep.fileMods.empty())
+            dormantModules[fileUUID] = prep.fileMods;
+        if (prep.unsupported)
+            dormantTypeInfo[fileUUID] = std::move(prep.dormantTypeInfoJ);
 
-                    if (unsupported) {
-                        /* The type module is absent: keep its slice
-                         * dormant, remember what the object would have
-                         * been, and load only the core. */
-                        json info;
-                        int bits = 0;
-                        const json &ents = j["entries"];
-                        auto fl = ents.find("$core/flags");
-
-                        if (fl != ents.end() && (*fl)["value"].is_array())
-                            bits = (*fl)["value"][0].get<int>() & TYPE_MASK;
-                        info["name"] = tname;
-                        info["bits"] = bits;
-                        dormantTypeInfo[fileUUID] = info;
-
-                        for (auto eit = j["entries"].begin();
-                             eit != j["entries"].end();)
-                            if (eit.key().rfind("$type/", 0) == 0)
-                                eit = j["entries"].erase(eit);
-                            else
-                                ++eit;
-                    }
-
-                    json fileEntries = j["entries"];
-                    json fileMods = j.value("modules", json::array());
-                    json fileMarkers = j.value("markers", json::array());
-
-                    j = fileToLoadShape(j, root_);
-                    objectFromJsonPhase1(j, later);
-                    /* it came off disk, so it has a base there. This
-                     * includes recycled shells: their retained files
-                     * must stay in the manifest index, or the next
-                     * boot would discard them as uncommitted. */
-                    if (DbObject *bo = MUCK::database().get(claimed)) {
-                        bo->setBaseWritten(true);
-                        if (bo->isDeleted() && delEra >= 0)
-                            bo->setDeletedRev(delEra);
-                    }
-                    if (!fileMarkers.empty()) {
-                        dbref mref = (dbref) j.value("dbref", -1);
-                        DbObject *mo = mref >= 0
-                            ? MUCK::database().get(mref) : nullptr;
-
-                        if (mo)
-                            for (const auto &me : fileMarkers)
-                                mo->scopedMarkers().push_back(
-                                    {me.value("rev", 0L),
-                                     me.value("when", 0L),
-                                     me.value("label", std::string()),
-                                     me.value("locked", false)});
-                    }
-                    if (unsupported) {
-                        dbref pref = (dbref) j.value("dbref", -1);
-
-                        if (pref >= 0) {
-                            struct object *po = DBFETCH(pref);
-
-                            MUCK::setType(pref, ObjectType::Unsupported);
-                            (void) po;
-                        }
-                    }
-                    if (!later.empty() && later.back().ref == j.value("dbref", -1)) {
-                        later.back().entries = fileEntries;
-                        for (const auto &mn : fileMods)
-                            later.back().modules.push_back(mn.get<std::string>());
-                    }
-                    return;
-                }
-                damaged(full + ": no entry model; this store predates "
-                        "the current format. Rebuild it by re-importing "
-                        "the legacy flat database.");
+        objectFromJsonPhase1(prep.shape, later);
+        /* it came off disk, so it has a base there. This includes
+         * recycled shells: their retained files must stay in the
+         * manifest index, or the next boot would discard them as
+         * uncommitted. */
+        if (DbObject *bo = MUCK::database().get(claimed)) {
+            bo->setBaseWritten(true);
+            if (bo->isDeleted() && delEra >= 0)
+                bo->setDeletedRev(delEra);
+            for (const auto &me : prep.fileMarkers)
+                bo->scopedMarkers().push_back(
+                    {me.value("rev", 0L),
+                     me.value("when", 0L),
+                     me.value("label", std::string()),
+                     me.value("locked", false)});
+        }
+        if (prep.unsupported)
+            MUCK::setType(claimed, ObjectType::Unsupported);
+        if (!later.empty() && later.back().ref == claimed) {
+            later.back().entries = std::move(prep.fileEntries);
+            for (const auto &mn : prep.fileMods)
+                later.back().modules.push_back(mn.get<std::string>());
+        }
     };
 
     {
@@ -2443,7 +2457,7 @@ ObjectStore::loadAll()
             for (size_t i = 0; i < nfiles; i++) {
                 PreparedFile prep;
 
-                prepareStoreFile(jsonFiles[i], prep, index, top,
+                prepareStoreFile(jsonFiles[i], prep, index, top, root_,
                                  journalReplay);
                 applyPrepared(prep);
             }
@@ -2472,7 +2486,7 @@ ObjectStore::loadAll()
 
                     PreparedFile tmp;
 
-                    prepareStoreFile(jsonFiles[i], tmp, index, top,
+                    prepareStoreFile(jsonFiles[i], tmp, index, top, root_,
                                      journalReplay);
                     {
                         std::unique_lock<std::mutex> lk(pm);
