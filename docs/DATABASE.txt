@@ -264,9 +264,38 @@ superseded mechanisms are deleted, not kept alongside.
 
    A manifest file at the data root stores the format version, the
    global revision counter, the next dbref, the globally enabled
-   feature modules, the tombstone table, and the @tune parameters
+   feature modules, the tombstone table, the @tune parameters
    (parmfile.cfg moves into the manifest; help files and logs
-   explicitly do NOT move into the database).
+   explicitly do NOT move into the database), and the COMMITTED
+   OBJECT INDEX: dbref -> uuid for every object that has a base file
+   on disk, recycled-but-retained shells included.
+
+   The manifest is the commit point, and the index is what makes that
+   enforceable at boot time.  A file the index does not name was
+   written by a dump that never committed; it is an uncommitted
+   leftover from a crash, and the loader discards it (json and hist
+   both) once the boot is known to proceed, exactly as the crash
+   already discarded every other unsaved change.  Without the
+   discard, the dbref such a file claims can be reassigned by the
+   recovered world and a later boot would find two files claiming one
+   slot.  A file the index names that is MISSING is damage.  When two
+   files claim one dbref, the index says which one is real.
+
+   LOAD-TIME INTEGRITY.  The loader collects every problem it finds
+   and then refuses to boot if there were any: booting past damaged
+   or missing files silently regresses objects to older state, which
+   is worse than not starting.  Damage is: an unreadable or
+   unparsable object file, a missing or unparsable uuid or dbref, a
+   file whose name does not match the uuid inside it, a corrupt or
+   truncated history line, a legacy copy-on-write history record, a
+   history sidecar with no base beside it, two files claiming one
+   dbref, and an indexed object with no file.  Every problem is
+   printed to stderr AND to logs/status; the serving boot detaches
+   and closes stderr before the store loads, so the log is where an
+   operator reads the failure.  --force-load boots anyway, skipping
+   the damaged data, and still reports everything.  A missing or
+   unparsable manifest always refuses: there is no committed state to
+   boot from and no flag overrides that.
 
    The store format is VERSION 1 and it is the ONLY version.  The
    loader refuses any other format number outright.  There are no
@@ -362,7 +391,8 @@ superseded mechanisms are deleted, not kept alongside.
 
    Reading at revision R: the base with every layer up to R applied.
 
-   Retention is time-based on markers via @tune (like 30 days).  A
+   Retention is the ladder of section 7.2: hourly, daily, weekly,
+   monthly tiers, each keeping a bounded number of snapshots.  A
    marker can be locked; locked markers never age out.  Use case:
    lock a snapshot of one program before a risky edit, roll back if
    needed.  Layers a retained marker still needs are kept; the rest
@@ -471,21 +501,55 @@ superseded mechanisms are deleted, not kept alongside.
 
    COMPACTION
 
-   Layers accumulate until the snapshot that needs them ages out.
-   Compaction is a background pass that works purely from files:
-   read an object's .json and .hist, merge every layer no retained
-   marker still requires into the base, write a fresh .json, rewrite
-   the .hist with the layers that remain.  It never touches a live
-   object and never blocks the game.  Object load applies remaining
-   layers over the base, so a compacted and an uncompacted object are
-   indistinguishable to the loader.
+   Compaction is automatic, incremental, and rides the dump.  At
+   fire time (game thread) the retention ladder of 7.2 prunes the
+   marker list, and the sweep picks the next batch of objects (the
+   cursor wraps, so the whole store is revisited every few dozen
+   dumps).  For each object in the batch a frozen WORK ORDER is
+   built: its uuid, the sorted union of the surviving global and
+   scoped marker revisions, the scoped markers its file should keep,
+   and whether the object is reclaimed.  The orders ride in the
+   capture set; the dump thread executes them AFTER the set's
+   manifest lands, from files alone.  Decisions on the game thread,
+   file work on the dump thread, nothing in between.
 
-   Compaction is also where a recycled object finally dies.  While any
-   retained marker can still reach it, it keeps its file and keeps
-   loading, dead but recoverable by an ordinary rollback.  When none
-   can, compaction removes its data and writes the tombstone that
-   records the dbref was used and its state is gone.  The tombstone
-   ages out of the manifest later, on its own retention clock.
+   What an order does to the files:
+
+     - Layers at or below the OLDEST surviving marker merge into the
+       base; the base's rev advances to the newest era absorbed.
+       The base is written before the history is rewritten: replaying
+       an absorbed layer over a base that already contains it is
+       idempotent, so a crash between the two writes loses nothing.
+     - Every other layer buckets to the smallest surviving marker at
+       or above its era.  A bucket holding one layer is kept
+       verbatim; a bucket holding several merges them into one layer
+       stamped with the newest era in the run, recording covers_from,
+       the oldest era it swallowed.  Rollback refuses a target inside
+       [covers_from, era) and names the nearest revisions that still
+       exist, rather than silently handing back older state.
+     - Past the newest surviving marker, layers bucket to their own
+       era, which folds the many same-era lines a frequent dump
+       interval appends into one line per era.  Era is the rollback
+       granularity, so this loses nothing.
+     - The file's scoped marker list is rewritten to its survivors.
+
+   Compaction is also where a recycled object finally dies.  While
+   any surviving marker predates the deletion (its era is below the
+   deletion's era), the object keeps its files and keeps loading,
+   dead but recoverable by an ordinary rollback; the deletion era is
+   stamped on the object at deleteObject and reconstructed from the
+   file at load.  When no surviving marker predates it, the fire that
+   notices records the tombstone and drops the object from the
+   committed index, and the dump thread unlinks the files only after
+   that manifest commits.  A crash before the commit changes nothing;
+   a crash after it leaves files the index does not name, which the
+   next boot discards as uncommitted leftovers.  Order matters and it
+   is always manifest first, then unlink.  The tombstone ages out of
+   the manifest later, on its own retention clock
+   (tombstone_retention).
+
+   -storegc is the same engine run over every object at once, and it
+   too writes the manifest before removing anything.
 
 
    READS OF STORED STATE
@@ -569,6 +633,88 @@ superseded mechanisms are deleted, not kept alongside.
 
    tests/muckharness.py exists to make both impossible: it stops by
    pid and refuses to start while the port is still held.
+
+   tests/run_integrity_tests.py  damages a store every way section 6
+       lists (truncated files, corrupt history, missing objects,
+       orphaned history, broken manifests, uuid mismatches) and
+       insists the boot refuses, that --force-load overrides, that
+       the failure is readable in logs/status, and that an
+       uncommitted leftover is discarded rather than refused.
+
+   tests/run_ladder_tests.py  runs the retention ladder at
+       accelerated time by backdating marker timestamps while the
+       server is down.  The survivor set is compared against an
+       independent python reimplementation of the ladder, so the two
+       go red if they drift.  Also: the journal bound (no layer below
+       the oldest survivor after a sweep), rollback refusal with
+       nearest-revision naming, locked markers pinning, retention of
+       recycled objects, and full reclamation with a clean boot
+       after.
+
+   tests/run_dump_stress_tests.py  issues 100 @dumps back to back
+       over conflicting property overlays and insists the server
+       stays responsive, the last write wins after a real restart,
+       and a mid-run snapshot still rolls back to exactly the state
+       of its moment.
+
+   tests/run_perf_ab.py  builds the A+B measurement database
+       (100,000 objects x 100 properties, plus twenty whales up to a
+       million properties each) through real MUF, then measures dump
+       stall, snapshot stall, examine, boot replay, and store size at
+       increasing snapshot counts.
+
+
+7.2 SNAPSHOT CADENCE AND THE RETENTION LADDER
+
+   Dumps are durability only.  A dump appends layers stamped with the
+   CURRENT era and does not advance it; six dumps between snapshots
+   are six same-era lines, indistinguishable to rollback, and later
+   folded into one by compaction.  Rollback targets exist at snapshot
+   boundaries, because only a snapshot bumps the era and records a
+   marker.  Dump often for durability, snapshot for restore points.
+
+   AUTOMATIC SNAPSHOTS.  snapshot_interval (@tune, default one hour,
+   0 disables) is checked on the dump path: when the newest global
+   marker is older than the interval, the dump takes a global
+   snapshot first, labeled "auto".  The effective cadence granularity
+   is therefore the dump interval.  A game that dumps every ten
+   minutes and snapshots every hour gets six durability points and
+   one restore point per hour, with no operator action.
+
+   THE LADDER.  Four tiers, each a keep-count @tune:
+
+       keep_hourly_snapshots    72     one per hour bucket
+       keep_daily_snapshots     90     one per day bucket
+       keep_weekly_snapshots    52     one per week bucket
+       keep_monthly_snapshots   24     one per 30-day bucket
+
+   Every unlocked marker is classified by age into the finest enabled
+   tier whose window (grain times keep-count) still covers it; within
+   a tier the newest marker per bucket survives.  Markers younger
+   than one hour are all kept, so a snapshot taken a moment ago can
+   never be thinned; locked markers always survive; a marker no
+   enabled tier covers is gone.  A tier set to 0 is disabled and its
+   ages fall through to the next coarser tier.  Manual snapshots are
+   ordinary markers and ride the same ladder; lock the ones that must
+   outlive it.  Scoped (per-object) markers age on the same ladder.
+
+   With the defaults, a store carries at most about 72 + 90 + 52 + 24
+   markers plus whatever is locked or under an hour old: roughly 240
+   restore points spanning two years, regardless of dump frequency.
+
+   The ladder runs at fire time on the dump path, and one pure
+   function computes it everywhere it is needed (global markers,
+   scoped markers, offline gc), so every consumer agrees about what
+   survived.  Because compaction merges every layer below the oldest
+   survivor into the base, the ladder is also the journal bound: no
+   object's history reaches further back than the oldest marker the
+   ladder retains, plus at most the sweep period before the merge
+   catches up.
+
+   What thinning takes away is addressability, never the present:
+   rolling back to a thinned revision is refused by name (see
+   COMPACTION in 7.1), and the state at every SURVIVING marker is
+   reconstructed exactly.
 
 
 8. MIGRATION AND OPERATIONS

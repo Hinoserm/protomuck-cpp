@@ -4193,6 +4193,12 @@ process_commands(void)
     char buf[BUFFER_LEN];
     dbref mufprog;
 
+    /* the dump thread raised this when a dump's manifest committed;
+     * the message is posted from here because walling walks the
+     * descriptor list, which that thread must never do */
+    if (MUCK::store().takeDumpLanded() && tp_dbdump_warning)
+        wall_and_flush(tp_dumpdone_mesg);
+
     do {
         nprocessed = 0;
         for (d = descriptor_list; d; d = dnext) {

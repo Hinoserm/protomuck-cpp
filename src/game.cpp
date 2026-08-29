@@ -329,7 +329,11 @@ dump_database_internal(void)
         ansi_wall_wizards(buf);
     }
 
-    if (tp_dbdump_warning)
+    /* The journal path announces completion when the manifest lands
+     * (process_commands polls the store); announcing here would say
+     * "Done." at fire time, while the dump thread is still writing.
+     * The synchronous conversion path really is done here. */
+    if (db_conversion_flag && tp_dbdump_warning)
         wall_and_flush(tp_dumpdone_mesg);
 
     if (tp_periodic_program_purge)

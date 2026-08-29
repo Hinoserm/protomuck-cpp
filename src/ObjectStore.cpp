@@ -2720,6 +2720,8 @@ ObjectStore::persist(const CaptureSet &set)
         return true;
     if (!atomicWrite(root_ + "/manifest.json", set.manifest))
         return false;
+    /* the game loop polls this and posts the dump-done message */
+    dumpLanded_.store(true);
 
     /* Compaction rides BEHIND the commit: a reclaimed object must
      * leave the committed index before its files leave the disk, and

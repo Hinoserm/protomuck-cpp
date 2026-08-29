@@ -14,6 +14,7 @@
  * See docs/DATABASE.txt sections 6 and the API notes appended there.
  */
 
+#include <atomic>
 #include <cstdio>
 #include <condition_variable>
 #include <deque>
@@ -202,6 +203,13 @@ class ObjectStore {
     /* True while the dump thread has work outstanding. */
     bool persistPending();
 
+    /* True once since the last call if a dump's manifest committed.
+     * The game loop polls this and posts the dump-done message; the
+     * dump thread itself must not wall (walling walks the descriptor
+     * list). So "Done." means the disk is caught up, not merely that
+     * the fire returned. */
+    bool takeDumpLanded() { return dumpLanded_.exchange(false); }
+
     /* Dump thread (or inline): write a frozen set. Appends each
      * layer to its object's .hist, or writes a full base when the
      * object has none yet, then commits with the manifest. */
@@ -237,6 +245,7 @@ class ObjectStore {
     bool dumpThreadRunning_ = false;
     bool dumpThreadStop_ = false;
     bool persisting_ = false;
+    std::atomic<bool> dumpLanded_{false};
 
     std::string root_;
     long rev_ = 0;
