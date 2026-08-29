@@ -1895,7 +1895,11 @@ ObjectStore::loadAll()
     std::vector<std::string> problems;
     std::vector<std::string> uncommitted;
     auto damaged = [&problems](const std::string &msg) {
+        /* both channels: a serving boot has detached and closed
+         * stderr by the time the store loads, so the log file is the
+         * only place an operator can read the failure */
         fprintf(stderr, "STORE: %s\n", msg.c_str());
+        log_status("STORE: %s\n", msg.c_str());
         problems.push_back(msg);
     };
     const json *index = manifest.contains("index")
