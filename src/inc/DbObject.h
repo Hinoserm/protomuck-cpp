@@ -37,6 +37,18 @@ class DbObject;
 class Database;
 class Properties;
 
+/* A scoped snapshot marker: one rollback point recorded against a
+ * single object by @snapshot <obj>. The object's file carries the
+ * same list for the dump thread and offline compaction; this copy
+ * lives on the DbObject so display paths (examine's snapshot count,
+ * @snapshot listings) never parse a file. */
+struct ScopedMarker {
+    long rev;
+    long when;
+    std::string label;
+    bool locked;
+};
+
 /* --------------------------------------------------------------- */
 /* Module: base of every attachable behavior.                      */
 /* --------------------------------------------------------------- */
@@ -149,6 +161,13 @@ class DbObject {
             f(m.get());
     }
 
+    /* --- scoped snapshot markers (docs/DATABASE.txt section 7) --- */
+    /* In-memory mirror of the "markers" list in the object's file:
+     * loaded at boot, appended by snapshotObject, cleared when a full
+     * base write drops the history those markers pointed at. Game
+     * thread only. */
+    std::vector<ScopedMarker> &scopedMarkers() { return scopedMarkers_; }
+
     /* --- journal (docs/DATABASE.txt section 7) --- */
     /* The object's stack of layers. Only the top one is mutable and
      * only the game thread touches it; sealed layers are frozen, which
@@ -215,6 +234,7 @@ class DbObject {
     std::vector<std::unique_ptr<Module> > modules_;
 
     Journal journal_;
+    std::vector<ScopedMarker> scopedMarkers_;
     bool baseWritten_ = false;
     struct object legacy_;      /* TRANSITIONAL payload */
 };

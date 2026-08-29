@@ -1290,13 +1290,7 @@ ObjectStore::saveObject(dbref i)
 
     json cur = objectToJson(i);
 
-    /* Carry the object's own markers across, and stamp the revision
-     * this base represents. */
-    std::ifstream pf(path);
-    json prev = pf ? json::parse(pf, nullptr, false) : json();
-
-    if (prev.is_object() && !prev.value("markers", json::array()).empty())
-        cur["markers"] = prev["markers"];
+    /* Stamp the revision this base represents. */
     cur["rev"] = rev_;
 
     /* A full base supersedes every layer that sat on it, so the
@@ -1313,6 +1307,8 @@ ObjectStore::saveObject(dbref i)
     if (DbObject *o = MUCK::database().get(i)) {
         o->journal().discardTop();
         o->setBaseWritten(true);
+        /* the in-memory mirror tracks the file */
+        o->scopedMarkers().clear();
     }
     return atomicWrite(path, cur.dump(1));
 }
@@ -1396,6 +1392,9 @@ ObjectStore::snapshotObject(dbref i, const char *label, bool locked)
 
     if (!atomicWrite(path, j.dump(1)))
         return -1;
+    /* keep the in-memory mirror in step with the file */
+    if (DbObject *o = MUCK::database().get(i))
+        o->scopedMarkers().push_back({m.rev, m.when, m.label, m.locked});
     writeManifest();            /* persist the advanced rev counter */
     log_status("SNAPSHOT: #%d rev %ld (%s)%s\n", i, m.rev,
                m.label.empty() ? "unlabeled" : m.label.c_str(),
@@ -1406,37 +1405,22 @@ ObjectStore::snapshotObject(dbref i, const char *label, bool locked)
 std::vector<ObjectStore::Marker>
 ObjectStore::objectMarkers(dbref i) const
 {
-    /* Deliberately no barrier. This feeds examine's snapshot count,
-     * which is an ordinary command: forcing a flush here made every
-     * examine write the store, and an examine issued between creating
-     * an object and setting its properties captured the object's base
-     * before it had any. A marker taken but not yet written simply
-     * does not appear in the count, which is harmless; the paths that
-     * RECONSTRUCT state (rollback) take the barrier instead. */
+    /* Served from the DbObject's in-memory mirror, never from the
+     * file: this feeds examine's snapshot count, which is an ordinary
+     * command and must not pay a parse of the object's whole base per
+     * look. The mirror is loaded at boot, appended by snapshotObject,
+     * and cleared when a full base write drops the history. A deleted
+     * object still has its DbObject until reclamation, so its markers
+     * list normally; after reclamation the files are gone and there is
+     * nothing to list. */
+    std::vector<Marker> out;
+    DbObject *o = MUCK::database().get(i);
 
-    std::string path;
-
-    /* a dead shell has no uuid of its own; its retained file is
-     * findable through the tombstone */
-    if (MUCK::database().UUIDOf(i).isNil()) {
-        Database::Tombstone t;
-
-        if (!MUCK::database().findTombstone(i, &t))
-            return {};
-        path = UUIDObjectPath(root_, t.uuid.toString());
-    } else {
-        path = objectPath(i);
-    }
-
-    std::ifstream pf(path);
-
-    if (!pf)
-        return {};
-    json j = json::parse(pf, nullptr, false);
-
-    if (j.is_discarded())
-        return {};
-    return markersFromJson(j.value("markers", json::array()));
+    if (!o)
+        return out;
+    for (const auto &m : o->scopedMarkers())
+        out.push_back({m.rev, m.when, m.label, m.locked});
+    return out;
 }
 
 /* Value of every entry as of a revision: current entries whose rev is
@@ -1854,9 +1838,23 @@ ObjectStore::loadAll()
 
                     json fileEntries = j["entries"];
                     json fileMods = j.value("modules", json::array());
+                    json fileMarkers = j.value("markers", json::array());
 
                     j = fileToLoadShape(j, root_);
                     objectFromJsonPhase1(j, later);
+                    if (!fileMarkers.empty()) {
+                        dbref mref = (dbref) j.value("dbref", -1);
+                        DbObject *mo = mref >= 0
+                            ? MUCK::database().get(mref) : nullptr;
+
+                        if (mo)
+                            for (const auto &me : fileMarkers)
+                                mo->scopedMarkers().push_back(
+                                    {me.value("rev", 0L),
+                                     me.value("when", 0L),
+                                     me.value("label", std::string()),
+                                     me.value("locked", false)});
+                    }
                     if (unsupported) {
                         dbref pref = (dbref) j.value("dbref", -1);
 
