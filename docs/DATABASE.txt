@@ -32,24 +32,32 @@ superseded mechanisms are deleted, not kept alongside.
 
    The garbage object type is abolished as a storable type: nothing
    can create or save one, and TYPE_GARBAGE survives only as the
-   in-memory sentinel marking a dead shell.  Deleting an object unlinks
-   it from the uuid index and records a tombstone row: uuid, dbref,
-   deleted timestamp, deleting player uuid, and the store revision era
-   at deletion.  The dbref keeps resolving to a dead shell (section 5),
-   so no held pointer or stale ref can dangle.  Programs holding a
-   deleted object are to receive an OBJECT_DELETED mufevent; that event
-   is DEFERRED pending design discussion and is not raised today.
+   in-memory sentinel marking a dead shell.  The dbref keeps resolving
+   to that shell (section 5), so no held pointer or stale ref can
+   dangle.  Programs holding a deleted object are to receive an
+   OBJECT_DELETED mufevent; that event is DEFERRED pending design
+   discussion and is not raised today.
 
-   Deletion does NOT remove the object's store file.  The final state
-   is flushed at delete time, and the file plus its history survive as
-   long as any retained snapshot marker predates the deletion; every
-   runtime function and primitive shows the object as deleted
-   immediately, but @rollback <deadref>=<rev> resurrects it into its
-   original (never reused) slot as of that revision.  Compaction
-   reclaims the files once no covering marker remains (locked
-   snapshots pin them forever), and only then may the tombstone itself
-   age out per the @tune retention parameter, from zero to forever,
-   default on the order of 90 days.
+   RECYCLING IS A JOURNAL ENTRY, not a mechanism of its own.  The
+   object's file is left exactly as it is and a layer records
+   $core/deleted; the object is dead because its latest state says so.
+   Every runtime function and primitive shows it as deleted at once,
+   and its uuid stops resolving, but the dbref keeps pointing at it.
+
+   That makes undoing it an ORDINARY rollback: at any revision before
+   that entry the object was alive, so rolling back there brings it
+   back, with its type, flags, owner, location, properties and source.
+   There is no resurrection path, nothing to order against a tombstone
+   table, and nothing written at delete time.
+
+   A tombstone is created at RECLAMATION, not at deletion.  Once no
+   retained marker can still reach the object (locked snapshots pin it
+   forever), compaction removes its data and leaves a tombstone as the
+   record that the dbref was used and its state is gone.  That is the
+   point of no return: before it the object is recoverable, after it
+   only the tombstone remains.  The tombstone itself then ages out per
+   the @tune retention parameter, from zero to forever, default on the
+   order of 90 days.
 
 
 2. OBJECT MODEL: CORE PLUS MODULES
@@ -430,15 +438,24 @@ superseded mechanisms are deleted, not kept alongside.
    correct if sets land in fire order.  Coalescing two markerless
    sets is permitted as an optimization.
 
-   Deletion enqueues like anything else: retiring an object seals its
-   layer immediately, and FIFO guarantees the retained file is on
-   disk before the manifest carrying its tombstone commits.  A
-   single-object snapshot enqueues a one-object set whose marker
-   lands in that object's file.
+   ONLY A DUMP WRITES.  @dump and the dump interval are the only
+   things that hand work to the writer.  A deletion and a snapshot
+   both SEAL, because a layer has to capture its values at the era
+   boundary it belongs to, but sealing and writing are separate
+   concerns: sealed sets are HELD in memory and go out with the next
+   dump.  Without that, a mass recycle would mean one manifest rewrite
+   per object deleted.
 
-   Backpressure is by memory, not count: if a fire would exceed the
-   bound, the game thread blocks at the next fire, never mid
-   mutation, until the queue drains.
+   A crash before the next dump loses those changes, which is exactly
+   what a crash has always cost: everything since the last dump.
+
+   The exception is a scoped snapshot, whose marker is written into
+   the object's own file and therefore needs what it covers to be on
+   disk first.  It syncs.
+
+   A held set carries no manifest; the manifest of the set behind it
+   commits everything ahead of it, so the commit point is shared
+   rather than duplicated.
 
 
    DURABILITY
@@ -463,19 +480,26 @@ superseded mechanisms are deleted, not kept alongside.
    layers over the base, so a compacted and an uncompacted object are
    indistinguishable to the loader.
 
-   Compaction also reclaims deleted objects: a tombstoned object's
-   files disappear once no retained marker predates its deletion, and
-   only then may the tombstone age out of the manifest.
+   Compaction is also where a recycled object finally dies.  While any
+   retained marker can still reach it, it keeps its file and keeps
+   loading, dead but recoverable by an ordinary rollback.  When none
+   can, compaction removes its data and writes the tombstone that
+   records the dbref was used and its state is gone.  The tombstone
+   ages out of the manifest later, on its own retention clock.
 
 
    READS OF STORED STATE
 
-   @rollback, resurrection, marker listings, and the examine snapshot
-   summary read files.  They first drain the persist queue, because
-   rolling back to a marker whose set has not landed yet would find
-   no stored state.  These are rare admin operations and the barrier
-   is brief.  Rollback then reads the base and applies layers up to
-   the target revision.
+   @rollback reconstructs state from files, so it first puts held
+   sets on disk and waits: rolling back to a marker whose layers have
+   not landed would find a world missing its most recent changes. That
+   is a rare admin operation and the barrier is brief.
+
+   Examine's snapshot count deliberately takes NO barrier. It is an
+   ordinary command, and forcing a flush there made every examine
+   write the store; an examine issued between creating an object and
+   setting its properties captured the object's base before it had
+   any. A marker not yet written simply does not appear in the count.
 
    The player-visible "dump complete" message is posted back from the
    dump thread when the manifest commits, so operators still learn
@@ -644,13 +668,15 @@ ObjectStore  (ObjectStore.h, ObjectStore.cpp)
     store().loadAll()             read an entire store
     store().saveObject(ref)       write one object
     store().removeObject(ref)     delete one object's files outright
-    store().retireObject(ref)     flush a deleted object and return
-                                  the deletion revision; its files
-                                  stay until no marker covers them
-    store().resurrectObject(t, rev, err)
-                                  rebuild a tombstoned object into its
-                                  original slot as of a revision
-    store().snapshotGlobal/snapshotObject/rollbackObject
+    store().rollbackObject(ref, rev)
+                                  reconstruct an object as of a
+                                  revision, including bringing back
+                                  one that was recycled after it
+    store().fire()                seal every changed object's layer
+    store().hold(set)             keep a sealed set for the next dump
+    store().flushHeld(set)        hand everything held to the writer
+    store().syncNow()             flush held work and wait for it
+    store().snapshotGlobal/snapshotObject
     store().globalMarkers/objectMarkers/snapshotSummary
     store().gcStore()             offline maintenance pass
 
@@ -834,15 +860,15 @@ DELETION AND TOMBSTONES
     no longer exist anywhere in the tree.
 
     Database::deleteObject(victim, deleter) is the single deletion
-    gatekeeper, called from recycle_object after the object is emptied:
+    gatekeeper, called from recycle_object after the object is emptied.
+    It does two things and nothing else:
 
-        - flushes the object's final state (while the uuid resolves)
-          and keeps its files for as long as a retained marker covers
-          them, so @rollback can resurrect it
-        - records a tombstone: uuid, dbref, deletion time, deleter
-          uuid, deletion revision
+        - records $core/deleted in the journal (when, and by whom)
         - retires the uuid from the index
-        - marks the shell deleted (isDeleted())
+
+    Nothing is written and nothing is destroyed. The object's file is
+    untouched, and the entry reaches disk with the next dump like any
+    other change.
 
     The OBJECT_DELETED mufevent is DEFERRED pending design
     discussion; its broadcast is commented out, not removed.
@@ -851,15 +877,18 @@ DELETION AND TOMBSTONES
     TYPE_GARBAGE (and skips it, as it always has); nothing can ever
     occupy that dbref again.
 
-    Tombstones persist in the manifest with the deletion revision
-    (uuid, dbref, deleted_at, deleted_by, deleted_rev) and age out
-    per the tombstone_retention @tune parameter (days; -1 keeps
-    forever, 0 keeps none, default 90). Reclaim runs at manifest
-    write today and moves into compaction when 7.1 lands; either way
-    the rule is the same: a deleted object's file pair goes only once
-    no retained marker predates its deletion, and a tombstone may
-    only age out after its files are gone, so a covered file can
-    never be orphaned into loading as a live object.
+    Bringing one back is not a special operation. @rollback obj=rev to
+    any revision before the deletion entry restores the object, since
+    at that revision it was simply alive; rollback puts back its type,
+    flags, owner, location, properties and source.
+
+    A tombstone (uuid, dbref, deleted_at, deleted_by, deleted_rev)
+    appears only when compaction finally reclaims the data, and it is
+    the record that the dbref was used and its state no longer exists.
+    Before that the object is recoverable; after it, only the
+    tombstone remains. Tombstones age out per the tombstone_retention
+    @tune parameter (days; -1 keeps forever, 0 keeps none, default
+    90).
 
 
 VERSIONING COMMANDS  (@snapshot, @rollback, -storegc)
@@ -877,8 +906,9 @@ VERSIONING COMMANDS  (@snapshot, @rollback, -storegc)
                              dead shell through its tombstone)
     @rollback obj=rev        restore name, props, program source as of
                              that revision (containment stays live)
-    @rollback #deadref=rev   resurrect a deleted object into its
-                             original slot as of that revision
+    @rollback #deadref=rev   a recycled object is not a special case:
+                             rolling back past its deletion entry
+                             brings it back, in its own slot
 
     A marker captures the current era and advances it, so writes
     after a snapshot belong to the next era and a read at the marker
@@ -982,9 +1012,9 @@ REMAINING WORK
       6. Compaction merges layers no retained marker needs into a
          fresh base, purely from files; -storegc is its offline form.
       7. Deletions: retire enqueues, reclaim moves into compaction.
-      8. Barriers: rollback, resurrection, and marker reads drain the
-         queue first; shutdown and @restart drain before exec.
-         panic() writes synchronously outside the queue.
+      8. Barriers: rollback syncs held work before reading it back;
+         shutdown and @restart drain before exec; panic() writes
+         synchronously outside the queue.
       9. Delete what the journal replaces: the save-time diff in
          saveObject, the forked dump (tp_dump_forking), and the
          THREADED_DB_DUMP ifdefs.  OBJECT_CHANGED survives only as

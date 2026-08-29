@@ -1325,19 +1325,6 @@ ObjectStore::removeObject(dbref i)
 }
 
 long
-ObjectStore::retireObject(dbref i)
-{
-    /* Flush the object's final state as a journal layer so its
-     * history survives; a full base rewrite would drop the layers a
-     * rollback needs. */
-    /* Seal the object's final state, but do not write: only a dump
-     * writes. A crash before the next dump loses the deletion, the
-     * same way it loses any other unsaved change. */
-    hold(fireObject(i));
-    return rev_;
-}
-
-long
 ObjectStore::snapshotGlobal(const char *label, bool locked)
 {
     Marker m;
@@ -1619,110 +1606,6 @@ ObjectStore::rollbackObject(dbref i, long rev)
 
     DBDIRTY(i);
     log_status("ROLLBACK: #%d to rev %ld\n", i, rev);
-    return true;
-}
-
-bool
-ObjectStore::resurrectObject(const MUCK::Database::Tombstone &t, long rev,
-                             std::string *err)
-{
-    syncNow();
-
-    std::string path = UUIDObjectPath(root_, t.uuid.toString());
-    std::ifstream pf(path);
-
-    if (!pf) {
-        if (err)
-            *err = "no retained file for that object; its snapshots aged out";
-        return false;
-    }
-    json j = json::parse(pf, nullptr, false);
-
-    if (j.is_discarded() || !j.contains("entries")) {
-        if (err)
-            *err = "the retained file is unreadable";
-        return false;
-    }
-
-    /* A revision at or after the deletion describes the emptied
-     * husk, not the object: reviving that would install garbage as a
-     * live object and destroy the tombstone that points at the real
-     * state. */
-    if (t.deletedRev > 0 && rev >= t.deletedRev) {
-        if (err)
-            *err = "that revision is at or after the deletion; pick an "
-                "earlier one";
-        return false;
-    }
-
-    dbref i = t.ref;
-
-    if (i < 0 || i >= MUCK::database().top()
-        || MUCK::typeOf(i) != ObjectType::Garbage) {
-        if (err)
-            *err = "the object's slot is not a dead shell";
-        return false;
-    }
-
-    std::string hist;
-    std::ifstream hf(path.substr(0, path.size() - 5) + ".hist");
-
-    if (hf)
-        hist.assign(std::istreambuf_iterator<char>(hf),
-                    std::istreambuf_iterator<char>());
-
-    json e = entriesAtRev(j, hist, rev);
-
-    if (!e.contains("$core/flags") || !e.contains("$core/name")) {
-        if (err)
-            *err = "the object has no stored state at that revision";
-        return false;
-    }
-    j["entries"] = e;
-
-    /* the shell keeps its literal placeholder name, so phase one's
-     * overwrite leaks nothing; the boot machinery does the rest */
-    std::vector<PendingLinks> later;
-    json shape = fileToLoadShape(j, root_);
-
-    objectFromJsonPhase1(shape, later);
-    for (const auto &pl : later)
-        objectFromJsonPhase2(pl);
-
-    struct object *o = DBFETCH(i);
-
-    /* Containment is not resurrected: the children of record were
-     * evacuated or separately recycled before the deletion, so phase
-     * two's list wiring is dropped and the object re-enters the world
-     * cleanly at its rev-time location when that still stands. */
-    dbref loc = o->location;
-
-    MUCK::contentsOf(i).clear();
-    MUCK::exitsOf(i).clear();
-    o->location = NOTHING;
-    if (o->owner < 0 || !MUCK::database().valid(o->owner)
-        || Typeof(o->owner) != TYPE_PLAYER)
-        o->owner = GOD;
-
-    bool locValid = loc >= 0 && MUCK::database().valid(loc)
-        && Typeof(loc) != TYPE_GARBAGE;
-
-    if (Typeof(i) == TYPE_EXIT) {
-        if (!locValid)
-            loc = MUCK::getOwner(i);
-        MUCK::attachExit(loc, i);
-        o->location = loc;
-        DBDIRTY(loc);
-    } else {
-        if (!locValid)
-            loc = Typeof(i) == TYPE_ROOM ? GLOBAL_ENVIRONMENT : MUCK::getOwner(i);
-        moveto(i, loc);
-    }
-
-    MUCK::database().reviveHole(i);
-    MUCK::database().removeTombstone(t.uuid);
-    DBDIRTY(i);
-    log_status("RESURRECT: #%d (%s) at rev %ld\n", i, MUCK::getName(i), rev);
     return true;
 }
 

@@ -75,20 +75,6 @@ class ObjectStore {
      * sweep instead. */
     bool removeObject(dbref i);
 
-    /* Deletion support: flush the object's final state to its file
-     * (so the file plus history hold everything a rollback needs) and
-     * return the current revision era, which the caller records as
-     * the tombstone's deletedRev. Returns -1 if the save failed. */
-    long retireObject(dbref i);
-
-    /* Bring a deleted object back to life in its original (never
-     * reused) dbref slot, reconstructed as of the given revision.
-     * Contents and exits are not re-wired (children were evacuated or
-     * separately recycled); the object is placed at its rev-time
-     * location when that still exists, else at its fallback. */
-    bool resurrectObject(const MUCK::Database::Tombstone &t, long rev,
-                         std::string *err);
-
     /* --- versioning (docs/DATABASE.txt section 7) --- */
     struct Marker {
         long rev;
