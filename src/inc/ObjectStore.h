@@ -104,8 +104,10 @@ class ObjectStore {
      * current file plus its history) and restore the parts that are
      * safe to restore in a running world: name, properties, program
      * source. Containment and location are not rolled back. Returns
-     * false if the object or revision cannot be resolved. */
-    bool rollbackObject(dbref i, long rev);
+     * false if the object or revision cannot be resolved; a revision
+     * compaction has coalesced away is refused, with err (when given)
+     * naming the nearest revisions that still exist. */
+    bool rollbackObject(dbref i, long rev, std::string *err = nullptr);
 
     /* Marker listings for the @snapshot command. */
     const std::vector<Marker> &globalMarkers() const { return markers_; }
@@ -124,6 +126,23 @@ class ObjectStore {
 
     /* --- the journal persist path (docs/DATABASE.txt 7.1) --- */
 
+    /* One object's compaction work order (docs/DATABASE.txt 7.2):
+     * decided on the game thread at fire time, executed on the dump
+     * thread AFTER the set's manifest lands, so a reclaimed object
+     * leaves the committed index before its files leave the disk.
+     * survivors is the sorted union of the global ladder survivors
+     * and the object's own surviving scoped markers; scopedKeep is
+     * what the file's marker list is rewritten to. reclaim means the
+     * object is a recycled shell no survivor predates: its files are
+     * removed outright and only its tombstone remains. */
+    struct CompactOrder {
+        dbref ref = -1;
+        std::string uuid;
+        std::vector<long> survivors;
+        std::vector<Marker> scopedKeep;
+        bool reclaim = false;
+    };
+
     /* One fire's worth of frozen work: the layers sealed from every
      * object that changed, plus the manifest as of that instant.
      * Nothing in here points at a live object, which is what lets the
@@ -133,11 +152,16 @@ class ObjectStore {
         std::vector<SealedLayer> layers;
         std::string manifest;   /* serialized, ready to write */
         bool hasMarker = false;
+        std::vector<CompactOrder> compactions;
     };
 
     /* Game thread: seal every object's top layer, materializing only
-     * the entries that changed, and hand back the frozen result. */
-    CaptureSet fire();
+     * the entries that changed, and hand back the frozen result.
+     * With compact set (the dump path), this also runs the retention
+     * ladder over the global markers, decides this dump's batch of
+     * compaction work, and reclaims recycled shells no retained
+     * snapshot can revive; the frozen orders ride in the set. */
+    CaptureSet fire(bool compact = false);
     CaptureSet fireObject(dbref i);
 
     /* Hold a frozen set until the next dump. Sealing and WRITING are
@@ -196,6 +220,8 @@ class ObjectStore {
     std::string histPath(dbref i) const;
     bool writeManifest();
     std::string buildManifest();
+    bool buildCompactOrder(dbref i, const std::vector<long> &globalRevs,
+                           long now, CompactOrder *out);
 
     /* --- the dump thread (docs/DATABASE.txt 7.1) --- */
     void dumpThreadMain();
@@ -215,6 +241,10 @@ class ObjectStore {
     std::string root_;
     long rev_ = 0;
     std::vector<Marker> markers_;    /* global; per-object live in files */
+    /* round-robin position of the incremental compaction sweep: each
+     * dump compacts the next batch of objects, so the whole store is
+     * revisited every few dozen dumps without one giant pass */
+    dbref sweepCursor_ = 0;
 };
 
 extern ObjectStore g_objectStore;

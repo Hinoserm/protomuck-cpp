@@ -1134,18 +1134,8 @@ ObjectStore::buildManifest()
     m["format"] = STORE_FORMAT;
     m["next_dbref"] = (int) MUCK::database().top();
 
-    /* age out unlocked markers past the snapshot retention window */
-    if (tp_snapshot_retention >= 0) {
-        long cutoff = (long) current_systime
-            - (long) tp_snapshot_retention * 86400L;
-
-        markers_.erase(
-            std::remove_if(markers_.begin(), markers_.end(),
-                           [cutoff](const Marker &m) {
-                               return !m.locked && m.when < cutoff;
-                           }),
-            markers_.end());
-    }
+    /* marker aging happens in fire(), through the retention ladder;
+     * this only serializes whatever survived */
     m["rev"] = rev_;
     m["markers"] = markersToJson(markers_);
 
@@ -1307,6 +1297,75 @@ markersToJson(const std::vector<ObjectStore::Marker> &list)
         arr.push_back(e);
     }
     return arr;
+}
+
+/* The retention ladder (docs/DATABASE.txt 7.2): which markers survive,
+ * given the keep_* tunes. Each unlocked marker is classified by age
+ * into the finest enabled tier whose window still covers it; within a
+ * tier, the newest marker per bucket of the tier's grain survives.
+ * Markers younger than one hour are all kept, so a snapshot taken a
+ * moment ago cannot be thinned away; locked markers always survive;
+ * a marker no enabled tier covers is gone. Pure over its inputs, so
+ * fire(), offline gc, and every test agree on the same answer. */
+static std::vector<ObjectStore::Marker>
+ladderSurvivors(const std::vector<ObjectStore::Marker> &markers, long now)
+{
+    struct Tier {
+        long grain;
+        long window;
+    };
+    const Tier tiers[] = {
+        {3600L, (long) tp_keep_hourly_snapshots * 3600L},
+        {86400L, (long) tp_keep_daily_snapshots * 86400L},
+        {604800L, (long) tp_keep_weekly_snapshots * 604800L},
+        {2592000L, (long) tp_keep_monthly_snapshots * 2592000L},
+    };
+    std::map<std::pair<int, long>, const ObjectStore::Marker *> best;
+    std::vector<ObjectStore::Marker> out;
+
+    for (const auto &m : markers) {
+        long age = now - m.when;
+
+        if (m.locked || age < 3600L) {
+            out.push_back(m);
+            continue;
+        }
+        for (int t = 0; t < 4; t++) {
+            if (tiers[t].window <= 0 || age >= tiers[t].window)
+                continue;
+
+            auto key = std::make_pair(t, m.when / tiers[t].grain);
+            auto it = best.find(key);
+
+            if (it == best.end() || m.when > it->second->when)
+                best[key] = &m;
+            break;
+        }
+    }
+    for (const auto &kv : best)
+        out.push_back(*kv.second);
+    std::sort(out.begin(), out.end(),
+              [](const ObjectStore::Marker &a, const ObjectStore::Marker &b) {
+                  return a.rev < b.rev;
+              });
+    return out;
+}
+
+/* The same ladder over an object's own scoped markers. */
+static std::vector<ScopedMarker>
+scopedLadderSurvivors(const std::vector<ScopedMarker> &markers, long now)
+{
+    std::vector<ObjectStore::Marker> conv;
+
+    for (const auto &m : markers)
+        conv.push_back({m.rev, m.when, m.label, m.locked});
+    conv = ladderSurvivors(conv, now);
+
+    std::vector<ScopedMarker> out;
+
+    for (const auto &m : conv)
+        out.push_back({m.rev, m.when, m.label, m.locked});
+    return out;
 }
 
 bool
@@ -1506,7 +1565,7 @@ entriesAtRev(const json &file, const std::string &hist, long rev)
 }
 
 bool
-ObjectStore::rollbackObject(dbref i, long rev)
+ObjectStore::rollbackObject(dbref i, long rev, std::string *err)
 {
     /* rolling back to a marker whose set has not landed yet would
      * find no stored state */
@@ -1514,12 +1573,18 @@ ObjectStore::rollbackObject(dbref i, long rev)
 
     std::ifstream pf(objectPath(i));
 
-    if (!pf)
+    if (!pf) {
+        if (err)
+            *err = "no stored state for that object.";
         return false;
+    }
     json j = json::parse(pf, nullptr, false);
 
-    if (j.is_discarded() || !j.contains("entries"))
+    if (j.is_discarded() || !j.contains("entries")) {
+        if (err)
+            *err = "the object's stored state is unreadable.";
         return false;
+    }
 
     std::string hist;
     std::ifstream hf(histPath(i));
@@ -1528,10 +1593,53 @@ ObjectStore::rollbackObject(dbref i, long rev)
         hist.assign(std::istreambuf_iterator<char>(hf),
                     std::istreambuf_iterator<char>());
 
+    /* Refuse a target compaction has taken away rather than silently
+     * handing back older state. Below the base rev nothing is
+     * reconstructable; inside a merged layer's covered range
+     * [covers_from, era) the intermediate states were folded into the
+     * layer and only its era survives as a target. */
+    long baseRev = j.value("rev", 0L);
+
+    if (rev < baseRev) {
+        if (err)
+            *err = "revision " + std::to_string(rev)
+                + " predates the oldest reconstructable state (rev "
+                + std::to_string(baseRev)
+                + "); older history has been compacted away.";
+        return false;
+    }
+    {
+        std::istringstream hs(hist);
+        std::string line;
+
+        while (std::getline(hs, line)) {
+            json layer = json::parse(line, nullptr, false);
+
+            if (layer.is_discarded() || !layer.contains("covers_from"))
+                continue;
+
+            long era = layer.value("era", 0L);
+            long from = layer.value("covers_from", 0L);
+
+            if (rev >= from && rev < era) {
+                if (err)
+                    *err = "revision " + std::to_string(rev)
+                        + " was coalesced away; the nearest available "
+                        "revisions are " + std::to_string(from - 1)
+                        + " and " + std::to_string(era) + ".";
+                return false;
+            }
+        }
+    }
+
     json e = entriesAtRev(j, hist, rev);
 
-    if (e.empty())
-        return false;           /* nothing reconstructable at that rev */
+    if (e.empty()) {
+        if (err)
+            *err = "nothing is reconstructable at revision "
+                + std::to_string(rev) + ".";
+        return false;
+    }
 
     /* Everything a rollback restores goes through the setters, so the
      * restored state is journalled like any other change. Writing the
@@ -1888,6 +1996,14 @@ ObjectStore::loadAll()
                  * history holds, applied in era order: that is what
                  * makes a compacted and an uncompacted object
                  * indistinguishable here (docs/DATABASE.txt 6). */
+                /* the era the deletion entry was recorded in, for
+                 * reclamation: from the base's rev when the base
+                 * already carries it, else from the layer that
+                 * introduces it (a later null revives) */
+                long delEra = -1;
+
+                if (j["entries"].contains("$core/deleted"))
+                    delEra = j.value("rev", 0L);
                 {
                     std::string base = full;
                     std::string histFile =
@@ -1930,6 +2046,13 @@ ObjectStore::loadAll()
                             }
                             if (layer.contains("type"))
                                 j["type"] = layer["type"];
+                            {
+                                auto dit = layer["entries"].find("$core/deleted");
+
+                                if (dit != layer["entries"].end())
+                                    delEra = dit.value().is_null()
+                                        ? -1 : layer.value("era", 0L);
+                            }
                             for (auto lit = layer["entries"].begin();
                                  lit != layer["entries"].end(); ++lit) {
                                 if (lit.value().is_null())
@@ -1989,8 +2112,11 @@ ObjectStore::loadAll()
                      * includes recycled shells: their retained files
                      * must stay in the manifest index, or the next
                      * boot would discard them as uncommitted. */
-                    if (DbObject *bo = MUCK::database().get(claimed))
+                    if (DbObject *bo = MUCK::database().get(claimed)) {
                         bo->setBaseWritten(true);
+                        if (bo->isDeleted() && delEra >= 0)
+                            bo->setDeletedRev(delEra);
+                    }
                     if (!fileMarkers.empty()) {
                         dbref mref = (dbref) j.value("dbref", -1);
                         DbObject *mo = mref >= 0
@@ -2171,8 +2297,78 @@ ObjectStore::fireObject(dbref i)
     return set;
 }
 
+/* Decide one object's compaction work (game thread, fire time).
+ * Returns false when the object has no base on disk and so needs no
+ * order. Mutates live state for its decisions: prunes the object's
+ * scoped marker mirror through the ladder, and on reclaim records
+ * the tombstone and drops the object from the committed index
+ * (baseWritten false), so the manifest built after this excludes it
+ * and the dump thread can unlink the files once that manifest lands. */
+bool
+ObjectStore::buildCompactOrder(dbref i, const std::vector<long> &globalRevs,
+                               long now, CompactOrder *out)
+{
+    DbObject *o = MUCK::database().get(i);
+
+    if (!o || !o->baseWritten() || o->uuid().isNil())
+        return false;
+
+    out->ref = i;
+    out->uuid = o->uuid().toString();
+    out->reclaim = false;
+
+    /* the object's own markers age on the same ladder */
+    std::vector<ScopedMarker> keep =
+        scopedLadderSurvivors(o->scopedMarkers(), now);
+
+    o->scopedMarkers() = keep;
+
+    out->survivors = globalRevs;
+    for (const auto &m : keep) {
+        out->survivors.push_back(m.rev);
+        out->scopedKeep.push_back({m.rev, m.when, m.label, m.locked});
+    }
+    std::sort(out->survivors.begin(), out->survivors.end());
+    out->survivors.erase(
+        std::unique(out->survivors.begin(), out->survivors.end()),
+        out->survivors.end());
+
+    if (o->isDeleted()) {
+        /* a recycled shell stays for as long as any retained snapshot
+         * predates the deletion and so could still revive it; when
+         * none can, the data is finally reclaimed and the tombstone
+         * becomes the record that the dbref was used */
+        long drev = o->deletedRev();
+        bool revivable = drev < 0;      /* unknown errs toward keeping */
+
+        for (long s : out->survivors)
+            if (s < drev) {
+                revivable = true;
+                break;
+            }
+        if (!revivable) {
+            Database::Tombstone t;
+
+            t.uuid = o->uuid();
+            t.ref = i;
+            t.deletedAt = o->deletedAt();
+            t.deletedBy = MUCK::database().UUIDOf(o->deletedBy());
+            t.deletedRev = drev;
+            MUCK::database().addTombstone(t);
+            o->setBaseWritten(false);   /* leaves the committed index */
+            o->scopedMarkers().clear();
+            o->journal().discardTop();
+            forgetDirty(i);
+            out->reclaim = true;
+            out->scopedKeep.clear();
+            out->survivors.clear();
+        }
+    }
+    return true;
+}
+
 ObjectStore::CaptureSet
-ObjectStore::fire()
+ObjectStore::fire(bool compact)
 {
     CaptureSet set;
 
@@ -2226,9 +2422,216 @@ ObjectStore::fire()
     }
     bulkSaveActive = false;
     clearDirtyObjects();
+
+    if (compact) {
+        long now = (long) current_systime;
+
+        /* the retention ladder decides which snapshots remain */
+        markers_ = ladderSurvivors(markers_, now);
+
+        std::vector<long> globalRevs;
+
+        for (const auto &m : markers_)
+            globalRevs.push_back(m.rev);
+
+        /* sweep the next batch of objects; the cursor wraps, so the
+         * whole store is revisited every few dozen dumps and no
+         * object's history outlives the ladder by more than that */
+        dbref dtop = MUCK::database().top();
+        long batch = dtop / 64 > 512 ? dtop / 64 : 512;
+
+        if (batch > dtop)
+            batch = dtop;
+        for (long k = 0; k < batch; k++) {
+            if (sweepCursor_ >= dtop)
+                sweepCursor_ = 0;
+
+            CompactOrder ord;
+
+            if (buildCompactOrder(sweepCursor_++, globalRevs, now, &ord))
+                set.compactions.push_back(std::move(ord));
+        }
+    }
     set.manifest = buildManifest();
 
     return set;
+}
+
+/* Compact one object's files against its frozen work order: pure file
+ * work, no live state, so it runs on the dump thread (or offline).
+ *
+ * Layers at or below the oldest survivor merge into the base, whose
+ * rev advances to the newest era it absorbed. Every other layer
+ * buckets to the smallest survivor at or above its era; past the
+ * newest survivor it buckets to its own era, which folds the many
+ * same-era lines a frequent dump interval writes into one. A bucket
+ * with one layer is kept verbatim, so its era stays a valid rollback
+ * target; a merged bucket records covers_from, the oldest era it
+ * swallowed, so a rollback into the swallowed range can refuse
+ * instead of silently handing back older state.
+ *
+ * The base is written before the history: replaying an absorbed layer
+ * over a base that already contains it is idempotent (values are
+ * absolute), so a crash between the two writes loses nothing.
+ *
+ * Returns the number of layers eliminated. */
+static long
+compactObjectFile(const std::string &root, const ObjectStore::CompactOrder &ord)
+{
+    std::string path = UUIDObjectPath(root, ord.uuid);
+    std::string histFile = path.substr(0, path.size() - 5) + ".hist";
+
+    if (ord.reclaim) {
+        /* the manifest that no longer names this object has already
+         * landed, so removing the files cannot orphan the index; a
+         * crash between these unlinks is cleaned as an uncommitted
+         * leftover at the next boot */
+        unlink(histFile.c_str());
+        unlink(path.c_str());
+        return 0;
+    }
+
+    std::ifstream bf(path);
+
+    if (!bf)
+        return 0;
+    json base = json::parse(bf, nullptr, false);
+    bf.close();
+    if (base.is_discarded() || !base.contains("entries"))
+        return 0;               /* damage; the loader reports it */
+
+    json keepMarkers = json::array();
+
+    for (const auto &m : ord.scopedKeep) {
+        json e;
+
+        e["rev"] = m.rev;
+        e["when"] = m.when;
+        e["label"] = m.label;
+        e["locked"] = m.locked;
+        keepMarkers.push_back(e);
+    }
+    bool markersChanged =
+        base.value("markers", json::array()) != keepMarkers;
+
+    std::vector<json> layers;
+    {
+        std::ifstream hf(histFile);
+        std::string line;
+
+        while (hf && std::getline(hf, line)) {
+            if (line.empty())
+                continue;
+            json l = json::parse(line, nullptr, false);
+
+            if (l.is_discarded() || !l.contains("entries"))
+                return 0;       /* damage; leave it for the loader */
+            layers.push_back(std::move(l));
+        }
+    }
+    if (layers.empty() && !markersChanged)
+        return 0;
+
+    long s0 = ord.survivors.empty() ? -1 : ord.survivors.front();
+    auto bucketOf = [&ord, s0](long era) -> long {
+        if (ord.survivors.empty())
+            return -1;          /* no rollback targets: all into base */
+        if (era <= s0)
+            return -1;
+        for (long s : ord.survivors)
+            if (s >= era)
+                return s;
+        return era;             /* past the newest survivor */
+    };
+
+    json newEntries = base["entries"];
+    std::string newType = base.value("type", "");
+    long newRev = base.value("rev", 0L);
+    bool baseChanged = false;
+    long merged = 0;
+    /* bucket -> layers, in era order (eras ascend, buckets follow) */
+    std::map<long, std::vector<json> > buckets;
+
+    for (auto &l : layers) {
+        long era = l.value("era", 0L);
+        long b = bucketOf(era);
+
+        if (b < 0) {
+            for (auto it = l["entries"].begin();
+                 it != l["entries"].end(); ++it) {
+                if (it.value().is_null())
+                    newEntries.erase(it.key());
+                else
+                    newEntries[it.key()] = it.value();
+            }
+            if (l.contains("type"))
+                newType = l["type"].get<std::string>();
+            if (era > newRev)
+                newRev = era;
+            baseChanged = true;
+            merged++;
+            continue;
+        }
+        buckets[b].push_back(std::move(l));
+    }
+
+    std::string newHist;
+
+    for (auto &kv : buckets) {
+        std::vector<json> &run = kv.second;
+
+        if (run.size() == 1) {
+            newHist += run[0].dump() + "\n";
+            continue;
+        }
+
+        json out;
+        long coversFrom = -1, maxEra = -1;
+
+        out["entries"] = json::object();
+        for (auto &l : run) {
+            long era = l.value("era", 0L);
+            long from = l.value("covers_from", era);
+
+            if (coversFrom < 0 || from < coversFrom)
+                coversFrom = from;
+            if (era > maxEra)
+                maxEra = era;
+            for (auto it = l["entries"].begin();
+                 it != l["entries"].end(); ++it)
+                out["entries"][it.key()] = it.value();
+            if (l.contains("type"))
+                out["type"] = l["type"];
+        }
+        out["era"] = maxEra;
+        out["covers_from"] = coversFrom;
+        newHist += out.dump() + "\n";
+        merged += (long) run.size() - 1;
+    }
+
+    if (!merged && !markersChanged)
+        return 0;
+
+    if (baseChanged || markersChanged) {
+        base["entries"] = newEntries;
+        if (!newType.empty())
+            base["type"] = newType;
+        if (baseChanged)
+            base["rev"] = newRev;
+        if (keepMarkers.empty())
+            base.erase("markers");
+        else
+            base["markers"] = keepMarkers;
+        if (!atomicWrite(path, base.dump(1)))
+            return 0;           /* keep the history if the base failed */
+    }
+    if (merged) {
+        if (newHist.empty())
+            unlink(histFile.c_str());
+        else
+            atomicWrite(histFile, newHist);
+    }
+    return merged;
 }
 
 bool
@@ -2311,7 +2714,29 @@ ObjectStore::persist(const CaptureSet &set)
      * manifest is still the commit point, just shared. */
     if (set.manifest.empty())
         return true;
-    return atomicWrite(root_ + "/manifest.json", set.manifest);
+    if (!atomicWrite(root_ + "/manifest.json", set.manifest))
+        return false;
+
+    /* Compaction rides BEHIND the commit: a reclaimed object must
+     * leave the committed index before its files leave the disk, and
+     * layer merging only rewrites content the manifest never names.
+     * Failures here are not failures of the set; the data is intact
+     * and the next sweep simply finds the same work again. */
+    if (!set.compactions.empty()) {
+        long merged = 0, reclaimed = 0;
+
+        for (const CompactOrder &ord : set.compactions) {
+            if (ord.reclaim)
+                reclaimed++;
+            merged += compactObjectFile(root_, ord);
+        }
+        /* stderr, not log_status: this thread must not walk the
+         * descriptor list */
+        if (merged || reclaimed)
+            fprintf(stderr, "STORE: sweep merged %ld layer(s), "
+                    "reclaimed %ld object(s)\n", merged, reclaimed);
+    }
+    return true;
 }
 
 /* ------------------------------------------------------------------ */
@@ -2546,142 +2971,45 @@ ObjectStore::verifyEntrySerialization()
 long
 ObjectStore::gcStore()
 {
-    long removed = 0;
-    std::string objroot = root_ + "/objects";
-    DIR *d0 = opendir(objroot.c_str());
-
-    if (!d0)
+    if (root_.empty())
         return -1;
 
-    struct dirent *e0;
+    long now = (long) current_systime;
 
-    while ((e0 = readdir(d0)) != NULL) {
-        if (e0->d_name[0] == '.')
-            continue;
+    /* the retention ladder decides which snapshots remain */
+    markers_ = ladderSurvivors(markers_, now);
 
-        std::string l1 = objroot + "/" + e0->d_name;
-        DIR *d1 = opendir(l1.c_str());
+    std::vector<long> globalRevs;
 
-        if (!d1)
-            continue;
+    for (const auto &m : markers_)
+        globalRevs.push_back(m.rev);
 
-        struct dirent *e1;
+    /* the offline pass is simply the dump-time sweep run over every
+     * object at once, on the same engine */
+    std::vector<CompactOrder> orders;
+    long reclaimed = 0;
 
-        while ((e1 = readdir(d1)) != NULL) {
-            if (e1->d_name[0] == '.')
-                continue;
+    for (dbref i = 0; i < MUCK::database().top(); i++) {
+        CompactOrder ord;
 
-            std::string l2 = l1 + "/" + e1->d_name;
-            DIR *d2 = opendir(l2.c_str());
-
-            if (!d2)
-                continue;
-
-            struct dirent *e2;
-
-            while ((e2 = readdir(d2)) != NULL) {
-                std::string fn = e2->d_name;
-                std::string full = l2 + "/" + fn;
-
-                if (fn.size() > 5 && fn.compare(fn.size() - 5, 5, ".hist") == 0) {
-                    /* COMPACTION (docs/DATABASE.txt 7.1): merge every
-                     * layer no retained marker still needs into the
-                     * base, and keep the rest. Purely file work; no
-                     * live object is touched, so this can run in the
-                     * background or offline through -storegc. */
-                    std::ifstream f(full);
-                    std::string line, kept;
-                    std::vector<Marker> own;
-                    std::string objfile = full.substr(0, full.size() - 5) + ".json";
-                    std::ifstream of(objfile);
-                    json oj = of ? json::parse(of, nullptr, false) : json();
-
-                    if (!oj.is_object() || !oj.contains("entries")) {
-                        f.close();
-                        continue;   /* no base to merge into */
-                    }
-                    own = markersFromJson(oj.value("markers", json::array()));
-
-                    /* the oldest revision anything can still ask for */
-                    long oldest = -1;
-
-                    for (const auto &m : markers_)
-                        if (oldest < 0 || m.rev < oldest)
-                            oldest = m.rev;
-                    for (const auto &m : own)
-                        if (oldest < 0 || m.rev < oldest)
-                            oldest = m.rev;
-
-                    /* A recycled object whose lifetime no retained
-                     * marker can still reach is finally gone: remove
-                     * its data and leave a tombstone as the record
-                     * that the dbref was used. Until this moment the
-                     * object still loads (dead) and a rollback can
-                     * bring it back. */
-                    if (oj["entries"].contains("$core/deleted")
-                        && oldest < 0) {
-                        const json &d = oj["entries"]["$core/deleted"]["value"];
-                        Database::Tombstone t;
-
-                        t.uuid = UUID::parse(oj.value("uuid", ""));
-                        t.ref = (dbref) oj.value("dbref", -1);
-                        t.deletedAt = d.is_array() && d.size() > 0
-                            ? d[0].get<long>() : (long) current_systime;
-                        t.deletedRev = oj.value("rev", 0L);
-                        MUCK::database().addTombstone(t);
-
-                        f.close();
-                        unlink(full.c_str());
-                        unlink(objfile.c_str());
-                        removed++;
-                        continue;
-                    }
-
-                    bool merged = false;
-
-                    while (std::getline(f, line)) {
-                        json layer = json::parse(line, nullptr, false);
-
-                        if (layer.is_discarded() || !layer.contains("entries"))
-                            continue;
-
-                        long era = layer.value("era", 0L);
-
-                        /* A layer is still needed while a retained
-                         * marker sits at or before its era: rolling
-                         * back to that marker has to see the state
-                         * without it. */
-                        if (oldest >= 0 && era >= oldest) {
-                            kept += line + "\n";
-                            continue;
-                        }
-                        for (auto lit = layer["entries"].begin();
-                             lit != layer["entries"].end(); ++lit) {
-                            if (lit.value().is_null())
-                                oj["entries"].erase(lit.key());
-                            else
-                                oj["entries"][lit.key()] = lit.value();
-                        }
-                        oj["rev"] = era;
-                        merged = true;
-                        removed++;
-                    }
-                    f.close();
-                    if (merged)
-                        atomicWrite(objfile, oj.dump(1));
-                    if (kept.empty())
-                        unlink(full.c_str());
-                    else if (merged)
-                        atomicWrite(full, kept);
-                }
-            }
-            closedir(d2);
+        if (buildCompactOrder(i, globalRevs, now, &ord)) {
+            if (ord.reclaim)
+                reclaimed++;
+            orders.push_back(std::move(ord));
         }
-        closedir(d1);
     }
-    closedir(d0);
 
-    log_status("STOREGC: compacted %ld layers into their bases\n", removed);
+    /* commit the reclaim decisions and the pruned markers BEFORE any
+     * file is removed: a crash mid-gc then reads as uncommitted
+     * leftovers at the next boot, never as damage */
+    writeManifest();
+
+    long removed = 0;
+
+    for (const auto &ord : orders)
+        removed += compactObjectFile(root_, ord);
+    log_status("STOREGC: merged %ld layer(s), reclaimed %ld object(s)\n",
+               removed, reclaimed);
     return removed;
 }
 

@@ -286,11 +286,28 @@ dump_database_internal(void)
             ansi_wall_wizards(buf);
         }
     } else {
+        /* Automatic snapshots ride the dump path: when the newest
+         * global marker is older than snapshot_interval, this dump
+         * also becomes a restore point. Dumps alone are durability
+         * only; the era advances, and rollback targets exist, only at
+         * snapshot boundaries. docs/DATABASE.txt 7.2. */
+        if (tp_snapshot_interval > 0 && MUCK::store().active()) {
+            long newest = 0;
+
+            for (const auto &m : MUCK::store().globalMarkers())
+                if (m.when > newest)
+                    newest = m.when;
+            if ((long) current_systime - newest >= (long) tp_snapshot_interval)
+                MUCK::store().snapshotGlobal("auto", false);
+        }
+
         /* Fire and return: the dump thread writes the sealed layers
          * behind the game. docs/DATABASE.txt 7.1. */
         /* The dump is the only thing that writes: it hands the writer
-         * everything held since last time, plus what just sealed. */
-        MUCK::store().flushHeld(MUCK::store().fire());
+         * everything held since last time, plus what just sealed.
+         * This is also where the retention ladder runs and the
+         * incremental compaction sweep picks its batch (fire(true)). */
+        MUCK::store().flushHeld(MUCK::store().fire(true));
     }
 
     /* Write out the macros */

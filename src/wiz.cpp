@@ -1829,8 +1829,13 @@ do_rollback(int descr, dbref player, const char *arg1, const char *arg2)
         }
     }
 
-    if (!MUCK::store().rollbackObject(thing, rev)) {
-        anotify_nolisten2(player, CFAIL "Rollback failed: no stored state for that object at that revision.");
+    std::string rberr;
+
+    if (!MUCK::store().rollbackObject(thing, rev, &rberr)) {
+        anotify_fmt(player, CFAIL "Rollback failed: %s",
+                    rberr.empty()
+                    ? "no stored state for that object at that revision."
+                    : rberr.c_str());
         return;
     }
 

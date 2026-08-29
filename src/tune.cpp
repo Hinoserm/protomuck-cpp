@@ -108,6 +108,9 @@ time_t tp_idletime = IDLETIME;
 time_t tp_cron_interval = CRON_INTERVAL;
 time_t tp_archive_interval = ARCHIVE_INTERVAL;
 time_t tp_shutdown_delay = SHUTDOWN_DELAY;
+/* automatic global snapshot cadence; 0 disables. Checked on the dump
+ * path, so the effective granularity is the dump interval. */
+time_t tp_snapshot_interval = 3600;
 
 struct tune_time_entry {
     const char *group;
@@ -129,6 +132,7 @@ struct tune_time_entry tune_time_list[] = {
     {"MUF", "cron_interval", &tp_cron_interval, LARCH, LMUF},
     {"Database", "archive_interval", &tp_archive_interval, LARCH, LMUF},
     {"System", "shutdown_delay", &tp_shutdown_delay, LARCH, LMUF},
+    {"Database", "snapshot_interval", &tp_snapshot_interval, WBOY, LMUF},
     {NULL, NULL, NULL, 0, 0}
 };
 
@@ -165,7 +169,13 @@ int tp_playermax_limit = PLAYERMAX_LIMIT;
 int tp_process_timer_limit = 4;
 int tp_dump_copies = 10;
 int tp_tombstone_retention = 90;   /* days; -1 forever, 0 none */
-int tp_snapshot_retention = 30;    /* days; -1 forever; locked markers immune */
+/* The snapshot retention ladder (docs/DATABASE.txt 7.2). Each tier
+ * keeps at most one snapshot per bucket of its grain, for that many
+ * buckets; locked snapshots never age. 0 disables a tier. */
+int tp_keep_hourly_snapshots = 72;
+int tp_keep_daily_snapshots = 90;
+int tp_keep_weekly_snapshots = 52;
+int tp_keep_monthly_snapshots = 24;
 int tp_min_progbreak_lev = 0;
 int tp_max_wiz_preempt_count = 0;
 int tp_wizhidden_access_bit = 3;
@@ -235,7 +245,10 @@ struct tune_val_entry tune_val_list[] = {
     {"MUF", "process_timer_limit", &tp_process_timer_limit, LARCH, LMUF},
     {"Database", "dump_copies", &tp_dump_copies, WBOY, LMUF},
     {"Database", "tombstone_retention", &tp_tombstone_retention, WBOY, LMUF},
-    {"Database", "snapshot_retention", &tp_snapshot_retention, WBOY, LMUF},
+    {"Database", "keep_hourly_snapshots", &tp_keep_hourly_snapshots, WBOY, LMUF},
+    {"Database", "keep_daily_snapshots", &tp_keep_daily_snapshots, WBOY, LMUF},
+    {"Database", "keep_weekly_snapshots", &tp_keep_weekly_snapshots, WBOY, LMUF},
+    {"Database", "keep_monthly_snapshots", &tp_keep_monthly_snapshots, WBOY, LMUF},
     {"MUF", "min_progbreak_lev", &tp_min_progbreak_lev, LARCH, LMAGE},
     {"MUF", "max_wiz_preempt_count", &tp_max_wiz_preempt_count, LARCH, LMAGE},
     {"MUF", "max_per_slice", &tp_max_per_slice, LARCH, LMUF},

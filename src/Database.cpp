@@ -282,6 +282,9 @@ Database::deleteObject(dbref victim, dbref deleter)
     o->deletedAt_ = (long) current_systime;
     o->deletedBy_ = deleter;
     o->deleted_ = true;
+    /* the era this deletion seals into: reclamation retains the
+     * object while any snapshot predates it */
+    o->deletedRev_ = MUCK::store().rev();
     journalRecord(victim, "$core/deleted");
 
     /* The uuid index stops resolving to it; the dbref keeps pointing

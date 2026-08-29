@@ -107,7 +107,18 @@ class DbObject {
     void markDeleted(long when, dbref by) {
         deletedAt_ = when; deletedBy_ = by; deleted_ = true;
     }
-    void markAlive() { deleted_ = false; deletedAt_ = 0; deletedBy_ = -1; }
+    void markAlive() {
+        deleted_ = false; deletedAt_ = 0; deletedBy_ = -1; deletedRev_ = -1;
+    }
+
+    /* The era the deletion entry was recorded in: reclamation keeps a
+     * recycled object for as long as any retained snapshot predates
+     * this. Stamped at deleteObject; reconstructed from the file at
+     * load (the era of the layer that introduced $core/deleted, or
+     * the base rev when the base already carries it). -1 = unknown,
+     * which errs toward keeping the object. */
+    long deletedRev() const { return deletedRev_; }
+    void setDeletedRev(long rev) { deletedRev_ = rev; }
 
     /* --- permissions --- */
     /* Effective MUF/wizard level from the W-bits, folded by the
@@ -226,6 +237,7 @@ class DbObject {
     bool deleted_ = false;
     long deletedAt_ = 0;
     dbref deletedBy_ = -1;
+    long deletedRev_ = -1;
     /* the type the attached modules were built for; Invalid forces a
      * rebuild on first access */
     ObjectType moduleType_ = ObjectType::Invalid;
