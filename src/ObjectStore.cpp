@@ -1127,6 +1127,13 @@ atomicWrite(const std::string &path, const std::string &content,
  * cost is only boot-replay work after a crash. */
 static const long kJournalLag = 8;
 
+/* A single capture is split into segments of at most this many
+ * layers. Folding yields to pending commits between segments, so
+ * this bounds how long any commit can wait behind housekeeping:
+ * one small segment's fold, even right after a mass import wrote
+ * a hundred thousand layers in one dump. */
+static const long kSegmentLayers = 5000;
+
 bool
 ObjectStore::isStore(const char *path)
 {
@@ -2682,10 +2689,15 @@ ObjectStore::fire(bool compact)
                 set.compactions.push_back(std::move(ord));
         }
     }
-    /* assign this set's journal segment BEFORE the manifest is
-     * serialized, so journal_committed covers it */
-    if (!set.layers.empty())
-        set.journalSeq = ++journalSeq_;
+    /* assign this set's journal segments BEFORE the manifest is
+     * serialized, so journal_committed covers them; a large capture
+     * spans several bounded segments so folding can yield between
+     * them (kSegmentLayers) */
+    if (!set.layers.empty()) {
+        set.journalSeq = journalSeq_ + 1;
+        journalSeq_ += ((long) set.layers.size() + kSegmentLayers - 1)
+            / kSegmentLayers;
+    }
     set.committedAtBuild = journalSeq_;
     set.distributedAtBuild = journalDistributed_.load();
     set.manifest = buildManifest();
@@ -3004,12 +3016,25 @@ ObjectStore::distributeOneSegment(long seq)
 /* Fold committed segments until at most keepAtMost remain pending.
  * Never runs past the last LANDED manifest's committed watermark:
  * folding an uncommitted segment would let changes a crash is
- * supposed to discard leak into the per-object files. */
+ * supposed to discard leak into the per-object files. Yields between
+ * segments the moment a commit is waiting (keepAtMost < 0 forces a
+ * full, non-yielding fold: the sync barriers). */
 void
 ObjectStore::distributeSegments(long keepAtMost)
 {
+    bool force = keepAtMost < 0;
+
+    if (force)
+        keepAtMost = 0;
     while (journalLandedCommitted_ - journalDistributed_.load()
            > keepAtMost) {
+        if (!force) {
+            std::unique_lock<std::mutex> qhold(queueMutex_);
+
+            if (!queue_.empty())
+                return;         /* a commit is waiting; yield */
+        }
+
         long s = journalDistributed_.load() + 1;
 
         if (distributeOneSegment(s) < 0) {
@@ -3048,25 +3073,36 @@ ObjectStore::persist(const CaptureSet &set)
      * two fsyncs each made a dump take a minute; this takes as long
      * as writing the bytes. */
     if (!set.layers.empty() && set.journalSeq > 0) {
-        std::string seg;
-
         ensureDir(root_ + "/journal");
-        for (const SealedLayer &layer : set.layers) {
-            json l;
 
-            l["uuid"] = layer.uuid;
-            l["dbref"] = layer.ref;
-            l["era"] = layer.era;
-            l["entries"] = layer.entries;
-            if (!layer.typeName.empty())
-                l["type"] = layer.typeName;
-            if (layer.full)
-                l["full"] = true;
-            seg += l.dump() + "\n";
+        long seq = set.journalSeq;
+        size_t i = 0;
+
+        while (i < set.layers.size()) {
+            std::string seg;
+            size_t chunkEnd = i + (size_t) kSegmentLayers;
+
+            if (chunkEnd > set.layers.size())
+                chunkEnd = set.layers.size();
+            for (; i < chunkEnd; i++) {
+                const SealedLayer &layer = set.layers[i];
+                json l;
+
+                l["uuid"] = layer.uuid;
+                l["dbref"] = layer.ref;
+                l["era"] = layer.era;
+                l["entries"] = layer.entries;
+                if (!layer.typeName.empty())
+                    l["type"] = layer.typeName;
+                if (layer.full)
+                    l["full"] = true;
+                seg += l.dump() + "\n";
+            }
+            /* full sync: these writes ARE the durability point */
+            if (!atomicWrite(journalSegmentPath(seq), seg))
+                return false;
+            seq++;
         }
-        /* full sync: this write IS the durability point of the dump */
-        if (!atomicWrite(journalSegmentPath(set.journalSeq), seg))
-            return false;
         layersSinceCommit_.fetch_add((long) set.layers.size());
     }
 
@@ -3113,7 +3149,7 @@ ObjectStore::persist(const CaptureSet &set)
     }
     unlinkDistributedSegments(set.distributedAtBuild);
     if (set.distributeAll)
-        distributeSegments(0);
+        distributeSegments(-1);         /* barrier: fold everything */
     else if (!queueBusy)
         distributeSegments(kJournalLag);
 
@@ -3345,7 +3381,7 @@ ObjectStore::stopDumpThread()
      * next boot replays nothing. A crash skips all of this and the
      * loader replays the journal instead. */
     if (!root_.empty()) {
-        distributeSegments(0);
+        distributeSegments(-1);
         writeManifest();
         unlinkDistributedSegments(journalDistributed_.load());
     }
@@ -3406,7 +3442,7 @@ ObjectStore::gcStore()
      * single-threaded, so calling the dump thread's machinery
      * directly is safe) */
     journalLandedCommitted_ = journalSeq_;
-    distributeSegments(0);
+    distributeSegments(-1);
 
     /* the retention ladder decides which snapshots remain */
     markers_ = ladderSurvivors(markers_, now);
