@@ -281,6 +281,15 @@ superseded mechanisms are deleted, not kept alongside.
    slot.  A file the index names that is MISSING is damage.  When two
    files claim one dbref, the index says which one is real.
 
+   A store written before the index existed loads with the same
+   damage checks; the one index-based judgment it can still make is
+   that a file claiming a dbref at or past the committed next_dbref
+   is provably uncommitted (next_dbref only grows and commits with
+   the manifest), and such files are discarded the same way.  This is
+   deliberately not the pre-index behavior, which silently kept such
+   files and grew the world past its committed top.  The live store
+   was dry-run against the strict loader before this shipped.
+
    LOAD-TIME INTEGRITY.  The loader collects every problem it finds
    and then refuses to boot if there were any: booting past damaged
    or missing files silently regresses objects to older state, which
@@ -448,7 +457,12 @@ superseded mechanisms are deleted, not kept alongside.
    GinkoMUCK database of 7950 objects: a dump with 20 changed objects
    returns in 17ms and a snapshot in 4ms.  An idle dump costs 53ms,
    all of it the manifest and the macro file, both bounded and
-   independent of how many objects exist.
+   independent of how many objects exist.  The committed index (one
+   line per object) would break that bound if it were rebuilt per
+   fire, and measurably did on a 100k-object database (about a second
+   of stall); its serialized blob is therefore cached and spliced
+   into the manifest text, rebuilt only when membership changes: an
+   object's first dump, or a reclamation.
 
 
    PERSISTING

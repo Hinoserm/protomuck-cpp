@@ -1414,7 +1414,6 @@ ObjectStore::saveObject(dbref i)
      * Dropping the layers also drops what the object's own markers
      * pointed at, so those go too rather than being left dangling at
      * revisions nothing can reconstruct. */
-    unlink(histPath(i).c_str());
     cur.erase("markers");
 
     if (DbObject *o = MUCK::database().get(i)) {
@@ -1423,7 +1422,14 @@ ObjectStore::saveObject(dbref i)
         /* the in-memory mirror tracks the file */
         o->scopedMarkers().clear();
     }
-    return atomicWrite(path, cur.dump(1));
+    if (!atomicWrite(path, cur.dump(1)))
+        return false;
+    /* The history goes only AFTER the new base is safely on disk: it
+     * is superseded by the base, and unlinking it first would strand
+     * the OLD base with no layers if a crash lands between the two,
+     * silently losing everything the layers held. */
+    unlink(histPath(i).c_str());
+    return true;
 }
 
 bool
@@ -1977,10 +1983,20 @@ ObjectStore::loadAll()
                     damaged(full + ": missing or unparsable uuid");
                     continue;
                 }
-                if (fileUUID.toString() + ".json" != e2->d_name) {
-                    damaged(full + ": file name does not match the uuid "
-                            "inside it (" + fileUUID.toString() + ")");
-                    continue;
+                {
+                    /* case-insensitively: UUID::parse accepts upper
+                     * hex, so a case-normalizing restore step must
+                     * not read as damage */
+                    std::string fname(e2->d_name);
+
+                    for (auto &c : fname)
+                        c = (char) tolower(c);
+                    if (fileUUID.toString() + ".json" != fname) {
+                        damaged(full + ": file name does not match the "
+                                "uuid inside it ("
+                                + fileUUID.toString() + ")");
+                        continue;
+                    }
                 }
                 if (claimed < 0) {
                     damaged(full + ": missing or unparsable dbref");

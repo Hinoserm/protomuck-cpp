@@ -567,7 +567,10 @@ main(int argc, char **argv)
         show_program_usage(*argv);
     }
 #ifdef DISKBASE
-    if (!strcmp(infile_name, outfile_name)) {
+    /* store-mode boots always use one root for both; this guard is
+     * about the legacy flat-file pair */
+    if (!strcmp(infile_name, outfile_name)
+        && !MUCK::ObjectStore::isStore(infile_name)) {
         fprintf(stderr, "Output file must be different from the input file.");
         exit(3);
     }
