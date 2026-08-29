@@ -477,7 +477,9 @@ superseded mechanisms are deleted, not kept alongside.
    whether ten objects changed or fifty thousand: scattering each
    object's layer into its own sidecar at dump time cost one file
    write (and, before that, two fsyncs) per dirty object, and made a
-   seven-thousand-object dump take a minute.
+   seven-thousand-object dump take a minute.  A very large capture
+   spans several segments of bounded size (kSegmentLayers), for the
+   yield rule below.
 
    DISTRIBUTION.  The per-object organization (bases, .hist
    sidecars) is only needed lazily, by boot, rollback, and
@@ -489,6 +491,10 @@ superseded mechanisms are deleted, not kept alongside.
    coalesces repeated same-era lines per object, so a property
    ticking on a hot object costs one history append per era, not one
    per dump.  An idle game distributes nothing and writes nothing.
+   Housekeeping must never delay a commit: folding runs only while
+   the queue is idle and yields between segments the moment new work
+   arrives, so the most any commit waits behind housekeeping is one
+   bounded segment's fold.
    Rollback and every other file reader take the sync barrier, which
    now also forces distribution, so read paths see current files.
    A clean shutdown distributes everything and leaves the journal
