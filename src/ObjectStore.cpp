@@ -385,7 +385,35 @@ propsFromJson(dbref obj, const json &arr)
  * container as location, and an object can appear in exactly one chain
  * per save pass (the claimed set). Violations are dropped with a log
  * line; this is the conversion-time equivalent of @sanfix. */
-static std::unordered_set<int> chainClaimed;
+/* The chain sanitizer's claimed set: which dbref already appeared in
+ * some contents or exits list this save pass. One atomic flag per
+ * dbref rather than a set, because parallel seal workers serialize
+ * different objects' lists concurrently; first claim wins, exactly
+ * as the serial set did. */
+static std::unique_ptr<std::atomic<unsigned char>[]> chainClaimed;
+static size_t chainClaimedSize = 0;
+
+static void
+chainClaimReset(void)
+{
+    size_t need = (size_t) MUCK::database().top();
+
+    if (need > chainClaimedSize) {
+        chainClaimed.reset(new std::atomic<unsigned char>[need]);
+        chainClaimedSize = need;
+    }
+    for (size_t i = 0; i < chainClaimedSize; i++)
+        chainClaimed[i].store(0, std::memory_order_relaxed);
+}
+
+/* true = newly claimed by this caller */
+static bool
+chainClaim(dbref i)
+{
+    if (i < 0 || (size_t) i >= chainClaimedSize)
+        return true;            /* outside the table: never cut */
+    return chainClaimed[i].exchange(1, std::memory_order_relaxed) == 0;
+}
 static bool bulkSaveActive = false;
 
 static json
@@ -408,7 +436,7 @@ listToJson(dbref container, const std::vector<MUCK::DbObject *> &list,
          * list is being written together. Materializing a single
          * entry has no pass to be part of, so it keeps the per-object
          * location check and skips the cross-object claim. */
-        if (claim && !chainClaimed.insert((int) i).second) {
+        if (claim && !chainClaim(i)) {
             fprintf(stderr, "STORE: #%d already serialized in another list; dropping from #%d\n",
                     i, container);
             continue;
@@ -1004,10 +1032,8 @@ objectFromJsonPhase2(const PendingLinks &pl)
             MUCK::playerSetHomeRef(pl.ref, refFromJson(pl.td["home"]));
             listFromJson(MUCK::contentsOf(pl.ref), pl.td["contents"]);
             listFromJson(MUCK::exitsOf(pl.ref), pl.td["exits"]);
-            /* the player name lookup table is runtime state the flat
-             * importer built as it read; without it every login fails
-             * before the password is even checked */
-            add_player(pl.ref);
+            /* add_player happens in the loader's serial pass: the
+             * name table is shared and phase two runs in parallel */
             break;
         case TYPE_EXIT: {
             const json &dests = pl.td["dests"];
@@ -1423,7 +1449,7 @@ ObjectStore::saveObject(dbref i)
      * save is its own pass. Without this, the second single-object
      * save ever made would drop the object's entire contents chain. */
     if (!bulkSaveActive)
-        chainClaimed.clear();
+        chainClaimReset();
 
     ensureDirsFor(path);
 
@@ -1820,7 +1846,7 @@ ObjectStore::saveAll(bool dirtyOnly)
         dirtyOnly = false;
 
     /* chain sanitizer state is per save pass */
-    chainClaimed.clear();
+    chainClaimReset();
     bulkSaveActive = true;
 
     ensureDir(root_);
@@ -1850,6 +1876,203 @@ ObjectStore::saveAll(bool dirtyOnly)
         return -1;
     unlinkDistributedSegments(journalSeq_);
     return written;
+}
+
+/* One store file's load-time preparation: read, parse, verify, then
+ * apply its history sidecar and any committed journal lines. Pure
+ * over its inputs (the committed index and the journal map are only
+ * READ here), which is what lets the loader run many of these in
+ * parallel; every mutation of shared state belongs to the serial
+ * apply pass that follows. File-level failures set skip after
+ * recording the problem; history line-level failures record and
+ * carry on, exactly as the serial loader did. */
+struct PreparedFile {
+    std::string path;
+    json j;
+    UUID fileUUID;
+    dbref claimed = -1;
+    long delEra = -1;
+    std::string consumedUUID;   /* journalReplay key applied, if any */
+    std::vector<std::string> problems;
+    bool uncommitted = false;
+    bool skip = false;
+};
+
+static void
+prepareStoreFile(const std::string &full, PreparedFile &out,
+                 const json *index, int top,
+                 const std::map<std::string,
+                                std::vector<json> > &journalReplay)
+{
+    out.path = full;
+
+    std::ifstream f(full);
+
+    if (!f) {
+        out.problems.push_back(full + ": cannot open for reading");
+        out.skip = true;
+        return;
+    }
+    out.j = json::parse(f, nullptr, false);
+    if (out.j.is_discarded()) {
+        out.problems.push_back(full
+                               + ": not valid JSON (truncated or corrupt)");
+        out.skip = true;
+        return;
+    }
+
+    json &j = out.j;
+
+    out.fileUUID = UUID::parse(j.value("uuid", ""));
+    out.claimed = (dbref) j.value("dbref", -1);
+    if (out.fileUUID.isNil()) {
+        out.problems.push_back(full + ": missing or unparsable uuid");
+        out.skip = true;
+        return;
+    }
+    {
+        /* case-insensitively: UUID::parse accepts upper hex, so a
+         * case-normalizing restore step must not read as damage */
+        std::string fname = full.substr(full.rfind('/') + 1);
+
+        for (auto &c : fname)
+            c = (char) tolower(c);
+        if (out.fileUUID.toString() + ".json" != fname) {
+            out.problems.push_back(full + ": file name does not match "
+                                   "the uuid inside it ("
+                                   + out.fileUUID.toString() + ")");
+            out.skip = true;
+            return;
+        }
+    }
+    if (out.claimed < 0) {
+        out.problems.push_back(full + ": missing or unparsable dbref");
+        out.skip = true;
+        return;
+    }
+    if (index) {
+        /* the committed index says which uuid owns this dbref; a file
+         * it does not name is an uncommitted leftover from an
+         * interrupted dump */
+        auto it = index->find(std::to_string(out.claimed));
+
+        if (it == index->end()
+            || it->get<std::string>() != out.fileUUID.toString()) {
+            out.uncommitted = true;
+            return;
+        }
+    } else if (out.claimed >= top) {
+        /* no index (store written before it existed): a dbref past
+         * the committed top is still provably uncommitted */
+        out.uncommitted = true;
+        return;
+    }
+    if (!j.contains("entries")) {
+        /* pass C reports this one; the shape must survive to it */
+        return;
+    }
+
+    /* The stored object is its base plus the layers its history
+     * holds, applied in era order (docs/DATABASE.txt 6). delEra is
+     * the era the deletion entry was recorded in, for reclamation:
+     * from the base's rev when the base already carries it, else
+     * from the layer that introduces it (a later null revives). */
+    if (j["entries"].contains("$core/deleted"))
+        out.delEra = j.value("rev", 0L);
+    {
+        std::string histFile = full.substr(0, full.size() - 5) + ".hist";
+        std::ifstream hf(histFile);
+
+        if (hf) {
+            std::string line;
+            long lineNo = 0;
+
+            while (std::getline(hf, line)) {
+                json layer = json::parse(line, nullptr, false);
+
+                lineNo++;
+                if (layer.is_discarded()) {
+                    out.problems.push_back(histFile + " line "
+                                           + std::to_string(lineNo)
+                                           + ": not valid JSON (truncated "
+                                           "or corrupt); the changes it "
+                                           "carried are lost");
+                    continue;
+                }
+                /* a history line written by the retired copy-on-write
+                 * path describes an OLD value and carries "key";
+                 * nothing writes those any more */
+                if (layer.contains("key")) {
+                    out.problems.push_back(histFile + " line "
+                                           + std::to_string(lineNo)
+                                           + ": legacy copy-on-write "
+                                           "record; this store predates "
+                                           "the current format");
+                    continue;
+                }
+                if (!layer.contains("entries")) {
+                    out.problems.push_back(histFile + " line "
+                                           + std::to_string(lineNo)
+                                           + ": no entries map");
+                    continue;
+                }
+                if (layer.contains("type"))
+                    j["type"] = layer["type"];
+                {
+                    auto dit = layer["entries"].find("$core/deleted");
+
+                    if (dit != layer["entries"].end())
+                        out.delEra = dit.value().is_null()
+                            ? -1 : layer.value("era", 0L);
+                }
+                for (auto lit = layer["entries"].begin();
+                     lit != layer["entries"].end(); ++lit) {
+                    if (lit.value().is_null())
+                        j["entries"].erase(lit.key());
+                    else
+                        j["entries"][lit.key()] = lit.value();
+                }
+            }
+        }
+    }
+
+    /* committed journal lines not yet folded into this object's
+     * files replay over it now, newest last; the map is shared and
+     * read-only here, the erase happens in the serial pass */
+    {
+        auto jr = journalReplay.find(j.value("uuid", ""));
+
+        if (jr != journalReplay.end()) {
+            for (const json &l : jr->second) {
+                if (l.value("full", false)) {
+                    /* a full line is the whole object file, verbatim */
+                    j = l["entries"];
+                    j["rev"] = l.value("era", 0L);
+                    out.delEra = j.contains("entries")
+                        && j["entries"].contains("$core/deleted")
+                        ? l.value("era", 0L) : -1;
+                    continue;
+                }
+                if (l.contains("type"))
+                    j["type"] = l["type"];
+                {
+                    auto dit = l["entries"].find("$core/deleted");
+
+                    if (dit != l["entries"].end())
+                        out.delEra = dit.value().is_null()
+                            ? -1 : l.value("era", 0L);
+                }
+                for (auto lit = l["entries"].begin();
+                     lit != l["entries"].end(); ++lit) {
+                    if (lit.value().is_null())
+                        j["entries"].erase(lit.key());
+                    else
+                        j["entries"][lit.key()] = lit.value();
+                }
+            }
+            out.consumedUUID = jr->first;
+        }
+    }
 }
 
 dbref
@@ -1895,6 +2118,10 @@ ObjectStore::loadAll()
 
     rev_ = manifest.value("rev", 0L);
     markers_ = markersFromJson(manifest.value("markers", json::array()));
+    /* nothing read from disk is a change: setters record nothing for
+     * the whole load, which is also what lets phase two run its
+     * setters in parallel without racing on the dirty index */
+    journalSuppress(true);
     journalSeq_ = manifest.value("journal_committed", 0L);
     journalDistributed_.store(manifest.value("journal_distributed", 0L));
     journalLandedCommitted_.store(journalSeq_);
@@ -2028,12 +2255,16 @@ ObjectStore::loadAll()
         }
     }
 
+    /* --- pass A: enumerate (serial, cheap) --- */
     std::string objroot = root_ + "/objects";
     DIR *d0 = opendir(objroot.c_str());
 
     if (!d0)
         return -1;
+
+    std::vector<std::string> jsonFiles;
     struct dirent *e0;
+
     while ((e0 = readdir(d0)) != NULL) {
         if (e0->d_name[0] == '.')
             continue;
@@ -2061,182 +2292,55 @@ ObjectStore::loadAll()
                 if (n < 6 || strcmp(e2->d_name + n - 5, ".json"))
                     continue;   /* stray .tmp leftovers are not damage */
                 jsonSeen.insert(full);
-                std::ifstream f(full);
-                if (!f) {
-                    damaged(full + ": cannot open for reading");
-                    continue;
-                }
-                json j = json::parse(f, nullptr, false);
-                if (j.is_discarded()) {
-                    damaged(full + ": not valid JSON (truncated or corrupt)");
-                    continue;
-                }
-                UUID fileUUID = UUID::parse(j.value("uuid", ""));
-                dbref claimed = (dbref) j.value("dbref", -1);
+                jsonFiles.push_back(full);
+            }
+            closedir(d2);
+        }
+        closedir(d1);
+    }
+    closedir(d0);
 
-                if (fileUUID.isNil()) {
-                    damaged(full + ": missing or unparsable uuid");
-                    continue;
-                }
-                {
-                    /* case-insensitively: UUID::parse accepts upper
-                     * hex, so a case-normalizing restore step must
-                     * not read as damage */
-                    std::string fname(e2->d_name);
+    /* --- pass B/C: a bounded parse pipeline. Workers read, parse,
+     * verify, and merge history and journal for at most a window of
+     * files ahead of the applier; the main thread applies each result
+     * in file order (shared tables, the duplicate check, dormant
+     * slices, phase one). Workers only READ shared inputs (the
+     * committed index, the journal replay map), so preparation needs
+     * no locks. The window bound is not optional: a parsed shape is
+     * an order of magnitude bigger than its file, and holding a
+     * hundred thousand of them at once was an OOM kill, not a
+     * speedup. --- */
+    auto applyPrepared = [&](PreparedFile &prep) {
+        for (const auto &msg : prep.problems)
+            damaged(msg);
+        if (prep.uncommitted) {
+            uncommitted.push_back(prep.path);
+            return;
+        }
+        if (prep.skip)
+            return;
 
-                    for (auto &c : fname)
-                        c = (char) tolower(c);
-                    if (fileUUID.toString() + ".json" != fname) {
-                        damaged(full + ": file name does not match the "
-                                "uuid inside it ("
-                                + fileUUID.toString() + ")");
-                        continue;
-                    }
-                }
-                if (claimed < 0) {
-                    damaged(full + ": missing or unparsable dbref");
-                    continue;
-                }
-                if (index) {
-                    /* the committed index says which uuid owns this
-                     * dbref; a file it does not name is an uncommitted
-                     * leftover from an interrupted dump */
-                    auto it = index->find(std::to_string(claimed));
+        const std::string &full = prep.path;
+        json &j = prep.j;
+        UUID fileUUID = prep.fileUUID;
+        dbref claimed = prep.claimed;
+        long delEra = prep.delEra;
 
-                    if (it == index->end()
-                        || it->get<std::string>() != fileUUID.toString()) {
-                        uncommitted.push_back(full);
-                        continue;
-                    }
-                } else if (claimed >= top) {
-                    /* no index (store written before it existed): a
-                     * dbref past the committed top is still provably
-                     * uncommitted */
-                    uncommitted.push_back(full);
-                    continue;
-                }
-                {
-                    auto dup = refClaimed.find(claimed);
+        {
+            auto dup = refClaimed.find(claimed);
 
-                    if (dup != refClaimed.end()) {
-                        damaged(full + " and " + dup->second
-                                + " both claim dbref #"
-                                + std::to_string(claimed));
-                        continue;
-                    }
-                    refClaimed[claimed] = full;
-                }
+            if (dup != refClaimed.end()) {
+                damaged(full + " and " + dup->second
+                        + " both claim dbref #"
+                        + std::to_string(claimed));
+                return;
+            }
+            refClaimed[claimed] = full;
+        }
+        if (!prep.consumedUUID.empty())
+            journalReplay.erase(prep.consumedUUID);
 
-                /* The stored object is its base plus the layers its
-                 * history holds, applied in era order: that is what
-                 * makes a compacted and an uncompacted object
-                 * indistinguishable here (docs/DATABASE.txt 6). */
-                /* the era the deletion entry was recorded in, for
-                 * reclamation: from the base's rev when the base
-                 * already carries it, else from the layer that
-                 * introduces it (a later null revives) */
-                long delEra = -1;
-
-                if (j["entries"].contains("$core/deleted"))
-                    delEra = j.value("rev", 0L);
-                {
-                    std::string base = full;
-                    std::string histFile =
-                        base.substr(0, base.size() - 5) + ".hist";
-                    std::ifstream hf(histFile);
-
-                    if (hf && j.contains("entries")) {
-                        std::string line;
-                        long lineNo = 0;
-
-                        while (std::getline(hf, line)) {
-                            json layer = json::parse(line, nullptr, false);
-
-                            lineNo++;
-                            if (layer.is_discarded()) {
-                                damaged(histFile + " line "
-                                        + std::to_string(lineNo)
-                                        + ": not valid JSON (truncated "
-                                        "or corrupt); the changes it "
-                                        "carried are lost");
-                                continue;
-                            }
-                            /* a history line written by the retired
-                             * copy-on-write path describes an OLD
-                             * value and carries "key"; nothing writes
-                             * those any more */
-                            if (layer.contains("key")) {
-                                damaged(histFile + " line "
-                                        + std::to_string(lineNo)
-                                        + ": legacy copy-on-write "
-                                        "record; this store predates "
-                                        "the current format");
-                                continue;
-                            }
-                            if (!layer.contains("entries")) {
-                                damaged(histFile + " line "
-                                        + std::to_string(lineNo)
-                                        + ": no entries map");
-                                continue;
-                            }
-                            if (layer.contains("type"))
-                                j["type"] = layer["type"];
-                            {
-                                auto dit = layer["entries"].find("$core/deleted");
-
-                                if (dit != layer["entries"].end())
-                                    delEra = dit.value().is_null()
-                                        ? -1 : layer.value("era", 0L);
-                            }
-                            for (auto lit = layer["entries"].begin();
-                                 lit != layer["entries"].end(); ++lit) {
-                                if (lit.value().is_null())
-                                    j["entries"].erase(lit.key());
-                                else
-                                    j["entries"][lit.key()] = lit.value();
-                            }
-                        }
-                    }
-                }
-
-                /* committed journal lines not yet folded into this
-                 * object's files replay over it now, newest last */
-                {
-                    auto jr = journalReplay.find(j.value("uuid", ""));
-
-                    if (jr != journalReplay.end() && j.contains("entries")) {
-                        for (json &l : jr->second) {
-                            if (l.value("full", false)) {
-                                /* a full line is the whole object
-                                 * file, verbatim */
-                                j = l["entries"];
-                                j["rev"] = l.value("era", 0L);
-                                delEra = j.contains("entries")
-                                    && j["entries"].contains("$core/deleted")
-                                    ? l.value("era", 0L) : -1;
-                                continue;
-                            }
-                            if (l.contains("type"))
-                                j["type"] = l["type"];
-                            {
-                                auto dit = l["entries"].find("$core/deleted");
-
-                                if (dit != l["entries"].end())
-                                    delEra = dit.value().is_null()
-                                        ? -1 : l.value("era", 0L);
-                            }
-                            for (auto lit = l["entries"].begin();
-                                 lit != l["entries"].end(); ++lit) {
-                                if (lit.value().is_null())
-                                    j["entries"].erase(lit.key());
-                                else
-                                    j["entries"][lit.key()] = lit.value();
-                            }
-                        }
-                        journalReplay.erase(jr);
-                    }
-                }
-                if (j.contains("entries")) {
+        if (j.contains("entries")) {
                     json unknown = json::object();
                     std::string tname = j.value("type", "garbage");
                     bool unsupported = !storedTypeSupported(tname);
@@ -2318,17 +2422,93 @@ ObjectStore::loadAll()
                         for (const auto &mn : fileMods)
                             later.back().modules.push_back(mn.get<std::string>());
                     }
-                    continue;
+                    return;
                 }
                 damaged(full + ": no entry model; this store predates "
                         "the current format. Rebuild it by re-importing "
                         "the legacy flat database.");
+    };
+
+    {
+        const size_t nfiles = jsonFiles.size();
+        const size_t window = 256;
+        unsigned nthreads = std::thread::hardware_concurrency();
+
+        if (nthreads < 1)
+            nthreads = 1;
+        if (nthreads > 16)
+            nthreads = 16;
+
+        if (nfiles < 64 || nthreads <= 1) {
+            for (size_t i = 0; i < nfiles; i++) {
+                PreparedFile prep;
+
+                prepareStoreFile(jsonFiles[i], prep, index, top,
+                                 journalReplay);
+                applyPrepared(prep);
             }
-            closedir(d2);
+        } else {
+            std::vector<PreparedFile> ring(window);
+            std::vector<char> ready(window, 0);
+            std::mutex pm;
+            std::condition_variable canProduce, canConsume;
+            size_t nextClaim = 0, applied = 0;
+
+            auto workerFn = [&]() {
+                for (;;) {
+                    size_t i;
+
+                    {
+                        std::unique_lock<std::mutex> lk(pm);
+
+                        canProduce.wait(lk, [&] {
+                            return nextClaim >= nfiles
+                                || nextClaim < applied + window;
+                        });
+                        if (nextClaim >= nfiles)
+                            return;
+                        i = nextClaim++;
+                    }
+
+                    PreparedFile tmp;
+
+                    prepareStoreFile(jsonFiles[i], tmp, index, top,
+                                     journalReplay);
+                    {
+                        std::unique_lock<std::mutex> lk(pm);
+
+                        ring[i % window] = std::move(tmp);
+                        ready[i % window] = 1;
+                    }
+                    canConsume.notify_all();
+                }
+            };
+            std::vector<std::thread> pool;
+
+            for (unsigned t = 0; t < nthreads; t++)
+                pool.emplace_back(workerFn);
+
+            for (size_t i = 0; i < nfiles; i++) {
+                PreparedFile prep;
+
+                {
+                    std::unique_lock<std::mutex> lk(pm);
+
+                    canConsume.wait(lk, [&] {
+                        return ready[i % window] != 0;
+                    });
+                    prep = std::move(ring[i % window]);
+                    ring[i % window] = PreparedFile();
+                    ready[i % window] = 0;
+                    applied = i + 1;
+                }
+                canProduce.notify_all();
+                applyPrepared(prep);
+            }
+            for (auto &th : pool)
+                th.join();
         }
-        closedir(d1);
     }
-    closedir(d0);
 
     /* Objects that exist only in the journal: created and committed
      * after the last distribution, so no per-object file exists yet.
@@ -2494,8 +2674,55 @@ ObjectStore::loadAll()
         unlink(s.c_str());
     }
 
-    for (const auto &pl : later)
-        objectFromJsonPhase2(pl);
+    /* Phase two in PARALLEL: building thirteen million properties was
+     * the actual boot cost, and it is object-local work. Every write
+     * a phase-two entry makes lands on its own object (its property
+     * tree, its module slices, its own contents and exits vectors,
+     * its fields); other objects are only READ (resolving refs to
+     * pointers), and phase one already built every slot and the whole
+     * uuid map. The two shared touchpoints are handled: journaling is
+     * suppressed for the load, and add_player moved to a serial pass
+     * below. Lock properties parse on the dbload path, which never
+     * touches the matcher; the parse buffers are stack locals. */
+    {
+        unsigned nthreads = std::thread::hardware_concurrency();
+
+        if (nthreads < 1)
+            nthreads = 1;
+        if (nthreads > 16)
+            nthreads = 16;
+        if (later.size() < 64)
+            nthreads = 1;
+
+        std::atomic<size_t> nextPl(0);
+        auto phase2Worker = [&]() {
+            for (;;) {
+                size_t k = nextPl.fetch_add(1);
+
+                if (k >= later.size())
+                    break;
+                objectFromJsonPhase2(later[k]);
+            }
+        };
+
+        if (nthreads <= 1) {
+            phase2Worker();
+        } else {
+            std::vector<std::thread> pool;
+
+            for (unsigned t = 0; t < nthreads; t++)
+                pool.emplace_back(phase2Worker);
+            for (auto &th : pool)
+                th.join();
+        }
+    }
+
+    /* the player name lookup table is runtime state the flat importer
+     * built as it read; without it every login fails before the
+     * password is even checked. Serial: the table is shared. */
+    for (dbref i = 0; i < top; i++)
+        if (MUCK::typeOf(i) == TYPE_PLAYER)
+            add_player(i);
 
     /* A recycled object keeps its file and its state, so it loaded
      * like anything else; it is dead because its entry says so, and
@@ -2527,6 +2754,7 @@ ObjectStore::loadAll()
         }
     }
 
+    journalSuppress(false);
     return (dbref) top;
 }
 
@@ -2613,51 +2841,120 @@ ObjectStore::fire(bool compact)
     set.rev = rev_;
 
     /* chain sanitation is per pass, and a fire is one pass */
-    chainClaimed.clear();
+    chainClaimReset();
     bulkSaveActive = true;
 
-    /* Walk what changed, not what exists. */
+    /* Walk what changed, not what exists, and seal it in PARALLEL.
+     *
+     * Why this is safe: the game thread is right here, blocked, so
+     * the world is frozen for the duration. Each dirty object is
+     * sealed by exactly one worker, and everything a seal MUTATES is
+     * that object's own state (its journal top, its baseWritten flag,
+     * a possible lazy module attach); everything it reads of OTHER
+     * objects (a uuid, a ref in a contents list) is a plain field no
+     * worker writes. The two pieces of shared state a seal touches
+     * are lock-free: the chain sanitizer's claim table (atomic
+     * per-dbref flags, first claim wins) and the manifest index dirty
+     * flag (atomic bool). The serializers themselves were audited
+     * static-free: jstr builds locally, the residency hook is a
+     * no-op, and lock unparsing at fullname 0 never reaches the
+     * static unparse buffer. Sealing thirteen million properties was
+     * three quarters of the all-dirty dump's stall; it splits across
+     * cores cleanly. */
     std::vector<dbref> dirty(dirtyObjects().begin(), dirtyObjects().end());
+    std::vector<SealedLayer> slots(dirty.size());
+    std::vector<char> hasLayer(dirty.size(), 0);
 
-    for (dbref i : dirty) {
-        DbObject *o = MUCK::database().get(i);
+    {
+        unsigned nthreads = std::thread::hardware_concurrency();
 
-        if (!o)
-            continue;
+        if (nthreads < 1)
+            nthreads = 1;
+        if (nthreads > 16)
+            nthreads = 16;
+        if (dirty.size() < 256)
+            nthreads = 1;
 
-        JournalLayer *top = o->journal().peek();
+        std::atomic<size_t> next(0);
+        auto sealWorker = [&]() {
+            for (;;) {
+                size_t k = next.fetch_add(1);
 
-        if (!top || top->empty())
-            continue;
+                if (k >= dirty.size())
+                    break;
 
-        SealedLayer sealed;
+                dbref i = dirty[k];
+                DbObject *o = MUCK::database().get(i);
 
-        sealed.era = top->era();
-        sealed.ref = i;
-        sealed.uuid = MUCK::database().UUIDOf(i).toString();
-        sealed.typeName = typeNameOf(i);
-        sealed.entries = json::object();
+                if (!o)
+                    continue;
 
-        if (!o->baseWritten()) {
-            /* No base yet: this object has never been written, so the
-             * whole object is the change. A layer over nothing would
-             * restore nothing. */
-            json full = objectToJson(i);
+                JournalLayer *top = o->journal().peek();
 
-            sealed.entries = full;
-            sealed.full = true;
-            o->setBaseWritten(true);
-        } else {
-            for (const std::string &key : top->keys()) {
-                json v = entryValueOf(i, key);
+                if (!top || top->empty())
+                    continue;
 
-                /* a null value is a removal, and is recorded as one */
-                sealed.entries[key] = v.is_null() ? json() : v;
+                SealedLayer &sealed = slots[k];
+
+                sealed.era = top->era();
+                sealed.ref = i;
+                sealed.uuid = MUCK::database().UUIDOf(i).toString();
+                sealed.typeName = typeNameOf(i);
+                sealed.entries = json::object();
+
+                if (!o->baseWritten()) {
+                    /* No base yet: this object has never been
+                     * written, so the whole object is the change. A
+                     * layer over nothing would restore nothing. */
+                    sealed.entries = objectToJson(i);
+                    sealed.full = true;
+                    o->setBaseWritten(true);
+                } else {
+                    for (const std::string &key : top->keys()) {
+                        json v = entryValueOf(i, key);
+
+                        /* a null value is a removal, recorded as one */
+                        sealed.entries[key] = v.is_null() ? json() : v;
+                    }
+                }
+                o->journal().discardTop();
+
+                /* pre-serialize the segment line here, in parallel;
+                 * the json tree is not needed after this and its
+                 * memory goes back immediately */
+                {
+                    json l;
+
+                    l["uuid"] = sealed.uuid;
+                    l["dbref"] = sealed.ref;
+                    l["era"] = sealed.era;
+                    l["entries"] = std::move(sealed.entries);
+                    if (!sealed.typeName.empty())
+                        l["type"] = sealed.typeName;
+                    if (sealed.full)
+                        l["full"] = true;
+                    sealed.segmentLine = l.dump();
+                    sealed.segmentLine += '\n';
+                    sealed.entries = json::object();
+                }
+                hasLayer[k] = 1;
             }
+        };
+
+        if (nthreads <= 1) {
+            sealWorker();
+        } else {
+            std::vector<std::thread> pool;
+
+            for (unsigned t = 0; t < nthreads; t++)
+                pool.emplace_back(sealWorker);
+            for (auto &th : pool)
+                th.join();
         }
-        o->journal().discardTop();
-        set.layers.push_back(std::move(sealed));
     }
+    for (size_t k = 0; k < dirty.size(); k++)
+        if (hasLayer[k])
+            set.layers.push_back(std::move(slots[k]));
     bulkSaveActive = false;
     clearDirtyObjects();
 
@@ -3080,20 +3377,8 @@ ObjectStore::persist(const CaptureSet &set)
 
             if (chunkEnd > set.layers.size())
                 chunkEnd = set.layers.size();
-            for (; i < chunkEnd; i++) {
-                const SealedLayer &layer = set.layers[i];
-                json l;
-
-                l["uuid"] = layer.uuid;
-                l["dbref"] = layer.ref;
-                l["era"] = layer.era;
-                l["entries"] = layer.entries;
-                if (!layer.typeName.empty())
-                    l["type"] = layer.typeName;
-                if (layer.full)
-                    l["full"] = true;
-                seg += l.dump() + "\n";
-            }
+            for (; i < chunkEnd; i++)
+                seg += set.layers[i].segmentLine;
             /* full sync: these writes ARE the durability point */
             if (!atomicWrite(journalSegmentPath(seq), seg))
                 return false;

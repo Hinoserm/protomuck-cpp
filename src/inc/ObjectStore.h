@@ -338,9 +338,10 @@ class ObjectStore {
     std::atomic<long> folderLagTarget_{8};
 
     /* serialized committed-index, spliced into the manifest; rebuilt
-     * only when membership changes (see storeIndexInvalidate) */
+     * only when membership changes (see storeIndexInvalidate).
+     * Atomic: parallel seal workers flip it via setBaseWritten. */
     std::string indexBlob_;
-    bool indexBlobDirty_ = true;
+    std::atomic<bool> indexBlobDirty_{true};
 
     std::string root_;
     long rev_ = 0;

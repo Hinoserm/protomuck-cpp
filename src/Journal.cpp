@@ -35,6 +35,18 @@ currentEra()
 /* Every object with a non-empty top layer. */
 static std::set<dbref> g_dirty;
 
+/* Load-mode suppression: the loader's setters would journal thirteen
+ * million entries only for the end-of-load pass to discard them all,
+ * and the dirty index is shared state the parallel phase-two workers
+ * must not race on. What was just read from disk is not a change. */
+static bool g_suppress = false;
+
+void
+journalSuppress(bool on)
+{
+    g_suppress = on;
+}
+
 const std::set<dbref> &
 dirtyObjects()
 {
@@ -56,6 +68,9 @@ clearDirtyObjects()
 void
 journalRecord(dbref ref, const char *key)
 {
+    if (g_suppress)
+        return;
+
     DbObject *o = database().get(ref);
 
     if (!o || !key)
@@ -67,6 +82,9 @@ journalRecord(dbref ref, const char *key)
 void
 journalRecord(dbref ref, const std::string &key)
 {
+    if (g_suppress)
+        return;
+
     DbObject *o = database().get(ref);
 
     if (!o)

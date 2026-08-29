@@ -47,6 +47,11 @@ struct SealedLayer {
     std::string uuid;
     /* entry key -> value, or null for a removal */
     nlohmann::json entries;
+    /* The layer pre-serialized as its journal segment line (newline
+     * included), built by the parallel seal workers so the dump
+     * thread only concatenates: serializing a hundred thousand full
+     * objects single-threaded was half the all-dirty commit. */
+    std::string segmentLine;
     /* The object's stored type name at seal time. The type name lives
      * at the top level of the object file rather than in the entries
      * map, so a layer has to carry it or a type change never reaches
@@ -144,6 +149,13 @@ bool hasUnsavedChanges(dbref ref);
  * has millions of objects. */
 const std::set<dbref> &dirtyObjects();
 void forgetDirty(dbref ref);
+
+/* Load-mode: setters record nothing while on. The loader flips this
+ * around the whole load (what was read is not a change, and the
+ * end-of-load pass discarded it all anyway), which also lets the
+ * parallel phase-two workers run setters without racing on the
+ * shared dirty index. */
+void journalSuppress(bool on);
 void clearDirtyObjects();
 
 } /* namespace MUCK */
