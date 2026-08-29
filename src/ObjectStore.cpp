@@ -2885,12 +2885,16 @@ compactObjectFile(const std::string &root, const ObjectStore::CompactOrder &ord)
             return 0;           /* keep the history if the base failed */
     }
     if (merged) {
+        /* unsynced: the base write above was fsynced, so it is
+         * durable before this trim can possibly land; losing the
+         * trim in a crash merely replays layers the base already
+         * carries, which is idempotent */
         if (newHist.empty())
             unlink(histFile.c_str());
-        else if (!atomicWrite(histFile, newHist))
+        else if (!atomicWrite(histFile, newHist, false))
             /* the base already carries the merged layers, so a stale
-             * hist is safe (idempotent replay); the next sweep simply
-             * finds the same work, but the operator should know */
+             * hist is safe; the next sweep simply finds the same
+             * work, but the operator should know */
             fprintf(stderr, "STORE: could not rewrite %s; stale "
                     "layers kept\n", histFile.c_str());
     }
@@ -3163,6 +3167,16 @@ ObjectStore::persist(const CaptureSet &set)
         long merged = 0, reclaimed = 0;
 
         for (const CompactOrder &ord : set.compactions) {
+            /* housekeeping never delays a commit: yield the moment
+             * new work queues. Skipped orders self-heal: a reclaim's
+             * files read as uncommitted leftovers at the next boot,
+             * and the sweep cursor returns on its next wrap. */
+            {
+                std::unique_lock<std::mutex> qhold(queueMutex_);
+
+                if (!queue_.empty())
+                    break;
+            }
             if (ord.reclaim)
                 reclaimed++;
             /* one poisoned object must not fail the set: the layers
