@@ -255,6 +255,7 @@ superseded mechanisms are deleted, not kept alongside.
 
        data/objects/01/8f/018f3a2b-....json      base state
        data/objects/01/8f/018f3a2b-....hist      journal layers
+       data/journal/0000000042.jsonl             dump segments (7.1)
 
    The object file records: the type module name, the list of
    individually attached feature modules, and the entries, one flat
@@ -467,16 +468,39 @@ superseded mechanisms are deleted, not kept alongside.
 
    PERSISTING
 
-   The dump thread drains the queue in FIFO order and, for each
-   sealed set, appends each object's layer to that object's .hist
-   file, then writes the manifest LAST.  The manifest is the commit
-   point for the set.
+   THE DUMP IS ONE FILE.  The dump thread drains the queue in FIFO
+   order and, for each sealed set, writes every layer as one line of
+   a single journal segment (data/store/journal/<seq>.jsonl): one
+   sequential write, one fsync, then the manifest LAST.  The manifest
+   is the commit point for the set and records the journal
+   watermarks.  A dump's cost is the cost of writing its bytes,
+   whether ten objects changed or fifty thousand: scattering each
+   object's layer into its own sidecar at dump time cost one file
+   write (and, before that, two fsyncs) per dirty object, and made a
+   seven-thousand-object dump take a minute.
+
+   DISTRIBUTION.  The per-object organization (bases, .hist
+   sidecars) is only needed lazily, by boot, rollback, and
+   compaction, so committed segments are folded into the per-object
+   files BEHIND the commit, on the dump thread, unsynced (the
+   segment already guarantees durability; a crash simply replays it,
+   and replay is idempotent because values are absolute).  Folding
+   waits until more than a handful of segments are pending and
+   coalesces repeated same-era lines per object, so a property
+   ticking on a hot object costs one history append per era, not one
+   per dump.  An idle game distributes nothing and writes nothing.
+   Rollback and every other file reader take the sync barrier, which
+   now also forces distribution, so read paths see current files.
+   A clean shutdown distributes everything and leaves the journal
+   empty; a crash leaves segments for the loader to replay: the
+   manifest's committed watermark bounds what is real (segments past
+   it are an interrupted dump's tail and are discarded), and its
+   distributed watermark bounds what is already folded.
 
    Nothing is read back, diffed, or reconstructed at save time: the
    layer is already the delta, so a dump writes only what changed.
-   An object with three ticked properties costs a few hundred bytes
-   of append, not a rewritten file.  A sealed layer is dropped from
-   memory once written, since the disk now holds it.
+   A sealed layer is dropped from memory once written, since the
+   disk now holds it.
 
    Sets never coalesce across a marker: history lifetimes are only
    correct if sets land in fire order.  Coalescing two markerless
@@ -507,10 +531,14 @@ superseded mechanisms are deleted, not kept alongside.
    DURABILITY
 
    Torn files after power loss have been a real problem historically.
-   The write discipline is therefore: write, fsync the file, then
-   rename, then fsync the containing directory.  A .hist append is
-   fsynced before the manifest that covers it commits, and the
-   manifest itself is fsynced the same way.  A reader can never see a
+   The write discipline for a commit is: write, fsync the file, then
+   rename, then fsync the containing directory.  Exactly two things
+   pay it per dump: the journal segment and the manifest, in that
+   order, so a landed manifest can never name a segment whose bytes
+   did not reach the platter.  Distribution's per-object writes are
+   deliberately NOT fsynced: they are reconstructible from the
+   segment until a later landed manifest marks it distributed, and
+   only then is the segment removed.  A reader can never see
    committed state whose bytes did not reach the platter.  All of
    this cost lands on the dump thread, where latency is free.
 

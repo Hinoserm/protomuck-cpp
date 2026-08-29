@@ -153,6 +153,20 @@ class ObjectStore {
         std::vector<SealedLayer> layers;
         std::string manifest;   /* serialized, ready to write */
         std::vector<CompactOrder> compactions;
+        /* when fire() sealed this set (steady clock, ms): the dump
+         * thread computes fire-to-commit duration from it */
+        long long firedAtMs = 0;
+        /* this set's journal segment number (0 = no layers), the
+         * committed watermark its manifest records (everything at or
+         * below is commanded durable once the manifest lands), and
+         * the distributed watermark it records: segments at or below
+         * THAT are removed once the manifest lands */
+        long journalSeq = 0;
+        long committedAtBuild = 0;
+        long distributedAtBuild = 0;
+        /* a sync barrier's set: distribute every pending segment
+         * before returning, so file readers see everything */
+        bool distributeAll = false;
     };
 
     /* Game thread: seal every object's top layer, materializing only
@@ -212,6 +226,24 @@ class ObjectStore {
      * the fire returned. */
     bool takeDumpLanded() { return dumpLanded_.exchange(false); }
 
+    /* Stats of the most recently committed dump, for the completion
+     * message: how many object layers it wrote and how long it took
+     * from fire to manifest commit. Written by the dump thread,
+     * read by the game loop; atomics, no lock. */
+    long lastDumpLayers() const { return lastDumpLayers_.load(); }
+    long lastDumpMillis() const { return lastDumpMillis_.load(); }
+
+    /* Who ran @dump, so the completion message can go to them and
+     * not only the wizard wall. Game thread only; NOTHING when the
+     * dump was timed rather than commanded. */
+    void setDumpRequester(dbref who) { dumpRequester_ = who; }
+    dbref takeDumpRequester() {
+        dbref who = dumpRequester_;
+
+        dumpRequester_ = -1;
+        return who;
+    }
+
     /* Dump thread (or inline): write a frozen set. Appends each
      * layer to its object's .hist, or writes a full base when the
      * object has none yet, then commits with the manifest. */
@@ -248,6 +280,38 @@ class ObjectStore {
     bool dumpThreadStop_ = false;
     bool persisting_ = false;
     std::atomic<bool> dumpLanded_{false};
+    std::atomic<long> lastDumpLayers_{0};
+    std::atomic<long> lastDumpMillis_{0};
+    std::atomic<long> layersSinceCommit_{0};
+    dbref dumpRequester_ = -1;  /* game thread only */
+
+    /* --- the dump journal (docs/DATABASE.txt 7.1) ---
+     *
+     * A dump appends every sealed layer as one line to a single
+     * journal segment: one sequential write and one fsync commit a
+     * dump of any size. Distribution of those lines into the
+     * per-object files happens later on the dump thread, unsynced
+     * (the segment already guarantees durability) and coalesced, so
+     * the per-object scatter never sits on the dump's critical path.
+     *
+     * journalSeq_ is the last segment number assigned (game thread,
+     * at fire). journalDistributed_ is the last segment fully folded
+     * into per-object files (dump thread advances it; the game
+     * thread's next manifest records it, and only segments a LANDED
+     * manifest calls distributed are removed). */
+    long journalSeq_ = 0;
+    std::atomic<long> journalDistributed_{0};
+    long journalUnlinked_ = 0;          /* dump thread only */
+    /* highest segment a LANDED manifest has committed: distribution
+     * must never run ahead of this, or uncommitted changes would leak
+     * into the per-object files and survive the crash that was
+     * supposed to discard them. Dump thread only. */
+    long journalLandedCommitted_ = 0;
+
+    std::string journalSegmentPath(long seq) const;
+    long distributeOneSegment(long seq);
+    void distributeSegments(long keepAtMost);
+    void unlinkDistributedSegments(long upTo);
 
     /* serialized committed-index, spliced into the manifest; rebuilt
      * only when membership changes (see storeIndexInvalidate) */

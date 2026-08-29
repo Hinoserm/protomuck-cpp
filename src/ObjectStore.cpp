@@ -1087,7 +1087,8 @@ syncDirOf(const std::string &path)
 }
 
 static bool
-atomicWrite(const std::string &path, const std::string &content)
+atomicWrite(const std::string &path, const std::string &content,
+            bool syncIt = true)
 {
     /* The temp name is unique per writer and per call. The game thread
      * and the dump thread can both have a legitimate reason to write
@@ -1107,13 +1108,24 @@ atomicWrite(const std::string &path, const std::string &content)
     if (!f)
         return false;
     /* fsync the data, then publish, then fsync the directory so the
-     * rename itself survives */
-    syncFile(tmp);
+     * rename itself survives. syncIt=false is for batched writers
+     * (the dump's layer phase), which pay ONE filesystem barrier for
+     * the whole batch before their commit point instead of two
+     * fsyncs per file; the rename is still atomic either way. */
+    if (syncIt)
+        syncFile(tmp);
     if (rename(tmp.c_str(), path.c_str()) != 0)
         return false;
-    syncDirOf(path);
+    if (syncIt)
+        syncDirOf(path);
     return true;
 }
+
+/* How many committed journal segments may sit unfolded before the
+ * dump thread starts distributing the oldest into the per-object
+ * files. Larger = fewer, better-coalesced background writes; the
+ * cost is only boot-replay work after a crash. */
+static const long kJournalLag = 8;
 
 bool
 ObjectStore::isStore(const char *path)
@@ -1138,6 +1150,12 @@ ObjectStore::buildManifest()
      * this only serializes whatever survived */
     m["rev"] = rev_;
     m["markers"] = markersToJson(markers_);
+    /* the journal watermarks: segments at or below distributed are
+     * folded into the per-object files; segments above committed are
+     * uncommitted crash leftovers; the span between them replays at
+     * boot (docs/DATABASE.txt 7.1) */
+    m["journal_committed"] = journalSeq_;
+    m["journal_distributed"] = journalDistributed_.load();
     m["global_modules"] = { "properties" };
     m["hash_passwords"] = (bool) MUCK::PasswordHash::enabled;
     m["hash_version"] = MUCK::PasswordHash::version;
@@ -1814,8 +1832,15 @@ ObjectStore::saveAll(bool dirtyOnly)
         written++;
     }
     bulkSaveActive = false;
+    /* a full save supersedes the journal: every file now carries its
+     * object's current state, and replaying older segments over that
+     * at boot would regress it. Mark everything distributed, commit,
+     * then drop the segments. */
+    journalDistributed_.store(journalSeq_);
+    journalLandedCommitted_ = journalSeq_;
     if (!writeManifest())
         return -1;
+    unlinkDistributedSegments(journalSeq_);
     return written;
 }
 
@@ -1862,6 +1887,10 @@ ObjectStore::loadAll()
 
     rev_ = manifest.value("rev", 0L);
     markers_ = markersFromJson(manifest.value("markers", json::array()));
+    journalSeq_ = manifest.value("journal_committed", 0L);
+    journalDistributed_.store(manifest.value("journal_distributed", 0L));
+    journalLandedCommitted_ = journalSeq_;
+    journalUnlinked_ = journalDistributed_.load();
 
     if (manifest.contains("parms")) {
         std::string text;
@@ -1931,6 +1960,65 @@ ObjectStore::loadAll()
         && manifest["index"].is_object() ? &manifest["index"] : nullptr;
     std::map<int, std::string> refClaimed;  /* dbref -> file, dup check */
     std::set<std::string> jsonSeen, histSeen;
+
+    /* Journal segments in (distributed, committed] carry committed
+     * changes not yet folded into the per-object files; they replay
+     * over the files during the walk below. Beyond committed is an
+     * uncommitted crash leftover; at or below distributed is an
+     * already-folded leftover; both are discarded once the boot is
+     * known to proceed. Lines are grouped per uuid in segment order. */
+    std::map<std::string, std::vector<json> > journalReplay;
+    std::vector<std::string> staleSegments;
+    {
+        std::vector<std::pair<long, std::string> > committedSegs;
+        DIR *jd = opendir((root_ + "/journal").c_str());
+
+        if (jd) {
+            struct dirent *je;
+
+            while ((je = readdir(jd)) != NULL) {
+                std::string n = je->d_name;
+
+                if (n.size() < 7 || n.compare(n.size() - 6, 6, ".jsonl"))
+                    continue;
+
+                long seq = atol(n.c_str());
+                std::string p = root_ + "/journal/" + n;
+
+                if (seq <= 0)
+                    continue;
+                if (seq <= journalDistributed_.load()
+                    || seq > journalSeq_)
+                    staleSegments.push_back(p);
+                else
+                    committedSegs.push_back({seq, p});
+            }
+            closedir(jd);
+        }
+        std::sort(committedSegs.begin(), committedSegs.end());
+        for (const auto &cs : committedSegs) {
+            std::ifstream sf(cs.second);
+            std::string line;
+            long lineNo = 0;
+
+            while (sf && std::getline(sf, line)) {
+                if (line.empty())
+                    continue;
+                lineNo++;
+
+                json l = json::parse(line, nullptr, false);
+
+                if (l.is_discarded() || !l.contains("uuid")
+                    || !l.contains("entries")) {
+                    damaged(cs.second + " line " + std::to_string(lineNo)
+                            + ": committed journal record is unreadable");
+                    continue;
+                }
+                journalReplay[l["uuid"].get<std::string>()]
+                    .push_back(std::move(l));
+            }
+        }
+    }
 
     std::string objroot = root_ + "/objects";
     DIR *d0 = opendir(objroot.c_str());
@@ -2102,6 +2190,44 @@ ObjectStore::loadAll()
                         }
                     }
                 }
+
+                /* committed journal lines not yet folded into this
+                 * object's files replay over it now, newest last */
+                {
+                    auto jr = journalReplay.find(j.value("uuid", ""));
+
+                    if (jr != journalReplay.end() && j.contains("entries")) {
+                        for (json &l : jr->second) {
+                            if (l.value("full", false)) {
+                                /* a full line is the whole object
+                                 * file, verbatim */
+                                j = l["entries"];
+                                j["rev"] = l.value("era", 0L);
+                                delEra = j.contains("entries")
+                                    && j["entries"].contains("$core/deleted")
+                                    ? l.value("era", 0L) : -1;
+                                continue;
+                            }
+                            if (l.contains("type"))
+                                j["type"] = l["type"];
+                            {
+                                auto dit = l["entries"].find("$core/deleted");
+
+                                if (dit != l["entries"].end())
+                                    delEra = dit.value().is_null()
+                                        ? -1 : l.value("era", 0L);
+                            }
+                            for (auto lit = l["entries"].begin();
+                                 lit != l["entries"].end(); ++lit) {
+                                if (lit.value().is_null())
+                                    j["entries"].erase(lit.key());
+                                else
+                                    j["entries"][lit.key()] = lit.value();
+                            }
+                        }
+                        journalReplay.erase(jr);
+                    }
+                }
                 if (j.contains("entries")) {
                     json unknown = json::object();
                     std::string tname = j.value("type", "garbage");
@@ -2196,6 +2322,95 @@ ObjectStore::loadAll()
     }
     closedir(d0);
 
+    /* Objects that exist only in the journal: created and committed
+     * after the last distribution, so no per-object file exists yet.
+     * The full journal record IS the object file, verbatim; rebuild
+     * exactly as a file would have loaded. A delta-only run with no
+     * file underneath is damage. */
+    for (auto &kv : journalReplay) {
+        json j;
+        bool founded = false;
+        long delEra = -1;
+
+        for (json &l : kv.second) {
+            if (l.value("full", false)) {
+                j = l["entries"];
+                j["rev"] = l.value("era", 0L);
+                founded = true;
+                delEra = j.contains("entries")
+                    && j["entries"].contains("$core/deleted")
+                    ? l.value("era", 0L) : -1;
+                continue;
+            }
+            if (!founded)
+                continue;
+            if (l.contains("type"))
+                j["type"] = l["type"];
+            {
+                auto dit = l["entries"].find("$core/deleted");
+
+                if (dit != l["entries"].end())
+                    delEra = dit.value().is_null()
+                        ? -1 : l.value("era", 0L);
+            }
+            for (auto lit = l["entries"].begin();
+                 lit != l["entries"].end(); ++lit) {
+                if (lit.value().is_null())
+                    j["entries"].erase(lit.key());
+                else
+                    j["entries"][lit.key()] = lit.value();
+            }
+        }
+        if (!founded) {
+            damaged("journal carries layers for uuid " + kv.first
+                    + " but the store has no file and no full record "
+                    "for it");
+            continue;
+        }
+
+        dbref claimed = (dbref) j.value("dbref", -1);
+
+        if (claimed < 0 || claimed >= top) {
+            damaged("journal object uuid " + kv.first + " claims dbref #"
+                    + std::to_string(claimed)
+                    + " outside the manifest's range");
+            continue;
+        }
+        {
+            auto dup = refClaimed.find(claimed);
+
+            if (dup != refClaimed.end()) {
+                damaged("journal object uuid " + kv.first + " and "
+                        + dup->second + " both claim dbref #"
+                        + std::to_string(claimed));
+                continue;
+            }
+        }
+        if (!storedTypeSupported(j.value("type", "garbage"))) {
+            damaged("journal object uuid " + kv.first
+                    + " has type \"" + j.value("type", "garbage")
+                    + "\" with no loaded type module");
+            continue;
+        }
+
+        json fileEntries = j["entries"];
+        json fileMods = j.value("modules", json::array());
+
+        j = fileToLoadShape(j, root_);
+        objectFromJsonPhase1(j, later);
+        if (DbObject *bo = MUCK::database().get(claimed)) {
+            bo->setBaseWritten(true);
+            if (bo->isDeleted() && delEra >= 0)
+                bo->setDeletedRev(delEra);
+        }
+        if (!later.empty() && later.back().ref == claimed) {
+            later.back().entries = fileEntries;
+            for (const auto &mn : fileMods)
+                later.back().modules.push_back(mn.get<std::string>());
+        }
+        refClaimed[claimed] = "journal:" + kv.first;
+    }
+
     /* orphaned history: layers with no base beside them cannot be
      * applied to anything, so the state they carried is unreachable */
     for (const auto &h : histSeen) {
@@ -2246,6 +2461,14 @@ ObjectStore::loadAll()
                    "interrupted dump\n", u.c_str());
         unlink(u.c_str());
         unlink((u.substr(0, u.size() - 5) + ".hist").c_str());
+    }
+    /* journal segments past the committed watermark (an interrupted
+     * dump's tail) or at or below the distributed one (already folded,
+     * not yet removed) go the same way */
+    for (const auto &s : staleSegments) {
+        log_status("STORE: discarding stale journal segment %s\n",
+                   s.c_str());
+        unlink(s.c_str());
     }
 
     for (const auto &pl : later)
@@ -2444,7 +2667,15 @@ ObjectStore::fire(bool compact)
                 set.compactions.push_back(std::move(ord));
         }
     }
+    /* assign this set's journal segment BEFORE the manifest is
+     * serialized, so journal_committed covers it */
+    if (!set.layers.empty())
+        set.journalSeq = ++journalSeq_;
+    set.committedAtBuild = journalSeq_;
+    set.distributedAtBuild = journalDistributed_.load();
     set.manifest = buildManifest();
+    set.firedAtMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
 
     return set;
 }
@@ -2638,6 +2869,152 @@ compactObjectFile(const std::string &root, const ObjectStore::CompactOrder &ord)
     return merged;
 }
 
+std::string
+ObjectStore::journalSegmentPath(long seq) const
+{
+    char name[64];
+
+    sprintf(name, "/journal/%010ld.jsonl", seq);
+    return root_ + name;
+}
+
+/* Fold one committed journal segment into the per-object files:
+ * bases for full lines, history appends for delta lines, coalescing
+ * repeated same-era lines per object into one. None of it is
+ * fsynced: the segment already guarantees durability, and if a crash
+ * loses these writes the segment is simply replayed (idempotent:
+ * values are absolute). Returns the number of lines folded, -1 when
+ * the segment is unreadable. */
+long
+ObjectStore::distributeOneSegment(long seq)
+{
+    std::ifstream f(journalSegmentPath(seq));
+
+    if (!f)
+        return 0;               /* already gone: nothing to fold */
+
+    /* per-object runs, in arrival order per object */
+    std::map<std::string, std::vector<json> > runs;
+    std::string line;
+    long lines = 0;
+
+    while (std::getline(f, line)) {
+        if (line.empty())
+            continue;
+        json l = json::parse(line, nullptr, false);
+
+        if (l.is_discarded() || !l.contains("uuid")
+            || !l.contains("entries")) {
+            fprintf(stderr, "STORE: journal segment %ld is damaged; "
+                    "keeping it aside\n", seq);
+            return -1;
+        }
+        lines++;
+
+        std::string u = l["uuid"].get<std::string>();
+        std::vector<json> &run = runs[u];
+
+        if (l.value("full", false)) {
+            /* a full line supersedes everything before it */
+            run.clear();
+            run.push_back(std::move(l));
+        } else if (!run.empty() && !run.back().value("full", false)
+                   && run.back().value("era", 0L) == l.value("era", 0L)) {
+            /* same era: coalesce into one layer, later values win */
+            json &prev = run.back();
+
+            for (auto it = l["entries"].begin();
+                 it != l["entries"].end(); ++it)
+                prev["entries"][it.key()] = it.value();
+            if (l.contains("type"))
+                prev["type"] = l["type"];
+        } else {
+            run.push_back(std::move(l));
+        }
+    }
+    f.close();
+
+    for (auto &kv : runs) {
+        std::string path = UUIDObjectPath(root_, kv.first);
+
+        ensureDirsFor(path);
+        for (json &l : kv.second) {
+            if (l.value("full", false)) {
+                /* the object's whole state: supersedes the old base
+                 * and every layer that sat on it, so the stale hist
+                 * goes too (a resurrected object would otherwise
+                 * revert at load, its pre-deletion layers replayed
+                 * over the state it was restored to) */
+                json j = l["entries"];
+
+                j["rev"] = l.value("era", 0L);
+                {
+                    std::ifstream pf(path);
+                    json prev = pf ? json::parse(pf, nullptr, false)
+                        : json();
+
+                    /* a full write must not silently drop the scoped
+                     * snapshots taken against this object */
+                    if (prev.is_object()
+                        && !prev.value("markers", json::array()).empty())
+                        j["markers"] = prev["markers"];
+                }
+                atomicWrite(path, j.dump(1), false);
+                unlink((path.substr(0, path.size() - 5)
+                        + ".hist").c_str());
+                continue;
+            }
+
+            json rec;
+
+            rec["era"] = l.value("era", 0L);
+            rec["entries"] = l["entries"];
+            /* the stored type name lives at the top level of the
+             * object file, so a layer carries it explicitly */
+            if (l.contains("type"))
+                rec["type"] = l["type"];
+
+            std::string hist = path.substr(0, path.size() - 5) + ".hist";
+            std::ofstream hf(hist, std::ios::app);
+
+            if (hf) {
+                hf << rec.dump() << "\n";
+                hf.close();
+            }
+        }
+    }
+    return lines;
+}
+
+/* Fold committed segments until at most keepAtMost remain pending.
+ * Never runs past the last LANDED manifest's committed watermark:
+ * folding an uncommitted segment would let changes a crash is
+ * supposed to discard leak into the per-object files. */
+void
+ObjectStore::distributeSegments(long keepAtMost)
+{
+    while (journalLandedCommitted_ - journalDistributed_.load()
+           > keepAtMost) {
+        long s = journalDistributed_.load() + 1;
+
+        if (distributeOneSegment(s) < 0) {
+            /* damaged: preserve the evidence rather than delete data */
+            rename(journalSegmentPath(s).c_str(),
+                   (journalSegmentPath(s) + ".damaged").c_str());
+        }
+        journalDistributed_.store(s);
+    }
+}
+
+void
+ObjectStore::unlinkDistributedSegments(long upTo)
+{
+    while (journalUnlinked_ < upTo) {
+        journalUnlinked_++;
+        unlink(journalSegmentPath(journalUnlinked_).c_str());
+    }
+}
+
 bool
 ObjectStore::persist(const CaptureSet &set)
 {
@@ -2647,81 +3024,70 @@ ObjectStore::persist(const CaptureSet &set)
     ensureDir(root_);
     ensureDir(root_ + "/objects");
 
-    for (const SealedLayer &layer : set.layers) {
-        if (layer.landed)
-            continue;
+    /* THE DUMP IS ONE FILE. Every sealed layer becomes one line in
+     * this set's journal segment: one sequential write and one fsync
+     * commit a dump of any size. The per-object scatter (bases,
+     * history sidecars) happens in distributeSegments, behind the
+     * commit, unsynced and coalesced; it never sits on the dump's
+     * critical path. Scattering 7k dirty objects into 7k files with
+     * two fsyncs each made a dump take a minute; this takes as long
+     * as writing the bytes. */
+    if (!set.layers.empty() && set.journalSeq > 0) {
+        std::string seg;
 
-        std::string path = UUIDObjectPath(root_, layer.uuid);
+        ensureDir(root_ + "/journal");
+        for (const SealedLayer &layer : set.layers) {
+            json l;
 
-        ensureDirsFor(path);
-
-        if (layer.full) {
-            /* This is the object's whole state, so it supersedes every
-             * layer that sat on the old base. Leaving a stale .hist
-             * beside it would replay those layers over the new base at
-             * load: a resurrected object would revert, because its
-             * pre-deletion layers would be applied on top of the state
-             * it was resurrected to. */
-            json j = layer.entries;
-
-            j["rev"] = set.rev;
-            /* Carry the object's own markers across, exactly as
-             * saveObject does: a full write must not silently drop the
-             * scoped snapshots taken against this object. */
-            {
-                std::ifstream pf(path);
-                json prev = pf ? json::parse(pf, nullptr, false) : json();
-
-                if (prev.is_object()
-                    && !prev.value("markers", json::array()).empty())
-                    j["markers"] = prev["markers"];
-            }
-            if (!atomicWrite(path, j.dump(1)))
-                return false;
-            unlink((path.substr(0, path.size() - 5) + ".hist").c_str());
-            layer.landed = true;
-            continue;
+            l["uuid"] = layer.uuid;
+            l["dbref"] = layer.ref;
+            l["era"] = layer.era;
+            l["entries"] = layer.entries;
+            if (!layer.typeName.empty())
+                l["type"] = layer.typeName;
+            if (layer.full)
+                l["full"] = true;
+            seg += l.dump() + "\n";
         }
-
-        /* otherwise the layer appends to the history sidecar */
-        json rec;
-
-        rec["era"] = layer.era;
-        rec["entries"] = layer.entries;
-        /* The stored type name lives at the top level of the object
-         * file, outside the entries map, so a layer has to carry it
-         * explicitly: without this a @toad would leave the file
-         * claiming the old type until something rewrote the base. */
-        if (!layer.typeName.empty())
-            rec["type"] = layer.typeName;
-
-        std::string hist = path.substr(0, path.size() - 5) + ".hist";
-        std::ofstream hf(hist, std::ios::app);
-
-        if (!hf)
+        /* full sync: this write IS the durability point of the dump */
+        if (!atomicWrite(journalSegmentPath(set.journalSeq), seg))
             return false;
-        hf << rec.dump() << "\n";
-        hf.flush();
-        hf.close();
-        syncFile(hist);
-        layer.landed = true;
+        layersSinceCommit_.fetch_add((long) set.layers.size());
     }
 
     /* The manifest commits the set. It was serialized on the game
      * thread, because building it reads live state (tune parms, the
      * tombstone table, the object count) and this thread may not. A
-     * set with no manifest is a programming error, not a fallback:
-     * falling back to writeManifest() here would read live state from
-     * the wrong thread. */
-    /* A set with no manifest is a HELD set: its layers are now on
-     * disk, and the manifest of the set behind it commits them. The
-     * manifest is still the commit point, just shared. */
+     * set with no manifest is a HELD set: its segment is durable, and
+     * the manifest of the set behind it commits it. The manifest is
+     * still the commit point, just shared. */
     if (set.manifest.empty())
         return true;
+
     if (!atomicWrite(root_ + "/manifest.json", set.manifest))
         return false;
-    /* the game loop polls this and posts the dump-done message */
+    journalLandedCommitted_ = set.committedAtBuild;
+    /* the game loop polls this and posts the dump-done message; the
+     * stats feed the completion notice to whoever ran @dump */
+    lastDumpLayers_.store(layersSinceCommit_.exchange(0));
+    if (set.firedAtMs > 0) {
+        long long nowMs =
+            std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now().time_since_epoch()).count();
+
+        lastDumpMillis_.store((long) (nowMs - set.firedAtMs));
+    }
     dumpLanded_.store(true);
+
+    /* Post-commit housekeeping, in order: segments an earlier landed
+     * manifest already recorded as distributed can leave the disk;
+     * then fold pending segments down to the lag bound (all of them
+     * for a sync barrier), so the per-object files trail the journal
+     * by a bounded, replayable amount. Folding repeats are coalesced
+     * per object and era, which is what turns a hot object's line per
+     * dump into one history append per era. */
+    unlinkDistributedSegments(set.distributedAtBuild);
+    distributeSegments(set.distributeAll ? 0 : kJournalLag);
 
     /* Compaction rides BEHIND the commit: a reclaimed object must
      * leave the committed index before its files leave the disk, and
@@ -2886,8 +3252,13 @@ ObjectStore::syncNow()
 {
     /* Anything sealed but held is not on disk yet, and reading stored
      * state without it would read a world missing its most recent
-     * changes. Push it out, then wait. */
-    flushHeld(fire());
+     * changes. Push it out with a distribute-everything barrier (file
+     * readers like rollback need the per-object files current, not
+     * just the journal durable), then wait. */
+    CaptureSet set = fire();
+
+    set.distributeAll = true;
+    flushHeld(std::move(set));
     drain();
 }
 
@@ -2939,6 +3310,17 @@ ObjectStore::stopDumpThread()
     if (dumpThread_.joinable())
         dumpThread_.join();
     dumpThreadRunning_ = false;
+
+    /* The worker is gone, so its machinery is safe to run inline: a
+     * clean shutdown leaves the store fully at rest (bases and
+     * sidecars current, journal empty, watermarks committed), and the
+     * next boot replays nothing. A crash skips all of this and the
+     * loader replays the journal instead. */
+    if (!root_.empty()) {
+        distributeSegments(0);
+        writeManifest();
+        unlinkDistributedSegments(journalDistributed_.load());
+    }
 }
 
 long
@@ -2991,6 +3373,13 @@ ObjectStore::gcStore()
 
     long now = (long) current_systime;
 
+    /* fold any pending journal segments first: compaction works on
+     * the per-object files and must see everything (offline mode,
+     * single-threaded, so calling the dump thread's machinery
+     * directly is safe) */
+    journalLandedCommitted_ = journalSeq_;
+    distributeSegments(0);
+
     /* the retention ladder decides which snapshots remain */
     markers_ = ladderSurvivors(markers_, now);
 
@@ -3014,10 +3403,12 @@ ObjectStore::gcStore()
         }
     }
 
-    /* commit the reclaim decisions and the pruned markers BEFORE any
-     * file is removed: a crash mid-gc then reads as uncommitted
-     * leftovers at the next boot, never as damage */
+    /* commit the reclaim decisions, the pruned markers, and the
+     * distribution watermark BEFORE any file is removed: a crash
+     * mid-gc then reads as leftovers at the next boot, never as
+     * damage */
     writeManifest();
+    unlinkDistributedSegments(journalDistributed_.load());
 
     long removed = 0;
 

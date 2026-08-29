@@ -96,7 +96,12 @@ do_dump(dbref player, const char *newfile)
         }
         anotify_nolisten2(player, buf);
         dump_db_now();
-        anotify_nolisten2(player, CINFO "Done.");
+        /* the fire returned; the dump thread is still writing. The
+         * dumpdone message walls when the manifest actually commits,
+         * so saying "Done." here would be a lie by up to however long
+         * the disk takes. */
+        anotify_nolisten2(player, CINFO "Dump fired; the disk write "
+                          "completes in the background.");
         if (*newfile)
             dumpfile = (char *) yerf;
     } else {

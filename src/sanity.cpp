@@ -11,6 +11,37 @@
 #include "ObjectAccess.h"
 #include "Modules.h"
 
+#include <vector>
+
+/* The visited marker for sanity's walks. This was a bit in the flags
+ * word (SANEBIT), but under the journal every flags toggle records a
+ * change: the boot sanity pass marked EVERY object dirty and the next
+ * dump wrote one layer per object of pure scratch noise. Scratch
+ * state lives outside persistent state, full stop. */
+static std::vector<char> saneMark;
+
+static void
+saneClearAll(void)
+{
+    saneMark.assign((size_t) MUCK::database().top(), 0);
+}
+
+static bool
+saneMarked(dbref i)
+{
+    return i >= 0 && (size_t) i < saneMark.size() && saneMark[i];
+}
+
+static void
+saneSetMark(dbref i)
+{
+    if (i < 0)
+        return;
+    if ((size_t) i >= saneMark.size())
+        saneMark.resize((size_t) i + 1, 0);
+    saneMark[i] = 1;
+}
+
 #include "params.h"
 #include "props.h"
 
@@ -220,32 +251,30 @@ find_orphan_objects(dbref player)
 
     SanPrint(player, "Searching for orphan objects...");
 
-    for (i = 0; i < MUCK::database().top(); i++) {
-        MUCK::clearFlags(i, SANEBIT);
-    }
+    saneClearAll();
 
-    MUCK::addFlags(GLOBAL_ENVIRONMENT, SANEBIT);
+    saneSetMark(GLOBAL_ENVIRONMENT);
 
     for (i = 0; i < MUCK::database().top(); i++) {
         if (!MUCK::getExits(i).empty()) {
-            if (FLAGS(EXITS(i)) & SANEBIT) {
+            if (saneMarked(EXITS(i))) {
                 violate(player, EXITS(i), "is referred to by more than one object's Next, Contents, or Exits field");
             } else {
-                MUCK::addFlags(EXITS(i), SANEBIT);
+                saneSetMark(EXITS(i));
             }
         }
         if (!MUCK::getContents(i).empty()) {
-            if (FLAGS(CONTENTS(i)) & SANEBIT) {
+            if (saneMarked(CONTENTS(i))) {
                 violate(player, CONTENTS(i), "is referred to by more than one object's Next, Contents, or Exits field");
             } else {
-                MUCK::addFlags(CONTENTS(i), SANEBIT);
+                saneSetMark(CONTENTS(i));
             }
         }
         if (NEXTOBJ(i) != NOTHING) {
-            if (FLAGS(NEXTOBJ(i)) & SANEBIT) {
+            if (saneMarked(NEXTOBJ(i))) {
                 violate(player, NEXTOBJ(i), "is referred to by more than one object's Next, Contents, or Exits field");
             } else {
-                MUCK::addFlags(NEXTOBJ(i), SANEBIT);
+                saneSetMark(NEXTOBJ(i));
             }
         }
     }
@@ -255,13 +284,9 @@ find_orphan_objects(dbref player)
          * dbrefs are monotonic, nothing chains to them anymore */
         if (TYPEOF(i) == TYPE_GARBAGE)
             continue;
-        if (!(FLAGS(i) & SANEBIT)) {
+        if (!saneMarked(i)) {
             violate(player, i, "appears to be an orphan object, that is not referred to by any other object");
         }
-    }
-
-    for (i = 0; i < MUCK::database().top(); i++) {
-        MUCK::clearFlags(i, SANEBIT);
     }
 }
 
@@ -569,7 +594,7 @@ cut_bad_contents(dbref obj)
     for (size_t i = 0; i < v.size(); i++) {
         dbref loop = v[i]->ref();
 
-        if (!valid_obj(loop) || FLAGS(loop) & SANEBIT || TYPEOF(loop) == TYPE_EXIT || MUCK::getLocation(loop) != obj || loop == obj) {
+        if (!valid_obj(loop) || saneMarked(loop) || TYPEOF(loop) == TYPE_EXIT || MUCK::getLocation(loop) != obj || loop == obj) {
             if (!valid_obj(loop)) {
                 SanFixed(obj, "Contents list for %s cut at invalid dbref");
             } else if (TYPEOF(loop) == TYPE_EXIT) {
@@ -578,7 +603,7 @@ cut_bad_contents(dbref obj)
                 SanFixed(obj, "Contents list for %s cut at self-reference");
             } else if (MUCK::getLocation(loop) != obj) {
                 SanFixed2(obj, loop, "Contents list for %s cut at misplaced object %s");
-            } else if (FLAGS(loop) & SANEBIT) {
+            } else if (saneMarked(loop)) {
                 SanFixed2(obj, loop, "Contents list for %s cut at already listed object %s");
             } else {
                 SanFixed2(obj, loop, "Contents list for %s cut at %s");
@@ -587,7 +612,7 @@ cut_bad_contents(dbref obj)
             DBDIRTY(obj);
             return;
         }
-        MUCK::addFlags(loop, SANEBIT);
+        saneSetMark(loop);
     }
 }
 
@@ -599,14 +624,14 @@ cut_bad_exits(dbref obj)
     for (size_t i = 0; i < v.size(); i++) {
         dbref loop = v[i]->ref();
 
-        if (!valid_obj(loop) || FLAGS(loop) & SANEBIT || TYPEOF(loop) != TYPE_EXIT || MUCK::getLocation(loop) != obj) {
+        if (!valid_obj(loop) || saneMarked(loop) || TYPEOF(loop) != TYPE_EXIT || MUCK::getLocation(loop) != obj) {
             if (!valid_obj(loop)) {
                 SanFixed(obj, "Exits list for %s cut at invalid dbref");
             } else if (TYPEOF(loop) != TYPE_EXIT) {
                 SanFixed2(obj, loop, "Exits list for %s cut at non-exit %s");
             } else if (MUCK::getLocation(loop) != obj) {
                 SanFixed2(obj, loop, "Exits list for %s cut at misplaced exit %s");
-            } else if (FLAGS(loop) & SANEBIT) {
+            } else if (saneMarked(loop)) {
                 SanFixed2(obj, loop, "Exits list for %s cut at already listed exit %s");
             } else {
                 SanFixed2(obj, loop, "Exits list for %s cut at %s");
@@ -615,7 +640,7 @@ cut_bad_exits(dbref obj)
             DBDIRTY(obj);
             return;
         }
-        MUCK::addFlags(loop, SANEBIT);
+        saneSetMark(loop);
     }
 }
 
@@ -661,7 +686,8 @@ create_lostandfound(dbref *player, dbref *room)
     MUCK::setLocation(*room, GLOBAL_ENVIRONMENT);
     MUCK::roomSetDropToRef(*room, NOTHING);
     MUCK::setType(*room, MUCK::ObjectType::Room);
-    MUCK::setFlags(*room, SANEBIT);
+    MUCK::setFlags(*room, 0);
+    saneSetMark(*room);
     MUCK::attachContent(GLOBAL_ENVIRONMENT, *room);
     SanFixed(*room, "Using %s to resolve unknown location");
 
@@ -677,7 +703,8 @@ create_lostandfound(dbref *player, dbref *room)
         MUCK::setName(*player, player_name);
         MUCK::setLocation(*player, *room);
         MUCK::setType(*player, MUCK::ObjectType::Player);
-        MUCK::setFlags(*player, PCREATE_FLAGS | SANEBIT);
+        MUCK::setFlags(*player, PCREATE_FLAGS);
+        saneSetMark(*player);
         MUCK::setOwner(*player, *player);
         MUCK::playerSetHomeRef(*player, *room);
         MUCK::playerSetPennies(*player, tp_start_pennies);
@@ -842,7 +869,7 @@ find_misplaced_objects(void)
                 } else {
                     MUCK::attachContent(MUCK::getLocation(loop), loop);
                 }
-                MUCK::addFlags(loop, SANEBIT);
+                saneSetMark(loop);
                 SanFixed2(loop, MUCK::getLocation(loop), "Set location of %s to %s");
             }
         } else {
@@ -886,7 +913,7 @@ adopt_orphans(void)
     dbref loop;
 
     for (loop = 0; loop < MUCK::database().top(); loop++) {
-        if (!(FLAGS(loop) & SANEBIT)) {
+        if (!saneMarked(loop)) {
             DBDIRTY(loop);
             switch (TYPEOF(loop)) {
                 case TYPE_ROOM:
@@ -937,10 +964,8 @@ sanfix(dbref player)
 
     sanity_violated = 0;
 
-    for (loop = 0; loop < MUCK::database().top(); loop++) {
-        MUCK::clearFlags(loop, SANEBIT);
-    }
-    MUCK::addFlags(GLOBAL_ENVIRONMENT, SANEBIT);
+    saneClearAll();
+    saneSetMark(GLOBAL_ENVIRONMENT);
 
     if (!valid_obj(tp_player_start) || TYPEOF(tp_player_start) != TYPE_ROOM) {
         SanFixed(GLOBAL_ENVIRONMENT, "Reset invalid player_start to %s");
@@ -951,10 +976,6 @@ sanfix(dbref player)
     find_misplaced_objects();
     adopt_orphans();
     clean_global_environment();
-
-    for (loop = 0; loop < MUCK::database().top(); loop++) {
-        MUCK::clearFlags(loop, SANEBIT);
-    }
 
     if (player > NOTHING) {
         if (!sanity_violated) {
