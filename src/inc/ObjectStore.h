@@ -152,7 +152,6 @@ class ObjectStore {
         long rev = 0;
         std::vector<SealedLayer> layers;
         std::string manifest;   /* serialized, ready to write */
-        bool hasMarker = false;
         std::vector<CompactOrder> compactions;
     };
 

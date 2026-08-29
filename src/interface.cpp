@@ -810,7 +810,18 @@ main(int argc, char **argv)
     if (sanity_interactive) {
         san_main();
     } else {
-        dump_database(0);
+        extern bool store_gc_flag;
+        extern bool store_verify_flag;
+
+        /* -storegc and --verify-entries are maintenance/audit passes,
+         * not conversions: the conversion-mode exit save would rewrite
+         * every base and unlink every history sidecar, destroying the
+         * very survivors gcStore just computed and preserved, and
+         * writing to a store the operator was told was only being
+         * audited. gcStore writes its own manifest; verify writes
+         * nothing, which is the point. */
+        if (!store_gc_flag && !store_verify_flag)
+            dump_database(0);
         /* The dump thread must finish before we exit or exec: this is
          * the one place a pause remains, and it is where a pause has
          * always been expected. docs/DATABASE.txt 7.1. */

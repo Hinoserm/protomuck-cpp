@@ -1461,7 +1461,6 @@ ObjectStore::snapshotGlobal(const char *label, bool locked)
      * manifest.json itself while the dump thread might be writing the
      * same file. */
     set.manifest = buildManifest();
-    set.hasMarker = true;
     hold(std::move(set));
     log_status("SNAPSHOT: global rev %ld (%s)%s\n", m.rev,
                m.label.empty() ? "unlabeled" : m.label.c_str(),
@@ -2517,7 +2516,15 @@ compactObjectFile(const std::string &root, const ObjectStore::CompactOrder &ord)
                 continue;
             json l = json::parse(line, nullptr, false);
 
-            if (l.is_discarded() || !l.contains("entries"))
+            /* full type validation, not just presence: a wrong-typed
+             * field would otherwise throw out of the merge below and
+             * misreport an already-landed set as failed */
+            if (l.is_discarded() || !l.contains("entries")
+                || !l["entries"].is_object()
+                || (l.contains("era") && !l["era"].is_number_integer())
+                || (l.contains("covers_from")
+                    && !l["covers_from"].is_number_integer())
+                || (l.contains("type") && !l["type"].is_string()))
                 return 0;       /* damage; leave it for the loader */
             layers.push_back(std::move(l));
         }
@@ -2621,8 +2628,12 @@ compactObjectFile(const std::string &root, const ObjectStore::CompactOrder &ord)
     if (merged) {
         if (newHist.empty())
             unlink(histFile.c_str());
-        else
-            atomicWrite(histFile, newHist);
+        else if (!atomicWrite(histFile, newHist))
+            /* the base already carries the merged layers, so a stale
+             * hist is safe (idempotent replay); the next sweep simply
+             * finds the same work, but the operator should know */
+            fprintf(stderr, "STORE: could not rewrite %s; stale "
+                    "layers kept\n", histFile.c_str());
     }
     return merged;
 }
@@ -2723,7 +2734,16 @@ ObjectStore::persist(const CaptureSet &set)
         for (const CompactOrder &ord : set.compactions) {
             if (ord.reclaim)
                 reclaimed++;
-            merged += compactObjectFile(root_, ord);
+            /* one poisoned object must not fail the set: the layers
+             * and manifest above are already durably committed, and
+             * failing here would retry (and falsely report losing)
+             * a dump that in fact landed */
+            try {
+                merged += compactObjectFile(root_, ord);
+            } catch (const std::exception &e) {
+                fprintf(stderr, "STORE: compaction of %s failed: %s\n",
+                        ord.uuid.c_str(), e.what());
+            }
         }
         /* stderr, not log_status: this thread must not walk the
          * descriptor list */
@@ -3001,8 +3021,14 @@ ObjectStore::gcStore()
 
     long removed = 0;
 
-    for (const auto &ord : orders)
-        removed += compactObjectFile(root_, ord);
+    for (const auto &ord : orders) {
+        try {
+            removed += compactObjectFile(root_, ord);
+        } catch (const std::exception &e) {
+            fprintf(stderr, "STOREGC: compaction of %s failed: %s\n",
+                    ord.uuid.c_str(), e.what());
+        }
+    }
     log_status("STOREGC: merged %ld layer(s), reclaimed %ld object(s)\n",
                removed, reclaimed);
     return removed;

@@ -598,7 +598,13 @@ superseded mechanisms are deleted, not kept alongside.
    -convert and -storegc remain offline and single-threaded, and pay
    fsync synchronously, which is acceptable at maintenance time.
    -storegc is the offline form of compaction: the same merge the
-   background pass does, run over the whole store on demand.
+   background pass does, run over the whole store on demand.  Neither
+   -storegc nor --verify-entries takes the conversion-mode exit save:
+   that save rewrites every base and drops every history sidecar,
+   which is a conversion's job and would destroy the survivors
+   gcStore just preserved.  gcStore writes its own manifest; a verify
+   run writes nothing at all, and is therefore safe against the live
+   store.
 
    The forked dump (tp_dump_forking) and the THREADED_DB_DUMP ifdefs
    are retired when this lands.
