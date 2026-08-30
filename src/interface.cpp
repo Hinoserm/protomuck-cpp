@@ -4240,6 +4240,24 @@ process_commands(void)
      * descriptor list, which that thread must never do. Whoever ran
      * @dump gets the real numbers: how many objects landed and how
      * long fire-to-commit took. */
+    /* Reconcile full layers whose write failed for good: the dump
+     * thread cannot touch live objects, so it left the refs for us.
+     * Clearing baseWritten drops the object from the committed index
+     * (so no manifest claims a file that is not there) and re-dirties
+     * it, making the next dump write a real full base. */
+    if (MUCK::store().anyFailedFullLayers()) {
+        for (dbref bad : MUCK::store().takeFailedFullLayers()) {
+            if (!MUCK::database().valid(bad))
+                continue;
+            if (MUCK::DbObject *o = MUCK::database().get(bad)) {
+                o->setBaseWritten(false);
+                MUCK::journalRecord(bad, "$core/flags");
+                log_status("STORE: #%d lost its base write; it will be "
+                           "written whole at the next dump\n", bad);
+            }
+        }
+    }
+
     if (MUCK::store().takeDumpLanded()) {
         if (tp_dbdump_warning)
             wall_and_flush(tp_dumpdone_mesg);

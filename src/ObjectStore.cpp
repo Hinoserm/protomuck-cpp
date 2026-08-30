@@ -2695,10 +2695,21 @@ ObjectStore::loadAll()
         if (prep.unsupported)
             MUCK::setType(claimed, ObjectType::Unsupported);
         if (!later.empty() && later.back().ref == claimed) {
-            later.back().entries = std::move(prep.fileEntries);
-            for (const auto &mn : prep.fileMods)
-                later.back().modules.push_back(mn.get<std::string>());
+            /* The entry map is retained ONLY to hand feature modules
+             * their namespace slices in phase two. With no feature
+             * modules nothing ever reads it, and keeping it held a
+             * second full copy of every property in the database
+             * (on top of the props copy right beside it) for the
+             * whole load: that duplicate WAS the load-time memory
+             * peak, since virtually every object carries no feature
+             * module at all. */
+            if (!prep.fileMods.empty()) {
+                later.back().entries = std::move(prep.fileEntries);
+                for (const auto &mn : prep.fileMods)
+                    later.back().modules.push_back(mn.get<std::string>());
+            }
         }
+        prep.fileEntries = json();      /* free it now either way */
     };
 
     {
@@ -2910,8 +2921,11 @@ ObjectStore::loadAll()
             if (bo->isDeleted() && delEra >= 0)
                 bo->setDeletedRev(delEra);
         }
-        if (!later.empty() && later.back().ref == claimed) {
-            later.back().entries = fileEntries;
+        if (!later.empty() && later.back().ref == claimed
+            && !fileMods.empty()) {
+            /* same rule as the file path: only feature modules read
+             * this, and holding it otherwise doubles peak load memory */
+            later.back().entries = std::move(fileEntries);
             for (const auto &mn : fileMods)
                 later.back().modules.push_back(mn.get<std::string>());
         }
@@ -4066,16 +4080,16 @@ ObjectStore::dumpThreadMain()
                 healthFailedPersist();
                 fprintf(stderr, "DUMP: PERSIST FAILED for rev %ld after "
                         "3 attempts; those changes are lost\n", set.rev);
-                /* KNOWN GAP: a full-sealed layer in this set already
-                 * flipped its object's baseWritten true on the game
-                 * thread, so a later manifest's index will claim a
-                 * base that was never written and the next boot
-                 * refuses over it (fail-safe, --force-load recovers).
-                 * Repairing it means reaching into live objects from
-                 * this thread, which the design forbids; the correct
-                 * fix is a failed-set queue the game thread drains.
-                 * Only reachable after three consecutive write
-                 * failures, i.e. a disk that is already gone. */
+                /* A full layer that never landed left its object
+                 * claiming a base that does not exist. This thread
+                 * must not touch live objects, so hand the refs to
+                 * the game loop, which resets baseWritten and
+                 * re-dirties them: the next dump then writes a real
+                 * full base instead of deltas folding into nothing
+                 * and an index naming a missing file. */
+                for (const SealedLayer &l : set.layers)
+                    if (l.full && !l.landed)
+                        noteFailedFullLayer(l.ref);
             }
             idleCv_.notify_all();
         }

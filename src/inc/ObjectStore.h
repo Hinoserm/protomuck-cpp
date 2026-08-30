@@ -236,6 +236,29 @@ class ObjectStore {
                  hWorkerExceptions_.load() };
     }
 
+    /* A full-object layer that never reached the disk. fire() flips
+     * baseWritten true when it seals a full layer, so a persist that
+     * fails for good would leave the object claiming a base that does
+     * not exist: later deltas fold into nothing and the committed
+     * index names a missing file, which refuses the next boot. The
+     * dump thread cannot repair live objects, so it records the refs
+     * here and the game loop reconciles them. */
+    void noteFailedFullLayer(dbref ref) {
+        std::unique_lock<std::mutex> lk(failedMutex_);
+
+        failedFullLayers_.push_back(ref);
+        hasFailedFullLayers_.store(true);
+    }
+    bool anyFailedFullLayers() const { return hasFailedFullLayers_.load(); }
+    std::vector<dbref> takeFailedFullLayers() {
+        std::unique_lock<std::mutex> lk(failedMutex_);
+        std::vector<dbref> out;
+
+        out.swap(failedFullLayers_);
+        hasFailedFullLayers_.store(false);
+        return out;
+    }
+
     /* True once since the last call if a dump's manifest committed.
      * The game loop polls this and posts the dump-done message; the
      * dump thread itself must not wall (walling walks the descriptor
@@ -369,6 +392,12 @@ class ObjectStore {
      * single fire, merging the whole rollback history away
      * irreversibly. Game thread only. */
     long lastLadderNow_ = 0;
+
+    /* full layers whose write failed for good; drained by the game
+     * loop, which resets baseWritten and re-dirties them */
+    mutable std::mutex failedMutex_;
+    std::vector<dbref> failedFullLayers_;
+    std::atomic<bool> hasFailedFullLayers_{false};
 
     /* store-health counters (see Health above) */
     std::atomic<unsigned long> hFailedPersists_{0};
