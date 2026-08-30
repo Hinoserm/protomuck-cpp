@@ -30,6 +30,8 @@ PROP_EXPECT = [
     'PRMDIR:0', 'PRMDEEP:gone', 'PZERO:keep', 'PEMPTY:keep',
     'PADD:apval', 'PADDV:99', 'PENV:fromzero1',
     'PBIG137:v137', 'PBIGN:200', 'PMPI:plain-mpi', 'PI64:1',
+    'PI64GET:5000000000', 'PI64VAL:5000000000',
+    'PI64ENV:5000000000', 'PI64NEG:-5000000000',
     'PDONE:ok',
 ]
 
@@ -57,7 +59,10 @@ def main():
     binpath, gamedir, port = sys.argv[1], sys.argv[2], int(sys.argv[3])
     os.chdir(gamedir)
     shutil.copy('minimal.db', 'live.db')
-    srv = subprocess.Popen([binpath, 'live.db', 'out.db', str(port)],
+    # -port, not positional: the legacy parser eats the first
+    # positional port as a bare enable-sockets toggle and binds the
+    # parmfile default instead (see muckharness.py)
+    srv = subprocess.Popen([binpath, '-port', str(port), 'live.db', 'out.db'],
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     time.sleep(2)
     s = socket.create_connection(('127.0.0.1', port), timeout=10)

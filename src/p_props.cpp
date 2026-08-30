@@ -193,7 +193,10 @@ prim_getprop(PRIM_PROTOTYPE)
                     break;
                 }
                 case PROP_INTTYP: {
-                    int tval = PropDataVal(prptr);
+                    /* MUFINT, not int: property values and the MUF
+                     * stack are both 64-bit, and narrowing here
+                     * silently wrecked any value past 2^31 */
+                    MUFINT tval = PropDataVal(prptr);
 
                     PushInt(tval);
                     break;
@@ -338,7 +341,9 @@ void
 prim_envprop(PRIM_PROTOTYPE)
 {
     double fresult;
-    int result;
+    /* MUFINT: a 64-bit property value must not narrow on its way to
+     * the 64-bit stack */
+    MUFINT result;
 
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string argument (2)");
@@ -1053,12 +1058,15 @@ prim_array_filter_smart(PRIM_PROTOTYPE)
     const char *ptr;
     PropPtr prptr;
     int fflags;
-    int val_int = 0;
+    /* MUFINT throughout: both the filter's comparison value and the
+     * property value it is compared against are 64-bit, and
+     * narrowing either made large values compare wrong */
+    MUFINT val_int = 0;
     double val_flt = 0.0;
     dbref val_ref = 0;
     char val_str[BUFFER_LEN];
     dbref ref;
-    int result;
+    MUFINT result;
 
     //int outcount = 0;
 
@@ -1085,7 +1093,7 @@ prim_array_filter_smart(PRIM_PROTOTYPE)
             case PROG_STRING:
                 if (oper[0].data.string) {
                     strcpy(val_str, oper[0].data.string->data.c_str());
-                    val_int = atoi(val_str);
+                    val_int = (MUFINT) atoll(val_str);
                     val_ref = (dbref) atoi(val_str);
                     if (ifloat(val_str))
                         sscanf(val_str, "%lg", &val_flt);
@@ -1098,7 +1106,7 @@ prim_array_filter_smart(PRIM_PROTOTYPE)
                 sprintf(val_str, "%lld", (long long) oper[0].data.number);
                 break;
             case PROG_FLOAT:
-                val_int = (int) oper[0].data.fnumber;
+                val_int = (MUFINT) oper[0].data.fnumber;
                 val_ref = (dbref) oper[0].data.fnumber;
                 val_flt = oper[0].data.fnumber;
                 sprintf(val_str, "%#.15g", oper[0].data.fnumber);

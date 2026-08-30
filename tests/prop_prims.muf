@@ -114,5 +114,15 @@ var i
   ( build-feature compiler define: 64-bit MUF integers )
   HAVE_INT64 intostr "PI64:" t
 
+  ( a property value past 2^31 must survive GETPROP and ENVPROP
+    intact: both used to narrow it through a 32-bit local, so the
+    value came back wrapped while GETPROPVAL returned it correctly )
+  me @ "big64" 5000000000 setprop
+  me @ "big64" getprop intostr "PI64GET:" t
+  me @ "big64" getpropval intostr "PI64VAL:" t
+  me @ "big64" envprop swap pop intostr "PI64ENV:" t
+  me @ "neg64" -5000000000 setprop
+  me @ "neg64" getprop intostr "PI64NEG:" t
+
   "PDONE:ok" "" swap t
 ;
