@@ -1032,13 +1032,22 @@ fileToLoadShape(const json &j, const std::string &root)
      * same way ts is guarded just below. */
     {
         json fl = val("$core/flags");
+        bool flOk = fl.is_array() && fl.size() >= 4;
 
-        core["flags"] = (fl.is_array() && fl.size() >= 4)
-            ? fl : json::array({ 0, 0, 0, 0 });
+        core["flags"] = flOk ? fl : json::array({ 0, 0, 0, 0 });
         json pw = val("$core/powers");
+        bool pwOk = pw.is_array() && pw.size() >= 2;
 
-        core["powers"] = (pw.is_array() && pw.size() >= 2)
-            ? pw : json::array({ 0, 0 });
+        core["powers"] = pwOk ? pw : json::array({ 0, 0 });
+        /* The defaults keep one bad object from aborting the boot, but
+         * they are NOT a silent repair: zeroed flags means zeroed type
+         * bits, so the object would come back as an ordinary empty
+         * room and be persisted that way. Say so, loudly, and let the
+         * strict loader refuse unless --force-load. */
+        if (!flOk || !pwOk)
+            out["shape_damage"] = std::string("malformed ")
+                + (!flOk ? "$core/flags" : "$core/powers")
+                + " entry; the object would load as an empty room";
     }
 
     json tsl = val("$core/ts");
@@ -2443,6 +2452,11 @@ prepareStoreFile(const std::string &full, PreparedFile &out,
                 ++eit;
     }
     out.shape = fileToLoadShape(j, root);
+    if (out.shape.contains("shape_damage")) {
+        out.problems.push_back(full + ": "
+            + out.shape["shape_damage"].get<std::string>());
+        out.shape.erase("shape_damage");
+    }
     out.fileEntries = std::move(j["entries"]);
     out.j = json();             /* the raw parse is dead; free it */
 }
@@ -2599,6 +2613,12 @@ ObjectStore::loadAll()
         if (jd) {
             struct dirent *je;
 
+            /* errno guard, same as the object-file scan below: a
+             * readdir that stops on an I/O fault looks exactly like a
+             * clean end of directory, and a committed segment never
+             * enumerated would be silently dropped rather than
+             * replayed */
+            errno = 0;
             while ((je = readdir(jd)) != NULL) {
                 std::string n = je->d_name;
 
@@ -2616,6 +2636,10 @@ ObjectStore::loadAll()
                 else
                     committedSegs.push_back({seq, p});
             }
+            if (errno != 0)
+                damaged(root_ + "/journal: directory read failed "
+                        "mid-listing (" + std::string(strerror(errno))
+                        + "); committed segments may not have been seen");
             closedir(jd);
         }
         std::sort(committedSegs.begin(), committedSegs.end());
@@ -3940,6 +3964,25 @@ ObjectStore::persist(const CaptureSet &set)
     if (set.manifest.empty())
         return true;
 
+    /* A manifest that advertises journal_distributed = N tells the
+     * next boot it may DISCARD segments up to N without replaying
+     * them. Folding wrote those object files unsynced, so force them
+     * to the platter BEFORE the manifest makes that promise; doing it
+     * afterwards (as the unlink path did) left a window where a crash
+     * lost folded data the loader would then refuse to recover. */
+    if (set.distributedAtBuild > lastDurableDistributed_) {
+        int fd = open(root_.c_str(), O_RDONLY | O_DIRECTORY);
+
+        if (fd >= 0) {
+#ifdef __linux__
+            syncfs(fd);
+#else
+            sync();
+#endif
+            close(fd);
+        }
+        lastDurableDistributed_ = set.distributedAtBuild;
+    }
     if (!atomicWrite(root_ + "/manifest.json", set.manifest))
         return false;
     journalLandedCommitted_.store(set.committedAtBuild);
@@ -4277,21 +4320,24 @@ ObjectStore::persistPending()
 void
 ObjectStore::requestDumpStop()
 {
+    /* NO BLOCKING LOCKS ANYWHERE ON THIS PATH. panic() reaches here
+     * synchronously from a signal handler (bailout), and the thread
+     * the fault landed on may already hold either mutex, so taking
+     * one deadlocks that thread against itself and the crash hangs
+     * forever with nothing saved. The stop flags are atomic precisely
+     * so they can be raised without a lock; the queue is cleared only
+     * if the mutex happens to be free, and leaving it unclear is
+     * harmless because the workers check the stop flag anyway. */
     if (folderRunning_) {
-        {
-            std::unique_lock<std::mutex> lk(folderMutex_);
-
-            folderStop_ = true;
-        }
+        folderStop_.store(true);
         folderCv_.notify_all();
     }
     if (!dumpThreadRunning_)
         return;
-    {
-        std::unique_lock<std::mutex> hold(queueMutex_);
-
-        dumpThreadStop_ = true;
+    dumpThreadStop_.store(true);
+    if (queueMutex_.try_lock()) {
         queue_.clear();
+        queueMutex_.unlock();
     }
     queueCv_.notify_all();
 

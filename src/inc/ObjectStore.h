@@ -320,7 +320,10 @@ class ObjectStore {
     /* sealed but deliberately not yet written; drained by a dump */
     std::vector<CaptureSet> held_;
     bool dumpThreadRunning_ = false;
-    bool dumpThreadStop_ = false;
+    /* ATOMIC: panic runs from a signal handler and must be able to
+     * raise the stop flags without taking a mutex the interrupted
+     * thread may already hold. */
+    std::atomic<bool> dumpThreadStop_{false};
     bool persisting_ = false;
     std::atomic<bool> dumpLanded_{false};
     std::atomic<long> lastDumpLayers_{0};
@@ -376,13 +379,19 @@ class ObjectStore {
     std::condition_variable folderIdleCv_;  /* caught up */
     std::deque<CompactOrder> folderOrders_;
     bool folderRunning_ = false;
-    bool folderStop_ = false;
+    std::atomic<bool> folderStop_{false};   /* see dumpThreadStop_ */
     bool folderBusy_ = false;
     std::atomic<long> folderLagTarget_{8};
 
     /* serialized committed-index, spliced into the manifest; rebuilt
      * only when membership changes (see storeIndexInvalidate).
      * Atomic: parallel seal workers flip it via setBaseWritten. */
+    /* highest journal_distributed watermark whose folded bytes have
+     * been forced to the platter; a manifest must never advertise a
+     * watermark past this, or a crash loses folded-but-unwritten data
+     * that the loader will then refuse to replay */
+    long lastDurableDistributed_ = 0;
+
     std::string indexBlob_;
     std::atomic<bool> indexBlobDirty_{true};
 
