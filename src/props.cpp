@@ -117,6 +117,11 @@ sizeVisit(MUCK::PropNode *p, void *arg)
     *acc += sizeof(MUCK::PropNode) + strlen(p->name()) + 1;
     if (PropType(p) == PROP_STRTYP && p->strValue())
         *acc += strlen(p->strValue()) + 1;
+    /* a lock's boolexp tree is heap the property owns, so leaving it
+     * out made examine and SIZE() undercount every object carrying
+     * one */
+    if (PropType(p) == PROP_LOKTYP && p->lokValue())
+        *acc += size_boolexp(p->lokValue());
     if (p->isDir())
         *acc += size_proplist(&p->children());
 }

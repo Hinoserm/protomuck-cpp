@@ -34,10 +34,15 @@ MUCK::ProgramStore::logText(struct line *first, dbref player, dbref i)
         );
 
     while (first) {
-        if (!first->this_line)
-            continue;
-        fputs(first->this_line, f);
-        fputc('\n', f);
+        /* the continue has to advance the cursor too: skipping an
+         * empty line without it spins here forever, holding the game
+         * thread and an open log file. No current caller can pass a
+         * null this_line, which is why nobody has hit it, but the
+         * loop should not be one refactor away from hanging. */
+        if (first->this_line) {
+            fputs(first->this_line, f);
+            fputc('\n', f);
+        }
         first = first->next;
     }
     fputs("\n\n\n", f);
