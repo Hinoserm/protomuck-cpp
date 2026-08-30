@@ -3975,6 +3975,28 @@ ObjectStore::requestDumpStop()
         queue_.clear();
     }
     queueCv_.notify_all();
+
+    /* This is the PANIC path: the caller is about to run saveAll on
+     * its own thread, writing the same manifest and object files an
+     * in-flight persist or fold may still be renaming onto. If the
+     * worker's stale manifest rename lands AFTER panic's, the store
+     * reverts to the older committed index and the next boot discards
+     * panic's files as uncommitted, destroying exactly the data panic
+     * exists to save. Wait, bounded, for both workers to go quiet; a
+     * worker that IS the casualty never will, and after the timeout
+     * panic proceeds anyway, which is no worse than before. */
+    {
+        std::unique_lock<std::mutex> hold(queueMutex_);
+
+        idleCv_.wait_for(hold, std::chrono::seconds(10),
+                         [this] { return !persisting_; });
+    }
+    {
+        std::unique_lock<std::mutex> lk(folderMutex_);
+
+        folderIdleCv_.wait_for(lk, std::chrono::seconds(10),
+                               [this] { return !folderBusy_; });
+    }
 }
 
 void
