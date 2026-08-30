@@ -142,6 +142,11 @@ class ObjectStore {
         std::vector<long> survivors;
         std::vector<Marker> scopedKeep;
         bool reclaim = false;
+        /* failed base writes are retried, but not forever: an order
+         * that can never be written would otherwise hold
+         * folderOrders_ non-empty and with it every sync barrier,
+         * which is what rollback and scoped snapshot wait on */
+        int attempts = 0;
     };
 
     /* One fire's worth of frozen work: the layers sealed from every

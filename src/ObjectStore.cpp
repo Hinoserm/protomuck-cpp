@@ -2933,8 +2933,17 @@ ObjectStore::loadAll()
             uncommitted.push_back(prep.path);
             return;
         }
-        if (prep.skip)
+        if (prep.skip) {
+            /* A file kept for manual repair must also claim its
+             * journal entries. It returns before the merge that would
+             * normally set consumedUUID, so the journal-founded pass
+             * later saw the uuid still pending and rebuilt the object
+             * from a PARTIAL journal replay, walking straight around
+             * the review the quarantine exists to force. */
+            if (!prep.fileUUID.isNil())
+                consumedJournalUUIDs.push_back(prep.fileUUID.toString());
             return;
+        }
 
         const std::string &full = prep.path;
         UUID fileUUID = prep.fileUUID;
@@ -3899,8 +3908,20 @@ compactObjectFile(const std::string &root, const ObjectStore::CompactOrder &ord)
             base.erase("markers");
         else
             base["markers"] = keepMarkers;
-        if (!atomicWrite(path, base.dump(1)))
-            return 0;           /* keep the history if the base failed */
+        if (!atomicWrite(path, base.dump(1))) {
+            /* -1, not 0: the marker list this order trims was already
+             * trimmed in the object's in-memory mirror when the order
+             * was built, so silently dropping the order leaves memory
+             * and disk permanently disagreeing about which snapshots
+             * exist. A marker still on disk but gone from the mirror
+             * is unlistable, and the next sweep computes its
+             * survivors from the smaller set and can coalesce away
+             * the history that marker needed. Report it so the caller
+             * can retry and bring the file back into step. */
+            fprintf(stderr, "STORE: could not rewrite %s; compaction "
+                    "deferred\n", path.c_str());
+            return -1;          /* keep the history if the base failed */
+        }
     }
     if (merged) {
         /* unsynced: the base write above was fsynced, so it is
@@ -4371,7 +4392,30 @@ ObjectStore::folderThreadMain()
 
         try {
             if (haveOrder) {
-                compactObjectFile(root_, ord);
+                if (compactObjectFile(root_, ord) < 0) {
+                    /* Back on the queue: the mirror is already
+                     * trimmed, so the file has to catch up or the two
+                     * stay out of step forever. Bounded, and with a
+                     * backoff: an order that can never be written
+                     * would otherwise spin and keep folderOrders_
+                     * non-empty, and the sync barrier waits on that,
+                     * so every rollback and scoped snapshot would
+                     * refuse for as long as the disk stayed bad. */
+                    if (++ord.attempts < 3) {
+                        std::this_thread::sleep_for(
+                            std::chrono::seconds(5));
+                        std::unique_lock<std::mutex> lk(folderMutex_);
+
+                        folderOrders_.push_back(ord);
+                    } else {
+                        MUCK::store().healthDamagedObjectFile();
+                        fprintf(stderr, "STORE: giving up on compacting "
+                                "%s after %d attempts; its stored "
+                                "snapshot list now disagrees with the "
+                                "one in memory\n", ord.uuid.c_str(),
+                                ord.attempts);
+                    }
+                }
             } else {
                 long s = journalDistributed_.load() + 1;
                 long r = distributeOneSegment(s);
@@ -4890,7 +4934,12 @@ ObjectStore::gcStore()
 
     for (const auto &ord : orders) {
         try {
-            removed += compactObjectFile(root_, ord);
+            {
+                long r = compactObjectFile(root_, ord);
+
+                if (r > 0)
+                    removed += r;
+            }
         } catch (const std::exception &e) {
             fprintf(stderr, "STOREGC: compaction of %s failed: %s\n",
                     ord.uuid.c_str(), e.what());
