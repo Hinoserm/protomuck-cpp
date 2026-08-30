@@ -1853,13 +1853,58 @@ ObjectStore::rollbackObject(dbref i, long rev, std::string *err)
      * fields directly would leave the rollback unrecorded, and the
      * next restart would replay the pre-rollback state over it. */
 
-    /* A rollback that changes a player's name or turns something
-     * into or out of a player must keep the player-name lookup table
-     * in step, exactly as @name and @frob do; a restored player whose
-     * name is not in the table cannot log in until the next restart. */
-    bool wasPlayer = MUCK::typeOf(i) == TYPE_PLAYER;
+    /* State captured BEFORE anything is restored. The type decides
+     * which containment list the object currently sits in, and the
+     * restore below changes the type, so reading it afterwards
+     * detaches from the wrong list and leaves the object in two
+     * containers at once. */
+    ObjectType oldType = MUCK::typeOf(i);
+    bool wasPlayer = oldType == TYPE_PLAYER;
+    std::string oldName = wasPlayer && MUCK::getName(i)
+        ? MUCK::getName(i) : std::string();
+    std::string newName = e.contains("$core/name")
+        && e["$core/name"]["value"].is_string()
+        ? junstr(e["$core/name"]["value"].get<std::string>()) : oldName;
+    ObjectType newType = oldType;
 
-    if (wasPlayer)
+    if (e.contains("$core/flags")) {
+        const json &fl0 = e["$core/flags"]["value"];
+
+        if (fl0.is_array() && fl0.size() >= 1)
+            newType = (ObjectType) (fl0[0].get<int>() & TYPE_MASK);
+    }
+
+    /* A player's name lives in a shared lookup table, and rebuilding
+     * that entry also rotates their connect aliases away. Only touch
+     * it when the rollback actually changes the name or the type;
+     * rolling back an unrelated field (a description, say) must not
+     * cost the player their aliases. */
+    bool nameTableChanges = wasPlayer
+        && (newType != oldType || newName != oldName);
+
+    /* Restoring a name a DIFFERENT live player has since claimed
+     * would steal their lookup entry and leave them unreachable by
+     * name. Refuse rather than corrupt the table. */
+    if (nameTableChanges && newType == TYPE_PLAYER && !newName.empty()) {
+        dbref clash = lookup_player(newName.c_str());
+
+        if (clash != NOTHING && clash != i) {
+            if (err)
+                *err = "another player is named \"" + newName
+                    + "\" now; rename them first.";
+            return false;
+        }
+    }
+
+    /* A connected player being demoted out of playerhood must be
+     * disconnected first, exactly as @frob does: the module teardown
+     * below destroys the session, and the descriptor's owner checks
+     * gate on Typeof == TYPE_PLAYER, so afterwards nothing can find
+     * or boot the orphaned connection. */
+    if (wasPlayer && newType != TYPE_PLAYER)
+        boot_player_off(i);
+
+    if (nameTableChanges)
         delete_player(i);
 
     /* Life and death are just another entry. If the target revision
@@ -1953,7 +1998,9 @@ ObjectStore::rollbackObject(dbref i, long rev, std::string *err)
          * anywhere else, exactly as moveto does: attach alone leaves
          * the object listed in two containers at once */
         if (cur != NOTHING && MUCK::database().valid(cur)) {
-            if (MUCK::typeOf(i) == TYPE_EXIT)
+            /* oldType, not the restored type: the object is listed in
+             * whichever list its PRE-rollback type put it in */
+            if (oldType == TYPE_EXIT)
                 MUCK::detachExit(cur, i);
             else
                 MUCK::detachContent(cur, i);
@@ -1971,6 +2018,57 @@ ObjectStore::rollbackObject(dbref i, long rev, std::string *err)
              * pre-rollback container */
             MUCK::setLocation(i, NOTHING);
         }
+    }
+
+    /* Type-specific state is versioned like everything else and has
+     * to come back too. Without this a rolled-back exit kept whatever
+     * destinations it has NOW, which is the single most visible piece
+     * of an exit's state, and rooms, things and players kept their
+     * current dropto, home, value, pennies and password. Containment
+     * ($type/contents and $type/exits) is deliberately NOT restored:
+     * the objects in a room have moved on with their own lives, and
+     * the location restore above is the supported half of that. */
+    switch (MUCK::typeOf(i)) {
+        case TYPE_ROOM:
+            if (e.contains("$type/dropto"))
+                MUCK::roomSetDropToRef(i,
+                    refFromJson(e["$type/dropto"]["value"]));
+            break;
+        case TYPE_THING:
+            if (e.contains("$type/home"))
+                MUCK::thingSetHomeRef(i,
+                    refFromJson(e["$type/home"]["value"]));
+            if (e.contains("$type/value")
+                && e["$type/value"]["value"].is_number_integer())
+                MUCK::thingSetValue(i,
+                    e["$type/value"]["value"].get<int>());
+            break;
+        case TYPE_PLAYER:
+            if (e.contains("$type/home"))
+                MUCK::playerSetHomeRef(i,
+                    refFromJson(e["$type/home"]["value"]));
+            if (e.contains("$type/pennies")
+                && e["$type/pennies"]["value"].is_number_integer())
+                MUCK::playerSetPennies(i,
+                    e["$type/pennies"]["value"].get<int>());
+            /* the password is versioned too, but restoring it would
+             * silently hand an old credential back; leave it alone
+             * and let a wizard set one deliberately */
+            break;
+        case TYPE_EXIT:
+            if (e.contains("$type/dests")
+                && e["$type/dests"]["value"].is_array()) {
+                std::vector<dbref> dl;
+
+                for (const auto &dv : e["$type/dests"]["value"])
+                    dl.push_back(refFromJson(dv));
+                if (MUCK::Exit *x = MUCK::database().get(i)->As<MUCK::Exit>())
+                    x->setDestRefs(dl.empty() ? NULL : dl.data(),
+                                   (int) dl.size());
+            }
+            break;
+        default:
+            break;
     }
 
     /* properties: wipe and rebuild from the snapshot. The wipe has to
@@ -2006,7 +2104,7 @@ ObjectStore::rollbackObject(dbref i, long rev, std::string *err)
     }
 
     /* the other half of the name-table bracket above */
-    if (MUCK::typeOf(i) == TYPE_PLAYER)
+    if (nameTableChanges && MUCK::typeOf(i) == TYPE_PLAYER)
         add_player(i);
 
     DBDIRTY(i);
