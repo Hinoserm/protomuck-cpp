@@ -2717,7 +2717,16 @@ ObjectStore::loadAll()
 
                 prepareStoreFile(jsonFiles[i], prep, index, indexUUIDs, top, root_,
                                  journalReplay);
-                applyPrepared(prep);
+                /* the producer side is guarded; guard the consumer
+                 * too, or a bad_alloc here aborts the whole boot
+                 * instead of costing one object */
+                try {
+                    applyPrepared(prep);
+                } catch (const std::exception &e) {
+                    healthWorkerException();
+                    damaged(prep.path + ": failed to apply ("
+                            + e.what() + ")");
+                }
             }
         } else {
             std::vector<PreparedFile> ring(window);
@@ -2786,7 +2795,16 @@ ObjectStore::loadAll()
                     applied = i + 1;
                 }
                 canProduce.notify_all();
-                applyPrepared(prep);
+                /* the producer side is guarded; guard the consumer
+                 * too, or a bad_alloc here aborts the whole boot
+                 * instead of costing one object */
+                try {
+                    applyPrepared(prep);
+                } catch (const std::exception &e) {
+                    healthWorkerException();
+                    damaged(prep.path + ": failed to apply ("
+                            + e.what() + ")");
+                }
             }
             for (auto &th : pool)
                 th.join();
@@ -3951,8 +3969,15 @@ ObjectStore::folderThreadMain()
                         fprintf(stderr, "STORE: segment %ld damaged; "
                                 "quarantined as %s.damaged\n", s,
                                 journalSegmentPath(s).c_str());
-                        rename(journalSegmentPath(s).c_str(),
-                               (journalSegmentPath(s) + ".damaged").c_str());
+                        /* if the preservation rename fails, leave the
+                         * segment alone rather than advancing past it
+                         * and letting the unlink destroy the evidence */
+                        if (rename(journalSegmentPath(s).c_str(),
+                                   (journalSegmentPath(s) + ".damaged").c_str())
+                            != 0)
+                            fprintf(stderr, "STORE: could not quarantine "
+                                    "segment %ld (%s); leaving it in "
+                                    "place\n", s, strerror(errno));
                     }
                     journalDistributed_.store(s);
                 }
@@ -4041,6 +4066,16 @@ ObjectStore::dumpThreadMain()
                 healthFailedPersist();
                 fprintf(stderr, "DUMP: PERSIST FAILED for rev %ld after "
                         "3 attempts; those changes are lost\n", set.rev);
+                /* KNOWN GAP: a full-sealed layer in this set already
+                 * flipped its object's baseWritten true on the game
+                 * thread, so a later manifest's index will claim a
+                 * base that was never written and the next boot
+                 * refuses over it (fail-safe, --force-load recovers).
+                 * Repairing it means reaching into live objects from
+                 * this thread, which the design forbids; the correct
+                 * fix is a failed-set queue the game thread drains.
+                 * Only reachable after three consecutive write
+                 * failures, i.e. a disk that is already gone. */
             }
             idleCv_.notify_all();
         }
