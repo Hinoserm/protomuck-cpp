@@ -203,8 +203,15 @@ floatToJson(double d)
 {
     if (std::isfinite(d))
         return json(d);
-    if (std::isnan(d))
-        return json("nan");
+    if (std::isnan(d)) {
+        /* the SIGN survives too. MUF can produce and observe -nan
+         * (FABS and the comparison prims see the difference), and the
+         * persistence invariant is that a dump and reload with no MUF
+         * mutation in between changes nothing observable; collapsing
+         * -nan to nan broke exactly that. The payload is not
+         * preserved, which no MUF prim can observe. */
+        return json(std::signbit(d) ? "-nan" : "nan");
+    }
     return json(d > 0 ? "inf" : "-inf");
 }
 
@@ -224,6 +231,8 @@ jsonToFloat(const json &v, bool *ok)
             return -HUGE_VAL;
         if (s == "nan")
             return std::nan("");
+        if (s == "-nan")
+            return -std::nan("");
     }
     /* null: a non-finite value written before this encoding existed */
     if (ok)
@@ -388,6 +397,14 @@ static void
 propsFromJson(dbref obj, const json &arr)
 {
     for (const auto &entry : arr) {
+        /* .value() on a non-object throws, and the throw escapes past
+         * every remaining property, the module attach, and the
+         * containment wiring for this object: one bad property entry
+         * cost the whole object its phase-two load, which is not what
+         * this function's own per-entry skips promise. */
+        if (!entry.is_object())
+            continue;
+
         std::string name = junstr(entry.value("name", ""));
         int flags = entry.value("flags", 0);
         PData pdat;
@@ -1809,7 +1826,12 @@ entriesAtRev(const json &file, const std::string &hist, long rev)
      * revision stamped on the file. A base written after the target
      * revision cannot be walked backwards, so its entries are still
      * the starting point; the layers below only move forward. */
-    if (file.contains("entries"))
+    /* is_object, not merely contains: a damaged file whose "entries"
+     * is a string or an array reaches the iteration below (and the
+     * caller's property wipe) and throws invalid_iterator, which
+     * nothing in the command dispatch path catches. compactObjectFile
+     * checks the same field; this did not. */
+    if (file.contains("entries") && file["entries"].is_object())
         out = file["entries"];
 
     /* Apply every layer up to and including the target era, in the
@@ -1820,7 +1842,8 @@ entriesAtRev(const json &file, const std::string &hist, long rev)
     while (std::getline(hs, line)) {
         json layer = json::parse(line, nullptr, false);
 
-        if (layer.is_discarded() || !layer.contains("entries"))
+        if (layer.is_discarded() || !layer.contains("entries")
+            || !layer["entries"].is_object())
             continue;
         if (layer.value("era", 0L) > rev)
             break;              /* layers are appended in era order */
@@ -1916,6 +1939,53 @@ ObjectStore::rollbackObject(dbref i, long rev, std::string *err)
             *err = "nothing is reconstructable at revision "
                 + std::to_string(rev) + ".";
         return false;
+    }
+
+    /* Validate the numeric core arrays BEFORE touching anything.
+     * These were read with a bare .get<int>() guarded only on array
+     * size, so a damaged element type threw json::type_error out of
+     * a command handler that catches nothing: the server went down
+     * for every connected player, and it went down PART WAY THROUGH
+     * the restore, with some fields already applied and journalled.
+     * Refusing up front is the only outcome that leaves the object
+     * as it was. */
+    {
+        auto wellFormed = [&e](const char *key, size_t need) {
+            auto it = e.find(key);
+
+            if (it == e.end())
+                return true;    /* absent is fine; it just is not restored */
+            if (!it->is_object() || !it->contains("value"))
+                return false;
+
+            const json &v = (*it)["value"];
+
+            if (!v.is_array() || v.size() < need)
+                return false;
+            for (const auto &el : v)
+                if (!el.is_number_integer())
+                    return false;
+            return true;
+        };
+
+        const char *bad = nullptr;
+
+        if (!wellFormed("$core/flags", 4))
+            bad = "$core/flags";
+        else if (!wellFormed("$core/powers", 2))
+            bad = "$core/powers";
+        else if (!wellFormed("$core/ts", 7))
+            bad = "$core/ts";
+        else if (!wellFormed("$core/deleted", 0))
+            bad = "$core/deleted";
+        if (bad) {
+            if (err)
+                *err = std::string("stored state at revision ")
+                    + std::to_string(rev) + " has a damaged " + bad
+                    + " field; refusing rather than restoring it "
+                      "half way.";
+            return false;
+        }
     }
 
     /* Everything a rollback restores goes through the setters, so the
@@ -2163,6 +2233,15 @@ ObjectStore::rollbackObject(dbref i, long rev, std::string *err)
         if (!ObjectStore::moduleExcluded("properties"))
             propsFromJson(i, props);
     }
+
+    /* A rollback that changes the type AWAY from program leaves the
+     * compiled bytecode, the editor buffer, and the pubs table
+     * attached to an object that is no longer a program: nothing
+     * reaches them again and nothing frees them. The source-restore
+     * below uncompiles too, but only when the snapshot carried
+     * source, so a type-only rollback slipped past it. */
+    if (oldType == TYPE_PROGRAM && newType != TYPE_PROGRAM)
+        uncompile_program(i);
 
     /* program source */
     if (Typeof(i) == TYPE_PROGRAM && e.contains("$type/source")) {
@@ -2569,6 +2648,17 @@ ObjectStore::loadAll()
     MUCK::PasswordHash::enabled = manifest.value("hash_passwords", false);
     MUCK::PasswordHash::version = manifest.value("hash_version", 0);
 
+    std::vector<std::string> problems;
+    std::vector<std::string> uncommitted;
+    auto damaged = [&problems](const std::string &msg) {
+        /* both channels: a serving boot has detached and closed
+         * stderr by the time the store loads, so the log file is the
+         * only place an operator can read the failure */
+        fprintf(stderr, "STORE: %s\n", msg.c_str());
+        log_status("STORE: %s\n", msg.c_str());
+        problems.push_back(msg);
+    };
+
     rev_ = manifest.value("rev", 0L);
     markers_ = markersFromJson(manifest.value("markers", json::array()));
     /* nothing read from disk is a change: setters record nothing for
@@ -2580,20 +2670,36 @@ ObjectStore::loadAll()
     journalLandedCommitted_.store(journalSeq_);
     journalUnlinked_.store(journalDistributed_.load());
 
+    /* A hand-edited manifest whose tombstones or parms fields are the
+     * wrong shape threw json::type_error straight out of the boot,
+     * which is the one outcome the loader is designed not to have:
+     * every other malformed input here is reported and refused, so
+     * the operator learns what is wrong instead of watching the
+     * process die. */
     if (manifest.contains("tombstones")) {
-        std::vector<Database::Tombstone> list;
+        try {
+            std::vector<Database::Tombstone> list;
 
-        for (const auto &e : manifest["tombstones"]) {
-            Database::Tombstone t;
+            if (!manifest["tombstones"].is_array())
+                throw std::runtime_error("not an array");
+            for (const auto &e : manifest["tombstones"]) {
+                Database::Tombstone t;
 
-            t.uuid = UUID::parse(e.value("uuid", "").c_str());
-            t.ref = (dbref) e.value("dbref", -1);
-            t.deletedAt = e.value("deleted_at", 0L);
-            t.deletedBy = UUID::parse(e.value("deleted_by", "").c_str());
-            t.deletedRev = e.value("deleted_rev", 0L);
-            list.push_back(t);
+                if (!e.is_object())
+                    throw std::runtime_error("entry is not an object");
+                t.uuid = UUID::parse(e.value("uuid", "").c_str());
+                t.ref = (dbref) e.value("dbref", -1);
+                t.deletedAt = e.value("deleted_at", 0L);
+                t.deletedBy = UUID::parse(e.value("deleted_by", "").c_str());
+                t.deletedRev = e.value("deleted_rev", 0L);
+                list.push_back(t);
+            }
+            MUCK::database().setTombstones(std::move(list));
+        } catch (const std::exception &ex) {
+            damaged(std::string("manifest tombstones are malformed (")
+                    + ex.what() + "); a tombstoned object could be "
+                    "wrongly resurrected");
         }
-        MUCK::database().setTombstones(std::move(list));
     }
 
     /* A recycled object still has a file for as long as a snapshot
@@ -2610,18 +2716,29 @@ ObjectStore::loadAll()
     MUCK::database().ensureTop(top);
 
     if (manifest.contains("parms")) {
-        std::string text;
+        try {
+            std::string text;
 
-        for (const auto &l : manifest["parms"])
-            text += junstr(l.get<std::string>()) + "\n";
+            if (!manifest["parms"].is_array())
+                throw std::runtime_error("not an array");
+            for (const auto &l : manifest["parms"]) {
+                if (!l.is_string())
+                    throw std::runtime_error("entry is not a string");
+                text += junstr(l.get<std::string>()) + "\n";
+            }
 
-        FILE *pf = fmemopen((void *) text.data(), text.size(), "r");
+            FILE *pf = fmemopen((void *) text.data(), text.size(), "r");
 
-        if (pf) {
-            tune_load_parms_from_file(pf, NOTHING, -1);
-            fclose(pf);
-            log_status("STORE: applied %d tune parms from the manifest\n",
-                       (int) manifest["parms"].size());
+            if (pf) {
+                tune_load_parms_from_file(pf, NOTHING, -1);
+                fclose(pf);
+                log_status("STORE: applied %d tune parms from the "
+                           "manifest\n", (int) manifest["parms"].size());
+            }
+        } catch (const std::exception &ex) {
+            damaged(std::string("manifest parms are malformed (")
+                    + ex.what() + "); server settings would silently "
+                    "revert to compiled defaults");
         }
     }
 
@@ -2641,16 +2758,6 @@ ObjectStore::loadAll()
      * lost at a crash. Without the discard, the dbref such a file
      * claims can be reassigned by the recovered world, and the next
      * boot would find two files claiming one slot. */
-    std::vector<std::string> problems;
-    std::vector<std::string> uncommitted;
-    auto damaged = [&problems](const std::string &msg) {
-        /* both channels: a serving boot has detached and closed
-         * stderr by the time the store loads, so the log file is the
-         * only place an operator can read the failure */
-        fprintf(stderr, "STORE: %s\n", msg.c_str());
-        log_status("STORE: %s\n", msg.c_str());
-        problems.push_back(msg);
-    };
     const json *index = manifest.contains("index")
         && manifest["index"].is_object() ? &manifest["index"] : nullptr;
     /* reverse of the index: every committed uuid, to tell a file with
@@ -2921,8 +3028,22 @@ ObjectStore::loadAll()
             for (size_t i = 0; i < nfiles; i++) {
                 PreparedFile prep;
 
-                prepareStoreFile(jsonFiles[i], prep, index, indexUUIDs, top, root_,
-                                 journalReplay);
+                /* The pooled branch guards this call; the serial one
+                 * did not, so a single malformed file aborted the
+                 * entire boot for exactly the installs that take this
+                 * branch: small or fresh stores (under 64 objects)
+                 * and single-core hardware. */
+                try {
+                    prepareStoreFile(jsonFiles[i], prep, index, indexUUIDs,
+                                     top, root_, journalReplay);
+                } catch (const std::exception &e) {
+                    healthWorkerException();
+                    prep = PreparedFile();
+                    prep.path = jsonFiles[i];
+                    prep.skip = true;
+                    prep.problems.push_back(jsonFiles[i] + ": unreadable ("
+                                            + e.what() + ")");
+                }
                 /* the producer side is guarded; guard the consumer
                  * too, or a bad_alloc here aborts the whole boot
                  * instead of costing one object */
@@ -3109,20 +3230,58 @@ ObjectStore::loadAll()
         json fileEntries = j["entries"];
         json fileMods = j.value("modules", json::array());
 
-        j = fileToLoadShape(j, root_);
-        objectFromJsonPhase1(j, later);
-        if (DbObject *bo = MUCK::database().get(claimed)) {
-            bo->setBaseWritten(true);
-            if (bo->isDeleted() && delEra >= 0)
-                bo->setDeletedRev(delEra);
-        }
-        if (!later.empty() && later.back().ref == claimed
-            && !fileMods.empty()) {
-            /* same rule as the file path: only feature modules read
-             * this, and holding it otherwise doubles peak load memory */
-            later.back().entries = std::move(fileEntries);
-            for (const auto &mn : fileMods)
-                later.back().modules.push_back(mn.get<std::string>());
+        /* An object founded from the journal is one that was created
+         * or edited recently enough that its file has not been folded
+         * yet, which is the COMMON case for anything touched near a
+         * restart. It has to get the same treatment the file path
+         * gives, or it silently loses data the file path would keep:
+         *
+         *  - dormant namespaces. fileToLoadShape drops keys no loaded
+         *    module claims, and the file path stashes those in
+         *    dormantEntries so the next save re-emits them verbatim.
+         *    Without the stash, a feature module's data on a
+         *    not-yet-folded object is gone the first time the object
+         *    is saved.
+         *  - an exception guard. Every sibling consumer of
+         *    fileToLoadShape/objectFromJsonPhase1 has one; this call
+         *    site did not, so one malformed journal record took the
+         *    whole boot down instead of being reported as one
+         *    damaged object. */
+        try {
+            UUID fu = UUID::parse(kv.first);
+            json unknown = json::object();
+
+            for (auto eit = fileEntries.begin();
+                 eit != fileEntries.end(); ++eit)
+                if (!knownNamespace(eit.key()))
+                    unknown[eit.key()] = eit.value();
+            if (!unknown.empty())
+                dormantEntries[fu] = std::move(unknown);
+            if (!fileMods.empty())
+                dormantModules[fu] = fileMods;
+
+            j = fileToLoadShape(j, root_);
+            objectFromJsonPhase1(j, later);
+            if (DbObject *bo = MUCK::database().get(claimed)) {
+                bo->setBaseWritten(true);
+                if (bo->isDeleted() && delEra >= 0)
+                    bo->setDeletedRev(delEra);
+            }
+            if (!later.empty() && later.back().ref == claimed
+                && !fileMods.empty()) {
+                /* same rule as the file path: only feature modules
+                 * read this, and holding it otherwise doubles peak
+                 * load memory */
+                later.back().entries = std::move(fileEntries);
+                for (const auto &mn : fileMods)
+                    later.back().modules.push_back(mn.get<std::string>());
+            }
+        } catch (const std::exception &e) {
+            healthWorkerException();
+            damaged("journal object uuid " + kv.first + " (#"
+                    + std::to_string(claimed) + ") failed to load ("
+                    + e.what() + ")");
+            continue;
         }
         refClaimed[claimed] = "journal:" + kv.first;
     }
@@ -3223,6 +3382,10 @@ ObjectStore::loadAll()
                 try {
                     objectFromJsonPhase2(later[k]);
                 } catch (const std::exception &e) {
+                    /* an object silently losing its properties and
+                     * links is a real failure class, and this is the
+                     * one metric meant to surface it */
+                    MUCK::store().healthWorkerException();
                     fprintf(stderr, "STORE: #%d failed to load its "
                             "properties or links: %s\n",
                             later[k].ref, e.what());
@@ -3592,8 +3755,19 @@ compactObjectFile(const std::string &root, const ObjectStore::CompactOrder &ord)
         return 0;
     json base = json::parse(bf, nullptr, false);
     bf.close();
-    if (base.is_discarded() || !base.contains("entries"))
-        return 0;               /* damage; the loader reports it */
+    if (base.is_discarded() || !base.contains("entries")
+        || !base["entries"].is_object()) {
+        /* "the loader reports it" is true only of the NEXT boot. A
+         * live server folds over this file every dump and can run for
+         * weeks with it silently corrupt, no log line and no counter,
+         * while the segment-level equivalent shouts. Say it once per
+         * fold so an operator finds out while the journal copy still
+         * exists. */
+        MUCK::store().healthDamagedObjectFile();
+        fprintf(stderr, "STORE: object file %s is unreadable or "
+                "malformed; skipping its fold\n", path.c_str());
+        return 0;
+    }
 
     json keepMarkers = json::array();
 
@@ -4533,8 +4707,15 @@ ObjectStore::requestDumpStop()
      * mutex, or a worker that is itself the casualty, simply means
      * panic goes ahead without the barrier, which is exactly the
      * pre-existing behavior and no worse. */
+    /* 10s per worker, not 2. A persist on a large store routinely
+     * runs longer than two seconds, and giving up early is not free:
+     * it is precisely the case where a worker's stale manifest rename
+     * lands after panic's and the next boot throws panic's files away
+     * as uncommitted. Twenty seconds of extra latency on a process
+     * that is already crashing is a good trade for the dump it exists
+     * to write. */
     auto spinUntil = [](std::mutex &m, auto quiet) {
-        for (int i = 0; i < 200; i++) {   /* ~2s at 10ms */
+        for (int i = 0; i < 1000; i++) {  /* ~10s at 10ms */
             if (m.try_lock()) {
                 bool ok = quiet();
 

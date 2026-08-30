@@ -67,6 +67,22 @@ Database::assignUUID(dbref ref, const UUID &u)
 
     std::unique_lock<std::shared_mutex> hold(indexMutex_);
 
+    if (!u.isNil()) {
+        auto clash = byUUID_.find(u);
+
+        /* A UUID is the object's on-disk file path. Letting two
+         * objects hold one means whichever is dirtied next silently
+         * clobbers the other's stored state, with no error at any
+         * point. Refuse the assignment and say so: the object keeps
+         * the identity it had (or stays unidentified and gets a fresh
+         * one), which is recoverable, where an aliased write is not. */
+        if (clash != byUUID_.end() && clash->second != o) {
+            fprintf(stderr, "DB: refusing to assign UUID %s to #%d; "
+                    "#%d already holds it\n", u.toString().c_str(),
+                    (int) ref, (int) clash->second->ref());
+            return;
+        }
+    }
     if (!o->uuid_.isNil())
         byUUID_.erase(o->uuid_);
     o->uuid_ = u;
@@ -223,6 +239,13 @@ Database::freeObject(dbref i)
 #ifndef SANITY
     if (Typeof(i) == TYPE_PROGRAM) {
         uncompile_program(i);
+        /* uncompile drops the compiled form; the SOURCE text was kept
+         * indefinitely, so every recycled program's listing stayed
+         * resident for the life of the process. The .m file is
+         * already unlinked by the recycle path, and a rollback
+         * restores $type/source from the snapshot, so nothing needs
+         * the in-memory copy once the object is dead. */
+        MUCK::programs().dropSource(i);
     }
 #endif
     /* DBDIRTY(i); */

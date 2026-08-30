@@ -262,13 +262,14 @@ class ObjectStore {
         unsigned long failedPersists;
         unsigned long failedFolds;
         unsigned long damagedSegments;
+        unsigned long damagedObjectFiles;
         unsigned long barrierTimeouts;
         unsigned long workerExceptions;
     };
     Health healthSnapshot() const {
         return { hFailedPersists_.load(), hFailedFolds_.load(),
-                 hDamagedSegments_.load(), hBarrierTimeouts_.load(),
-                 hWorkerExceptions_.load() };
+                 hDamagedSegments_.load(), hDamagedObjectFiles_.load(),
+                 hBarrierTimeouts_.load(), hWorkerExceptions_.load() };
     }
 
     /* A full-object layer that never reached the disk. fire() flips
@@ -457,12 +458,14 @@ class ObjectStore {
     std::atomic<unsigned long> hFailedFolds_{0};
     std::atomic<unsigned long> hDamagedSegments_{0};
     std::atomic<unsigned long> hBarrierTimeouts_{0};
+    std::atomic<unsigned long> hDamagedObjectFiles_{0};
     std::atomic<unsigned long> hWorkerExceptions_{0};
 
   public:
     void healthFailedPersist() { hFailedPersists_.fetch_add(1); }
     void healthFailedFold() { hFailedFolds_.fetch_add(1); }
     void healthDamagedSegment() { hDamagedSegments_.fetch_add(1); }
+    void healthDamagedObjectFile() { hDamagedObjectFiles_.fetch_add(1); }
     void healthBarrierTimeout() { hBarrierTimeouts_.fetch_add(1); }
     void healthWorkerException() { hWorkerExceptions_.fetch_add(1); }
 

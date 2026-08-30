@@ -658,6 +658,19 @@ timestr_full(time_t dtime)
     static char buf[32];
     time_t days, hours, minutes;
 
+    /* A negative value is formatted with ONE leading sign and
+     * absolute components. Splitting the sign across the fields (the
+     * old behaviour) does not survive its own parser: a value of -30
+     * printed "0d 0:00:-30", and the reader's %2d stops after "-3",
+     * so the parm came back as -3. This is the format the manifest
+     * stores, so a self-inconsistent round trip silently rewrote the
+     * setting on every boot. */
+    const char *sign = "";
+
+    if (dtime < 0) {
+        sign = "-";
+        dtime = -dtime;
+    }
     days = dtime / 86400;
     dtime %= 86400;
     hours = dtime / 3600;
@@ -665,7 +678,8 @@ timestr_full(time_t dtime)
     minutes = dtime / 60;
     dtime %= 60;
 
-    sprintf(buf, "%3dd %2d:%02d:%02d", (int) days, (int) hours, (int) minutes, (int) dtime);
+    sprintf(buf, "%s%3dd %2d:%02d:%02d", sign, (int) days, (int) hours,
+            (int) minutes, (int) dtime);
 
     return buf;
 }
@@ -1081,6 +1095,11 @@ tune_setparm(const dbref player, const char *parmname, const char *val)
                 && (WLevel(MUCK::getOwner(player)) < ttim->writemlev))
                 return TUNESET_NOPERM;
             days = hrs = mins = secs = 0;
+            /* An empty value made this point one byte BEFORE the
+             * buffer, and both the read below and the '\0' store in
+             * every lettered case then ran off the front of it. */
+            if (!parmval || !*parmval)
+                return TUNESET_SYNTAX;
             end = parmval + strlen(parmval) - 1;
             switch (*end) {
                 case 's':
@@ -1112,9 +1131,29 @@ tune_setparm(const dbref player, const char *parmname, const char *val)
                     days = atoi(parmval);
                     break;
                 default:
-                    result = sscanf(parmval, "%dd %2d:%2d:%2d", &days, &hrs, &mins, &secs);
-                    if (result != 4)
-                        return 2;
+                    {
+                        const char *body = parmval;
+                        int neg = 0;
+
+                        /* matches timestr_full: one leading sign,
+                         * absolute components after it */
+                        while (*body == ' ')
+                            body++;
+                        if (*body == '-') {
+                            neg = 1;
+                            body++;
+                        }
+                        result = sscanf(body, "%dd %2d:%2d:%2d",
+                                        &days, &hrs, &mins, &secs);
+                        if (result != 4)
+                            return 2;
+                        if (neg) {
+                            days = -days;
+                            hrs = -hrs;
+                            mins = -mins;
+                            secs = -secs;
+                        }
+                    }
                     break;
             }
             *ttim->tim = (days * 86400) + (3600 * hrs) + (60 * mins) + secs;

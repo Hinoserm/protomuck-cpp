@@ -537,13 +537,16 @@ do_stats(dbref player, const char *name)
         MUCK::ObjectStore::Health h = MUCK::store().healthSnapshot();
 
         if (h.failedPersists || h.failedFolds || h.damagedSegments
-            || h.barrierTimeouts || h.workerExceptions)
+            || h.damagedObjectFiles || h.barrierTimeouts
+            || h.workerExceptions)
             anotify_fmt(player, SYSRED
                         "STORE HEALTH: %lu failed persist(s), %lu failed "
-                        "fold(s), %lu damaged segment(s), %lu barrier "
-                        "timeout(s), %lu worker exception(s) since boot",
+                        "fold(s), %lu damaged segment(s), %lu damaged "
+                        "object file(s), %lu barrier timeout(s), %lu "
+                        "worker exception(s) since boot",
                         h.failedPersists, h.failedFolds, h.damagedSegments,
-                        h.barrierTimeouts, h.workerExceptions);
+                        h.damagedObjectFiles, h.barrierTimeouts,
+                        h.workerExceptions);
         else
             anotify_fmt(player, SYSGREEN
                         "STORE HEALTH: nominal (no persist/fold failures "

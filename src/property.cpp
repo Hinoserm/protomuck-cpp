@@ -58,7 +58,13 @@ prop_value_equals(PropPtr p, PData *dat)
              * Reachable now that non-finite floats survive load. */
             double a = PropDataFVal(p), b = dat->data.fval;
 
-            return (a != a && b != b) || a == b;
+            /* sign-aware: the store now round-trips -nan distinctly
+             * from nan, so treating the two as equal here would make
+             * a write of one over the other a skipped no-op and leave
+             * the halves disagreeing about what the object holds */
+            if (a != a && b != b)
+                return std::signbit(a) == std::signbit(b);
+            return a == b;
         }
         case PROP_REFTYP:
             return PropDataRef(p) == dat->data.ref;
@@ -95,6 +101,16 @@ set_property_nofetch(dbref object, const char *pname, PData * dat, bool pure)
 
     if (!*buf)
         return;
+
+    /* The module-presence check has to come BEFORE the flag stamping,
+     * not after it. These flags are a cache of "this object has a
+     * listen/command property"; setting them for a write that is
+     * about to be discarded leaves the object permanently and
+     * persistently advertising a property it does not have, with
+     * nothing able to clear it, since the clearing path is driven by
+     * the same absent module. */
+    if (!MUCK::propRoot(object))
+        return;                 /* Properties module absent */
 
     if ((!(FLAGS(object) & LISTENER)) &&
         (string_prefix(buf, "_listen") ||
