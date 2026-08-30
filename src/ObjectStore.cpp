@@ -186,6 +186,47 @@ static bool markerInWindow(long from, long to,
 /* and comes back identical.                                          */
 /* ------------------------------------------------------------------ */
 
+/* JSON cannot represent a non-finite double: nlohmann silently dumps
+ * infinity and NaN as the literal null, and reading that back throws
+ * type_error inside whatever thread is loading. Ordinary MUF float
+ * math produces infinity without any error flag (1e308 1e308 F+), so
+ * a single unprivileged property set would otherwise bake a value
+ * into the store that makes every later boot abort. Non-finite values
+ * therefore travel as strings, which round-trip exactly; finite ones
+ * keep their plain JSON number, so existing files are unchanged. */
+static json
+floatToJson(double d)
+{
+    if (std::isfinite(d))
+        return json(d);
+    if (std::isnan(d))
+        return json("nan");
+    return json(d > 0 ? "inf" : "-inf");
+}
+
+static double
+jsonToFloat(const json &v, bool *ok)
+{
+    if (ok)
+        *ok = true;
+    if (v.is_number())
+        return v.get<double>();
+    if (v.is_string()) {
+        const std::string s = v.get<std::string>();
+
+        if (s == "inf")
+            return HUGE_VAL;
+        if (s == "-inf")
+            return -HUGE_VAL;
+        if (s == "nan")
+            return std::nan("");
+    }
+    /* null: a non-finite value written before this encoding existed */
+    if (ok)
+        *ok = false;
+    return 0.0;
+}
+
 static std::string
 jstr(const char *s)
 {
@@ -292,7 +333,7 @@ propsToJson(json &arr, const char *dir, PropDirPtr d)
                 if (!PropDataFVal(p))
                     keep = false;
                 else
-                    v = PropDataFVal(p);
+                    v = floatToJson(PropDataFVal(p));
                 break;
             case PROP_REFTYP:
                 if (PropDataRef(p) == NOTHING)
@@ -346,26 +387,47 @@ propsFromJson(dbref obj, const json &arr)
         const json &v = entry["value"];
         std::string sval;
 
+        /* Every access below is TYPE-GUARDED. This data comes off
+         * disk, an unchecked .get<T>() throws on the first mismatched
+         * field, and this runs inside a parallel load worker where an
+         * escaping exception would terminate the process instead of
+         * being reported as damage. A wrong-typed value loses that one
+         * property, not the server. */
         switch (pdat.flags & PROP_TYPMASK) {
             case PROP_STRTYP:
+                if (!v.is_string())
+                    continue;
                 pdat.flags &= ~PROP_ISUNLOADED;
                 sval = junstr(v.get<std::string>());
                 pdat.data.str = (char *) sval.c_str();
                 set_property_nofetch(obj, name.c_str(), &pdat, 1);
                 continue;
             case PROP_LOKTYP:
+                if (!v.is_string())
+                    continue;
                 pdat.flags &= ~PROP_ISUNLOADED;
                 sval = junstr(v.get<std::string>());
                 pdat.data.lok = parse_boolexp(-1, (dbref) 1, sval.c_str(), 32767);
                 break;
             case PROP_INTTYP:
+                if (!v.is_number_integer())
+                    continue;
                 pdat.data.val = v.get<int64_t>();
                 break;
-            case PROP_FLTTYP:
-                pdat.data.fval = v.get<double>();
+            case PROP_FLTTYP: {
+                bool ok = true;
+
+                pdat.data.fval = jsonToFloat(v, &ok);
+                if (!ok)
+                    fprintf(stderr, "STORE: #%d property \"%s\" had an "
+                            "unrepresentable float; loaded as 0\n",
+                            obj, name.c_str());
                 break;
+            }
             case PROP_REFTYP:
-                pdat.data.ref = (dbref) v.get<int>();
+                if (!v.is_number_integer())
+                    continue;
+                pdat.data.ref = (dbref) v.get<int64_t>();
                 break;
             default:
                 continue;
@@ -630,7 +692,7 @@ entryValueOf(dbref i, const std::string &key)
             case PROP_FLTTYP:
                 if (!PropDataFVal(p))
                     return json();
-                v = PropDataFVal(p);
+                v = floatToJson(PropDataFVal(p));
                 t = "float";
                 break;
             case PROP_REFTYP:
@@ -2371,6 +2433,9 @@ ObjectStore::loadAll()
      * an order of magnitude bigger than its file, and holding a
      * hundred thousand of them at once was an OOM kill, not a
      * speedup. --- */
+    /* journal keys the applier consumed; erased once the parse pool
+     * has joined (the workers read the map concurrently) */
+    std::vector<std::string> consumedJournalUUIDs;
     auto applyPrepared = [&](PreparedFile &prep) {
         for (const auto &msg : prep.problems)
             damaged(msg);
@@ -2398,8 +2463,14 @@ ObjectStore::loadAll()
             }
             refClaimed[claimed] = full;
         }
+        /* NOT erased here: the parse workers are still running and
+         * are calling journalReplay.find() concurrently, so mutating
+         * the map now is undefined behavior. Consumed keys are
+         * collected and erased after the pool joins; the only later
+         * reader is the journal-founded-object pass, which sees the
+         * same result either way. */
         if (!prep.consumedUUID.empty())
-            journalReplay.erase(prep.consumedUUID);
+            consumedJournalUUIDs.push_back(prep.consumedUUID);
 
         if (prep.noEntries) {
             damaged(full + ": no entry model; this store predates "
@@ -2486,8 +2557,19 @@ ObjectStore::loadAll()
 
                     PreparedFile tmp;
 
-                    prepareStoreFile(jsonFiles[i], tmp, index, top, root_,
-                                     journalReplay);
+                    /* an escaping exception here would terminate the
+                     * process; a bad file is damage, not a crash */
+                    try {
+                        prepareStoreFile(jsonFiles[i], tmp, index, top,
+                                         root_, journalReplay);
+                    } catch (const std::exception &e) {
+                        tmp = PreparedFile();
+                        tmp.path = jsonFiles[i];
+                        tmp.skip = true;
+                        tmp.problems.push_back(jsonFiles[i]
+                                               + ": unreadable ("
+                                               + e.what() + ")");
+                    }
                     {
                         std::unique_lock<std::mutex> lk(pm);
 
@@ -2523,6 +2605,9 @@ ObjectStore::loadAll()
                 th.join();
         }
     }
+    /* safe now: no worker is reading the map any more */
+    for (const auto &u : consumedJournalUUIDs)
+        journalReplay.erase(u);
 
     /* Objects that exist only in the journal: created and committed
      * after the last distribution, so no per-object file exists yet.
@@ -2719,7 +2804,15 @@ ObjectStore::loadAll()
 
                 if (k >= later.size())
                     break;
-                objectFromJsonPhase2(later[k]);
+                /* same rule as every other worker pool: a throw would
+                 * terminate the process mid-boot */
+                try {
+                    objectFromJsonPhase2(later[k]);
+                } catch (const std::exception &e) {
+                    fprintf(stderr, "STORE: #%d failed to load its "
+                            "properties or links: %s\n",
+                            later[k].ref, e.what());
+                }
             }
         };
 
@@ -2896,6 +2989,11 @@ ObjectStore::fire(bool compact)
 
         std::atomic<size_t> next(0);
         auto sealWorker = [&]() {
+          /* The seal runs on every dump, on the live game thread's
+           * behalf. An escaping exception here terminates the whole
+           * server; losing one object's layer costs that object its
+           * unsaved changes, which the next change re-dirties. */
+          try {
             for (;;) {
                 size_t k = next.fetch_add(1);
 
@@ -2958,6 +3056,9 @@ ObjectStore::fire(bool compact)
                 }
                 hasLayer[k] = 1;
             }
+          } catch (const std::exception &e) {
+            fprintf(stderr, "STORE: seal worker failed: %s\n", e.what());
+          }
         };
 
         if (nthreads <= 1) {

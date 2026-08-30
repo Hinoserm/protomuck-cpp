@@ -328,9 +328,16 @@ remove_property(dbref player, const char *type)
 /* Fold-once path cache (docs/PROPERTIES.txt 3a): a scan that probes
  * the same path against thousands of objects parses and folds the
  * path a single time; each object then costs only the pre-folded
- * radix descents. Single-threaded by the same convention as the rest
- * of the server. */
-static struct {
+ * radix descents.
+ *
+ * THREAD_LOCAL, and it must stay that way: get_property is reached
+ * from the parallel seal (entryValueOf materializes a changed
+ * property by path) and from the parallel loader. A shared cache
+ * torn by two workers does not merely slow things down, it makes
+ * findFolded miss a live property, which entryValueOf then records
+ * as a REMOVAL and the next fold deletes from disk. Per-thread
+ * caches keep the fold-once win with no synchronization. */
+static thread_local struct {
     std::string src;
     std::vector<std::pair<size_t, size_t> > comps; /* offset, len */
     std::vector<uint8_t> folded;
