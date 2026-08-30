@@ -1037,7 +1037,7 @@ prim_array_get_propdirs(PRIM_PROTOTYPE)
     nw = new_array_packed(0, 0);
     propadr = first_prop(ref, dir, &pptr, propname);
     while (propadr) {
-        sprintf(buf, "%s%c%s", dir, PROPDIR_DELIMITER, propname);
+        snprintf(buf, sizeof(buf), "%s%c%s", dir, PROPDIR_DELIMITER, propname);
         if (prop_read_perms(ProgUID, ref, buf, mlev)) {
             prptr = get_property(ref, buf);
             if (prptr) {
@@ -1093,7 +1093,7 @@ prim_array_get_propvals(PRIM_PROTOTYPE)
     nw = new_array_dictionary();
     propadr = first_prop(ref, dir, &pptr, propname);
     while (propadr) {
-        sprintf(buf, "%s%c%s", dir, PROPDIR_DELIMITER, propname);
+        snprintf(buf, sizeof(buf), "%s%c%s", dir, PROPDIR_DELIMITER, propname);
         if (prop_read_perms(ProgUID, ref, buf, mlev)) {
             prptr = get_property(ref, buf);
             if (prptr) {
@@ -1284,15 +1284,20 @@ prim_array_put_propvals(PRIM_PROTOTYPE)
 
         do {
             oper4 = array_getitem(arr, &temp1);
+            /* snprintf, not sprintf: both the directory string and a
+             * dictionary key are player-controlled and can each
+             * approach BUFFER_LEN, so their concatenation overflows a
+             * BUFFER_LEN stack buffer. This is player-triggerable
+             * from ordinary MUF on any writable object. */
             switch (temp1.type) {
                 case PROG_STRING:
-                    sprintf(propname, "%s%c%s", DoNullInd(oper[1].data.string), PROPDIR_DELIMITER, DoNullInd(temp1.data.string));
+                    snprintf(propname, sizeof(propname), "%s%c%s", DoNullInd(oper[1].data.string), PROPDIR_DELIMITER, DoNullInd(temp1.data.string));
                     break;
                 case PROG_INTEGER:
-                    sprintf(propname, "%s%c%lld", DoNullInd(oper[1].data.string), PROPDIR_DELIMITER, (long long) temp1.data.number);
+                    snprintf(propname, sizeof(propname), "%s%c%lld", DoNullInd(oper[1].data.string), PROPDIR_DELIMITER, (long long) temp1.data.number);
                     break;
                 case PROG_FLOAT:
-                    sprintf(propname, "%s%c%.15g", DoNullInd(oper[1].data.string), PROPDIR_DELIMITER, temp1.data.fnumber);
+                    snprintf(propname, sizeof(propname), "%s%c%.15g", DoNullInd(oper[1].data.string), PROPDIR_DELIMITER, temp1.data.fnumber);
                     break;
                 default:
                     *propname = '\0';

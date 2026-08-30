@@ -598,13 +598,27 @@ main(int argc, char **argv)
         fprintf(stdout, "ProtoMUCK-Win32 %s now detaching from console.\n", PROTOBASE);
 # endif
 #endif
-        /* Go into the background unless improper mode to */
+        /* Go into the background unless improper mode to. Fork BEFORE
+         * closing stdio and branch on the return explicitly: a failed
+         * fork (-1) previously took the same path as a successful
+         * parent and exited(0) with the console already gone, so a
+         * deploy that hit a process limit vanished with no diagnostic
+         * anywhere. */
         if (!sanity_interactive && !db_conversion_flag) {
+            pid_t child = fork();
+
+            if (child < 0) {
+                fprintf(stderr, "FATAL: fork to detach failed: %s\n",
+                        strerror(errno));
+                log_status_nowall("DIE: fork to detach failed: %s\n",
+                                  strerror(errno));
+                exit(1);
+            }
+            if (child > 0)
+                exit(0);        /* parent */
             fclose(stdin);
             fclose(stdout);
             fclose(stderr);
-            if (fork() != 0)
-                exit(0);
         }
 #endif
 #endif
@@ -633,10 +647,24 @@ main(int argc, char **argv)
 #ifdef DETACH
 /*    fprintf(stdout,"Console messages to '%s', Error messages to '%s'.", LOG_FILE, LOG_ERR_FILE); */
         if (!sanity_interactive && !db_conversion_flag) {
-            /* Detach from the TTY, log whatever output we have... */
-            freopen(LOG_ERR_FILE, "a", stderr);
+            /* Detach from the TTY, log whatever output we have. Check
+             * freopen: if stderr cannot be reopened onto the error
+             * log, every later fprintf(stderr, "STORE: ...") vanishes
+             * and the post-deploy protomuck.err check passes clean
+             * while the store may be failing. Report through the
+             * independent log_status path and refuse to continue
+             * blind. */
+            if (!freopen(LOG_ERR_FILE, "a", stderr)) {
+                log_status_nowall("DIE: cannot reopen stderr onto %s: "
+                                  "%s\n", LOG_ERR_FILE, strerror(errno));
+                exit(1);
+            }
             setbuf(stderr, NULL);
-            freopen(LOG_FILE, "a", stdout);
+            if (!freopen(LOG_FILE, "a", stdout)) {
+                log_status_nowall("DIE: cannot reopen stdout onto %s: "
+                                  "%s\n", LOG_FILE, strerror(errno));
+                exit(1);
+            }
             setbuf(stdout, NULL);
 
 /* Disassociate from Process Group */

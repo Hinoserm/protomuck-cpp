@@ -540,6 +540,26 @@ do_stats(dbref player, const char *name)
 
     anotify_fmt(player, SYSBLUE "%7d total object%s                     %7d old & unused", total, (total == 1) ? " " : "s", oldobjs);
 
+    /* store health: dump- and folder-thread failures are otherwise
+     * invisible (their stderr is detached), so surface the counters
+     * to wizards. All zero on a healthy server. */
+    if (Mage(MUCK::getOwner(player))) {
+        MUCK::ObjectStore::Health h = MUCK::store().healthSnapshot();
+
+        if (h.failedPersists || h.failedFolds || h.damagedSegments
+            || h.barrierTimeouts || h.workerExceptions)
+            anotify_fmt(player, SYSRED
+                        "STORE HEALTH: %lu failed persist(s), %lu failed "
+                        "fold(s), %lu damaged segment(s), %lu barrier "
+                        "timeout(s), %lu worker exception(s) since boot",
+                        h.failedPersists, h.failedFolds, h.damagedSegments,
+                        h.barrierTimeouts, h.workerExceptions);
+        else
+            anotify_fmt(player, SYSGREEN
+                        "STORE HEALTH: nominal (no persist/fold failures "
+                        "since boot)");
+    }
+
 #ifdef DISKBASE
     if (Mage(MUCK::getOwner(player))) {
         anotify_fmt(player, SYSWHITE "%7d proploaded object%s                %7d propchanged object%s", loaded, (loaded == 1) ? " " : "s", changed, (changed == 1) ? "" : "s");

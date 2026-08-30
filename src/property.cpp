@@ -54,8 +54,15 @@ prop_value_equals(PropPtr p, PData *dat)
         }
         case PROP_INTTYP:
             return PropDataVal(p) == dat->data.val;
-        case PROP_FLTTYP:
-            return PropDataFVal(p) == dat->data.fval;
+        case PROP_FLTTYP: {
+            /* NaN != NaN, so a property holding NaN would journal as
+             * changed on every identical rewrite, growing history
+             * without bound; two NaNs are "equal enough" to skip.
+             * Reachable now that non-finite floats survive load. */
+            double a = PropDataFVal(p), b = dat->data.fval;
+
+            return (a != a && b != b) || a == b;
+        }
         case PROP_REFTYP:
             return PropDataRef(p) == dat->data.ref;
         default:

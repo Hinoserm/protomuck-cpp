@@ -219,6 +219,23 @@ class ObjectStore {
      * rebuilt on the next manifest build. Game thread only. */
     void invalidateIndexBlob() { indexBlobDirty_ = true; }
 
+    /* Operator-visible store health: failures on the dump and folder
+     * threads are otherwise invisible (their stderr is detached), so
+     * every failure site bumps one of these and @stats surfaces them.
+     * Atomic, relaxed, incremented from any thread. */
+    struct Health {
+        unsigned long failedPersists;
+        unsigned long failedFolds;
+        unsigned long damagedSegments;
+        unsigned long barrierTimeouts;
+        unsigned long workerExceptions;
+    };
+    Health healthSnapshot() const {
+        return { hFailedPersists_.load(), hFailedFolds_.load(),
+                 hDamagedSegments_.load(), hBarrierTimeouts_.load(),
+                 hWorkerExceptions_.load() };
+    }
+
     /* True once since the last call if a dump's manifest committed.
      * The game loop polls this and posts the dump-done message; the
      * dump thread itself must not wall (walling walks the descriptor
@@ -265,6 +282,8 @@ class ObjectStore {
     std::string buildManifest();
     bool buildCompactOrder(dbref i, const std::vector<long> &globalRevs,
                            long now, CompactOrder *out);
+    /* wall clock for the ladder, clamped against clock jumps */
+    long ladderNow();
 
     /* --- the dump thread (docs/DATABASE.txt 7.1) --- */
     void dumpThreadMain();
@@ -343,6 +362,29 @@ class ObjectStore {
      * Atomic: parallel seal workers flip it via setBaseWritten. */
     std::string indexBlob_;
     std::atomic<bool> indexBlobDirty_{true};
+
+    /* Last wall-clock value the retention ladder ran against. A
+     * forward clock jump (NTP correction, hypervisor resume, admin
+     * error) would otherwise age every unlocked marker out in a
+     * single fire, merging the whole rollback history away
+     * irreversibly. Game thread only. */
+    long lastLadderNow_ = 0;
+
+    /* store-health counters (see Health above) */
+    std::atomic<unsigned long> hFailedPersists_{0};
+    std::atomic<unsigned long> hFailedFolds_{0};
+    std::atomic<unsigned long> hDamagedSegments_{0};
+    std::atomic<unsigned long> hBarrierTimeouts_{0};
+    std::atomic<unsigned long> hWorkerExceptions_{0};
+
+  public:
+    void healthFailedPersist() { hFailedPersists_.fetch_add(1); }
+    void healthFailedFold() { hFailedFolds_.fetch_add(1); }
+    void healthDamagedSegment() { hDamagedSegments_.fetch_add(1); }
+    void healthBarrierTimeout() { hBarrierTimeouts_.fetch_add(1); }
+    void healthWorkerException() { hWorkerExceptions_.fetch_add(1); }
+
+  private:
 
     std::string root_;
     long rev_ = 0;

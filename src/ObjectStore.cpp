@@ -1025,8 +1025,21 @@ fileToLoadShape(const json &j, const std::string &root)
     core["name"] = val("$core/name").is_string() ? val("$core/name") : json("");
     core["location"] = val("$core/location");
     core["owner"] = val("$core/owner");
-    core["flags"] = val("$core/flags");
-    core["powers"] = val("$core/powers");
+    /* flags and powers feed unchecked fl[0..3]/pw[0..1] indexing in
+     * phase one; a missing, short, or wrong-typed entry off disk
+     * would throw there and abort the WHOLE boot for one bad object.
+     * Default a malformed entry to a coherent zero shape here, the
+     * same way ts is guarded just below. */
+    {
+        json fl = val("$core/flags");
+
+        core["flags"] = (fl.is_array() && fl.size() >= 4)
+            ? fl : json::array({ 0, 0, 0, 0 });
+        json pw = val("$core/powers");
+
+        core["powers"] = (pw.is_array() && pw.size() >= 2)
+            ? pw : json::array({ 0, 0 });
+    }
 
     json tsl = val("$core/ts");
     json ts;
@@ -1212,8 +1225,12 @@ atomicWrite(const std::string &path, const std::string &content,
         return false;
     f << content;
     f.close();
-    if (!f)
+    if (!f) {
+        /* leave no orphan tmp behind: on sustained ENOSPC these
+         * accumulate and worsen the very condition that failed */
+        unlink(tmp.c_str());
         return false;
+    }
     /* fsync the data, then publish, then fsync the directory so the
      * rename itself survives. syncIt=false is for batched writers
      * (the dump's layer phase), which pay ONE filesystem barrier for
@@ -1221,11 +1238,43 @@ atomicWrite(const std::string &path, const std::string &content,
      * fsyncs per file; the rename is still atomic either way. */
     if (syncIt)
         syncFile(tmp);
-    if (rename(tmp.c_str(), path.c_str()) != 0)
+    if (rename(tmp.c_str(), path.c_str()) != 0) {
+        unlink(tmp.c_str());
         return false;
+    }
     if (syncIt)
         syncDirOf(path);
     return true;
+}
+
+/* The clock the retention ladder ages markers against, guarded
+ * against a jump. An NTP correction, a hypervisor resume, or an admin
+ * typo can move the wall clock forward by months; fed to the ladder
+ * raw, that retires nearly every unlocked marker in a single fire and
+ * compaction then merges the history away for good. A jump beyond a
+ * day is treated as a clock event, not elapsed time: the ladder
+ * advances by an hour instead, so at worst one bucket's worth of
+ * thinning happens per dump until the clock and the ladder agree.
+ * Backward jumps need no clamp (ages shrink, markers survive). */
+long
+ObjectStore::ladderNow()
+{
+    long now = (long) current_systime;
+
+    if (lastLadderNow_ == 0) {
+        lastLadderNow_ = now;
+        return now;
+    }
+    if (now - lastLadderNow_ > 86400L) {
+        fprintf(stderr, "STORE: clock jumped forward %ld seconds; "
+                "aging snapshots by one hour instead of the full jump\n",
+                now - lastLadderNow_);
+        lastLadderNow_ += 3600L;
+        return lastLadderNow_;
+    }
+    if (now > lastLadderNow_)
+        lastLadderNow_ = now;
+    return now;
 }
 
 /* How many committed journal segments may sit unfolded before the
@@ -1822,10 +1871,16 @@ ObjectStore::rollbackObject(dbref i, long rev, std::string *err)
     if (e.contains("$core/deleted")) {
         const json &d = e["$core/deleted"]["value"];
 
-        if (DbObject *o = MUCK::database().get(i))
+        if (DbObject *o = MUCK::database().get(i)) {
             o->markDeleted(d.is_array() && d.size() > 0 ? d[0].get<long>() : 0,
                            d.is_array() && d.size() > 1
                            ? (dbref) d[1].get<int>() : NOTHING);
+            /* markDeleted leaves deletedRev_ unset, unlike
+             * Database::deleteObject; without this a rollback into a
+             * dead window after a later real deletion builds a
+             * tombstone whose three fields come from three eras */
+            o->setDeletedRev(store().rev());
+        }
         MUCK::database().retireUUID(i);
     } else {
         MUCK::database().reviveHole(i);
@@ -1847,7 +1902,7 @@ ObjectStore::rollbackObject(dbref i, long rev, std::string *err)
         }
     }
 
-    if (e.contains("$core/name"))
+    if (e.contains("$core/name") && e["$core/name"]["value"].is_string())
         MUCK::setName(i, junstr(e["$core/name"]["value"].get<std::string>()).c_str());
 
     /* Owner and location come back too. Recycling clears both, so an
@@ -2056,7 +2111,8 @@ struct PreparedFile {
 
 static void
 prepareStoreFile(const std::string &full, PreparedFile &out,
-                 const json *index, int top, const std::string &root,
+                 const json *index, const std::set<std::string> &indexUUIDs,
+                 int top, const std::string &root,
                  const std::map<std::string,
                                 std::vector<json> > &journalReplay)
 {
@@ -2114,6 +2170,20 @@ prepareStoreFile(const std::string &full, PreparedFile &out,
 
         if (it == index->end()
             || it->get<std::string>() != out.fileUUID.toString()) {
+            /* the file's own dbref field does not match the index at
+             * that dbref. Only DISCARD it as an uncommitted leftover
+             * if its uuid appears nowhere in the index at all. If the
+             * uuid IS committed under some dbref (the file's dbref
+             * field is corrupt, but the object is real), discarding
+             * would destroy recoverable data under --force-load, so
+             * report it as damage and keep the file for repair. */
+            if (indexUUIDs.count(out.fileUUID.toString())) {
+                out.problems.push_back(full + ": committed uuid but its "
+                        "internal dbref (#" + std::to_string(out.claimed)
+                        + ") disagrees with the index; kept for repair");
+                out.skip = true;
+                return;
+            }
             out.uncommitted = true;
             return;
         }
@@ -2397,6 +2467,15 @@ ObjectStore::loadAll()
     };
     const json *index = manifest.contains("index")
         && manifest["index"].is_object() ? &manifest["index"] : nullptr;
+    /* reverse of the index: every committed uuid, to tell a file with
+     * a corrupt dbref field (uuid still committed) from a genuinely
+     * uncommitted leftover */
+    std::set<std::string> indexUUIDs;
+
+    if (index)
+        for (auto it = index->begin(); it != index->end(); ++it)
+            if (it->is_string())
+                indexUUIDs.insert(it->get<std::string>());
     std::map<int, std::string> refClaimed;  /* dbref -> file, dup check */
     std::set<std::string> jsonSeen, histSeen;
 
@@ -2469,6 +2548,12 @@ ObjectStore::loadAll()
     std::vector<std::string> jsonFiles;
     struct dirent *e0;
 
+    /* readdir returns NULL for BOTH end-of-directory and an I/O error
+     * (EIO, ESTALE): a mid-listing disk fault would silently truncate
+     * enumeration, and files never seen are invisible to the damage
+     * checker, which only judges files it saw. Reset errno before each
+     * loop and treat a nonzero errno at the end as damage. */
+    errno = 0;
     while ((e0 = readdir(d0)) != NULL) {
         if (e0->d_name[0] == '.')
             continue;
@@ -2477,6 +2562,7 @@ ObjectStore::loadAll()
         if (!d1)
             continue;
         struct dirent *e1;
+        errno = 0;
         while ((e1 = readdir(d1)) != NULL) {
             if (e1->d_name[0] == '.')
                 continue;
@@ -2485,6 +2571,7 @@ ObjectStore::loadAll()
             if (!d2)
                 continue;
             struct dirent *e2;
+            errno = 0;
             while ((e2 = readdir(d2)) != NULL) {
                 size_t n = strlen(e2->d_name);
                 std::string full = l2 + "/" + e2->d_name;
@@ -2498,11 +2585,30 @@ ObjectStore::loadAll()
                 jsonSeen.insert(full);
                 jsonFiles.push_back(full);
             }
+            if (errno != 0)
+                damaged(l2 + ": directory read failed mid-listing ("
+                        + std::string(strerror(errno)) + "); some "
+                        "objects may not have been seen");
             closedir(d2);
+            errno = 0;
         }
+        if (errno != 0)
+            damaged(l1 + ": directory read failed mid-listing ("
+                    + std::string(strerror(errno)) + ")");
         closedir(d1);
+        errno = 0;
     }
+    if (errno != 0)
+        damaged(objroot + ": directory read failed mid-listing ("
+                + std::string(strerror(errno)) + ")");
     closedir(d0);
+
+    /* Deterministic order: with two files claiming one dbref, the
+     * duplicate check keeps whichever the applier sees FIRST, and
+     * readdir order is filesystem-dependent. Sorting makes the
+     * survivor the lexicographically first path, so the same damaged
+     * store loads identically on every boot and every machine. */
+    std::sort(jsonFiles.begin(), jsonFiles.end());
 
     /* --- pass B/C: a bounded parse pipeline. Workers read, parse,
      * verify, and merge history and journal for at most a window of
@@ -2609,7 +2715,7 @@ ObjectStore::loadAll()
             for (size_t i = 0; i < nfiles; i++) {
                 PreparedFile prep;
 
-                prepareStoreFile(jsonFiles[i], prep, index, top, root_,
+                prepareStoreFile(jsonFiles[i], prep, index, indexUUIDs, top, root_,
                                  journalReplay);
                 applyPrepared(prep);
             }
@@ -2641,7 +2747,7 @@ ObjectStore::loadAll()
                     /* an escaping exception here would terminate the
                      * process; a bad file is damage, not a crash */
                     try {
-                        prepareStoreFile(jsonFiles[i], tmp, index, top,
+                        prepareStoreFile(jsonFiles[i], tmp, index, indexUUIDs, top,
                                          root_, journalReplay);
                     } catch (const std::exception &e) {
                         tmp = PreparedFile();
@@ -2910,6 +3016,13 @@ ObjectStore::loadAll()
         setPropPoolsThreadSafe(false);
     }
 
+    /* A stale or hand-edited manifest can name a next_dbref below what
+     * the index and disk actually hold; ensureTop grew the world past
+     * it silently during the load. The post-load passes below MUST
+     * cover every real slot, or a high-numbered player never enters
+     * the name table and cannot log in. Use the live top from here. */
+    top = (int) MUCK::database().top();
+
     /* the player name lookup table is runtime state the flat importer
      * built as it read; without it every login fails before the
      * password is even checked. Serial: the table is shared. */
@@ -3143,6 +3256,7 @@ ObjectStore::fire(bool compact)
                 hasLayer[k] = 1;
             }
           } catch (const std::exception &e) {
+            healthWorkerException();
             fprintf(stderr, "STORE: seal worker failed: %s\n", e.what());
           }
         };
@@ -3165,7 +3279,7 @@ ObjectStore::fire(bool compact)
     clearDirtyObjects();
 
     if (compact) {
-        long now = (long) current_systime;
+        long now = ladderNow();
 
         /* the retention ladder decides which snapshots remain */
         markers_ = ladderSurvivors(markers_, now);
@@ -3441,11 +3555,14 @@ ObjectStore::distributeOneSegment(long seq)
         json l = json::parse(line, nullptr, false);
 
         if (l.is_discarded() || !l.contains("uuid")
-            || !l.contains("entries")) {
+            || !l["uuid"].is_string() || !l.contains("entries")
+            || !l["entries"].is_object()) {
             /* one corrupt line must not discard the whole committed
              * segment: everything readable still folds, the file is
              * kept aside as evidence, and only the unreadable line
-             * itself is lost */
+             * itself is lost. The is_string/is_object checks matter:
+             * l["uuid"].get<string>() below would THROW on a
+             * non-string, wedging the folder on this segment forever. */
             fprintf(stderr, "STORE: journal segment %ld has an "
                     "unreadable line; folding the rest\n", seq);
             badLines++;
@@ -3521,8 +3638,18 @@ ObjectStore::distributeOneSegment(long seq)
             {
                 struct stat st;
 
-                if (stat(path.c_str(), &st) != 0)
+                if (stat(path.c_str(), &st) != 0) {
+                    /* ONLY a genuinely absent base means "reclaimed,
+                     * skip". Any other stat error (EIO, ESTALE,
+                     * EACCES) on a live object is a transient fault:
+                     * dropping the delta would silently lose it, so
+                     * signal a write failure and let the -2 retry
+                     * contract refold this segment later. */
+                    if (errno == ENOENT)
+                        continue;
+                    writeFailed = true;
                     continue;
+                }
             }
 
             json rec;
@@ -3578,12 +3705,17 @@ ObjectStore::distributeSegments(long keepAtMost)
         if (r == -2) {
             /* the disk would not take the fold; the segment is intact
              * and the watermark stays put, so a later pass retries */
+            healthFailedFold();
             fprintf(stderr, "STORE: folding segment %ld failed; will "
                     "retry\n", s);
             return;
         }
         if (r == -1) {
             /* damaged: preserve the evidence rather than delete data */
+            healthDamagedSegment();
+            fprintf(stderr, "STORE: segment %ld damaged; folded what "
+                    "was readable, quarantined the rest as %s.damaged\n",
+                    s, journalSegmentPath(s).c_str());
             rename(journalSegmentPath(s).c_str(),
                    (journalSegmentPath(s) + ".damaged").c_str());
         }
@@ -3594,6 +3726,30 @@ ObjectStore::distributeSegments(long keepAtMost)
 void
 ObjectStore::unlinkDistributedSegments(long upTo)
 {
+    if (journalUnlinked_ >= upTo)
+        return;
+
+    /* A segment is the ONLY durable copy of its mutations until the
+     * per-object files that folded it are themselves on the platter.
+     * Folding writes those files UNSYNCED, so before retiring a
+     * segment we force one filesystem barrier: without it a crash
+     * after this unlink but before the OS wrote the folded bytes back
+     * loses a mutation that was already fsynced into the journal, the
+     * documented durability boundary, with the safety net just
+     * deleted. One syncfs covers the whole batch and lands on the
+     * dump/folder thread where latency is free. */
+    {
+        int fd = open(root_.c_str(), O_RDONLY | O_DIRECTORY);
+
+        if (fd >= 0) {
+#ifdef __linux__
+            syncfs(fd);
+#else
+            sync();
+#endif
+            close(fd);
+        }
+    }
     while (journalUnlinked_ < upTo) {
         journalUnlinked_++;
         unlink(journalSegmentPath(journalUnlinked_).c_str());
@@ -3700,9 +3856,12 @@ ObjectStore::persist(const CaptureSet &set)
                         && journalDistributed_.load()
                            >= journalLandedCommitted_.load();
                 }))
+            {
+                healthBarrierTimeout();
                 fprintf(stderr, "STORE: sync barrier timed out waiting "
                         "for the folder; per-object files may lag the "
                         "journal\n");
+            }
         }
         folderLagTarget_.store(kJournalLag);
     }
@@ -3787,13 +3946,19 @@ ObjectStore::folderThreadMain()
                             "failed; will retry\n", s);
                     std::this_thread::sleep_for(std::chrono::seconds(5));
                 } else {
-                    if (r == -1)
+                    if (r == -1) {
+                        healthDamagedSegment();
+                        fprintf(stderr, "STORE: segment %ld damaged; "
+                                "quarantined as %s.damaged\n", s,
+                                journalSegmentPath(s).c_str());
                         rename(journalSegmentPath(s).c_str(),
                                (journalSegmentPath(s) + ".damaged").c_str());
+                    }
                     journalDistributed_.store(s);
                 }
             }
         } catch (const std::exception &e) {
+            healthWorkerException();
             fprintf(stderr, "STORE: folder work failed: %s\n", e.what());
         }
 
@@ -3873,6 +4038,7 @@ ObjectStore::dumpThreadMain()
                 /* stderr only: this is the dump thread, and
                  * log_status walls wizards through the descriptor
                  * list */
+                healthFailedPersist();
                 fprintf(stderr, "DUMP: PERSIST FAILED for rev %ld after "
                         "3 attempts; those changes are lost\n", set.rev);
             }
@@ -3982,21 +4148,34 @@ ObjectStore::requestDumpStop()
      * worker's stale manifest rename lands AFTER panic's, the store
      * reverts to the older committed index and the next boot discards
      * panic's files as uncommitted, destroying exactly the data panic
-     * exists to save. Wait, bounded, for both workers to go quiet; a
-     * worker that IS the casualty never will, and after the timeout
-     * panic proceeds anyway, which is no worse than before. */
-    {
-        std::unique_lock<std::mutex> hold(queueMutex_);
+     * exists to save. So wait, bounded, for both workers to go quiet.
+     *
+     * CRITICAL: panic() runs SYNCHRONOUSLY from a signal handler
+     * (bailout on SIGSEGV/SIGBUS/etc), and the faulting thread may
+     * already hold queueMutex_ or folderMutex_ from the very code the
+     * signal interrupted. A blocking lock here would self-deadlock
+     * that thread against itself and hang the crash forever. So this
+     * uses try_lock in a bounded poll: it never blocks on a mutex it
+     * cannot get, it just spins briefly and then proceeds. A held
+     * mutex, or a worker that is itself the casualty, simply means
+     * panic goes ahead without the barrier, which is exactly the
+     * pre-existing behavior and no worse. */
+    auto spinUntil = [](std::mutex &m, auto quiet) {
+        for (int i = 0; i < 200; i++) {   /* ~2s at 10ms */
+            if (m.try_lock()) {
+                bool ok = quiet();
 
-        idleCv_.wait_for(hold, std::chrono::seconds(10),
-                         [this] { return !persisting_; });
-    }
-    {
-        std::unique_lock<std::mutex> lk(folderMutex_);
+                m.unlock();
+                if (ok)
+                    return;
+            }
+            struct timespec ts = { 0, 10 * 1000 * 1000 };
+            nanosleep(&ts, nullptr);
+        }
+    };
 
-        folderIdleCv_.wait_for(lk, std::chrono::seconds(10),
-                               [this] { return !folderBusy_; });
-    }
+    spinUntil(queueMutex_, [this] { return !persisting_; });
+    spinUntil(folderMutex_, [this] { return !folderBusy_; });
 }
 
 void
@@ -4047,7 +4226,15 @@ ObjectStore::stopDumpThread()
                 folderOrders_.pop_front();
             }
         }
-        distributeSegments(0);
+        /* the same protection the folder thread has: a malformed
+         * segment line must not turn a graceful shutdown into an
+         * uncaught-exception abort that never reaches the re-exec */
+        try {
+            distributeSegments(0);
+        } catch (const std::exception &e) {
+            healthWorkerException();
+            fprintf(stderr, "STORE: shutdown fold failed: %s\n", e.what());
+        }
         writeManifest();
         unlinkDistributedSegments(journalDistributed_.load());
     }
@@ -4101,14 +4288,19 @@ ObjectStore::gcStore()
     if (root_.empty())
         return -1;
 
-    long now = (long) current_systime;
+    long now = ladderNow();
 
     /* fold any pending journal segments first: compaction works on
      * the per-object files and must see everything (offline mode,
      * single-threaded, so calling the dump thread's machinery
      * directly is safe) */
     journalLandedCommitted_.store(journalSeq_);
-    distributeSegments(-1);
+    try {
+        distributeSegments(-1);
+    } catch (const std::exception &e) {
+        healthWorkerException();
+        fprintf(stderr, "STOREGC: fold failed: %s\n", e.what());
+    }
 
     /* the retention ladder decides which snapshots remain */
     markers_ = ladderSurvivors(markers_, now);
