@@ -1041,9 +1041,6 @@ prim_array_get_propdirs(PRIM_PROTOTYPE)
         if (prop_read_perms(ProgUID, ref, buf, mlev)) {
             prptr = get_property(ref, buf);
             if (prptr) {
-#ifdef DISKBASE
-                propfetch(ref, prptr);
-#endif
                 if (PropDir(prptr)) {
                     temp2.type = PROG_STRING;
                     temp2.data.string = alloc_prog_string(propname);
@@ -1099,9 +1096,6 @@ prim_array_get_propvals(PRIM_PROTOTYPE)
             if (prptr) {
                 int goodflag = 1;
 
-#ifdef DISKBASE
-                propfetch(ref, prptr);
-#endif
                 switch (PropType(prptr)) {
                     case PROP_STRTYP:
                         temp2.type = PROG_STRING;
@@ -1213,9 +1207,6 @@ prim_array_get_proplist(PRIM_PROTOTYPE)
                     temp2.type = PROG_STRING;
                     temp2.data.string = NULL;
                 } else {
-#ifdef DISKBASE
-                    propfetch(ref, prptr);
-#endif
                     switch (PropType(prptr)) {
                         case PROP_STRTYP:
                             temp2.type = PROG_STRING;
@@ -2390,9 +2381,6 @@ array_props_wildcard(stk_array *arr, dbref player, dbref thing, const char *dir,
 
                     if (prptr) {
                         int goodflag = 1;
-#ifdef DISKBASE
-                        propfetch(thing, prptr);
-#endif
                         switch (PropType(prptr)) {
                             case PROP_STRTYP:
                                 temp2.type = PROG_STRING;

@@ -158,9 +158,6 @@ int make_socket6(int);
 
 #ifndef BOOLEXP_DEBUGGING
 
-#ifdef DISKBASE
-extern FILE *input_file;
-#endif
 #ifdef DELTADUMPS
 extern FILE *delta_infile;
 extern FILE *delta_outfile;
@@ -401,10 +398,6 @@ main(int argc, char **argv)
     }
 #endif
 
-#if defined(MALLOC_PROFILING) && defined(HAVE_PTHREAD_H)
-    /* initializing the mutex lock for CrT */
-    CrT_pthread_init();
-#endif
 
 #if defined(SQL_SUPPORT)
 
@@ -566,15 +559,6 @@ main(int argc, char **argv)
     if (!infile_name || !outfile_name) {
         show_program_usage(*argv);
     }
-#ifdef DISKBASE
-    /* store-mode boots always use one root for both; this guard is
-     * about the legacy flat-file pair */
-    if (!strcmp(infile_name, outfile_name)
-        && !MUCK::ObjectStore::isStore(infile_name)) {
-        fprintf(stderr, "Output file must be different from the input file.");
-        exit(3);
-    }
-#endif
 
 
     if (!sanity_interactive) {
@@ -868,36 +852,13 @@ main(int argc, char **argv)
         WSACleanup();
 #endif
 
-#ifdef MALLOC_PROFILING
-        MUCK::macros().purge();
-        purge_all_free_frames();
-        purge_timenode_free_pool();
-        purge_for_pool();
-        purge_for_pool();       /* 2nd time is needed to completely purge */
-        purge_try_pool();       /* 3rd time is needed to... oh... wait... */
-        purge_try_pool();       /* 2nd time is needed to completely purge */
-        purge_mfns();
-        MUCK::database().freeAll();
-        cleanup_game();
-        tune_freeparms();
-        clear_color_hash();
-#ifdef COMPRESS
-        free_compress_dictionary();
-#endif /* COMPRESS */
-#endif /* MALLOC_PROFILING */
 
-#ifdef DISKBASE
-        fclose(input_file);
-#endif
 #ifdef DELTADUMPS
         fclose(delta_infile);
         fclose(delta_outfile);
         (void) unlink(DELTAFILE_NAME);
 #endif
 
-#ifdef MALLOC_PROFILING
-        CrT_summarize_to_file("malloc_log", "Shutdown");
-#endif
 
         if (restart_flag) {
             /* The restart script owns startup: store paths are baked in
@@ -5099,23 +5060,6 @@ do_armageddon(dbref player, const char *msg)
     reslvd_close();
 #endif
 
-#ifdef MALLOC_PROFILING
-    MUCK::macros().purge();
-    purge_all_free_frames();
-    purge_timenode_free_pool();
-    purge_for_pool();
-    purge_for_pool();           /* 2nd time is needed to completely purge */
-    purge_try_pool();           /* 3rd time is needed to... oh... wait... */
-    purge_try_pool();           /* 2nd time is needed to completely purge */
-    purge_mfns();
-    MUCK::database().freeAll();
-    cleanup_game();
-    tune_freeparms();
-    clear_color_hash();
-#ifdef COMPRESS
-    free_compress_dictionary();
-#endif /* COMPRESS */
-#endif /* MALLOC_PROFILING */
 
     exit(1);
 }
@@ -6965,9 +6909,6 @@ mssp_send(struct descriptor_data *d)
         sprintf(buf, "%s%c%s", dir, PROPDIR_DELIMITER, propname);
         prptr = get_property(ref, buf);
         if (prptr) {
-#ifdef DISKBASE
-            propfetch(ref, prptr);
-#endif
             switch (PropType(prptr)) {
                 case PROP_STRTYP:
                     strcpy(mssp_val, PropDataUNCStr(prptr));

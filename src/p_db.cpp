@@ -46,14 +46,6 @@ copyobj(dbref player, dbref old, dbref nw)
     MUCK::setLocation(nw, NOTHING);
     moveto(nw, player);
 
-#ifdef DISKBASE
-    newp->propsfpos = 0;
-    newp->propsmode = PROPS_UNLOADED;
-    newp->propstime = 0;
-    newp->nextold = NOTHING;
-    newp->prevold = NOTHING;
-    dirtyprops(nw);
-#endif
 
     MUCK::setCreated(nw, current_systime, player);
     MUCK::setModified(nw, current_systime, player);
@@ -1973,14 +1965,6 @@ prim_copyplayer(PRIM_PROTOTYPE)
 
     copy_prop(ref, newplayer);
     MUCK::exitsOf(newplayer).clear();
-#ifdef DISKBASE
-    newp->propsfpos = 0;
-    newp->propsmode = PROPS_UNLOADED;
-    newp->propstime = 0;
-    newp->nextold = NOTHING;
-    newp->prevold = NOTHING;
-    dirtyprops(newplayer);
-#endif
 
     MUCK::setOwner(newplayer, newplayer);
     MUCK::playerSetHomeRef(newplayer, MUCK::playerHomeRef(ref));
@@ -2241,10 +2225,6 @@ prim_setpassword(PRIM_PROTOTYPE)
     CHECKREMOTE(ref);
     if (oper[1].type != PROG_STRING)
         abort_interp("Password string expected");
-#ifdef MALLOC_PROFILING
-    if (!oper[0].data.string)
-        abort_interp("NULL passwords cannot be set when MALLOC_PROFILING is turned on");
-#endif
     ptr = oper[1].data.string ? oper[1].data.string->data.c_str() : pad_char;
     ptr2 = oper[0].data.string ? oper[0].data.string->data.c_str() : pad_char;
     if (ref != NOTHING && !check_password(ref, ptr))
@@ -2263,10 +2243,6 @@ prim_newpassword(PRIM_PROTOTYPE)
         abort_interp("Password string expected");
     if (oper[1].type != PROG_OBJECT)
         abort_interp("Player dbref expected");
-#ifdef MALLOC_PROFILING
-    if (!oper[0].data.string)
-        abort_interp("NULL passwords cannot be set when MALLOC_PROFILING is turned on"); /* Why? -hinoserm */
-#endif
     ptr2 = oper[0].data.string ? oper[0].data.string->data.c_str() : pad_char;
     ref = oper[1].data.objref;
 

@@ -173,17 +173,6 @@ extern PropPtr envprop_cmds(dbref *where, const char *propname, int typ);
 extern PropPtr regenvprop(dbref *where, const char *propname, int typ);
 extern void delete_proplist(PropDirPtr p);
 
-#ifdef DISKBASE
-extern int fetchprops_priority(dbref obj, int mode);
-extern int fetchprops_nostamp(dbref obj);
-extern void fetchprops(dbref obj);
-extern void unloadprops_with_prejudice(dbref obj);
-extern int disposeprops_notime(dbref obj);
-extern int disposeprops(dbref obj);
-extern void dirtyprops(dbref obj);
-extern void undirtyprops(dbref obj);
-extern int propfetch(dbref obj, PropPtr p);
-#endif /* DISKBASE */
 
 extern const char *propdir_split(const char *path, char *comp);
 extern PropPtr propdir_new_elem(PropDirPtr l, char *path);

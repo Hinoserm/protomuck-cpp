@@ -286,9 +286,6 @@ do_look_at(int descr, dbref player, const char *name, const char *detail)
             look_room(descr, player, thing);
     } else {
 
-#ifdef DISKBASE
-        fetchprops(MUCK::getLocation(player));
-#endif
 
         /* look at a thing here */
         init_match(descr, player, name, NOTYPE, &md);
@@ -368,9 +365,6 @@ do_look_at(int descr, dbref player, const char *name, const char *detail)
                 sprintf(buf, "%s", detail);
             }
 
-#ifdef DISKBASE
-            fetchprops(thing);
-#endif
 
             lastmatch = NULL;
             ambig = 0;
@@ -410,9 +404,6 @@ do_look_at(int descr, dbref player, const char *name, const char *detail)
 
             thing = lastthing;
             if (lastmatch != NULL && PropType(lastmatch) == PROP_STRTYP) {
-#ifdef DISKBASE
-                propfetch(thing, lastmatch); /* DISKBASE PROPVALS */
-#endif
                 exec_or_notify(descr, player, thing, PropDataUNCStr(lastmatch), "(@detail)");
             } else if (ambig) {
                 anotify_nolisten(player, CINFO AMBIGUOUS_MESSAGE, 1);

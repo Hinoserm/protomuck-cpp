@@ -1063,14 +1063,6 @@ struct object {
     /* the property root lives on the Properties module now; reach it
      * with MUCK::propRoot(ref). docs/PROPERTIES.txt */
 
-#ifdef DISKBASE
-    int	    propsfpos;
-    time_t  propstime;
-    dbref   nextold;
-    dbref   prevold;
-    short   propsmode;
-    short   spacer;
-#endif
 
     object_flag_type flags, flag2, flag3, flag4;
     object_power_type powers, power2;
@@ -1108,9 +1100,7 @@ typedef hash_entry *hash_tab;
 #include "Database.h"
 #include "ProgramStore.h"
 
-#ifndef MALLOC_PROFILING
 extern char *alloc_string(const char *);
-#endif
 
 extern int fetch_propvals(dbref obj, const char *dir);
 
@@ -1119,12 +1109,10 @@ extern void free_prog_text(struct line * l);
 
 
 
-#ifndef MALLOC_PROFILING
 /* alloc_prog_string is now a macro, works exactly the way it used to. */
 //extern struct shared_string *alloc_prog_string(const char *);
 #define alloc_prog_string(x) alloc_prog_string_exact(x, -2, -2)
 extern struct shared_string *alloc_prog_string_exact(const char *, int length, int wclength);
-#endif
 
 extern dbref getref(FILE *);	/* Read a database reference from a file. */
 extern void putref(FILE *, dbref);	/* Write one ref to the file */

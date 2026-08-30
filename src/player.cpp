@@ -315,14 +315,6 @@ create_player(dbref creator, const char *name, const char *password)
 
         if (tp_pcreate_copy_props) {
             copy_prop(tp_player_prototype, player);
-#ifdef DISKBASE
-            newp->propsfpos = 0;
-            newp->propsmode = PROPS_UNLOADED;
-            newp->propstime = 0;
-            newp->nextold = NOTHING;
-            newp->prevold = NOTHING;
-            dirtyprops(player);
-#endif
         }
     }
 

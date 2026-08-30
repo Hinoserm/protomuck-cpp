@@ -14,9 +14,6 @@
 #include "nan.h"
 
 #ifdef COMPRESS
-#ifdef ARCHAIC_DATABASES
-extern const char *old_uncompress(const char *);
-#endif
 #endif /* COMPRESS */
 
 #define alloc_compressed(x) alloc_string(x)
@@ -876,11 +873,7 @@ db_get_single_prop(FILE * f, dbref obj, int pos)
     bool do_diskbase_propvals;
     PData pdat;
 
-#ifdef DISKBASE
-    do_diskbase_propvals = tp_diskbase_propvals;
-#else
     do_diskbase_propvals = 0;
-#endif
 
     if (pos) {
         fseek(f, pos, 0);
@@ -930,10 +923,6 @@ db_get_single_prop(FILE * f, dbref obj, int pos)
         case PROP_STRTYP:
             if (!do_diskbase_propvals || pos) {
                 pdat.flags &= ~PROP_ISUNLOADED;
-#if defined(COMPRESS) && defined(ARCHAIC_DATABASES)
-                if (!(pdat.flags & PROP_COMPRESSED))
-                    value = (char *) old_uncompress(value);
-#endif
                 pdat.data.str = value;
             } else {
                 pdat.flags |= PROP_ISUNLOADED;

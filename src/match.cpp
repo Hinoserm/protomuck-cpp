@@ -138,9 +138,6 @@ find_registered_obj(dbref player, const char *name)
 #ifdef HIDDEN_REG
     }
 #endif
-#ifdef DISKBASE
-    propfetch(player, ptr);     /* DISKBASE PROPVALS */
-#endif
     switch (PropType(ptr)) {
         case PROP_STRTYP:
             p = PropDataUNCStr(ptr);

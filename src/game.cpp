@@ -561,9 +561,7 @@ init_game(const char *infile, const char *outfile)
             log_status_nowall("DIE: database load error.  Damnit.\n");
             return -1;
         }
-#ifndef DISKBASE
         fclose(input_file);
-#endif
         log_status_nowall("LOAD: flat import complete; dumps now write "
                           "the object store at %s\n", outfile);
     }
@@ -707,9 +705,6 @@ const char version_line2[] = SYSGREEN "Compile-time Options: " SYSNORMAL
 #endif
 #ifdef MCP_SUPPORT
     "MCP "
-#endif
-#ifdef ARCHAIC_DATABASES
-    "ArchaicDB "
 #endif
 #ifdef DETACH
     "Detach "

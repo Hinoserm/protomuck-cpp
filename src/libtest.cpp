@@ -78,9 +78,6 @@ __prim_nuku_rp_getstatus_1(PRIM_PROTOTYPE)
 
         prptr = get_property(oper2->data.objref, buf);
         if (prptr) {
-#ifdef DISKBASE
-
-#endif
             switch (PropType(prptr)) {
                 case PROP_STRTYP:
                     sscanf(PropDataUNCStr(prptr), "%lg", &fresult);
@@ -160,16 +157,10 @@ __prim_nuku_rp_getstatus_1(PRIM_PROTOTYPE)
                 sprintf(buf, "%s%c%s", dir, PROPDIR_DELIMITER, propname);
                 prptr = get_property(oper2->data.objref, buf);
                 if (prptr) {
-#ifdef DISKBASE
-                    propfetch(ref, prptr);
-#endif
                     if (PropType(prptr) != PROP_DIRTYP) {
                         sprintf(buf, "%s%c%s%cPower", dir, PROPDIR_DELIMITER, propname, PROPDIR_DELIMITER);
                         prptr = get_property(oper2->data.objref, buf);
                         if (prptr) {
-#ifdef DISKBASE
-                            propfetch(ref, prptr);
-#endif
                             switch (PropType(prptr)) {
                                 case PROP_STRTYP:
                                     sscanf(PropDataUNCStr(prptr), "%lg", &fresult);

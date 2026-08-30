@@ -23,9 +23,7 @@
  * DbObject::muckerLevel and DbObject::wizLevel.
  */
 
-#ifndef MALLOC_PROFILING
 extern char *alloc_string(const char *);
-#endif
 
 #ifdef DBDEBUG
 /* This function is a total quickhack, mostly because of how */

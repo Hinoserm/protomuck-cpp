@@ -1802,9 +1802,6 @@ mfn_dirprops(MFUNARGS)
     buf[0] = '\0';
     outlen = 0;
 
-#ifdef DISKBASE
-    fetchprops(obj);
-#endif
 
     propadr = first_prop(obj, argv[0], &pptr, propname);
     while ((propadr) && *propname) {

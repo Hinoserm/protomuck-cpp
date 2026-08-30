@@ -472,9 +472,7 @@ extern int wcharlen_slice(char* buf, int slice, int buflen);
 //#define prefix_message_mush(v,w,x,y,z) (prefix_message(v,mushformat_substitute(w),x,y,z))
 
 
-#if !defined(MALLOC_PROFILING)
 extern char *string_dup(const char *s);
-#endif
 
 
 /* From utils.c */

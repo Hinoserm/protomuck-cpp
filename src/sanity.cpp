@@ -962,8 +962,6 @@ clean_global_environment(void)
 void
 sanfix(dbref player)
 {
-    dbref loop;
-
     if (player > NOTHING && !Arch(player)) {
         notify(player, NOPERM_MESG);
         return;
@@ -1281,9 +1279,6 @@ extract_object(FILE * f, dbref d)
             break;
     }
 
-#ifdef DISKBASE
-    fetchprops(d);
-#endif
     props = MUCK::propRoot(d);
     if (props && !props->empty()) {
         fprintf(f, "  Properties:\n");

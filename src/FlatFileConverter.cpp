@@ -35,14 +35,9 @@ extern dbref getref(FILE *);
 extern int number(const char *);
 extern int ifloat(const char *);
 extern void autostart_progs(void);
-#ifndef MALLOC_PROFILING
 extern char *alloc_string(const char *);
-#endif
 #ifdef COMPRESS
 extern const char *pcompress(const char *);
-#ifdef ARCHAIC_DATABASES
-extern const char *old_uncompress(const char *);
-#endif
 #endif
 
 #define getstring(x) alloc_string(getstring_noalloc(x))
@@ -199,248 +194,6 @@ getproperties(FILE * f, dbref obj)
 }
 
 
-#ifdef ARCHAIC_DATABASES
-
-#ifdef COMPRESS
-# define getstring_oldcomp_noalloc(foo) old_uncompress(getstring_noalloc(foo))
-#else
-# define getstring_oldcomp_noalloc(foo) getstring_noalloc(foo)
-#endif
-
-void
-db_read_object_old(FILE * f, struct object *o, dbref objno)
-{
-    dbref exits, f2, f3, f4, p1, p2;
-    int pennies;
-    const char *password;
-
-    MUCK::database().clearObject(-1, objno);
-    MUCK::setFlags(objno, 0);
-    MUCK::setFlags2(objno, 0);
-    MUCK::setFlags3(objno, 0);
-    MUCK::setFlags4(objno, 0);
-    POWERSDB(objno) = 0;
-    POWER2DB(objno) = 0;
-    MUCK::setName(objno, getstring_noalloc(f));
-    LOADDESC(objno, getstring_oldcomp_noalloc(f));
-    MUCK::setLocation(objno, getref(f));
-    rawContents[objno] = getref(f);
-    exits = getref(f);
-    rawNext[objno] = getref(f);
-    LOADLOCK(objno, getboolexp(f));
-    LOADFAIL(objno, getstring_oldcomp_noalloc(f));
-    LOADSUCC(objno, getstring_oldcomp_noalloc(f));
-    LOADOFAIL(objno, getstring_oldcomp_noalloc(f));
-    LOADOSUCC(objno, getstring_oldcomp_noalloc(f));
-    MUCK::setOwner(objno, getref(f));
-    pennies = getref(f);
-
-    /* timestamps mods */
-    MUCK::setCreated(objno, current_systime, -1);
-    MUCK::setLastUsed(objno, current_systime, -1);
-    MUCK::setUseCount(objno, 0);
-    MUCK::setModified(objno, current_systime, -1);
-
-
-    {
-        /* the legacy flags word carries the type; lift it out before
-         * the rest of the bits go in, exactly as the Foxen reader
-         * does, because addFlags refuses the type bits */
-        dbref rawflags = getfref(f, &f2, &f3, &f4, &p1, &p2);
-
-        MUCK::setType(objno, (MUCK::ObjectType) (rawflags & TYPE_MASK));
-        MUCK::addFlags(objno, rawflags);
-    }
-    MUCK::addFlags2(objno, f2);
-    MUCK::addFlags3(objno, f3);
-    MUCK::addFlags4(objno, f4);
-    POWERSDB(objno) |= p1;
-    POWER2DB(objno) |= p2;
-    /*
-     * flags have to be checked for conflict --- if they happen to coincide
-     * with chown_ok flags and jump_ok flags, we bump them up to the
-     * corresponding HAVEN and ABODE flags
-     */
-    if (FLAGS(objno) & CHOWN_OK) {
-        MUCK::clearFlags(objno, CHOWN_OK);
-        MUCK::addFlags(objno, HAVEN);
-    }
-    if (FLAGS(objno) & JUMP_OK) {
-        MUCK::clearFlags(objno, JUMP_OK);
-        MUCK::addFlags(objno, ABODE);
-    }
-    password = getstring(f);
-    /* convert GENDER flag to property */
-    switch ((FLAGS(objno) & GENDER_MASK) >> GENDER_SHIFT) {
-        case GENDER_NEUTER:
-            add_property(objno, tp_sex_prop, "neuter", 0);
-            break;
-        case GENDER_FEMALE:
-            add_property(objno, tp_sex_prop, "female", 0);
-            break;
-        case GENDER_MALE:
-            add_property(objno, tp_sex_prop, "male", 0);
-            break;
-        default:
-            break;
-    }
-    MUCK::clearFlags(objno, GENDER_MASK);
-    /* For downward compatibility with databases using the */
-    /* obsolete ANTILOCK flag. */
-    if (FLAGS(objno) & ANTILOCK) {
-        LOADLOCK(objno, negate_boolexp(copy_bool(GETLOCK(objno))))
-            MUCK::clearFlags(objno, ANTILOCK);
-    }
-    switch (MUCK::typeOf(objno)) {
-        case TYPE_THING:
-            o->sp.thing.home = exits;
-            o->sp.thing.value = pennies;
-            break;
-        case TYPE_ROOM:
-            o->sp.room.dropto = o->location;
-            MUCK::setLocation(objno, NOTHING);
-            rawExits[objno] = exits;
-            break;
-        case TYPE_EXIT:
-            if (o->location == NOTHING) {
-                o->sp.exit.ndest = 0;
-                o->sp.exit.dest = NULL;
-            } else {
-                o->sp.exit.ndest = 1;
-                o->sp.exit.dest = new dbref[1];
-
-                (o->sp.exit.dest)[0] = o->location;
-            }
-            MUCK::setLocation(objno, NOTHING);
-            break;
-        case TYPE_PLAYER:
-            o->sp.player.home = exits;
-            o->sp.player.pennies = pennies;
-            o->sp.player.password = password;
-            break;
-        case TYPE_GARBAGE:
-            MUCK::setOwner(objno, NOTHING);
-
-            MUCK::setName(objno, "<garbage>");
-            MUCK::setDesc(objno, "<recyclable>");
-            break;
-    }
-}
-
-void
-db_read_object_new(FILE * f, struct object *o, dbref objno)
-{
-    dbref f2, f3, f4, p1, p2;
-
-    int j;
-
-    db_clear_object(-1, objno);
-    MUCK::setFlags(objno, 0);
-    MUCK::setFlags2(objno, 0);
-    MUCK::setFlags3(objno, 0);
-    MUCK::setFlags4(objno, 0);
-    POWERSDB(objno) = 0;
-    POWER2DB(objno) = 0;
-    MUCK::setName(objno, getstring_noalloc(f));
-    LOADDESC(objno, getstring_noalloc(f));
-    MUCK::setLocation(objno, getref(f));
-    rawContents[objno] = getref(f);
-    rawNext[objno] = getref(f);
-    LOADLOCK(objno, getboolexp(f));
-    LOADFAIL(objno, getstring_oldcomp_noalloc(f));
-    LOADSUCC(objno, getstring_oldcomp_noalloc(f));
-    LOADOFAIL(objno, getstring_oldcomp_noalloc(f));
-    LOADOSUCC(objno, getstring_oldcomp_noalloc(f));
-
-    /* timestamps mods */
-    MUCK::setCreated(objno, current_systime, -1);
-    MUCK::setLastUsed(objno, current_systime, -1);
-    MUCK::setUseCount(objno, 0);
-    MUCK::setModified(objno, current_systime, -1);
-
-    /* OWNER(objno) = getref(f); */
-    /* o->pennies = getref(f); */
-    {
-        /* the legacy flags word carries the type; lift it out before
-         * the rest of the bits go in, exactly as the Foxen reader
-         * does, because addFlags refuses the type bits */
-        dbref rawflags = getfref(f, &f2, &f3, &f4, &p1, &p2);
-
-        MUCK::setType(objno, (MUCK::ObjectType) (rawflags & TYPE_MASK));
-        MUCK::addFlags(objno, rawflags);
-    }
-    MUCK::addFlags2(objno, f2);
-    MUCK::addFlags3(objno, f3);
-    MUCK::addFlags4(objno, f4);
-    POWERSDB(objno) |= p1;
-    POWER2DB(objno) |= p2;
-    /*
-     * flags have to be checked for conflict --- if they happen to coincide
-     * with chown_ok flags and jump_ok flags, we bump them up to the
-     * corresponding HAVEN and ABODE flags
-     */
-    if (FLAGS(objno) & CHOWN_OK) {
-        MUCK::clearFlags(objno, CHOWN_OK);
-        MUCK::addFlags(objno, HAVEN);
-    }
-    if (FLAGS(objno) & JUMP_OK) {
-        MUCK::clearFlags(objno, JUMP_OK);
-        MUCK::addFlags(objno, ABODE);
-    }
-    /* convert GENDER flag to property */
-    switch ((FLAGS(objno) & GENDER_MASK) >> GENDER_SHIFT) {
-        case GENDER_NEUTER:
-            add_property(objno, tp_sex_prop, "neuter", 0);
-            break;
-        case GENDER_FEMALE:
-            add_property(objno, tp_sex_prop, "female", 0);
-            break;
-        case GENDER_MALE:
-            add_property(objno, tp_sex_prop, "male", 0);
-            break;
-        default:
-            break;
-    }
-    MUCK::clearFlags(objno, GENDER_MASK);
-
-    /* o->password = getstring(f); */
-    /* For downward compatibility with databases using the */
-    /* obsolete ANTILOCK flag. */
-    if (FLAGS(objno) & ANTILOCK) {
-        LOADLOCK(objno, negate_boolexp(copy_bool(GETLOCK(objno))))
-            MUCK::clearFlags(objno, ANTILOCK);
-    }
-    switch (MUCK::typeOf(objno)) {
-        case TYPE_THING:
-            o->sp.thing.home = getref(f);
-            o->exits = getref(f);
-            MUCK::setOwner(objno, getref(f));
-            o->sp.thing.value = getref(f);
-            break;
-        case TYPE_ROOM:
-            o->sp.room.dropto = getref(f);
-            o->exits = getref(f);
-            MUCK::setOwner(objno, getref(f));
-            break;
-        case TYPE_EXIT:
-            o->sp.exit.ndest = getref(f);
-            o->sp.exit.dest = new dbref[o->sp.exit.ndest];
-
-            for (j = 0; j < o->sp.exit.ndest; j++) {
-                (o->sp.exit.dest)[j] = getref(f);
-            }
-            MUCK::setOwner(objno, getref(f));
-            break;
-        case TYPE_PLAYER:
-            o->sp.player.home = getref(f);
-            o->exits = getref(f);
-            o->sp.player.pennies = getref(f);
-            MUCK::playerPasswordSlot(objno) = getstring(f);
-            break;
-    }
-}
-
-#endif /* ARCHAIC_DATABASES */
 
 /* Reads in Foxen, Foxen[234], WhiteFire, Mage or Lachesis DB Formats */
 void
@@ -468,39 +221,11 @@ db_read_object_foxen(FILE * f, struct object *o, dbref objno, int dtype, int rea
         fprintf(stderr, "#%d [object_info] ", objno);
 
     MUCK::setName(objno, getstring_noalloc(f));
-#ifdef ARCHAIC_DATABASES
-    if (dtype <= 3)
-        LOADDESC(objno, getstring_oldcomp_noalloc(f));
-#endif /* ARCHAIC_DATABASES */
 
     MUCK::setLocation(objno, getref(f));
     rawContents[objno] = getref(f);
     rawNext[objno] = getref(f);
 
-#ifdef ARCHAIC_DATABASES
-    if (dtype < 6)
-        LOADLOCK(objno, getboolexp(f));
-
-    if (dtype == 3) {
-        if (verboseload)
-            fprintf(stderr, "[timestamps v3] ");
-        /* Mage timestamps */
-        o->ts.created = getref(f);
-        o->ts.modified = getref(f);
-        o->ts.lastused = getref(f);
-        o->ts.usecount = 0;
-    }
-
-    if (dtype <= 3) {
-        /* Lachesis, WhiteFire, and Mage messages */
-        LOADFAIL(objno, getstring_oldcomp_noalloc(f));
-        LOADSUCC(objno, getstring_oldcomp_noalloc(f));
-        LOADDROP(objno, getstring_oldcomp_noalloc(f));
-        LOADOFAIL(objno, getstring_oldcomp_noalloc(f));
-        LOADOSUCC(objno, getstring_oldcomp_noalloc(f));
-        LOADODROP(objno, getstring_oldcomp_noalloc(f));
-    }
-#endif /* ARCHAIC_DATABASES */
 
     if (verboseload)
         fprintf(stderr, "[flags] ");
@@ -710,10 +435,6 @@ db_read_object_foxen(FILE * f, struct object *o, dbref objno, int dtype, int rea
                 fprintf(stderr, "[type: PROGRAM] ");
             MUCK::setOwner(objno, getref(f));
             MUCK::clearFlags(objno, INTERNAL);
-#ifdef ARCHAIC_DATABASES
-            if (dtype < 5 && MLevel(objno) == 0)
-                SetMLevel(objno, 2);
-#endif /* ARCHAIC_DATABASES */
             break;
         case TYPE_GARBAGE:
             MUCK::setName(objno, "<garbage>");
@@ -828,25 +549,6 @@ MUCK::FlatFileConverter::import(FILE * f)
 
     if ((c = getc(f)) == '*') {
         special = getstring(f);
-#ifdef ARCHAIC_DATABASES
-        if (!strcmp(special, "**TinyMUCK DUMP Format***")) {
-            db_load_format = 1;
-        } else if (!strcmp(special, "**Lachesis TinyMUCK DUMP Format***") || !strcmp(special, "**WhiteFire TinyMUCK DUMP Format***")) {
-            db_load_format = 2;
-        } else if (!strcmp(special, "**Mage TinyMUCK DUMP Format***")) {
-            db_load_format = 3;
-        } else if (!strcmp(special, "**Foxen TinyMUCK DUMP Format***")) {
-            db_load_format = 4;
-        } else if (!strcmp(special, "**Foxen2 TinyMUCK DUMP Format***")) {
-            db_load_format = 5;
-        } else if (!strcmp(special, "**Foxen3 TinyMUCK DUMP Format***")) {
-            db_load_format = 6;
-        } else if (!strcmp(special, "**Foxen4 TinyMUCK DUMP Format***")) {
-            db_load_format = 6;
-            i = getref(f);
-            MUCK::database().ensureTop(i);
-        } else
-#endif /* ARCHAIC_DATABASES */
         if (!strcmp(special, "**Foxen5 TinyMUCK DUMP Format***") ||
                 !strcmp(special, "**Foxen6 TinyMUCK DUMP Format***") || !strcmp(special, "**Foxen7 TinyMUCK DUMP Format***") || !strcmp(special, "**NeonMuck V2 DUMP Format***")) {
             db_load_format = !strcmp(special, "**Foxen7 TinyMUCK DUMP Format***") ? 8 : 7;
@@ -872,17 +574,6 @@ MUCK::FlatFileConverter::import(FILE * f)
             MUCK::PasswordHash::version = MUCK::PasswordHash::enabled ? ((dbflags & HVER_MASK) >> HVER_SHIFT) : HVER_NONE;
 
             MUCK::database().ensureTop(i);
-#ifdef ARCHAIC_DATABASES
-        } else if (!strcmp(special, "***Foxen Deltas Dump Extention***")) {
-            db_load_format = 4;
-            doing_deltas = 1;
-        } else if (!strcmp(special, "***Foxen2 Deltas Dump Extention***")) {
-            db_load_format = 5;
-            doing_deltas = 1;
-        } else if (!strcmp(special, "***Foxen4 Deltas Dump Extention***")) {
-            db_load_format = 6;
-            doing_deltas = 1;
-#endif /* ARCHAIC_DATABASES */
         } else if (!strcmp(special, "***Foxen5 Deltas Dump Extention***") ||
                    !strcmp(special, "***Foxen6 Deltas Dump Extention***") ||
                    !strcmp(special, "***Foxen7 Deltas Dump Extention***") || !strcmp(special, "***NeonMuck V2 Deltas Dump Format***")) {
@@ -918,27 +609,7 @@ MUCK::FlatFileConverter::import(FILE * f)
 
                 /* read it in */
                 o = DBFETCH(thisref);
-#ifdef ARCHAIC_DATABASES
-                switch (db_load_format) {
-                    case 0:
-                        db_read_object_old(f, o, thisref);
-                        break;
-                    case 1:
-                        db_read_object_new(f, o, thisref);
-                        break;
-                    case 2:
-                    case 3:
-                    case 4:
-                    case 5:
-                    case 6:
-                    case 7:
-                    case 8:
-                        db_read_object_foxen(f, o, thisref, db_load_format, doing_deltas);
-                        break;
-                }
-#else /* !ARCHAIC_DATABASES */
                 db_read_object_foxen(f, o, thisref, db_load_format, doing_deltas);
-#endif /* !ARCHAIC_DATABASES */
 
                 /* every imported object gets a fresh identity */
                 MUCK::database().assignUUID(thisref, MUCK::UUID::generate());
@@ -956,11 +627,6 @@ MUCK::FlatFileConverter::import(FILE * f)
                 } else {
                     delete[]special;
                     special = getstring(f);
-#ifdef ARCHAIC_DATABASES
-                    if (!special || strcmp(special, "***Foxen Deltas Dump Extention***")) {
-                        if (!special || strcmp(special, "***Foxen2 Deltas Dump Extention***")) {
-                            if (!special || strcmp(special, "***Foxen4 Deltas Dump Extention***")) {
-#endif /* ARCHAIC_DATABASES */
                                 /* AND, not OR: "matches none of the
                                  * deltas markers." The OR form was
                                  * true for every possible string, so
@@ -1001,23 +667,6 @@ MUCK::FlatFileConverter::import(FILE * f)
                                         ? 8 : 7;
                                     doing_deltas = 1;
                                 }
-#ifdef ARCHAIC_DATABASES
-                            } else {
-                                delete[]special;
-                                db_load_format = 6;
-                                doing_deltas = 1;
-                            }
-                        } else {
-                            delete[]special;
-                            db_load_format = 5;
-                            doing_deltas = 1;
-                        }
-                    } else {
-                        delete[]special;
-                        db_load_format = 4;
-                        doing_deltas = 1;
-                    }
-#endif /* ARCHAIC_DATABASES */
                 }
                 break;
             default:

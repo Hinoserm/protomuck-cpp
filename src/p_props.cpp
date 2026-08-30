@@ -172,9 +172,6 @@ prim_getprop(PRIM_PROTOTYPE)
 #endif
 
         if (prptr) {
-#ifdef DISKBASE
-            propfetch(obj2, prptr);
-#endif
             switch (PropType(prptr)) {
                 case PROP_STRTYP:
                     PushString(PropDataUNCStr(prptr));
@@ -255,9 +252,6 @@ prim_getpropstr(PRIM_PROTOTYPE)
         if (!ptr) {
             temp = "";
         } else {
-#ifdef DISKBASE
-            propfetch(oper[1].data.objref, ptr);
-#endif
             switch (PropType(ptr)) {
                 case PROP_STRTYP:
                     temp = PropDataUNCStr(ptr);
@@ -376,9 +370,6 @@ prim_envprop(PRIM_PROTOTYPE)
             result = 0;
             PushInt(result);
         } else {
-#ifdef DISKBASE
-            propfetch(what, ptr);
-#endif
             switch (PropType(ptr)) {
                 case PROP_STRTYP:
                     PushString(PropDataUNCStr(ptr));
@@ -441,9 +432,6 @@ prim_envpropstr(PRIM_PROTOTYPE)
         if (!ptr) {
             temp = "";
         } else {
-#ifdef DISKBASE
-            propfetch(what, ptr);
-#endif
             switch (PropType(ptr)) {
                 case PROP_STRTYP:
                     temp = PropDataUNCStr(ptr);
@@ -1150,9 +1138,6 @@ prim_array_filter_smart(PRIM_PROTOTYPE)
                             double fresult;
                             char *temp;
 
-#ifdef DISKBASE
-                            propfetch(oper[1].data.objref, prptr);
-#endif
                             switch (PropType(prptr)) {
                                 case PROP_STRTYP:
                                     if (fflags & FILTER_PROP_STRING) {
@@ -1482,9 +1467,6 @@ prim_parsepropex(PRIM_PROTOTYPE)
 
                                 int propcount = 0;
 
-#ifdef DISKBASE
-                                fetchprops(destination);
-#endif
 
                                 /* loop through all properties in the current propdir */
                                 propadr = first_prop(source, (char *) sourcedir, &pptr, propname);
@@ -1495,9 +1477,6 @@ prim_parsepropex(PRIM_PROTOTYPE)
 
                                     /* read property from source object */
                                     currprop = get_property(source, buf);
-#ifdef DISKBASE
-                                    propfetch(source, currprop);
-#endif
                                     if (currprop) {
                                         pdat.flags = currprop->flags;
 

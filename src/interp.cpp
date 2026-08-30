@@ -663,10 +663,6 @@ interp(int descr, dbref player, dbref location, dbref program, dbref source, int
     fr->preemptlimit = 0;
     tptr = get_property(program, "_/instlimit");
     if (tptr) {
-#ifdef DISKBASE
-        propfetch(program, tptr);
-#endif /* 
-        */
         if (PropType(tptr) == PROP_STRTYP)
             fr->preemptlimit = atoi(PropDataUNCStr(tptr));
     }

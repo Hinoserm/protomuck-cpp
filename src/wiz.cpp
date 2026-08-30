@@ -438,10 +438,6 @@ do_stats(dbref player, const char *name)
     int altered = 0;
     int oldobjs = 0;
 
-#ifdef DISKBASE
-    int loaded = 0;
-    int changed = 0;
-#endif
     int currtime = (int) current_systime;
     int tosize = 0;
     int tpsize = 0;
@@ -471,12 +467,6 @@ do_stats(dbref player, const char *name)
 
     for (i = 0; i < MUCK::database().top(); i++) {
 
-#ifdef DISKBASE
-        if (((owner == NOTHING) || (MUCK::getOwner(i) == owner)) && DBFETCH(i)->propsmode != PROPS_UNLOADED)
-            loaded++;
-        if (((owner == NOTHING) || (MUCK::getOwner(i) == owner)) && DBFETCH(i)->propsmode == PROPS_CHANGED)
-            changed++;
-#endif
 
         /* Unsaved means the object has something in its top journal
          * layer: the layer IS the unsaved set (docs/DATABASE.txt 7). */
@@ -560,12 +550,6 @@ do_stats(dbref player, const char *name)
                         "since boot)");
     }
 
-#ifdef DISKBASE
-    if (Mage(MUCK::getOwner(player))) {
-        anotify_fmt(player, SYSWHITE "%7d proploaded object%s                %7d propchanged object%s", loaded, (loaded == 1) ? " " : "s", changed, (changed == 1) ? "" : "s");
-
-    }
-#endif
 
 /* #ifdef DELTADUMPS */
     {
@@ -1006,10 +990,6 @@ do_powers(int descr, dbref player, const char *name, const char *power)
 }
 
 
-#ifdef DISKBASE
-extern int propcache_hits;
-extern int propcache_misses;
-#endif
 
 void
 do_serverdebug(int descr, dbref player, const char *arg1, const char *arg2)
@@ -1018,12 +998,6 @@ do_serverdebug(int descr, dbref player, const char *arg1, const char *arg2)
         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
         return;
     }
-#ifdef DISKBASE
-    if (!*arg1 || string_prefix(arg1, "cache")) {
-        anotify_nolisten2(player, CINFO "Cache info:");
-        diskbase_debug(player);
-    }
-#endif
 
     anotify_nolisten2(player, CINFO "Done.");
 }
@@ -1658,11 +1632,6 @@ do_memory(dbref who)
 # endif /* HAVE_MALLINFO */
 #endif /* NO_MEMORY_COMMAND */
 
-#ifdef MALLOC_PROFILING
-    notify(who, "  ");
-    CrT_summarize(who);
-    CrT_summarize_to_file("malloc_log", "Manual Checkpoint");
-#endif
 
     anotify_nolisten2(who, CINFO "Done.");
 }

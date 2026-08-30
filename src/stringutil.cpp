@@ -1049,7 +1049,6 @@ pronoun_substitute(int descr, dbref player, const char *str)
     return buf;
 }
 */
-#ifndef MALLOC_PROFILING
 
 char *
 alloc_string(const char *string)
@@ -1112,9 +1111,7 @@ alloc_prog_string_exact(const char *s, int length, int wclength)
 #endif
 }
 
-#endif
 
-#if !defined(MALLOC_PROFILING)
 char *
 string_dup(const char *s)
 {
@@ -1127,7 +1124,6 @@ string_dup(const char *s)
         memcpy(p, s, len);
     return (p);
 }
-#endif
 
 char *
 intostr(char *buf, MUFINT i)

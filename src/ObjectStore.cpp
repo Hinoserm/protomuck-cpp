@@ -2634,7 +2634,6 @@ ObjectStore::loadAll()
             return;
 
         const std::string &full = prep.path;
-        json &j = prep.j;
         UUID fileUUID = prep.fileUUID;
         dbref claimed = prep.claimed;
         long delEra = prep.delEra;

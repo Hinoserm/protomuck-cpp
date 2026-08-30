@@ -17,9 +17,7 @@
 #include "ObjectStore.h"
 #include <cstring>
 
-#ifndef MALLOC_PROFILING
 extern char *alloc_string(const char *);
-#endif
 
 namespace MUCK {
 

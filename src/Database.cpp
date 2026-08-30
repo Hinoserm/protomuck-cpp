@@ -17,9 +17,7 @@
 #include "Journal.h"
 #include "strutils.h"
 
-#ifndef MALLOC_PROFILING
 extern char *alloc_string(const char *);
-#endif
 
 namespace MUCK {
 

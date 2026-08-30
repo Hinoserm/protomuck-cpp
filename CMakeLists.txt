@@ -55,10 +55,10 @@ add_custom_target(gen_version DEPENDS ${GEN_INC}/version.h)
 set(PROTO_SOURCES
     src/array.cpp src/boolexp.cpp src/cgi.cpp src/compile.cpp src/compress.cpp
     src/create.cpp src/Database.cpp src/MacroTable.cpp src/UUID.cpp src/DbObject.cpp src/LegacyDbIO.cpp src/ModuleRegistry.cpp src/ObjectStore.cpp src/ObjectAccess.cpp src/Journal.cpp src/FlatFileConverter.cpp src/PasswordHash.cpp src/ProgramStore.cpp src/PropertyTree.cpp src/PropNode.cpp src/debugger.cpp src/disassem.cpp
-    src/diskprop.cpp src/edit.cpp src/events.cpp src/game.cpp src/hashtab.cpp
+    src/edit.cpp src/events.cpp src/game.cpp src/hashtab.cpp
     src/help.cpp src/inst.cpp src/interp.cpp src/log.cpp src/look.cpp
     src/match.cpp src/mfuns.cpp src/mfuns2.cpp src/mfuns3.cpp src/msgparse.cpp
-    src/move.cpp src/mufevent.cpp src/crt_malloc.cpp src/oldcompress.cpp
+    src/move.cpp src/mufevent.cpp src/crt_malloc.cpp
     src/player.cpp src/predicates.cpp src/p_array.cpp src/p_connects.cpp
     src/p_db.cpp src/p_error.cpp src/p_float.cpp src/p_file.cpp src/p_html.cpp
     src/p_http.cpp src/p_math.cpp src/p_misc.cpp src/p_muf.cpp src/p_mysql.cpp
