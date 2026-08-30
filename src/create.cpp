@@ -421,11 +421,16 @@ do_link(int descr, dbref player, const char *thing_name, const char *dest_name)
                 return;
             }
             /* do the link */
+            /* setHomeRef, not setHome: the pointer overload resolves
+             * the dbref through database().get(), which returns null
+             * for the negative sentinels, so "@link thing=home" and
+             * "@link thing=nil" silently stored NOTHING while the
+             * success message named the sentinel the admin chose. */
             if (Typeof(thing) == TYPE_THING) {
                 MUCK::database().get(thing)->As<MUCK::Thing>()
-                    ->setHome(MUCK::database().get(dest));
+                    ->setHomeRef(dest);
             } else
-                MUCK::database().get(thing)->As<MUCK::Player>()->setHome(MUCK::database().get(dest));
+                MUCK::database().get(thing)->As<MUCK::Player>()->setHomeRef(dest);
             sprintf(buf, CSUCC "%s's home set to %s.", MUCK::getName(thing), unparse_object(player, dest));
             anotify_nolisten2(player, buf);
             break;
@@ -446,8 +451,11 @@ do_link(int descr, dbref player, const char *thing_name, const char *dest_name)
                 || (thing == dest)) {
                 anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
             } else {
+                /* setDropToRef: same sentinel hazard as setHome
+                 * above, and "@link room=home" is the common way to
+                 * make a room drop its contents home */
                 MUCK::database().get(thing)->As<MUCK::Room>()
-                    ->setDropTo(MUCK::database().get(dest));
+                    ->setDropToRef(dest);
                 sprintf(buf, CSUCC "%s's dropto set to %s.", MUCK::getName(thing), unparse_object(player, dest));
                 anotify_nolisten2(player, buf);
             }

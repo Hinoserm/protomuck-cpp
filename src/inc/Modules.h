@@ -44,7 +44,11 @@ class Room : public Container {
     void setDropToRef(dbref d);
 
   private:
-    dbref dropTo_ = -3;         /* NOTHING */
+    /* NOTHING (-1), not HOME (-3): the comment said NOTHING but the
+     * value was HOME, so every @dig'd room defaulted to dropping its
+     * contents home the moment anyone set it STICKY, with no @link
+     * ever run. */
+    dbref dropTo_ = NOTHING;
 };
 
 class Thing : public Container {

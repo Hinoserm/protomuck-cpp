@@ -104,9 +104,15 @@ MacroTable::eraseNode(Node *oldnode, Node *node, const char *killname, Node *mto
 {
     if (!node)
         return false;
-    else if (strcmp(killname, node->name) < 0)
+    /* string_compare, not strcmp: names are downcased when they are
+     * inserted (newNode), and lookup() and the root case in remove()
+     * both compare case-insensitively. Using a case-sensitive compare
+     * here meant "@macro/kill MyMacro" reported "not found" for any
+     * non-root macro typed in anything but lowercase, while the macro
+     * kept existing and expanding. */
+    else if (string_compare(killname, node->name) < 0)
         return eraseNode(node, node->left, killname, mtop);
-    else if (strcmp(killname, node->name))
+    else if (string_compare(killname, node->name))
         return eraseNode(node, node->right, killname, mtop);
     else {
         if (node == oldnode->left) {
