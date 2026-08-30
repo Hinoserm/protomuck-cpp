@@ -538,6 +538,58 @@ setUseCount(dbref ref, int n)
     touched(ref);
 }
 
+/* --- MPI profiling counters -------------------------------------- */
+/* Transient: never journalled, never persisted, reset by @mpitops.
+ * Blanket-safe like the rest of this layer, so an invalid ref reads
+ * as zero and writes go nowhere. */
+
+unsigned int
+mpiProfileUses(dbref ref)
+{
+    struct object *o = rec(ref);
+
+    return o ? o->mpi_prof_use : 0;
+}
+
+double
+mpiProfileSeconds(dbref ref)
+{
+    struct object *o = rec(ref);
+
+    if (!o)
+        return 0.0;
+    return (double) o->mpi_proftime.tv_sec
+        + (o->mpi_proftime.tv_usec / 1000000.0);
+}
+
+void
+mpiProfileAdd(dbref ref, const struct timeval &elapsed)
+{
+    struct object *o = rec(ref);
+
+    if (!o)
+        return;
+    o->mpi_proftime.tv_sec += elapsed.tv_sec;
+    o->mpi_proftime.tv_usec += elapsed.tv_usec;
+    if (o->mpi_proftime.tv_usec >= 1000000) {
+        o->mpi_proftime.tv_usec -= 1000000;
+        o->mpi_proftime.tv_sec += 1;
+    }
+    o->mpi_prof_use++;
+}
+
+void
+mpiProfileReset(dbref ref)
+{
+    struct object *o = rec(ref);
+
+    if (!o)
+        return;
+    o->mpi_prof_use = 0;
+    o->mpi_proftime.tv_sec = 0;
+    o->mpi_proftime.tv_usec = 0;
+}
+
 /* --- descriptions ----------------------------------------------- */
 
 const char *

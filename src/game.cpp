@@ -2031,9 +2031,9 @@ prop_command(int descr, dbref player, const char *command, const char *arg, cons
                 notify_descriptor(descr, "Invalid program call from a command prop.");
 		return 1;
             } else {
-            if (OkObj(DBFETCH(progRef)->location) && 
+            if (OkObj(DBFETCH(progRef)->location) &&
 		(Typeof(DBFETCH(progRef)->location == TYPE_ROOM) || Typeof(DBFETCH(progRef)->location) == TYPE_THING)) {
-    	        if (Wizard(player) || Mage(where) || controls(player,progRef) || 
+    	        if (Wizard(player) || Mage(where) || controls(player,progRef) ||
                    ((FLAGS(progRef) & JUMP_OK) || (FLAGS(DBFETCH(progRef)->location) & JUMP_OK)) )
 		    enter_room(descr, player, (int) (DBFETCH(progRef)->location), progRef);
         	else

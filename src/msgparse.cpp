@@ -1141,13 +1141,7 @@ do_parse_mesg(int descr, dbref player, dbref what, const char *inbuf, const char
             }
             et.tv_usec -= st.tv_usec;
             et.tv_sec -= st.tv_sec;
-            DBFETCH(what)->mpi_proftime.tv_sec += et.tv_sec;
-            DBFETCH(what)->mpi_proftime.tv_usec += et.tv_usec;
-            if (DBFETCH(what)->mpi_proftime.tv_usec >= 1000000) {
-                DBFETCH(what)->mpi_proftime.tv_usec -= 1000000;
-                DBFETCH(what)->mpi_proftime.tv_sec += 1;
-            }
-            DBFETCH(what)->mpi_prof_use++;
+            MUCK::mpiProfileAdd(what, et);
         }
 
         return (tmp);

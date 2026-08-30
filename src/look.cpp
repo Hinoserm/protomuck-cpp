@@ -882,17 +882,21 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
     /* Timestamps */
     /* ex: time_tm = localtime((time_t *)(&(DBFETCH(thing)->ts.created))); */
 
-    time_tm = localtime((&(DBFETCH(thing)->ts.created)));
+    time_t tstamp = MUCK::getCreated(thing);
+
+    time_tm = localtime(&tstamp);
     ref_tm = MUCK::getCreatedBy(thing);
     format_time(buf2, BUFFER_LEN, (char *) SYSFOREST "Created:" SYSGREEN "  %a %b %e %T %Z %Y", time_tm);
     sprintf(buf, "%s by %s", buf2, ref_tm < 0 ? "*NOTHING*" : ansi_unparse_object(MUCK::getOwner(player), ref_tm));
     anotify_nolisten(player, buf, 1);
-    time_tm = localtime((&(DBFETCH(thing)->ts.modified)));
+    tstamp = MUCK::getModified(thing);
+    time_tm = localtime(&tstamp);
     ref_tm = MUCK::getModifiedBy(thing);
     format_time(buf2, BUFFER_LEN, (char *) SYSFOREST "Modified:" SYSGREEN " %a %b %e %T %Z %Y", time_tm);
     sprintf(buf, "%s by %s", buf2, ref_tm < 0 ? "*NOTHING*" : ansi_unparse_object(MUCK::getOwner(player), ref_tm));
     anotify_nolisten(player, buf, 1);
-    time_tm = localtime((&(DBFETCH(thing)->ts.lastused)));
+    tstamp = MUCK::getLastUsed(thing);
+    time_tm = localtime(&tstamp);
     ref_tm = MUCK::getLastUsedBy(thing);
     format_time(buf2, BUFFER_LEN, (char *) SYSFOREST "Lastused:" SYSGREEN " %a %b %e %T %Z %Y", time_tm);
     sprintf(buf, "%s by %s", buf2, ref_tm < 0 ? "*NOTHING*" : ansi_unparse_object(MUCK::getOwner(player), ref_tm));

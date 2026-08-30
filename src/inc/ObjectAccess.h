@@ -134,6 +134,15 @@ void setModified(dbref ref, time_t when, dbref who);
 void setLastUsed(dbref ref, time_t when, dbref who);
 void setUseCount(dbref ref, int n);
 
+/* --- MPI profiling counters ------------------------------------- */
+/* Transient runtime statistics, not part of the entry model: they are
+ * never journalled and never persisted, and they reset with @mpitops.
+ * Accessors exist so nothing has to reach into the legacy payload. */
+unsigned int mpiProfileUses(dbref ref);
+double mpiProfileSeconds(dbref ref);
+void mpiProfileAdd(dbref ref, const struct timeval &elapsed);
+void mpiProfileReset(dbref ref);
+
 /* --- descriptions and the other message properties -------------- */
 /* These are properties, so they already journal through the property
  * funnel; they exist here so call sites have one vocabulary. */

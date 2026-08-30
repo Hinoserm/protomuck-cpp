@@ -1331,10 +1331,8 @@ do_mpi_topprofs(dbref player, char *arg1)
 
     if (!string_compare(arg1, "reset")) {
         for (i = MUCK::database().top(); i-- > 0;) {
-            if (DBFETCH(i)->mpi_prof_use) {
-                DBFETCH(i)->mpi_prof_use = 0;
-                DBFETCH(i)->mpi_proftime.tv_usec = 0;
-                DBFETCH(i)->mpi_proftime.tv_sec = 0;
+            if (MUCK::mpiProfileUses(i)) {
+                MUCK::mpiProfileReset(i);
             }
         }
         mpi_prof_start_time = current_systime;
@@ -1349,15 +1347,14 @@ do_mpi_topprofs(dbref player, char *arg1)
     }
 
     for (i = MUCK::database().top(); i-- > 0;) {
-        if (DBFETCH(i)->mpi_prof_use) {
+        if (MUCK::mpiProfileUses(i)) {
             struct profnode *newnode = new profnode;
 
             newnode->next = NULL;
             newnode->prog = i;
-            newnode->proftime = DBFETCH(i)->mpi_proftime.tv_sec;
-            newnode->proftime += (DBFETCH(i)->mpi_proftime.tv_usec / 1000000.0);
+            newnode->proftime = MUCK::mpiProfileSeconds(i);
             newnode->comptime = current_systime - mpi_prof_start_time;
-            newnode->usecount = DBFETCH(i)->mpi_prof_use;
+            newnode->usecount = MUCK::mpiProfileUses(i);
             if (newnode->comptime > 0) {
                 newnode->pcnt = 100.0 * newnode->proftime / newnode->comptime;
             } else {
@@ -1444,10 +1441,8 @@ do_all_topprofs(dbref player, char *arg1)
 
     if (!string_compare(arg1, "reset")) {
         for (i = MUCK::database().top(); i-- > 0;) {
-            if (DBFETCH(i)->mpi_prof_use) {
-                DBFETCH(i)->mpi_prof_use = 0;
-                DBFETCH(i)->mpi_proftime.tv_usec = 0;
-                DBFETCH(i)->mpi_proftime.tv_sec = 0;
+            if (MUCK::mpiProfileUses(i)) {
+                MUCK::mpiProfileReset(i);
             }
             if (Typeof(i) == TYPE_PROGRAM) {
                 MUCK::programRuntime(i).profTime.tv_sec = 0;
@@ -1472,15 +1467,14 @@ do_all_topprofs(dbref player, char *arg1)
     }
 
     for (i = MUCK::database().top(); i-- > 0;) {
-        if (DBFETCH(i)->mpi_prof_use) {
+        if (MUCK::mpiProfileUses(i)) {
             struct profnode *newnode = new profnode;
 
             newnode->next = NULL;
             newnode->prog = i;
-            newnode->proftime = DBFETCH(i)->mpi_proftime.tv_sec;
-            newnode->proftime += (DBFETCH(i)->mpi_proftime.tv_usec / 1000000.0);
+            newnode->proftime = MUCK::mpiProfileSeconds(i);
             newnode->comptime = current_systime - mpi_prof_start_time;
-            newnode->usecount = DBFETCH(i)->mpi_prof_use;
+            newnode->usecount = MUCK::mpiProfileUses(i);
             newnode->type = 0;
             if (newnode->comptime > 0) {
                 newnode->pcnt = 100.0 * newnode->proftime / newnode->comptime;
