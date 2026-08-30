@@ -555,6 +555,26 @@ typeNameOf(dbref i)
     return MUCK::typeName(MUCK::typeOf(i));
 }
 
+/* The type name as it must be STORED, which is not the live type name
+ * for an object whose type module is absent this boot. Such an object
+ * is loaded as an UNSUPPORTED placeholder that remembers its real
+ * identity in dormantTypeInfo, and every writer has to agree on that
+ * identity: a base write consulted the map, but the seal path did
+ * not, so the first edit to a dormant-type object sealed a delta line
+ * stamped "unsupported" and the next compaction folded that generic
+ * placeholder over the base file's true original type name,
+ * permanently. Read-only after load, so the seal workers may call it
+ * concurrently. */
+static std::string
+storedTypeNameOf(dbref i)
+{
+    auto pt = dormantTypeInfo.find(MUCK::database().UUIDOf(i));
+
+    if (pt != dormantTypeInfo.end())
+        return pt->second.value("name", "garbage");
+    return typeNameOf(i);
+}
+
 /* ------------------------------------------------------------------ */
 /* The chunk pool: content-addressed storage for bulk values (program */
 /* source lines). A chunk file's name is the sha1 of its content;     */
@@ -755,7 +775,7 @@ objectToJson(dbref i)
 
     j["uuid"] = MUCK::database().UUIDOf(i).toString();
     j["dbref"] = (int) i;
-    j["type"] = typeNameOf(i);
+    j["type"] = storedTypeNameOf(i);
     j["modules"] = json::array();
 
     /* An UNSUPPORTED placeholder saves as what it would have been:
@@ -763,12 +783,10 @@ objectToJson(dbref i)
     int typeBitsOut = (int) (o->flags & TYPE_MASK);
 
     {
-        auto pt = dormantTypeInfo.find(UUID::parse(j["uuid"].get<std::string>()));
+        auto pt = dormantTypeInfo.find(MUCK::database().UUIDOf(i));
 
-        if (pt != dormantTypeInfo.end()) {
-            j["type"] = pt->second.value("name", "garbage");
+        if (pt != dormantTypeInfo.end())
             typeBitsOut = pt->second.value("bits", 0) & TYPE_MASK;
-        }
     }
 
     json e;
@@ -1203,28 +1221,43 @@ ObjectStore::objectPath(dbref i) const
 /* Durability: torn files after power loss have been a real problem
  * here, so a write is not finished until its bytes are on the platter
  * and the rename that publishes them is too. docs/DATABASE.txt 7.1. */
-static void
+/* Both report failure. Treating a failed fsync as success is how an
+ * operator gets told a dump committed durably while the data is
+ * still only in a page cache the disk is refusing; on this store
+ * that same false success advances the committed watermark, which
+ * licenses the next boot to discard the journal that still holds the
+ * data. A failed close() counts too: on some filesystems that is
+ * where a deferred write error is finally reported. */
+static bool
 syncFile(const std::string &path)
 {
     int fd = open(path.c_str(), O_RDONLY);
 
-    if (fd >= 0) {
-        fsync(fd);
-        close(fd);
-    }
+    if (fd < 0)
+        return false;
+
+    bool ok = fsync(fd) == 0;
+
+    if (close(fd) != 0)
+        ok = false;
+    return ok;
 }
 
-static void
+static bool
 syncDirOf(const std::string &path)
 {
     size_t slash = path.rfind('/');
     std::string dir = (slash == std::string::npos) ? "." : path.substr(0, slash);
     int fd = open(dir.c_str(), O_RDONLY | O_DIRECTORY);
 
-    if (fd >= 0) {
-        fsync(fd);
-        close(fd);
-    }
+    if (fd < 0)
+        return false;
+
+    bool ok = fsync(fd) == 0;
+
+    if (close(fd) != 0)
+        ok = false;
+    return ok;
 }
 
 static bool
@@ -1257,14 +1290,25 @@ atomicWrite(const std::string &path, const std::string &content,
      * (the dump's layer phase), which pay ONE filesystem barrier for
      * the whole batch before their commit point instead of two
      * fsyncs per file; the rename is still atomic either way. */
-    if (syncIt)
-        syncFile(tmp);
+    if (syncIt && !syncFile(tmp)) {
+        /* the bytes are not on the platter; publishing them now
+         * would claim a durability that does not exist */
+        fprintf(stderr, "STORE: fsync failed for %s (%s)\n",
+                tmp.c_str(), strerror(errno));
+        unlink(tmp.c_str());
+        return false;
+    }
     if (rename(tmp.c_str(), path.c_str()) != 0) {
         unlink(tmp.c_str());
         return false;
     }
-    if (syncIt)
-        syncDirOf(path);
+    if (syncIt && !syncDirOf(path)) {
+        /* the file is correct but the rename that publishes it may
+         * not survive; the caller must not treat this as committed */
+        fprintf(stderr, "STORE: directory fsync failed for %s (%s)\n",
+                path.c_str(), strerror(errno));
+        return false;
+    }
     return true;
 }
 
@@ -2534,7 +2578,7 @@ ObjectStore::loadAll()
     journalSeq_ = manifest.value("journal_committed", 0L);
     journalDistributed_.store(manifest.value("journal_distributed", 0L));
     journalLandedCommitted_.store(journalSeq_);
-    journalUnlinked_ = journalDistributed_.load();
+    journalUnlinked_.store(journalDistributed_.load());
 
     if (manifest.contains("tombstones")) {
         std::vector<Database::Tombstone> list;
@@ -3398,7 +3442,7 @@ ObjectStore::fire(bool compact)
                 sealed.era = top->era();
                 sealed.ref = i;
                 sealed.uuid = MUCK::database().UUIDOf(i).toString();
-                sealed.typeName = typeNameOf(i);
+                sealed.typeName = storedTypeNameOf(i);
                 sealed.entries = json::object();
 
                 if (!o->baseWritten()) {
@@ -3899,8 +3943,18 @@ ObjectStore::distributeSegments(long keepAtMost)
             fprintf(stderr, "STORE: segment %ld damaged; folded what "
                     "was readable, quarantined the rest as %s.damaged\n",
                     s, journalSegmentPath(s).c_str());
-            rename(journalSegmentPath(s).c_str(),
-                   (journalSegmentPath(s) + ".damaged").c_str());
+            /* if the evidence cannot be preserved, do NOT advance:
+             * the watermark is what licenses the unlink, and
+             * unlinking the only surviving copy of unfolded
+             * mutations because a rename failed turns a recoverable
+             * fault into permanent loss */
+            if (rename(journalSegmentPath(s).c_str(),
+                       (journalSegmentPath(s) + ".damaged").c_str()) != 0) {
+                fprintf(stderr, "STORE: could not quarantine segment "
+                        "%ld (%s); leaving it in place\n", s,
+                        strerror(errno));
+                return;
+            }
         }
         journalDistributed_.store(s);
     }
@@ -3909,7 +3963,7 @@ ObjectStore::distributeSegments(long keepAtMost)
 void
 ObjectStore::unlinkDistributedSegments(long upTo)
 {
-    if (journalUnlinked_ >= upTo)
+    if (journalUnlinked_.load() >= upTo)
         return;
 
     /* A segment is the ONLY durable copy of its mutations until the
@@ -3933,9 +3987,17 @@ ObjectStore::unlinkDistributedSegments(long upTo)
             close(fd);
         }
     }
-    while (journalUnlinked_ < upTo) {
-        journalUnlinked_++;
-        unlink(journalSegmentPath(journalUnlinked_).c_str());
+    /* Not "dump thread only" any more: panic() runs saveAll on the
+     * faulting thread while an in-flight persist may still be in
+     * here, and a lost update on a plain long lets one of them skip
+     * the barrier a segment's retirement depends on. The exchange
+     * makes each segment number claimed by exactly one thread. */
+    long claim;
+
+    while ((claim = journalUnlinked_.load()) < upTo) {
+        if (!journalUnlinked_.compare_exchange_weak(claim, claim + 1))
+            continue;
+        unlink(journalSegmentPath(claim + 1).c_str());
     }
 }
 
@@ -4148,6 +4210,8 @@ ObjectStore::folderThreadMain()
                             "failed; will retry\n", s);
                     std::this_thread::sleep_for(std::chrono::seconds(5));
                 } else {
+                    bool preserved = true;
+
                     if (r == -1) {
                         healthDamagedSegment();
                         fprintf(stderr, "STORE: segment %ld damaged; "
@@ -4158,12 +4222,25 @@ ObjectStore::folderThreadMain()
                          * and letting the unlink destroy the evidence */
                         if (rename(journalSegmentPath(s).c_str(),
                                    (journalSegmentPath(s) + ".damaged").c_str())
-                            != 0)
+                            != 0) {
+                            /* the comment above was the intent; the
+                             * store() sat outside this guard, so the
+                             * watermark advanced anyway and the
+                             * unlink it licenses destroyed the very
+                             * evidence the rename failed to save */
                             fprintf(stderr, "STORE: could not quarantine "
                                     "segment %ld (%s); leaving it in "
                                     "place\n", s, strerror(errno));
+                            std::this_thread::sleep_for(
+                                std::chrono::seconds(5));
+                            preserved = false;
+                        }
                     }
-                    journalDistributed_.store(s);
+                    /* a plain continue here would skip the tail that
+                     * clears folderBusy_ and wakes folderIdleCv_,
+                     * wedging every sync barrier behind it forever */
+                    if (preserved)
+                        journalDistributed_.store(s);
                 }
             }
         } catch (const std::exception &e) {
@@ -4257,8 +4334,17 @@ ObjectStore::dumpThreadMain()
                  * re-dirties them: the next dump then writes a real
                  * full base instead of deltas folding into nothing
                  * and an index naming a missing file. */
+                /* EVERY unlanded layer, not just the full ones. The
+                 * entry-level dirty marks were consumed at seal, so
+                 * re-dirtying a delta object would seal a delta
+                 * carrying only whatever is marked now, and the edits
+                 * in the lost layer would never be written by
+                 * anything. Forcing a full rewrite is the only
+                 * recovery that captures them: the live object still
+                 * holds the state, so its next base write is
+                 * correct by construction. */
                 for (const SealedLayer &l : set.layers)
-                    if (l.full && !l.landed)
+                    if (!l.landed)
                         noteFailedFullLayer(l.ref);
             }
             idleCv_.notify_all();

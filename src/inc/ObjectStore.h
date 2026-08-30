@@ -382,7 +382,9 @@ class ObjectStore {
      * manifest calls distributed are removed). */
     long journalSeq_ = 0;
     std::atomic<long> journalDistributed_{0};
-    long journalUnlinked_ = 0;          /* dump thread only */
+    /* claimed one segment at a time: panic's saveAll and an
+     * in-flight persist can both be retiring segments at once */
+    std::atomic<long> journalUnlinked_{0};
     /* highest segment a LANDED manifest has committed: distribution
      * must never run ahead of this, or uncommitted changes would leak
      * into the per-object files and survive the crash that was
