@@ -358,6 +358,31 @@ panic(const char *message)
     log_status("PANIC: %s\n", message);
     fprintf(stderr, "PANIC: %s\n", message);
 
+    /* Exactly one thread writes the panic store. A fault handler
+     * fires on whichever thread died, and two threads walking and
+     * writing the same objects at once produces a worse store than
+     * either would alone. The loser parks; the process exits from
+     * under it in a moment. */
+    if (!MUCK::store().beginPanic()) {
+        for (;;)
+            sleep(1);
+    }
+
+    /* If the fault landed on a worker rather than the GAME thread,
+     * the game thread is still running commands and mutating the
+     * objects saveAll is about to walk. Ask it to park at its next
+     * poll point. Bounded: a game thread wedged in a syscall must not
+     * hang the crash dump forever, and a slightly torn store beats
+     * no store at all. */
+    if (!MUCK::store().onGameThread()) {
+        fprintf(stderr, "PANIC: raised off the game thread; parking it\n");
+        if (!MUCK::store().waitGameParked(3000)) {
+            log_status("PANIC: game thread did not park; store may be torn\n");
+            fprintf(stderr, "PANIC: game thread did not park; "
+                    "store may be torn\n");
+        }
+    }
+
     /* shut down interface */
     emergency_shutdown();
 

@@ -129,6 +129,10 @@ ObjectStore::excludeModule(const char *name, std::string *err)
         return false;
     }
     excludedModules.insert(n);
+    if (n == "properties")
+        fprintf(stderr, "STORE: properties module excluded; stored "
+                "property data rides dormant and is NOT visible or "
+                "editable this boot\n");
     return true;
 }
 
@@ -1100,7 +1104,15 @@ objectFromJsonPhase2(const PendingLinks &pl)
 {
     struct object *o = DBFETCH(pl.ref);
 
-    if (pl.props.is_array())
+    /* An excluded module is DORMANT, not merely unsaved. Its entries
+     * already ride through the save path untouched (knownNamespace
+     * rejects them, so they land in dormantUnknown and are re-emitted
+     * verbatim), and materializing them live as well produced the
+     * worst of both: the game showed a full property tree, accepted
+     * edits to it, and then discarded every one of them at save
+     * because the dormant copy wins. Leave the tree empty so an
+     * excluded boot behaves like the excluded boot it asked for. */
+    if (pl.props.is_array() && !ObjectStore::moduleExcluded("properties"))
         propsFromJson(pl.ref, pl.props);
 
     /* re-attach registered feature modules and hand each its entry
@@ -1671,7 +1683,8 @@ ObjectStore::snapshotObject(dbref i, const char *label, bool locked)
      * layer in the era that just ended. The marker goes into the
      * object's file below, which needs what was sealed to be on disk,
      * so this one case does write. */
-    syncNow();
+    if (!syncNow())
+        return -1;
 
     std::ifstream pf(path);
 
@@ -1785,7 +1798,11 @@ ObjectStore::rollbackObject(dbref i, long rev, std::string *err)
 {
     /* rolling back to a marker whose set has not landed yet would
      * find no stored state */
-    syncNow();
+    if (!syncNow()) {
+        if (err)
+            *err = "the store is still writing; try again shortly.";
+        return false;
+    }
 
     std::ifstream pf(objectPath(i));
 
@@ -2099,7 +2116,8 @@ ObjectStore::rollbackObject(dbref i, long rev, std::string *err)
             pe["value"] = it.value()["value"];
             props.push_back(pe);
         }
-        propsFromJson(i, props);
+        if (!ObjectStore::moduleExcluded("properties"))
+            propsFromJson(i, props);
     }
 
     /* program source */
@@ -2438,7 +2456,12 @@ prepareStoreFile(const std::string &full, PreparedFile &out,
         const json &ents = j["entries"];
         auto fl = ents.find("$core/flags");
 
-        if (fl != ents.end() && (*fl)["value"].is_array())
+        /* size check too: nlohmann's array operator[] past the end is
+         * unchecked UB, not a catchable exception, so the surrounding
+         * try/catch could not save the boot from a short array */
+        if (fl != ents.end() && (*fl).contains("value")
+            && (*fl)["value"].is_array() && (*fl)["value"].size() >= 1
+            && (*fl)["value"][0].is_number_integer())
             bits = (*fl)["value"][0].get<int>() & TYPE_MASK;
         info["name"] = out.tname;
         info["bits"] = bits;
@@ -4283,7 +4306,7 @@ ObjectStore::enqueue(CaptureSet set)
     queueCv_.notify_one();
 }
 
-void
+bool
 ObjectStore::syncNow()
 {
     /* Anything sealed but held is not on disk yet, and reading stored
@@ -4296,6 +4319,18 @@ ObjectStore::syncNow()
     set.distributeAll = true;
     flushHeld(std::move(set));
     drain();
+
+    /* drain() only proves the DUMP thread is idle. The folder is a
+     * separate thread, and its barrier inside persist() is bounded
+     * (a dead disk must not hang the game thread forever), so it can
+     * come back still behind. Callers read per-object files directly;
+     * doing that while the folder is mid-rewrite reads a torn file,
+     * and doing it after a silent timeout reads a stale one. Report
+     * the truth and let them refuse. */
+    std::unique_lock<std::mutex> lk(folderMutex_);
+
+    return !folderBusy_ && folderOrders_.empty()
+        && journalDistributed_.load() >= journalLandedCommitted_.load();
 }
 
 void
@@ -4315,6 +4350,59 @@ ObjectStore::persistPending()
     std::unique_lock<std::mutex> hold(queueMutex_);
 
     return !queue_.empty() || persisting_;
+}
+
+void
+ObjectStore::markGameThread()
+{
+    gameThread_ = std::this_thread::get_id();
+    gameThreadKnown_.store(true);
+}
+
+bool
+ObjectStore::onGameThread() const
+{
+    return gameThreadKnown_.load()
+        && std::this_thread::get_id() == gameThread_;
+}
+
+bool
+ObjectStore::beginPanic()
+{
+    bool was = false;
+
+    return panicking_.compare_exchange_strong(was, true);
+}
+
+void
+ObjectStore::panicParkSlow()
+{
+    if (!onGameThread())
+        return;
+
+    /* Terminal by design. The panicking thread is walking the live
+     * objects this thread owns; returning would resume mutating them
+     * underneath it, which is the whole thing being prevented. The
+     * process exits from panic() shortly. */
+    gameParked_.store(true);
+    for (;;)
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+}
+
+bool
+ObjectStore::waitGameParked(int millis)
+{
+    if (onGameThread())
+        return true;
+    if (!gameThreadKnown_.load())
+        return false;
+
+    for (int waited = 0; waited < millis; waited += 5) {
+        if (gameParked_.load())
+            return true;
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    return gameParked_.load();
 }
 
 void

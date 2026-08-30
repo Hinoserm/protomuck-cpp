@@ -196,7 +196,10 @@ class ObjectStore {
     /* Put everything held on disk and wait for it. Any read of stored
      * state takes this: a held set is not on disk, and reading without
      * it would see a world missing its most recent changes. */
-    void syncNow();
+    /* returns false if the folder barrier did not complete, meaning
+     * per-object files may be stale or mid-write; callers that read
+     * those files must refuse rather than trust them */
+    bool syncNow();
 
     /* Block until the dump thread has written everything queued.
      * Rollback, resurrection, marker reads, shutdown and @restart all
@@ -206,6 +209,38 @@ class ObjectStore {
 
     /* Stop the dump thread after draining. */
     void stopDumpThread();
+
+    /* Panic coordination.
+     *
+     * panic() runs on whichever thread faulted, which is not
+     * necessarily the GAME thread, and saveAll() walks every LIVE
+     * object. If the game thread keeps running commands underneath
+     * that walk it mutates objects mid-read, so the panic store
+     * records a world that never existed. Two threads panicking at
+     * once is worse still: both walk and both write.
+     *
+     * markGameThread() stamps the identity once at startup.
+     * beginPanic() lets exactly one thread through. panicPark() is
+     * the game thread's cooperative stop, called from the poll points
+     * it already passes through often (the command loop and the MUF
+     * instruction loop); once panicking it never returns.
+     * waitGameParked() gives the panicking thread a bounded wait for
+     * that to happen: bounded because a game thread wedged in a
+     * syscall would otherwise hang the crash dump forever, and a
+     * slightly torn store beats no store at all. */
+    void markGameThread();
+    bool onGameThread() const;
+    bool beginPanic();
+    bool waitGameParked(int millis);
+
+    /* Called once per MUF instruction, so the overwhelmingly common
+     * not-panicking case has to cost one relaxed load and nothing
+     * else; the parking itself is out of line. */
+    void panicPark()
+    {
+        if (panicking_.load(std::memory_order_relaxed))
+            panicParkSlow();
+    }
 
     /* Ask the dump thread to stop without waiting for it. For panic:
      * the world is coming down and cannot block on a worker that may
@@ -375,6 +410,13 @@ class ObjectStore {
 
     std::thread folderThread_;
     std::mutex folderMutex_;
+    void panicParkSlow();
+
+    std::thread::id gameThread_{};
+    std::atomic<bool> gameThreadKnown_{false};
+    std::atomic<bool> panicking_{false};
+    std::atomic<bool> gameParked_{false};
+
     std::condition_variable folderCv_;      /* work available */
     std::condition_variable folderIdleCv_;  /* caught up */
     std::deque<CompactOrder> folderOrders_;

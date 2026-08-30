@@ -885,7 +885,24 @@ tune_save_parms_to_file(FILE * f)
     struct tune_bool_entry *tbool = tune_bool_list;
 
     while (tstr->name) {
-        fprintf(f, "%s=%.4096s\n", tstr->name, *tstr->str);
+        /* One parm per LINE is the whole format, and the manifest
+         * splits this buffer back into lines, so a string parm
+         * containing a newline would be silently truncated at that
+         * newline on the next reload (and the tail read as a bogus
+         * parm). Write it with the newlines escaped; tune_setparm
+         * turns them back. */
+        const char *v = *tstr->str;
+
+        fprintf(f, "%s=", tstr->name);
+        for (int n = 0; v && *v && n < 4096; v++, n++) {
+            if (*v == '\n')
+                fputs("\\n", f);
+            else if (*v == '\\')
+                fputs("\\\\", f);
+            else
+                fputc(*v, f);
+        }
+        fputc('\n', f);
         tstr++;
     }
 
@@ -1178,8 +1195,12 @@ tune_load_parms_from_file(FILE * f, dbref player, int cnt)
     char *c, *p;
     int result = 0;
 
-    while (!feof(f) && (cnt < 0 || cnt--)) {
-        fgets(buf, sizeof(buf), f);
+    while ((cnt < 0 || cnt--)) {
+        /* An unchecked fgets leaves buf holding the PREVIOUS line at
+         * EOF, and feof() is only set after the failed read, so the
+         * last parm in the file was applied twice. */
+        if (!fgets(buf, sizeof(buf), f))
+            break;
         if (*buf != NUMBER_TOKEN) {
             p = c = index(buf, '=');
             if (c) {
@@ -1190,6 +1211,25 @@ tune_load_parms_from_file(FILE * f, dbref player, int cnt)
                     c++;
                 for (p = c; *p && *p != '\n' && *p != '\r'; p++) ;
                 *p = '\0';
+                /* undo the writer's escaping (see tune_save_parms_to_file):
+                 * one parm per line is the format, so a string parm
+                 * holding a newline can only travel escaped */
+                {
+                    char *rd = c, *wr = c;
+
+                    while (*rd) {
+                        if (*rd == '\\' && rd[1] == 'n') {
+                            *wr++ = '\n';
+                            rd += 2;
+                        } else if (*rd == '\\' && rd[1] == '\\') {
+                            *wr++ = '\\';
+                            rd += 2;
+                        } else {
+                            *wr++ = *rd++;
+                        }
+                    }
+                    *wr = '\0';
+                }
                 for (p = buf; isspace(*p); p++) ;
                 if (*p) {
                     result = tune_setparm(player, p, c);

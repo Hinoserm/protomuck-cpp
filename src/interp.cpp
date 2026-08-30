@@ -15,6 +15,7 @@
 #include "strutils.h"
 #include "interp.h"
 #include "mufevent.h"
+#include "ObjectStore.h"
 
 /* This package performs the interpretation of mud forth programs.
    It is a basically push pop kinda thing, but I'm making some stuff
@@ -1302,6 +1303,9 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
     }
     /* This is the 'natural' way to exit a function */
     while (stop) {
+        /* a long-running program must not keep mutating objects that
+         * a panic on another thread is busy walking */
+        MUCK::store().panicPark();
         /* Stores the time of the last shutdown processed instead of 1, just in
          * case I add the ability to cancel a delayed shutdown later. -brevantes */
         if (delayed_shutdown && (fr->shutdown_seen < delayed_shutdown)) {

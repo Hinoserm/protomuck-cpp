@@ -94,7 +94,8 @@ def _alive(pid):
         return False
 
 
-def start(binpath, infile, store, port, login='connect One potrzebie'):
+def start(binpath, infile, store, port, login='connect One potrzebie',
+          extra=None):
     """Launch a server and connect. Refuses to start over a live one."""
     deadline = time.time() + 20
     while _port_busy(port) and time.time() < deadline:
@@ -108,7 +109,8 @@ def start(binpath, infile, store, port, login='connect One potrzebie'):
     # the FIRST port argument as a bare "enable sockets" toggle and
     # binds the default port instead, so a single positional port is
     # silently ignored.
-    subprocess.Popen([binpath, '-port', str(port), infile, store],
+    subprocess.Popen([binpath, '-port', str(port)] + list(extra or [])
+                     + [infile, store],
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     # generous: sanitizer builds and hundred-thousand-object stores

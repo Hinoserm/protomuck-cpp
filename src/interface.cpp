@@ -369,6 +369,11 @@ extern void free_compress_dictionary(void);
 int
 main(int argc, char **argv)
 {
+    /* Stamp the thread that owns the live database before anything
+     * can fault: panic() runs on whichever thread died and needs to
+     * know whether it is the one still mutating objects. */
+    MUCK::store().markGameThread();
+
     FILE *ffd;
     char *infile_name = NULL;
     char *outfile_name = NULL;
@@ -4190,6 +4195,10 @@ process_input(struct descriptor_data *d)
 void
 process_commands(void)
 {
+    /* Cooperative stop for a panic raised on another thread; never
+     * returns once one is in progress. See ObjectStore::panicPark. */
+    MUCK::store().panicPark();
+
     int nprocessed;
     struct descriptor_data *d, *dnext;
     struct text_block *t;
