@@ -311,8 +311,15 @@ refFromJson(const json &v)
 static void
 propsToJson(json &arr, const char *dir, PropDirPtr d)
 {
-    char buf[BUFFER_LEN];
-    char ubuf[BUFFER_LEN];
+    /* HEAP, not stack: this function recurses once per propdir level,
+     * and two 64KB stack arrays per frame meant an ordinary player
+     * with a propdir nested ~60 deep (a/a/a/...:1, trivially short in
+     * bytes) blew the seal worker's stack and took the whole server
+     * down at the next dump. Heap frames make the same depth cost a
+     * few hundred stack bytes each. */
+    std::vector<char> bufv(BUFFER_LEN), ubufv(BUFFER_LEN);
+    char *buf = bufv.data();
+    char *ubuf = ubufv.data();
 
     if (!d)
         return;
@@ -367,7 +374,7 @@ propsToJson(json &arr, const char *dir, PropDirPtr d)
         }
 
         if (PropDir(p)) {
-            snprintf(buf, sizeof(buf), "%s%s%c", dir, PropName(p), PROPDIR_DELIMITER);
+            snprintf(buf, BUFFER_LEN, "%s%s%c", dir, PropName(p), PROPDIR_DELIMITER);
             propsToJson(arr, buf, PropDir(p));
         }
     }
@@ -383,6 +390,14 @@ propsFromJson(dbref obj, const json &arr)
 
         if (name.empty() || !entry.contains("value"))
             continue;
+        /* set_property_nofetch strcpys the name into a BUFFER_LEN
+         * stack array; an oversized name off disk is damage to skip,
+         * not a stack overflow to suffer */
+        if (name.size() >= BUFFER_LEN) {
+            fprintf(stderr, "STORE: #%d property name of %zu bytes "
+                    "exceeds the limit; skipped\n", obj, name.size());
+            continue;
+        }
         pdat.flags = (unsigned short) (flags & ~PROP_COMPRESSED);
         const json &v = entry["value"];
         std::string sval;
@@ -1789,10 +1804,21 @@ ObjectStore::rollbackObject(dbref i, long rev, std::string *err)
      * fields directly would leave the rollback unrecorded, and the
      * next restart would replay the pre-rollback state over it. */
 
+    /* A rollback that changes a player's name or turns something
+     * into or out of a player must keep the player-name lookup table
+     * in step, exactly as @name and @frob do; a restored player whose
+     * name is not in the table cannot log in until the next restart. */
+    bool wasPlayer = MUCK::typeOf(i) == TYPE_PLAYER;
+
+    if (wasPlayer)
+        delete_player(i);
+
     /* Life and death are just another entry. If the target revision
      * has no deletion entry then the object was alive then, so it is
      * alive now: that is the whole of resurrection, and it needs no
-     * path of its own. */
+     * path of its own. Both directions are CHANGES and must journal:
+     * an unrecorded revival re-deletes itself at the next restart,
+     * because the disk's latest word on $core/deleted still stands. */
     if (e.contains("$core/deleted")) {
         const json &d = e["$core/deleted"]["value"];
 
@@ -1804,6 +1830,7 @@ ObjectStore::rollbackObject(dbref i, long rev, std::string *err)
     } else {
         MUCK::database().reviveHole(i);
     }
+    journalRecord(i, "$core/deleted");
 
     /* Flags carry the type, and rolling back past a recycle has to put
      * the type back or the object stays a garbage shell wearing the
@@ -1826,11 +1853,56 @@ ObjectStore::rollbackObject(dbref i, long rev, std::string *err)
     /* Owner and location come back too. Recycling clears both, so an
      * object revived without them is owned by nobody and nowhere, and
      * anything that prints its owner's name walks off a null. */
-    if (e.contains("$core/owner"))
-        MUCK::setOwner(i, refFromJson(e["$core/owner"]["value"]));
+    /* powers and timestamps are ordinary versioned entries and roll
+     * back like everything else; leaving them out silently preserved
+     * a power grant (or revoked one) across the rollback */
+    if (e.contains("$core/powers")) {
+        const json &pw = e["$core/powers"]["value"];
+
+        if (pw.is_array() && pw.size() >= 2) {
+            MUCK::setOwnPowers(i, (object_power_type) pw[0].get<int>());
+            MUCK::setOwnPowers2(i, (object_power_type) pw[1].get<int>());
+        }
+    }
+    if (e.contains("$core/ts")) {
+        const json &ts = e["$core/ts"]["value"];
+
+        if (ts.is_array() && ts.size() >= 7) {
+            MUCK::setCreated(i, (time_t) ts[0].get<long>(),
+                             (dbref) ts[4].get<long>());
+            MUCK::setModified(i, (time_t) ts[1].get<long>(),
+                              (dbref) ts[5].get<long>());
+            MUCK::setLastUsed(i, (time_t) ts[2].get<long>(),
+                              (dbref) ts[6].get<long>());
+            MUCK::setUseCount(i, (int) ts[3].get<long>());
+        }
+    }
+
+    if (e.contains("$core/owner")) {
+        dbref own = refFromJson(e["$core/owner"]["value"]);
+
+        /* the snapshot's owner may itself be recycled by now; an
+         * object owned by a dead shell walks callers into nulls
+         * (getPowers reads the OWNER), so fall back to GOD, the same
+         * answer chown-on-toad gives */
+        if (own == NOTHING || !MUCK::database().valid(own)
+            || MUCK::typeOf(own) != TYPE_PLAYER)
+            own = (dbref) 1;
+        MUCK::setOwner(i, own);
+    }
     if (e.contains("$core/location")) {
         dbref loc = refFromJson(e["$core/location"]["value"]);
+        dbref cur = MUCK::getLocation(i);
 
+        /* DETACH from wherever the object is now before attaching it
+         * anywhere else, exactly as moveto does: attach alone leaves
+         * the object listed in two containers at once */
+        if (cur != NOTHING && MUCK::database().valid(cur)) {
+            if (MUCK::typeOf(i) == TYPE_EXIT)
+                MUCK::detachExit(cur, i);
+            else
+                MUCK::detachContent(cur, i);
+        }
         if (loc != NOTHING && MUCK::database().valid(loc)
             && MUCK::typeOf(loc) != ObjectType::Garbage) {
             MUCK::setLocation(i, loc);
@@ -1838,6 +1910,11 @@ ObjectStore::rollbackObject(dbref i, long rev, std::string *err)
                 MUCK::attachExit(loc, i);
             else
                 MUCK::attachContent(loc, i);
+        } else {
+            /* the snapshot's location no longer exists: nowhere is
+             * the honest answer, and it must not stay listed in its
+             * pre-rollback container */
+            MUCK::setLocation(i, NOTHING);
         }
     }
 
@@ -1872,6 +1949,10 @@ ObjectStore::rollbackObject(dbref i, long rev, std::string *err)
         MUCK::programs().setSourceLines(i, std::move(lines));
         uncompile_program(i);
     }
+
+    /* the other half of the name-table bracket above */
+    if (MUCK::typeOf(i) == TYPE_PLAYER)
+        add_player(i);
 
     DBDIRTY(i);
     log_status("ROLLBACK: #%d to rev %ld\n", i, rev);
@@ -2935,6 +3016,11 @@ ObjectStore::buildCompactOrder(dbref i, const std::vector<long> &globalRevs,
             MUCK::database().addTombstone(t);
             o->setBaseWritten(false);   /* leaves the committed index */
             o->scopedMarkers().clear();
+            /* the dormant slices die with the object, or they leak
+             * for the rest of the uptime */
+            dormantEntries.erase(o->uuid());
+            dormantModules.erase(o->uuid());
+            dormantTypeInfo.erase(o->uuid());
             o->journal().discardTop();
             forgetDirty(i);
             out->reclaim = true;
@@ -3347,6 +3433,8 @@ ObjectStore::distributeOneSegment(long seq)
     std::string line;
     long lines = 0;
 
+    long badLines = 0;
+
     while (std::getline(f, line)) {
         if (line.empty())
             continue;
@@ -3354,9 +3442,14 @@ ObjectStore::distributeOneSegment(long seq)
 
         if (l.is_discarded() || !l.contains("uuid")
             || !l.contains("entries")) {
-            fprintf(stderr, "STORE: journal segment %ld is damaged; "
-                    "keeping it aside\n", seq);
-            return -1;
+            /* one corrupt line must not discard the whole committed
+             * segment: everything readable still folds, the file is
+             * kept aside as evidence, and only the unreadable line
+             * itself is lost */
+            fprintf(stderr, "STORE: journal segment %ld has an "
+                    "unreadable line; folding the rest\n", seq);
+            badLines++;
+            continue;
         }
         lines++;
 
@@ -3383,6 +3476,8 @@ ObjectStore::distributeOneSegment(long seq)
     }
     f.close();
 
+    bool writeFailed = false;
+
     for (auto &kv : runs) {
         std::string path = UUIDObjectPath(root_, kv.first);
 
@@ -3408,10 +3503,26 @@ ObjectStore::distributeOneSegment(long seq)
                         && !prev.value("markers", json::array()).empty())
                         j["markers"] = prev["markers"];
                 }
-                atomicWrite(path, j.dump(1), false);
-                unlink((path.substr(0, path.size() - 5)
-                        + ".hist").c_str());
+                /* the hist goes only if the base actually landed: a
+                 * failed write (disk full, remount) with the unlink
+                 * anyway silently destroyed the object's history */
+                if (atomicWrite(path, j.dump(1), false))
+                    unlink((path.substr(0, path.size() - 5)
+                            + ".hist").c_str());
+                else
+                    writeFailed = true;
                 continue;
+            }
+
+            /* a delta for an object with NO base is a line for an
+             * object reclaimed after this segment committed: the
+             * manifest is newer truth, and appending would create an
+             * orphaned hist the next boot refuses over */
+            {
+                struct stat st;
+
+                if (stat(path.c_str(), &st) != 0)
+                    continue;
             }
 
             json rec;
@@ -3429,9 +3540,22 @@ ObjectStore::distributeOneSegment(long seq)
             if (hf) {
                 hf << rec.dump() << "\n";
                 hf.close();
+                if (!hf)
+                    writeFailed = true;
+            } else {
+                writeFailed = true;
             }
         }
     }
+    /* -2: transient write failure. The segment stays exactly where it
+     * is and the watermark must NOT advance; the next wake retries
+     * (refolding what did land is idempotent). -1: parse damage; the
+     * caller keeps the file aside, and everything readable was folded
+     * above. */
+    if (writeFailed)
+        return -2;
+    if (badLines)
+        return -1;
     return lines;
 }
 
@@ -3449,8 +3573,16 @@ ObjectStore::distributeSegments(long keepAtMost)
     while (journalLandedCommitted_.load() - journalDistributed_.load()
            > keepAtMost) {
         long s = journalDistributed_.load() + 1;
+        long r = distributeOneSegment(s);
 
-        if (distributeOneSegment(s) < 0) {
+        if (r == -2) {
+            /* the disk would not take the fold; the segment is intact
+             * and the watermark stays put, so a later pass retries */
+            fprintf(stderr, "STORE: folding segment %ld failed; will "
+                    "retry\n", s);
+            return;
+        }
+        if (r == -1) {
             /* damaged: preserve the evidence rather than delete data */
             rename(journalSegmentPath(s).c_str(),
                    (journalSegmentPath(s) + ".damaged").c_str());
@@ -3558,11 +3690,19 @@ ObjectStore::persist(const CaptureSet &set)
         {
             std::unique_lock<std::mutex> lk(folderMutex_);
 
-            folderIdleCv_.wait(lk, [this] {
-                return !folderBusy_ && folderOrders_.empty()
-                    && journalDistributed_.load()
-                       >= journalLandedCommitted_.load();
-            });
+            /* bounded: on a dead disk the folder can never finish,
+             * and a barrier that waits forever hangs the game thread
+             * behind it. Better a loud, slightly-stale read path than
+             * a silent hang. */
+            if (!folderIdleCv_.wait_for(lk, std::chrono::seconds(60),
+                                        [this] {
+                    return !folderBusy_ && folderOrders_.empty()
+                        && journalDistributed_.load()
+                           >= journalLandedCommitted_.load();
+                }))
+                fprintf(stderr, "STORE: sync barrier timed out waiting "
+                        "for the folder; per-object files may lag the "
+                        "journal\n");
         }
         folderLagTarget_.store(kJournalLag);
     }
@@ -3637,11 +3777,21 @@ ObjectStore::folderThreadMain()
                 compactObjectFile(root_, ord);
             } else {
                 long s = journalDistributed_.load() + 1;
+                long r = distributeOneSegment(s);
 
-                if (distributeOneSegment(s) < 0)
-                    rename(journalSegmentPath(s).c_str(),
-                           (journalSegmentPath(s) + ".damaged").c_str());
-                journalDistributed_.store(s);
+                if (r == -2) {
+                    /* the disk refused the fold (full, remounted);
+                     * keep the watermark, back off so a full disk is
+                     * not a busy loop, and retry on a later wake */
+                    fprintf(stderr, "STORE: folding segment %ld "
+                            "failed; will retry\n", s);
+                    std::this_thread::sleep_for(std::chrono::seconds(5));
+                } else {
+                    if (r == -1)
+                        rename(journalSegmentPath(s).c_str(),
+                               (journalSegmentPath(s) + ".damaged").c_str());
+                    journalDistributed_.store(s);
+                }
             }
         } catch (const std::exception &e) {
             fprintf(stderr, "STORE: folder work failed: %s\n", e.what());

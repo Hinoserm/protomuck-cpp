@@ -609,6 +609,10 @@ cut_bad_contents(dbref obj)
                 SanFixed2(obj, loop, "Contents list for %s cut at %s");
             }
             v.erase(v.begin() + i, v.end());
+            /* the repair is a change like any other: without a journal
+             * record it is never written, and the next restart loads
+             * the corrupted list right back */
+            MUCK::journalRecord(obj, "$type/contents");
             DBDIRTY(obj);
             return;
         }
@@ -637,6 +641,9 @@ cut_bad_exits(dbref obj)
                 SanFixed2(obj, loop, "Exits list for %s cut at %s");
             }
             v.erase(v.begin() + i, v.end());
+            /* same as cut_bad_contents: an unjournalled repair is
+             * silently undone by the next restart */
+            MUCK::journalRecord(obj, "$type/exits");
             DBDIRTY(obj);
             return;
         }

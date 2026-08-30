@@ -234,14 +234,15 @@ class ObjectStore {
     long lastDumpMillis() const { return lastDumpMillis_.load(); }
 
     /* Who ran @dump, so the completion message can go to them and
-     * not only the wizard wall. Game thread only; NOTHING when the
-     * dump was timed rather than commanded. */
-    void setDumpRequester(dbref who) { dumpRequester_ = who; }
-    dbref takeDumpRequester() {
-        dbref who = dumpRequester_;
+     * not only the wizard wall. Game thread only. A queue, not a
+     * slot: two wizards dumping back to back both deserve their
+     * notice, and the second must not silently eat the first's. */
+    void addDumpRequester(dbref who) { dumpRequesters_.push_back(who); }
+    std::vector<dbref> takeDumpRequesters() {
+        std::vector<dbref> out;
 
-        dumpRequester_ = -1;
-        return who;
+        out.swap(dumpRequesters_);
+        return out;
     }
 
     /* Dump thread (or inline): write a frozen set. Appends each
@@ -283,7 +284,7 @@ class ObjectStore {
     std::atomic<long> lastDumpLayers_{0};
     std::atomic<long> lastDumpMillis_{0};
     std::atomic<long> layersSinceCommit_{0};
-    dbref dumpRequester_ = -1;  /* game thread only */
+    std::vector<dbref> dumpRequesters_;     /* game thread only */
 
     /* --- the dump journal (docs/DATABASE.txt 7.1) ---
      *

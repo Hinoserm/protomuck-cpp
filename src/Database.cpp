@@ -137,6 +137,12 @@ Database::clearObject(dbref player, dbref i)
      * Put the object back in a coherent state explicitly rather than
      * leaving two sources of truth pointing different ways. */
     bzero(o, sizeof(struct object));
+    /* the bzero wiped powers and timestamps behind the setters'
+     * backs; without records the wipe never persists, and the shell
+     * reloads with its pre-recycle powers and timestamps while memory
+     * says zero */
+    journalRecord(i, "$core/powers");
+    journalRecord(i, "$core/ts");
     if (DbObject *sh = get(i))
         sh->setType(ObjectType::Garbage);
     MUCK::setName(i, 0);

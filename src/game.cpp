@@ -97,7 +97,7 @@ do_dump(dbref player, const char *newfile)
         anotify_nolisten2(player, buf);
         /* the completion notice (object count, fire-to-commit time)
          * comes back to this player when the manifest lands */
-        MUCK::store().setDumpRequester(player);
+        MUCK::store().addDumpRequester(player);
         dump_db_now();
         /* the fire returned; the dump thread is still writing. Saying
          * "Done." here would be a lie by however long the disk takes;
@@ -513,6 +513,20 @@ init_game(const char *infile, const char *outfile)
     /* New-format store? The outfile names the store root from here on;
      * a flat infile is a one-way import that the first dump converts. */
     bool from_store = MUCK::ObjectStore::isStore(infile);
+
+    /* -storegc and --verify-entries operate on an EXISTING store and
+     * deliberately skip the conversion-mode exit save. Run against a
+     * flat file, that combination imports the whole database into
+     * memory and then exits without ever writing it: the operator's
+     * import silently evaporates. Refuse the mismatch outright. */
+    if ((store_gc_flag || store_verify_flag) && !from_store) {
+        fprintf(stderr, "%s is not an object store; -storegc and "
+                "--verify-entries maintain an existing store and "
+                "never write one. Import the flat database first "
+                "(run without these flags), then rerun against the "
+                "store.\n", infile);
+        exit(2);
+    }
 
     if (!from_store && (input_file = fopen(infile, "r")) == NULL) {
         log_status_nowall("DIE: input file not readable\n");

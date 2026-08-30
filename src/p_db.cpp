@@ -32,6 +32,14 @@ copyobj(dbref player, dbref old, dbref nw)
     /* the struct copy also brought the source's type across in the
      * flags mirror without touching the type field */
     MUCK::setType(nw, MUCK::typeOf(old));
+    /* value and home live in the Thing MODULE, not the legacy struct
+     * the caller copied, so setType attached a fresh default module
+     * and the clone read VALUE 0, HOME NOTHING. Carry them the way
+     * copyplayer carries the analogous player fields. */
+    if (MUCK::typeOf(old) == TYPE_THING) {
+        MUCK::thingSetValue(nw, MUCK::thingValue(old));
+        MUCK::thingSetHomeRef(nw, MUCK::thingHomeRef(old));
+    }
     copy_prop(old, nw);
     MUCK::exitsOf(nw).clear();
     MUCK::contentsOf(nw).clear();
@@ -2622,7 +2630,10 @@ prim_getobjinfo(PRIM_PROTOTYPE)
             temp1.type = PROG_STRING;
             temp1.data.string = alloc_prog_string("VALUE");
             temp2.type = PROG_INTEGER;
-            temp2.data.objref = MUCK::database().get(ref)->As<MUCK::Thing>()->value();
+            /* .number, not .objref: a PROG_INTEGER is read through
+             * the 64-bit member, and writing the 32-bit one returns
+             * garbage for negative values */
+            temp2.data.number = MUCK::database().get(ref)->As<MUCK::Thing>()->value();
             array_setitem(&nw, &temp1, &temp2);
             CLEAR(&temp1);
             CLEAR(&temp2);

@@ -2166,7 +2166,8 @@ void
 interp_err(struct frame *fr, dbref player, dbref program, struct inst *pc, struct inst *arg, int atop, dbref origprog, const char *msg1, const char *msg2, int pid)
 {
     char buf[BUFFER_LEN];
-    int errcount;
+    /* MUFINT: the property is 64-bit and a 32-bit local truncates it */
+    MUFINT errcount;
     time_t lt;
     char tbuf[40];
 

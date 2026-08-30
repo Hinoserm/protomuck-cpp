@@ -961,10 +961,16 @@ MUCK::FlatFileConverter::import(FILE * f)
                         if (!special || strcmp(special, "***Foxen2 Deltas Dump Extention***")) {
                             if (!special || strcmp(special, "***Foxen4 Deltas Dump Extention***")) {
 #endif /* ARCHAIC_DATABASES */
-                                if (!special || strcmp(special, "***Foxen5 Deltas Dump Extention***")
-                                    || strcmp(special, "***Foxen6 Deltas Dump Extention***")
-                                    || strcmp(special, "***Foxen7 Deltas Dump Extention***")
-                                    || strcmp(special, "***NeonMuck V2 Deltas Dump Format***")) {
+                                /* AND, not OR: "matches none of the
+                                 * deltas markers." The OR form was
+                                 * true for every possible string, so
+                                 * a chained deltas segment was
+                                 * silently discarded on import. */
+                                if (!special
+                                    || (strcmp(special, "***Foxen5 Deltas Dump Extention***")
+                                        && strcmp(special, "***Foxen6 Deltas Dump Extention***")
+                                        && strcmp(special, "***Foxen7 Deltas Dump Extention***")
+                                        && strcmp(special, "***NeonMuck V2 Deltas Dump Format***"))) {
                                     if (special)
                                         delete[]special;
                                     if ((main_db_format == 7 || main_db_format == 8)

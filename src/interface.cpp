@@ -4216,13 +4216,16 @@ process_commands(void)
         if (tp_dbdump_warning)
             wall_and_flush(tp_dumpdone_mesg);
 
-        dbref dumper = MUCK::store().takeDumpRequester();
-
-        if (dumper >= 0)
-            anotify_fmt(dumper, CSUCC
-                        "Dump complete: %ld object(s) in %.1fs.",
-                        MUCK::store().lastDumpLayers(),
-                        MUCK::store().lastDumpMillis() / 1000.0);
+        /* every requester still valid gets the notice; a dbref that
+         * stopped being a player since (recycled, frobbed) is
+         * silently skipped rather than notified as a stranger */
+        for (dbref dumper : MUCK::store().takeDumpRequesters())
+            if (MUCK::database().valid(dumper)
+                && Typeof(dumper) == TYPE_PLAYER)
+                anotify_fmt(dumper, CSUCC
+                            "Dump complete: %ld object(s) in %.1fs.",
+                            MUCK::store().lastDumpLayers(),
+                            MUCK::store().lastDumpMillis() / 1000.0);
     }
 
     do {

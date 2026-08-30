@@ -40,6 +40,11 @@ DbObject::DbObject(dbref ref) : ref_(ref)
 void
 DbObject::setType(ObjectType t)
 {
+    /* compare-first like every other setter: a no-op type write must
+     * not dirty the object or journal a phantom flags change */
+    if (type_ == t
+        && (legacy_.flags & TYPE_MASK) == (int) t)
+        return;
     type_ = t;
     /* Mirror into the flags word. Several places still treat that word
      * as a unit (the "any flag but the type" test that gates examine's
@@ -65,6 +70,18 @@ DbObject::ensureModules()
 void
 DbObject::rebuildModules()
 {
+    /* A type change replaces the TYPE module only. Feature modules,
+     * Properties above all, carry live state this object OWNS: the
+     * whole property tree lives inside the module by value, with no
+     * backing copy anywhere in memory. Clearing them here silently
+     * destroyed every property on a @frob (and on any rollback across
+     * a type change) for the rest of the uptime. Everything that is
+     * not the type module survives the rebuild. */
+    std::vector<std::unique_ptr<Module> > keep;
+
+    for (auto &m : modules_)
+        if (m.get() != typeModule_)
+            keep.push_back(std::move(m));
     modules_.clear();
     typeModule_ = nullptr;
     propsCache_ = nullptr;
@@ -89,9 +106,15 @@ DbObject::rebuildModules()
         default:               /* garbage/unsupported: no type module */
             break;
     }
+    /* the preserved feature modules come back exactly as they were */
+    for (auto &m : keep)
+        attach(std::move(m));
+
     /* PROPERTIES is a global feature module: every object has it,
-     * unless this boot excluded it (its entries then ride dormant) */
-    if (!ObjectStore::moduleExcluded(Properties::staticName()))
+     * unless this boot excluded it (its entries then ride dormant).
+     * Only attach a fresh one when none survived the rebuild. */
+    if (!propsCache_
+        && !ObjectStore::moduleExcluded(Properties::staticName()))
         attach(std::make_unique<Properties>());
 }
 

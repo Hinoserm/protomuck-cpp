@@ -55,9 +55,13 @@ for r in refs:
 sess.cmd('@dump', 20.0)
 time.sleep(3)
 
-# --- churn: rewrite half of them, dump again, so the second seal is
-# also parallel and running over objects that already have bases ---
-for r in refs[::2]:
+# --- churn: rewrite EVERY object, dump again. This second seal is
+# the load-bearing one: the objects have bases now, so each changed
+# key is materialized as a delta through get_property, and the count
+# must stay over the 256-object parallel threshold or the whole pass
+# quietly runs serial and proves nothing (which is exactly how the
+# path-cache race slipped past the first version of this suite). ---
+for r in refs:
     for k in ('a', 'b/c'):
         v = 'w%d' % random.randrange(100000)
         sess.cmd('@set #%d=/%s:%s' % (r, k, v), 0.02)
