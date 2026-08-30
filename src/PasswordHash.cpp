@@ -86,7 +86,13 @@ MUCK::PasswordHash::hash(int type, char *out, const char *password, const char *
         sprintf(out, "%s", valToTag(HTYPE_NONE));
         return 1;
     }
-    if (!saltin || !*saltin) {
+    /* The salt is EIGHT BINARY BYTES, not a C string: any of them can
+     * legitimately be 0x00. Testing *saltin treated a stored salt
+     * beginning with a zero byte as "no salt supplied" and minted a
+     * fresh one, so the recomputed hash could never match and the
+     * account was locked out for good. Only a null pointer means
+     * "generate one". */
+    if (!saltin) {
         for (i = 0; i < 8; i++)
             salt[i] = (unsigned char) (RANDOM() & 0xFF);
         salt[8] = '\0';
@@ -99,7 +105,13 @@ MUCK::PasswordHash::hash(int type, char *out, const char *password, const char *
 
     switch (type) {
         case HTYPE_SHA1SALT:
-            sprintf(buf, "%.8s%s", salt, password);
+            /* memcpy, not sprintf: "%.8s" stops at the first zero
+             * byte in the salt while the hash below still reads all
+             * eight, so a salt containing 0x00 hashed uninitialized
+             * stack and produced a value that could not be
+             * reproduced at verify time. */
+            memcpy(buf, salt, 8);
+            memcpy(buf + 8, password, strlen(password));
             SHA1hex(buf, buf, strlen(password) + 8);
             sprintf(out, "%s:%s:%s", valToTag(type), buf, sbuf);
             break;
@@ -122,7 +134,9 @@ MUCK::PasswordHash::hash(int type, char *out, const char *password, const char *
             sprintf(out, "%s:%s", valToTag(type), buf);
             break;
         case HTYPE_MD5SALT:
-            sprintf(buf, "%.8s%s", salt, password);
+            /* same zero-byte hazard as HTYPE_SHA1SALT above */
+            memcpy(buf, salt, 8);
+            memcpy(buf + 8, password, strlen(password));
             MD5hex(buf, buf, strlen(password) + 8);
             sprintf(out, "%s:%s:%s", valToTag(type), buf, sbuf);
             break;
