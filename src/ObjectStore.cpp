@@ -2401,22 +2401,6 @@ ObjectStore::loadAll()
     journalLandedCommitted_.store(journalSeq_);
     journalUnlinked_ = journalDistributed_.load();
 
-    if (manifest.contains("parms")) {
-        std::string text;
-
-        for (const auto &l : manifest["parms"])
-            text += junstr(l.get<std::string>()) + "\n";
-
-        FILE *pf = fmemopen((void *) text.data(), text.size(), "r");
-
-        if (pf) {
-            tune_load_parms_from_file(pf, NOTHING, -1);
-            fclose(pf);
-            log_status("STORE: applied %d tune parms from the manifest\n",
-                       (int) manifest["parms"].size());
-        }
-    }
-
     if (manifest.contains("tombstones")) {
         std::vector<Database::Tombstone> list;
 
@@ -2437,8 +2421,31 @@ ObjectStore::loadAll()
      * can reach it, and it loads like any other object: its deletion
      * entry is what makes it dead. Only a tombstone means the data is
      * actually gone, and a tombstoned object has no file left to
-     * load. */
+     * load.
+     *
+     * This runs BEFORE the tune parms below: tune_setparm bounds-checks
+     * a dbref parm against database().top(), and with top() still zero
+     * every dbref tune an admin had configured (player_start, cron_prog,
+     * quit_prog, the prototypes) was rejected and silently replaced by
+     * its compiled default on every single boot. */
     MUCK::database().ensureTop(top);
+
+    if (manifest.contains("parms")) {
+        std::string text;
+
+        for (const auto &l : manifest["parms"])
+            text += junstr(l.get<std::string>()) + "\n";
+
+        FILE *pf = fmemopen((void *) text.data(), text.size(), "r");
+
+        if (pf) {
+            tune_load_parms_from_file(pf, NOTHING, -1);
+            fclose(pf);
+            log_status("STORE: applied %d tune parms from the manifest\n",
+                       (int) manifest["parms"].size());
+        }
+    }
+
 
     /* ensureTop pre-initialized every slot as a garbage shell */
 

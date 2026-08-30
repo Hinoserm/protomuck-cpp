@@ -626,17 +626,26 @@ power_description(dbref thing)
 int
 listprops_wildcard(dbref player, dbref thing, const char *dir, const char *wild)
 {
-    char propname[BUFFER_LEN];
-    char wld[BUFFER_LEN];
-    char buf[BUFFER_LEN];
-    char buf2[BUFFER_LEN];
+    /* HEAP, not stack. This function recurses once per path component
+     * and four BUFFER_LEN arrays made each frame a quarter of a
+     * megabyte, so examining a property path only ~30 components deep
+     * exhausted an ordinary 8MB stack and killed the server. Any
+     * player can create such a path with setprop, and any examine of
+     * it crashes the game for everyone. Heap frames cost a pointer
+     * each, so depth is bounded by the path length instead. */
+    std::vector<char> propnamev(BUFFER_LEN), wldv(BUFFER_LEN);
+    std::vector<char> bufv(BUFFER_LEN), buf2v(BUFFER_LEN);
+    char *propname = propnamev.data(), *wld = wldv.data();
+    char *buf = bufv.data(), *buf2 = buf2v.data();
     PropPtr propadr;
     PropDirPtr pptr;
     char *ptr, *wldcrd = wld;
     int i, cnt = 0;
     bool recurse = 0;
 
-    strcpy(wld, wild);
+    /* leave room for the "*" appended below rather than overflowing
+     * by one on a maximum-length wildcard */
+    snprintf(wld, BUFFER_LEN - 1, "%s", wild);
     i = strlen(wld);
     if (i && wld[i - 1] == PROPDIR_DELIMITER)
         strcat(wld, "*");
@@ -651,7 +660,10 @@ listprops_wildcard(dbref player, dbref thing, const char *dir, const char *wild)
     propadr = first_prop(thing, (char *) dir, &pptr, propname);
     while (propadr) {
         if (equalstr(wldcrd, propname)) {
-            sprintf(buf, "%s%c%s", dir, PROPDIR_DELIMITER, propname);
+            /* snprintf: dir grows by one component per level, so a
+             * deep enough path would otherwise overrun buf */
+            snprintf(buf, BUFFER_LEN, "%s%c%s", dir, PROPDIR_DELIMITER,
+                     propname);
             if ((!Prop_Hidden(buf) && !(PropFlags(propadr) & PROP_SYSPERMS))
                 || WizHidden(MUCK::getOwner(player))) {
                 if (!*ptr || recurse) {

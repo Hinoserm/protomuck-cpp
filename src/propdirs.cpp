@@ -17,6 +17,9 @@
 #include "tune.h"
 #include "props.h"
 #include "externs.h"
+#include <utility>
+#include <vector>
+
 #include "interface.h"
 
 /* Split a path at the first delimiter run. Returns the head
@@ -62,49 +65,71 @@ propdir_split(const char *path, char *comp)
 PropPtr
 propdir_new_elem(PropDirPtr l, char *path)
 {
+    /* ITERATIVE, and it must stay that way. These walkers descend one
+     * level per path component, and a component buffer is BUFFER_LEN
+     * (64KB). Recursing meant 64KB of stack per component, so an
+     * ordinary player storing "a/a/a/.../a" (thousands of components
+     * fit inside one property name) overflowed the game thread's
+     * stack and took the whole server down. */
     char comp[BUFFER_LEN];
-    const char *rest;
+    const char *rest = path;
+    PropPtr p = NULL;
 
     if (!l)
         return NULL;
-    rest = splitPath(path, comp);
-    if (!*comp)
-        return NULL;
-
-    PropPtr p = l->insert(comp);
-
-    if (rest) {
+    for (;;) {
+        rest = splitPath(rest, comp);
+        if (!*comp)
+            return NULL;
+        p = l->insert(comp);
+        if (!rest)
+            return p;
         p->children().parentNode = p;
-        return propdir_new_elem(&p->children(), (char *) rest);
+        l = &p->children();
     }
-    return p;
 }
 
 PropDirPtr
 propdir_delete_elem(PropDirPtr l, char *path)
 {
+    /* Iterative for the same stack reason as propdir_new_elem. The
+     * descent is recorded so the post-order cleanup (an emptied pure
+     * directory disappears along with its child) still runs from the
+     * deepest level back up, exactly as the recursion did. */
     char comp[BUFFER_LEN];
-    const char *rest;
+    const char *rest = path;
+    PropDirPtr top = l;
+    std::vector<std::pair<PropDirPtr, PropPtr> > descent;
 
     if (!l)
         return NULL;
-    rest = splitPath(path, comp);
-    if (!*comp)
-        return l;
+    for (;;) {
+        rest = splitPath(rest, comp);
+        if (!*comp)
+            return top;
+        if (!rest) {
+            l->erase(comp);     /* erases the subtree with it */
+            break;
+        }
 
-    if (rest) {
         PropPtr p = l->find(comp);
 
-        if (p && p->isDir()) {
-            propdir_delete_elem(&p->children(), (char *) rest);
-            /* an emptied pure directory disappears with its child */
-            if (!p->isDir() && p->type() == PROP_DIRTYP)
-                l->erase(p->name());
-        }
-        return l;
+        if (!p || !p->isDir())
+            return top;         /* nothing to delete down this path */
+        descent.push_back(std::make_pair(l, p));
+        l = &p->children();
     }
-    l->erase(comp);             /* erases the subtree with it */
-    return l;
+    /* unwind: same cleanup the recursion performed on the way out */
+    for (size_t i = descent.size(); i-- > 0;) {
+        PropDirPtr parent = descent[i].first;
+        PropPtr node = descent[i].second;
+
+        if (!node->isDir() && node->type() == PROP_DIRTYP)
+            parent->erase(node->name());
+        else
+            break;              /* a surviving level stops the unwind */
+    }
+    return top;
 }
 
 PropPtr
@@ -119,14 +144,20 @@ propdir_get_elem(PropDirPtr l, char *path)
     if (!*comp)
         return NULL;
 
-    PropPtr p = l->find(comp);
+    for (;;) {
+        PropPtr p = l->find(comp);
 
-    if (!p)
-        return NULL;
-    if (rest)
-        return p->isDir() ? propdir_get_elem(&p->children(), (char *) rest)
-                          : NULL;
-    return p;
+        if (!p)
+            return NULL;
+        if (!rest)
+            return p;
+        if (!p->isDir())
+            return NULL;
+        l = &p->children();
+        rest = splitPath(rest, comp);
+        if (!*comp)
+            return NULL;
+    }
 }
 
 PropPtr
@@ -158,14 +189,19 @@ propdir_next_elem(PropDirPtr l, char *path)
     if (!*comp)
         return NULL;
 
-    if (rest) {
+    for (;;) {
+        if (!rest)
+            return l->nextAfter(comp);
+
         PropPtr p = l->find(comp);
 
-        if (p && p->isDir())
-            return propdir_next_elem(&p->children(), (char *) rest);
-        return NULL;
+        if (!p || !p->isDir())
+            return NULL;
+        l = &p->children();
+        rest = splitPath(rest, comp);
+        if (!*comp)
+            return NULL;
     }
-    return l->nextAfter(comp);
 }
 
 int
