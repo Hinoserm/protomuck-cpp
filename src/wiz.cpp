@@ -700,9 +700,14 @@ do_frob(int descr, dbref player, const char *name, const char *recip)
                     break;
             }
         }
-        if (MUCK::Thing *t = MUCK::database().get(stuff)->As<MUCK::Thing>()) {
-            if (t->home() && t->home()->ref() == victim)
-                t->setHome(MUCK::database().get(tp_player_start));
+        /* database().get returns null for a ref that is not valid, and
+         * dereferencing that to reach As<> is undefined rather than
+         * merely wrong; the loop walks every slot up to top(). */
+        if (MUCK::DbObject *o = MUCK::database().get(stuff)) {
+            if (MUCK::Thing *t = o->As<MUCK::Thing>()) {
+                if (t->home() && t->home()->ref() == victim)
+                    t->setHome(MUCK::database().get(tp_player_start));
+            }
         }
     }
     if (MUCK::playerPasswordSlot(victim)) {
@@ -735,7 +740,19 @@ do_frob(int descr, dbref player, const char *name, const char *recip)
     MUCK::setOwnPowers(victim, 0);
     MUCK::setOwnPowers2(victim, 0);
     MUCK::setOwner(victim, player);     /* you get it */
-    MUCK::database().get(victim)->As<MUCK::Thing>()->setValue(1);
+    if (MUCK::Thing *t = MUCK::database().get(victim)->As<MUCK::Thing>()) {
+        t->setValue(1);
+        /* The type change above swapped the Player module out for a
+         * FRESH Thing, and a fresh Thing has no home. Legacy MUCK
+         * carried the player's home across for nothing, because both
+         * homes lived in the same union slot of struct object; with
+         * separate module objects that coupling is gone, so the
+         * frobbed object came out with the Thing module's default and
+         * tripped @sanity's check_thing, which accepts neither HOME
+         * nor NOTHING. Home it on the wizard doing the frobbing, who
+         * is also who now owns it. */
+        t->setHomeRef(player);
+    }
 
     if (tp_recycle_frobs)
         recycle(descr, player, victim);

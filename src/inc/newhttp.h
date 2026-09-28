@@ -122,7 +122,10 @@ class http {
         void process_ws_frame(const std::string& payload);
         int ws_process_output(void);
         void ws_add_to_queue(const std::string& in, dbref orig, std::string tag);
-        void send_ws_frame(const std::string& payload);
+        /* opcode 1 is text, the only thing the output path sends; the
+         * frame handler passes 8 (close) and 10 (pong) */
+        void send_ws_frame(const std::string& payload,
+                           unsigned char opcode = 1);
         void disconnect(void);
         int processcontent(const char in);
         int sendfile(const char *filename);

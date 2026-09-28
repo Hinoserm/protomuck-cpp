@@ -2667,7 +2667,16 @@ wall_and_flush(const char *msg)
     strcat(buf, "\r\n");
 
     for (d = descriptor_list; d; d = d->next) {
-        if (d->type != CT_HTTP) {
+        /* Websockets are player connections and must hear this: the
+         * dump-done notice and the shutdown warning both come through
+         * here, and excluding all of CT_HTTP meant wsclient players
+         * were the only ones never told. Raw HTTP requests still are
+         * not, having nobody to tell. */
+        if (d->type != CT_HTTP
+#ifdef NEWHTTPD
+            || (d->http && d->http->websocket)
+#endif /* NEWHTTPD */
+            ) {
             if (d->player != NOTHING) {
                 parse_ansi(d->player, abuf, buf, ANSINORMAL);
                 queue_ansi(d, abuf);
@@ -3058,9 +3067,23 @@ void
 shutdownsock(struct descriptor_data *d)
 {
 #ifdef NEWHTTPD
-    if (d->http) {
+    if (d->http)
         d->http->disconnect();
-    } else if (d->type != CT_HTTP) { /* hinoserm */
+
+    /* A WEBSOCKET IS A PLAYER CONNECTION. d->http is allocated for
+     * every CT_HTTP descriptor, so the old "if (d->http) ... else if
+     * (d->type != CT_HTTP)" sent every websocket down the first
+     * branch, and http::disconnect only posts a HTTP.DISCONNECT MUF
+     * event: announce_disconnect was never reached. Websocket players
+     * therefore fired no disconnect propqueues, sent no "has
+     * disconnected" to the room, never had a foreground program
+     * dequeued, never had their idle flags cleared (so the flags
+     * survived into the next login), never triggered the disconnect
+     * action, never put their puppets to sleep, and were never marked
+     * dirty or timestamped on the way out. The else-if was also dead
+     * as written: d->http is null exactly when the descriptor is not
+     * CT_HTTP. */
+    if (!d->http || d->http->websocket) {
 #endif /* NEWHTTPD */
         if (d->connected) {
             if (tp_log_connects)
@@ -3721,6 +3744,14 @@ process_input(struct descriptor_data *d)
 
     if (d->type == CT_HTTP && d->http && d->http->websocket)
     {
+        /* These bytes still count. The early return below skips the
+         * whole line-based path, which is where the telnet side does
+         * its accounting, so anything a websocket needs has to happen
+         * here or in process_ws_frame. d->last_time is refreshed per
+         * decoded command frame, not per read, to match the telnet
+         * rule of one refresh per completed command line. */
+        d->input_len += got;
+
         d->http->process_ws_input(buf, got);
 
         return 1;
@@ -5196,6 +5227,23 @@ dump_users(struct descriptor_data *d, char *user)
                 strcpy(typbuf, "Pueblo Port");
                 break;
             }
+#ifdef NEWHTTPD
+            case CT_HTTP:{
+                /* A websocket carries a real player, so it gets a real
+                 * name. With no case here at all it fell to default
+                 * and every wsclient player showed up in WHO as
+                 * "[Unknown]" on an "Unknown Port Type", despite
+                 * being connected with a perfectly good dbref. */
+                if (dlist->connected && OkObj(dlist->player)) {
+                    strcpy(plyrbuf, MUCK::getName(dlist->player));
+                } else {
+                    strcpy(plyrbuf, "[Connecting]");
+                }
+                strcpy(typbuf, (dlist->http && dlist->http->websocket)
+                       ? "WebSocket Port" : "HTTP Port");
+                break;
+            }
+#endif /* NEWHTTPD */
             case CT_MUF:{
                 strcpy(plyrbuf, "[MUF]");
                 strcpy(typbuf, "MUF Port");
@@ -6533,7 +6581,12 @@ welcome_user(struct descriptor_data *d)
 #ifdef USE_SSL
         || d->type == CT_SSL
 #endif /* USE_SSL */
-        || d->type == (CT_HTTP && d->http && d->http->websocket)) {
+        /* The paren was in the wrong place: the right side collapsed
+         * to 0 or 1 and this compared d->type against that, which
+         * only did the right thing because CT_HTTP happens to be 1
+         * and the CT_MUCK case above already covers 0. Renumbering
+         * the CT_ constants would have broken it silently. */
+        || (d->type == CT_HTTP && d->http && d->http->websocket)) {
         fname = reg_site_welcome(d->hu->h->a);
         if (fname && (*fname == '.')) {
             strcpy(buf, WELC_FILE);

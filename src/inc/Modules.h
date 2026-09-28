@@ -64,7 +64,14 @@ class Thing : public Container {
     void setHomeRef(dbref d);
 
   private:
-    dbref home_ = -3;           /* NOTHING */
+    /* NOTHING (-1), not HOME (-3): the comment claimed NOTHING while
+     * the value was HOME, the same inversion Room::dropTo_ had. It
+     * only shows through where a Thing module is built without anyone
+     * assigning home, and a TYPE CHANGE is exactly that: setType
+     * drops the old type module and rebuildModules attaches a fresh
+     * one, so a frobbed player came back with a home of HOME and
+     * failed @sanity's check_thing. */
+    dbref home_ = NOTHING;
     int value_ = 0;
 };
 
@@ -105,7 +112,11 @@ class Player : public Container {
     PlayerSession &session() { return session_; }
 
   private:
-    dbref home_ = -3;           /* NOTHING */
+    /* NOTHING (-1), not HOME (-3); the same inversion as Thing::home_
+     * above. Player creation always assigns a home (player.cpp), so
+     * this default was never the value anything read, but it had no
+     * business claiming to be NOTHING while holding HOME. */
+    dbref home_ = NOTHING;
     int pennies_ = 0;
     const char *password_ = nullptr;
     PlayerSession session_;

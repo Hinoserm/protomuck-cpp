@@ -1345,6 +1345,16 @@ void http::process_ws_input(const char* input, size_t length)
 {
     this->ws_buffer.append(input, length);
 
+    /* One read can carry several frames, and it routinely does when a
+     * client sends two commands in quick succession. This used to
+     * decode exactly one per call and leave the rest sitting in
+     * ws_buffer until the NEXT read happened to arrive, so the second
+     * command was delayed indefinitely (forever, if the player then
+     * sat still). Keep going while the buffer still yields a
+     * complete frame. */
+    for (;;) {
+        bool completed = false;
+
     if (ws_buf_plen == 0 && ws_buffer.length() >= 1) {
         f_fin = (ws_buffer.at(0) & 0x80) == 0x80;    // Final Packet Flag
         f_reserved = (ws_buffer.at(0) & 0x70) >> 4;  // Reserved Bits
@@ -1391,6 +1401,16 @@ void http::process_ws_input(const char* input, size_t length)
         process_ws_frame(f_payload);
         f_len = 0;
         ws_buf_plen = 0;
+        completed = true;
+    }
+
+        /* No whole frame this pass: what is left is a partial header
+         * or a partial payload, and it waits for more bytes. */
+        if (!completed)
+            break;
+        /* A close frame booted the descriptor; stop touching it. */
+        if (d->booted)
+            break;
     }
 }
 
@@ -1413,17 +1433,55 @@ void http::process_ws_frame(const std::string& payload)
 
     this->log(9, "WS_IN: f_payload: '%s' (%d)\n", f_payload.c_str(), f_payload.length());
 
-    if (f_opcode == 1) {
-        try {
-            json j = json::parse(f_payload);
-            string cmd = j["muck"]["command"].get<std::string>();
+    switch (f_opcode) {
+        case 1: {               /* text: a command from the client */
+            int queued;
 
-            save_command(d, cmd.c_str(), cmd.length(), -2);
-        } catch (std::exception & e) {
-            this->log(2, "process_ws_frame(): JSON Exception: %s\n", e.what());
-            save_command(d, f_payload.c_str(), f_payload.length(), -2);
+            try {
+                json j = json::parse(f_payload);
+                string cmd = j["muck"]["command"].get<std::string>();
+
+                queued = save_command(d, cmd.c_str(), cmd.length(), -2);
+            } catch (std::exception & e) {
+                this->log(2, "process_ws_frame(): JSON Exception: %s\n", e.what());
+                queued = save_command(d, f_payload.c_str(), f_payload.length(), -2);
+            }
+
+            /* THE idle fix. interface.cpp's process_input refreshes
+             * last_time on the telnet branch only, and it returns
+             * early for a websocket before ever reaching it, so a
+             * websocket descriptor kept the last_time it was given at
+             * connect: the player read as idle since login no matter
+             * how much they typed, WHO showed it, the idle flags
+             * latched on, the idle and unidle propqueues fired on the
+             * wrong schedule, and with idleboot on they were booted
+             * mid-sentence. Same condition as the telnet side: the
+             * unidle word returns -1 and deliberately does not count
+             * as activity. */
+            if (queued != -1)
+                d->last_time = time(NULL);
+            break;
         }
 
+        case 8:                 /* close: answer it, then let go */
+            this->log(4, "WS: close frame from descr %d\n", d->descriptor);
+            send_ws_frame("", 8);
+            d->booted = 1;
+            break;
+
+        case 9:                 /* ping: a pong is not optional */
+            this->log(9, "WS: ping from descr %d\n", d->descriptor);
+            send_ws_frame(f_payload, 10);
+            break;
+
+        case 10:                /* pong: nothing to do but not unknown */
+            this->log(9, "WS: pong from descr %d\n", d->descriptor);
+            break;
+
+        default:
+            this->log(2, "WS: unhandled opcode %u from descr %d\n",
+                      f_opcode, d->descriptor);
+            break;
     }
         
     //send_ws_frame(f_payload);
@@ -1433,6 +1491,14 @@ int
 http::ws_process_output(void)
 {
     std::string payload;
+
+    /* process_output calls this on every pass for a websocket, whether
+     * or not anything was queued, and it used to send a text frame
+     * regardless: every control-frame reply and every unrelated flush
+     * trailed an empty {"muck":{"text":""}} after it. Nothing queued
+     * means nothing to say. */
+    if (!ws_q)
+        return 0;
 
     while (ws_q) {
         struct ws_queue* qa = ws_q;
@@ -1455,14 +1521,18 @@ http::ws_process_output(void)
     return 0;
 }
 
-void http::ws_add_to_queue(const std::string& in, dbref orig = -1, std::string tag = "SYS")
+/* The defaults live on the declaration in newhttp.h, not here: a
+ * default in the definition is invisible to every other translation
+ * unit, so it reads as an interface that callers cannot actually use. */
+void http::ws_add_to_queue(const std::string& in, dbref orig, std::string tag)
 {
     struct ws_queue* q = new struct ws_queue;
-    
+
     q->next = NULL;
     q->text = in;
-    q->orig = -1;
-    q->tag = "SYS";
+    /* the arguments, not hardcoded copies of their defaults */
+    q->orig = orig;
+    q->tag = tag;
 
     if (!ws_q)
         ws_q = q;
@@ -1473,12 +1543,15 @@ void http::ws_add_to_queue(const std::string& in, dbref orig = -1, std::string t
     ws_q_tail = q;
 }
 
-void http::send_ws_frame(const std::string& payload)
+void http::send_ws_frame(const std::string& payload, unsigned char opcode)
 {
     std::string out;
 
     out.reserve(payload.length() + 4);
-    out.push_back((unsigned char)129);
+    /* FIN plus the opcode. Text (1) is the default and is all the
+     * output path sends; close (8) and pong (10) come from the frame
+     * handler, which has to answer those in kind. */
+    out.push_back((unsigned char)(0x80 | (opcode & 0x0F)));
 
     if (payload.length() < 126) {
         out.push_back(payload.length());
