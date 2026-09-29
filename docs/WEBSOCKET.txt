@@ -323,7 +323,9 @@ a connection, the sideband, the JSON primitives it rests on, and the
    The header is believed from nowhere else. Any client can send one,
    and believing it from anyone would let a banned player choose their
    own address. With web_trusted_proxies empty, the default, it is
-   ignored entirely.
+   ignored entirely. To empty it again, as with any string @tune:
+
+       @tune web_trusted_proxies=-
 
 
 7. @TUNE PARAMETERS

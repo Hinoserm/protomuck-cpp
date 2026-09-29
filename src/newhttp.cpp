@@ -1925,6 +1925,16 @@ http::ws_keepalive(time_t now)
     }
 }
 
+time_t
+http::ws_next_due(void)
+{
+    time_t interval = tp_web_ws_ping_interval < 5 ? 5 : tp_web_ws_ping_interval;
+    time_t ping = ws_last_ping + interval;
+    time_t dead = ws_last_rx + 3 * interval + 1;
+
+    return ping < dead ? ping : dead;
+}
+
 void
 http::ws_close(unsigned short code, const std::string &reason)
 {

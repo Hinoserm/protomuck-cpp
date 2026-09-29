@@ -2172,6 +2172,29 @@ shovechars(void)
             timeout.tv_sec = (long) tmptq + (tp_pause_min / 1000);
             timeout.tv_usec = (tp_pause_min % 1000) * 1000L;
         }
+#ifdef NEWHTTPD
+        /* Wake for websocket keepalive, as for timed MUF events. On a
+         * quiet server select otherwise sleeps up to 10s, and the
+         * keepalive pass only runs when it wakes, so a 5s interval
+         * pinged every 10s and the dead-connection check ran late. */
+        {
+            time_t wsnow = time(NULL);
+
+            for (d = descriptor_list; d; d = d->next) {
+                if (!(d->http && d->http->websocket) || d->booted)
+                    continue;
+
+                time_t wait = d->http->ws_next_due() - wsnow;
+
+                if (wait < 0)
+                    wait = 0;
+                if (wait < timeout.tv_sec) {
+                    timeout.tv_sec = (long) wait;
+                    timeout.tv_usec = 0;
+                }
+            }
+        }
+#endif /* NEWHTTPD */
         //log_status("SELECT(): %d, %d\r\n", timeout.tv_sec, timeout.tv_usec);
 
         gettimeofday(&sel_in, NULL);

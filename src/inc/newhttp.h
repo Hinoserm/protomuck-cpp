@@ -163,6 +163,11 @@ class http {
         /* ping on schedule; drop a connection silent for 3 intervals */
         void ws_keepalive(time_t now);
 
+        /* when ws_keepalive next has something to do (a ping due, or
+         * the silence deadline), so the main loop's select can wake
+         * for it instead of sleeping past it */
+        time_t ws_next_due(void);
+
         /* RFC 6455 closing handshake. ws_close sends our Close frame
          * (status code, then an optional reason) exactly once; after
          * it nothing else is sent, and the peer's Close in reply

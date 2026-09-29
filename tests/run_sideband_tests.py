@@ -413,7 +413,12 @@ def wizwho():
     return sess.cmd('WHO !', 1.0) + sess.cmd('WHO !!', 1.0)
 
 
-sess.cmd('@tune web_trusted_proxies=', 0.4)
+# "=-" is how a string tune is cleared ("=" alone only displays it). The
+# game directory's parmfile keeps tunes between runs, so this has to
+# really clear the list a previous run left set.
+out = sess.cmd('@tune web_trusted_proxies=-', 0.4)
+check('the trusted-proxy list can be cleared', 'Parameter set' in out,
+      out.strip()[-120:])
 untrusted = WS('X-Forwarded-For: 203.0.113.9\r\n')
 untrusted.collect(1.0)
 out = wizwho()

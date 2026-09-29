@@ -199,6 +199,13 @@ check('5s is accepted', 'Parameter set' in out, out.strip()[-160:])
 k = WS(auto_pong=False)
 _, f = k.wait(lambda f: f[0] == 9, 8)
 check('the server pings on web_ws_ping_interval', f is not None, 'no Ping')
+# on schedule, even on a quiet server: select used to sleep up to 10s
+# regardless, so a 5s interval really pinged about every 10s
+t1 = time.time()
+_, f = k.wait(lambda f: f[0] == 9, 9)
+gap = time.time() - t1
+check('pings keep the interval on a quiet server (about 5s apart)',
+      f is not None and 3.5 <= gap <= 6.5, 'gap %.1fs' % gap)
 # play dead: never answer, never send
 got, f = k.wait(is_close, 25)
 check('a connection silent for three intervals is closed with 1001',
