@@ -66,6 +66,9 @@ class http {
         int dofile(void);
         int dourl(void);
         void processheader(void);
+        /* adopt X-Forwarded-For from a web_trusted_proxies peer; false
+         * if the real client turns out to be a blocked site */
+        bool apply_forwarded_for(void);
         void begin_websocket(void);
         void finish(void);
         void handler_get(void);
@@ -113,6 +116,7 @@ class http {
         bool websocket = false;
         struct ws_queue* ws_q;        /* Websocket output queue           */
         struct ws_queue* ws_q_tail;
+        size_t ws_q_bytes = 0;        /* bytes waiting in ws_q            */
 
        
         /* Functions */
@@ -127,6 +131,29 @@ class http {
         void send_ws_frame(const std::string& payload,
                            unsigned char opcode = 1);
         void disconnect(void);
+
+        /* --- websocket sideband (docs/WEBSOCKET.txt) --- */
+
+        /* 1 to 64 characters of [A-Za-z0-9._-]. Names starting with
+         * '.' or '_' are refused unless reserved is set: '_' names
+         * belong to the server (_error), and '.' props are hidden. */
+        static bool sideband_name_ok(const std::string &name,
+                                     bool reserved = false);
+
+        /* Queue one outbound sideband packet in order with text. On
+         * refusal returns false and sets *err (7-bit, user-readable):
+         * the packet would exceed json_max_len, or this connection's
+         * unsent output is already over max_output + json_max_len. */
+        bool queue_sideband_out(const std::string &cmd, const json &data,
+                                dbref orig, std::string *err);
+
+        /* Run the program registered for an inbound packet that has
+         * waited its turn in the input queue ("<cmd>\0<data JSON>"). */
+        void dispatch_sideband(const char *buf, int len);
+
+        /* Tell the client its packet was not run. */
+        void sideband_error(const std::string &cmd, const std::string &why);
+
         int processcontent(const char in);
         int sendfile(const char *filename);
         stk_array *makearray(void);

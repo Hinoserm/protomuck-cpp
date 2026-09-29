@@ -51,6 +51,11 @@ const char *tp_unidle_command_msg = "";
 const char *tp_ssl_keyfile_passwd = "";
 const char *tp_reslvd_address = "127.0.0.1:12111";
 const char *tp_sex_prop = PROP_SEX;
+/* Comma-separated addresses of reverse proxies whose X-Forwarded-For
+ * header is believed. Empty means no proxy is trusted: the header is
+ * trivially forgeable by any client, so honoring it from anyone else
+ * would let a banned user pick any address they liked. */
+const char *tp_web_trusted_proxies = "";
 
 struct tune_str_entry {
     const char *group;
@@ -63,6 +68,7 @@ struct tune_str_entry {
 
 struct tune_str_entry tune_str_list[] = {
     {"Database", "dumpwarn_mesg", &tp_dumpwarn_mesg, LARCH, LMUF, 1},
+    {"HTTPD", "web_trusted_proxies", &tp_web_trusted_proxies, WBOY, LMAGE, 1},
     {"Database", "deltawarn_mesg", &tp_deltawarn_mesg, LARCH, LMUF, 1},
     {"Database", "dumpdeltas_mesg", &tp_dumpdeltas_mesg, LARCH, LMUF, 1},
     {"Database", "dumping_mesg", &tp_dumping_mesg, LARCH, LMUF, 1},
@@ -191,6 +197,10 @@ int tp_web_htmuf_mlvl = LM2;    /* hinoserm */
 int tp_web_max_files = 4;       /* hinoserm */
 int tp_web_max_filesize = 4096; /* 4mb, in kb -hinoserm */
 int tp_web_max_users = 10;      /* hinoserm */
+/* Largest JSON text accepted or produced, in KB: websocket frames,
+ * sideband packets, and the JSON conversion prims. Checked before
+ * anything is buffered or while output is being built, never after. */
+int tp_json_max_len = 1024;
 #endif /* hinoserm */
 //#ifdef SQL_SUPPORT
 int tp_mysql_result_limit = 40;
@@ -262,6 +272,7 @@ struct tune_val_entry tune_val_list[] = {
     {"HTTPD", "web_max_files", &tp_web_max_files, WBOY, LMUF}, /* hinoserm */
     {"HTTPD", "web_max_filesize", &tp_web_max_filesize, WBOY, LMUF}, /* hinoserm */
     {"HTTPD", "web_max_users", &tp_web_max_users, LARCH, LMUF}, /* hinoserm */
+    {"System", "json_max_len", &tp_json_max_len, WBOY, LMUF},
 #endif /* hinoserm */
     {"HTTPD", "mysql_thread_count", &tp_mysql_thread_count, WBOY, LMUF}, /* hinoserm */
     {"HTTPD", "mysql_log_level", &tp_mysql_log_lvl, LARCH, LMUF}, /* hinoserm */

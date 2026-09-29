@@ -57,6 +57,8 @@ extern void prim_array_sum(PRIM_PROTOTYPE);
 extern void prim_array_string_fragment(PRIM_PROTOTYPE);
 
 extern void prim_properties_array(PRIM_PROTOTYPE);
+extern void prim_json_to_array(PRIM_PROTOTYPE);
+extern void prim_array_to_json(PRIM_PROTOTYPE);
 
 #define PRIMLIST_ARRAY  { "ARRAY_MAKE",         LM1, 1, prim_array_make },            \
                         { "ARRAY_MAKE_DICT",    LM1, 1, prim_array_make_dict },       \
@@ -109,5 +111,7 @@ extern void prim_properties_array(PRIM_PROTOTYPE);
                         { "ARRAY_NESTED_DEL",   LM1, 2, prim_array_nested_del },      \
                         { "ARRAY_SUM",          LM1, 1, prim_array_sum },             \
                         { "ARRAY_STRING_FRAGMENT", LM1, 2, prim_array_string_fragment }, \
+                        { "JSON_TO_ARRAY",      LM1, 1, prim_json_to_array },         \
+                        { "ARRAY_TO_JSON",      LM1, 1, prim_array_to_json },         \
                         { "PROPERTIES_ARRAY",   LM3, 2, prim_properties_array }
-#define PRIMS_ARRAY_CNT 52
+#define PRIMS_ARRAY_CNT 54

@@ -39,6 +39,139 @@
 #include "externs.h"
 #include "Modules.h"
 #include "newhttp.h"
+#include "JSONConvert.h"
+#include "reg.h"
+#include "tune.h"
+
+/* ------------------------------------------------------------------ */
+/* X-Forwarded-For from trusted proxies                               */
+/* ------------------------------------------------------------------ */
+
+static std::string
+xff_trim(const std::string &s)
+{
+    size_t b = s.find_first_not_of(" \t");
+    size_t e = s.find_last_not_of(" \t");
+
+    return b == std::string::npos ? std::string() : s.substr(b, e - b + 1);
+}
+
+/* dotted IPv4 to the host-order int the host records use */
+static bool
+xff_ipv4(const std::string &s, int *out)
+{
+    struct in_addr a;
+
+    if (inet_pton(AF_INET, s.c_str(), &a) != 1)
+        return false;
+    *out = (int) ntohl(a.s_addr);
+    return true;
+}
+
+/* Is this (host-order) address in web_trusted_proxies? */
+static bool
+xff_trusted(int addr)
+{
+    std::string list = tp_web_trusted_proxies ? tp_web_trusted_proxies : "";
+    size_t pos = 0;
+
+    while (pos <= list.size()) {
+        size_t comma = list.find(',', pos);
+        std::string ent = xff_trim(list.substr(pos, comma == std::string::npos
+                                               ? std::string::npos
+                                               : comma - pos));
+        int a;
+
+        if (!ent.empty() && xff_ipv4(ent, &a) && a == addr)
+            return true;
+        if (comma == std::string::npos)
+            break;
+        pos = comma + 1;
+    }
+    return false;
+}
+
+/* If this request arrived through a trusted reverse proxy, adopt the
+ * client address the proxy reports, so site bans, the welcome-screen
+ * site checks, WHO and the connect logs see the real client rather
+ * than 127.0.0.1. The header is believed only from a trusted peer: any
+ * client can send one, and believing it from anyone would let a banned
+ * user choose their own address.
+ *
+ * The list is read right to left, skipping further trusted proxies, and
+ * the first untrusted address is the client. (The leftmost entry is
+ * whatever the client itself claimed and is never trusted blindly.)
+ * Returns false if the real client is a blocked site: accept checked
+ * the proxy's address, so the block has to be re-checked here. */
+bool
+http::apply_forwarded_for(void)
+{
+    std::string xff;
+    std::vector<std::string> parts;
+    int client = 0;
+    bool found = false;
+
+    if (!d->hu || !d->hu->h || !xff_trusted(d->hu->h->a))
+        return true;
+
+    for (const auto &f : this->fields)
+        if (!strcasecmp(f.first.c_str(), "X-Forwarded-For"))
+            xff = f.second;
+    if (xff.empty())
+        return true;
+
+    for (size_t pos = 0;;) {
+        size_t comma = xff.find(',', pos);
+
+        parts.push_back(xff_trim(xff.substr(pos, comma == std::string::npos
+                                            ? std::string::npos
+                                            : comma - pos)));
+        if (comma == std::string::npos)
+            break;
+        pos = comma + 1;
+    }
+    for (auto it = parts.rbegin(); it != parts.rend(); ++it) {
+        int a;
+
+        if (!xff_ipv4(*it, &a)) {
+            /* a malformed hop means the chain cannot be read; keep the
+             * proxy's address rather than guess at the client */
+            this->log(2, "XFF: descr %d: unusable entry '%s'; ignored\n",
+                      d->descriptor, it->c_str());
+            return true;
+        }
+        if (xff_trusted(a))
+            continue;
+        client = a;
+        found = true;
+        break;
+    }
+    if (!found)
+        return true;
+
+    struct huinfo *old = d->hu;
+    unsigned short rport = (old->u && old->u->uport) ? old->u->uport : 1;
+    struct huinfo *nhu = host_getinfo((int) htonl((uint32_t) client),
+                                      (unsigned short) d->cport,
+                                      htons(rport));
+
+    /* host_as_hex returns a static buffer: two calls in one argument
+     * list would print the same address twice */
+    std::string viaProxy = host_as_hex((unsigned) old->h->a);
+    std::string realClient = host_as_hex((unsigned) client);
+
+    this->log(3, "XFF: descr %d is %s via trusted proxy %s\n", d->descriptor,
+              realClient.c_str(), viaProxy.c_str());
+    d->hu = nhu;
+    host_delete(old);
+
+    if (reg_site_is_blocked(client) == TRUE) {
+        log_status("*BLK: %2d %s via proxy (X-Forwarded-For)\n",
+                   d->descriptor, host_as_hex(client));
+        return false;
+    }
+    return true;
+}
 #include "strutils.h"
 #include "params.h"
 #include "interp.h"
@@ -1222,6 +1355,12 @@ void
 {
     this->log(9, "HTTP: BEGIN processheader()\r\n");
 
+    /* first, so every check and log line below sees the real client */
+    if (!this->apply_forwarded_for()) {
+        this->senderror(403, "Forbidden.");
+        return;
+    }
+
     if (!OkObj(tp_www_root)) {
         /* Bad webroot @tune. */
         this->senderror(503, "Service unavailable. (Bad webroot @tune)");
@@ -1347,6 +1486,13 @@ void http::begin_websocket(void)
      * would land in the middle of the handshake and corrupt the
      * stream. */
     announce_login(d);
+
+    /* and the welcome screen, in the same order initializesock uses
+     * for telnet. A websocket used to get this only by typing
+     * something unrecognized (the TYPO path in check_connect), so a
+     * fresh wsclient connection sat blank. A web UI that shows its
+     * own login dialog is free to hide it. */
+    pdescr_welcome_user(d->descriptor);
 }
 
 void http::process_ws_input(const char* input, size_t length)
@@ -1386,7 +1532,16 @@ void http::process_ws_input(const char* input, size_t length)
             ws_buffer.erase(0, 2);
         }
         else if (f_len == 127) {
-            f_len = (uint64_t)((unsigned char)ws_buffer.at(0) << 56) | ((unsigned char)ws_buffer.at(1) << 48) | ((unsigned char)ws_buffer.at(2) << 40) | ((unsigned char)ws_buffer.at(3) << 32) | ((unsigned char)ws_buffer.at(4) << 24) | ((unsigned char)ws_buffer.at(5) << 16) | ((unsigned char)ws_buffer.at(6) << 8) | (unsigned char)ws_buffer.at(7);
+            /* Each byte is widened to 64 bits BEFORE it is shifted. The
+             * old expression shifted a byte promoted to 32-bit int by
+             * 32 to 56 bits, which is undefined and in practice threw
+             * the high bytes away, so any frame over 64KB (which a
+             * browser sends in this form) read as a garbage length, and
+             * a hostile length could come out small enough to slip
+             * under the json_max_len check. */
+            f_len = 0;
+            for (int k = 0; k < 8; k++)
+                f_len = (f_len << 8) | (uint64_t) (unsigned char) ws_buffer.at(k);
             ws_buffer.erase(0, 8);
         }
 
@@ -1394,6 +1549,22 @@ void http::process_ws_input(const char* input, size_t length)
     }
     else if (ws_buf_plen == 2 && f_len < 126) {
         ws_buf_plen++;
+    }
+
+    /* The header has told us the payload length and none of the
+     * payload is buffered yet: this is the one moment a hostile length
+     * can be refused for free. Checked later, a frame claiming
+     * gigabytes would be buffered in full first. */
+    if (ws_buf_plen == 3 && f_len > MUCK::JSONConvert::maxBytes()) {
+        this->log(1, "WS: descr %d sent a %llu byte frame (json_max_len "
+                  "is %lu); dropping the connection\n", d->descriptor,
+                  (unsigned long long) f_len,
+                  (unsigned long) MUCK::JSONConvert::maxBytes());
+        ws_buffer.clear();
+        ws_buf_plen = 0;
+        f_len = 0;
+        d->booted = 1;
+        return;
     }
 
     if (ws_buf_plen == 3 && ws_buffer.length() >= 4) {
@@ -1422,6 +1593,19 @@ void http::process_ws_input(const char* input, size_t length)
     }
 }
 
+/* A typed line from a websocket, cut to the same MAX_COMMAND_LEN a
+ * telnet line is cut to. Frames were never cut at all, and do_command
+ * strcpys the line into a BUFFER_LEN stack buffer, so one long frame
+ * overflowed it: any websocket client could smash the game thread's
+ * stack. */
+static int
+ws_save_line(struct descriptor_data *d, std::string line)
+{
+    if (line.size() > MAX_COMMAND_LEN - 1)
+        line.resize(MAX_COMMAND_LEN - 1);
+    return save_command(d, line.c_str(), (int) line.size(), -2);
+}
+
 void http::process_ws_frame(const std::string& payload)
 {
     string tmp;
@@ -1442,17 +1626,77 @@ void http::process_ws_frame(const std::string& payload)
     this->log(9, "WS_IN: f_payload: '%s' (%d)\n", f_payload.c_str(), f_payload.length());
 
     switch (f_opcode) {
-        case 1: {               /* text: a command from the client */
+        case 1: {               /* text: a command or a sideband packet */
             int queued;
+            json j;
+            bool envelope = false;
 
+            /* {"muck":{...}} is the protocol. Anything else, including
+             * text that is not JSON at all, is a typed line, exactly as
+             * before; a client that just sends raw text still works. */
             try {
-                json j = json::parse(f_payload);
-                string cmd = j["muck"]["command"].get<std::string>();
+                j = MUCK::JSONConvert::parse(f_payload,
+                                             MUCK::JSONConvert::maxBytes());
+                envelope = j.is_object() && j.contains("muck")
+                    && j["muck"].is_object();
+            } catch (const std::exception &e) {
+                this->log(9, "WS_IN: not JSON, taken as a typed line (%s)\n",
+                          e.what());
+            }
 
-                queued = save_command(d, cmd.c_str(), cmd.length(), -2);
-            } catch (std::exception & e) {
-                this->log(2, "process_ws_frame(): JSON Exception: %s\n", e.what());
-                queued = save_command(d, f_payload.c_str(), f_payload.length(), -2);
+            if (envelope && j["muck"].contains("sideband")) {
+                const json &sb = j["muck"]["sideband"];
+                std::string cmd;
+
+                if (!sb.is_object() || !sb.contains("cmd")
+                    || !sb["cmd"].is_string()) {
+                    sideband_error("", "malformed sideband packet");
+                    break;
+                }
+                cmd = sb["cmd"].get<std::string>();
+                if (!sideband_name_ok(cmd)) {
+                    sideband_error(MUCK::ASCIIFromUTF8(cmd).substr(0, 64),
+                                   "invalid command name");
+                    break;
+                }
+
+                /* data must be an object, so a handler's argument is
+                 * always a dictionary; absent means empty */
+                json data = sb.contains("data") ? sb["data"] : json::object();
+
+                if (!data.is_object()) {
+                    sideband_error(cmd, "data must be a JSON object");
+                    break;
+                }
+
+                /* It waits its turn in the input queue like a typed
+                 * line, so it stays in order with the commands around
+                 * it and draws on the same flood quota. It is dispatched
+                 * (and its data converted) when it comes off the queue,
+                 * not here: here is the middle of the socket reader. */
+                std::string packet = cmd;
+
+                packet.push_back('\0');
+                packet += data.dump(-1, ' ', true);
+                queue_sideband_input(d, packet.data(), (int) packet.size());
+                break;
+            }
+
+            if (envelope) {
+                if (!j["muck"].contains("command")
+                    || !j["muck"]["command"].is_string()) {
+                    sideband_error("", "unrecognized message");
+                    break;
+                }
+
+                /* 7-bit only in, as out: each non-ASCII character
+                 * becomes one '?' */
+                std::string cmd = MUCK::ASCIIFromUTF8(
+                    j["muck"]["command"].get<std::string>());
+
+                queued = ws_save_line(d, cmd);
+            } else {
+                queued = ws_save_line(d, MUCK::ASCIIFromUTF8(f_payload));
             }
 
             /* THE idle fix. interface.cpp's process_input refreshes
@@ -1508,23 +1752,41 @@ http::ws_process_output(void)
     if (!ws_q)
         return 0;
 
+    /* Entries go out in exactly the order they were queued. Text is
+     * tagged "SYS", and a run of consecutive text is merged into one
+     * text frame as it always was; any other tag is a sideband packet,
+     * whose entry already holds its complete frame, and it goes out as
+     * its own frame at its place in the queue. Merging all the text
+     * first would reorder a packet ahead of text printed before it. */
+    auto flushText = [&]() {
+        if (payload.empty())
+            return;
+
+        /* 7-bit out: legacy 8-bit text becomes '?', not UTF-8 */
+        json j = {
+            {"muck", { {"text", MUCK::ASCIIFromBytes(payload)} } }
+        };
+
+        send_ws_frame(j.dump(-1, ' ', true));
+        payload.clear();
+    };
+
     while (ws_q) {
         struct ws_queue* qa = ws_q;
 
-        payload += qa->text;
         ws_q = qa->next;
-
+        if (qa->tag == "SYS") {
+            payload += qa->text;
+        } else {
+            flushText();
+            send_ws_frame(qa->text);
+        }
         delete qa;
     }
+    flushText();
 
-    if (!ws_q)
-        ws_q_tail = NULL;
-
-    json j = {
-        {"muck", { {"text", ascii_to_utf8(payload)} } }
-    };
-
-    d->http->send_ws_frame(j.dump());
+    ws_q_tail = NULL;
+    ws_q_bytes = 0;
 
     return 0;
 }
@@ -1541,14 +1803,189 @@ void http::ws_add_to_queue(const std::string& in, dbref orig, std::string tag)
     /* the arguments, not hardcoded copies of their defaults */
     q->orig = orig;
     q->tag = tag;
+    ws_q_bytes += in.size();
 
     if (!ws_q)
         ws_q = q;
 
     if (ws_q_tail)
         ws_q_tail->next = q;
-       
+
     ws_q_tail = q;
+}
+
+/* ------------------------------------------------------------------ */
+/* Websocket sideband (docs/WEBSOCKET.txt)                            */
+/* ------------------------------------------------------------------ */
+
+bool
+http::sideband_name_ok(const std::string &name, bool reserved)
+{
+    if (name.empty() || name.size() > 64)
+        return false;
+    if (!reserved && (name[0] == '.' || name[0] == '_'))
+        return false;
+    for (unsigned char c : name)
+        if (!(isalnum(c) || c == '.' || c == '_' || c == '-'))
+            return false;
+    return true;
+}
+
+bool
+http::queue_sideband_out(const std::string &cmd, const json &data,
+                         dbref orig, std::string *err)
+{
+    size_t limit = MUCK::JSONConvert::maxBytes();
+    json frame = {
+        {"muck", { {"sideband", { {"cmd", cmd}, {"data", data} } } } }
+    };
+    std::string text;
+
+    try {
+        text = MUCK::JSONConvert::dump(frame, limit);
+    } catch (const MUCK::JSONConvert::Error &e) {
+        if (err)
+            *err = e.what();
+        return false;
+    }
+
+    /* Bounded, but never so tightly that one full-size packet cannot go
+     * out on an idle connection: max_output (128KB by default) is
+     * smaller than json_max_len (1MB). A client that stops reading
+     * backs this up, and past the bound the sender is refused rather
+     * than the server buffering without limit. */
+    if ((size_t) d->output_size + ws_q_bytes + text.size()
+        > (size_t) tp_max_output + limit) {
+        if (err)
+            *err = "this connection's output is backed up";
+        return false;
+    }
+
+    /* "SB:" can never equal the text tag "SYS", whatever the name */
+    ws_add_to_queue(text, orig, "SB:" + cmd);
+    return true;
+}
+
+void
+http::sideband_error(const std::string &cmd, const std::string &why)
+{
+    json data = {
+        {"cmd", MUCK::ASCIIFromBytes(cmd)},
+        {"error", MUCK::ASCIIFromBytes(why)}
+    };
+
+    queue_sideband_out("_error", data, NOTHING, nullptr);
+}
+
+void
+http::dispatch_sideband(const char *buf, int len)
+{
+    size_t n = strnlen(buf, (size_t) len);
+
+    if ((int) n >= len)
+        return;                 /* no separator: cannot happen, but */
+
+    std::string cmd(buf, n);
+    std::string text(buf + n + 1, (size_t) len - n - 1);
+    dbref prog = NOTHING;
+    std::string why;
+
+    /* The registry is the _ws propdir on the web root, read fresh for
+     * every packet so repointing a registration takes effect on the
+     * next one. The value is read the way propqueues read theirs. */
+    if (!OkObj(tp_www_root)) {
+        why = "www_root is not set";
+    } else {
+        char prop[BUFFER_LEN];
+        const char *s;
+
+        snprintf(prop, sizeof(prop), "_ws/%s", cmd.c_str());
+        prog = get_property_dbref(tp_www_root, prop);
+        if (prog == NOTHING
+            && (s = get_property_class(tp_www_root, prop)) && *s) {
+            if (*s == NUMBER_TOKEN && number(s + 1))
+                prog = (dbref) atoi(s + 1);
+            else if (*s == REGISTERED_TOKEN)
+                prog = find_registered_obj(tp_www_root, s);
+            else if (number(s))
+                prog = (dbref) atoi(s);
+        }
+
+        if (prog == NOTHING)
+            why = "not registered";
+        else if (!OkObj(prog) || Typeof(prog) != TYPE_PROGRAM)
+            why = "registered to something that is not a program";
+        else if (!(FLAGS(prog) & LINK_OK))
+            why = "program is not LINK_OK";
+        else if (MLevel(prog) < LMAGE)
+            why = "program is below W1";
+        else if (MLevel(MUCK::getOwner(prog)) < LMAGE)
+            why = "program's owner is below W1";
+    }
+
+    if (why.empty() && !MUCK::programRuntime(prog).start) {
+        /* compiled on demand, as the web server's MUF pages are */
+        struct line *tmpline = MUCK::programRuntime(prog).first;
+
+        MUCK::programRuntime(prog).first = MUCK::programs().read(prog);
+        do_compile(d->descriptor, MUCK::getOwner(prog), prog, 0);
+        free_prog_text(MUCK::programRuntime(prog).first);
+        MUCK::programRuntime(prog).first = tmpline;
+        if (!MUCK::programRuntime(prog).codeSize)
+            why = "program does not compile";
+    }
+
+    /* The client learns only that the name is not something it can
+     * use; which registrations exist, and why one failed, is for the
+     * log. */
+    if (!why.empty()) {
+        log_status("WS: descr %d sideband \"%s\" refused: %s\n",
+                   d->descriptor, cmd.c_str(), why.c_str());
+        sideband_error(cmd, "unknown command");
+        return;
+    }
+
+    /* The data was checked for shape when the packet arrived; here it
+     * becomes MUF, and anything MUF cannot hold (null, an integer too
+     * wide) is the client's own data, so the client is told exactly
+     * what and where. */
+    struct inst arg;
+
+    try {
+        json j = MUCK::JSONConvert::parse(text, MUCK::JSONConvert::maxBytes());
+
+        MUCK::JSONConvert::toInst(j, &arg);
+    } catch (const MUCK::JSONConvert::Error &e) {
+        sideband_error(cmd, e.what());
+        return;
+    }
+
+    /* Before login there is no player, and #-1 is deliberate: running
+     * as the program's owner (as the web server's MUF pages do) would
+     * let a handler written for logged-in players act as a wizard for
+     * an anonymous client. */
+    dbref player = (d->connected && OkObj(d->player)) ? d->player : NOTHING;
+    dbref loc = OkObj(player) ? MUCK::getLocation(player) : NOTHING;
+    struct frame *fr;
+
+    strcpy(match_args, "");
+    snprintf(match_cmdname, BUFFER_LEN, "%s", cmd.c_str());   /* command @ */
+    fr = interp(d->descriptor, player, loc, prog, tp_www_root, BACKGROUND,
+                STD_HARDUID, 0);
+    if (!fr) {
+        CLEAR(&arg);
+        return;
+    }
+
+    /* interp seeds the stack with match_args as a string; the argument
+     * of a sideband program is its data dictionary instead */
+    if (fr->argument.top > 0) {
+        CLEAR(&fr->argument.st[fr->argument.top - 1]);
+        fr->argument.st[fr->argument.top - 1] = arg;
+    } else {
+        fr->argument.st[fr->argument.top++] = arg;
+    }
+    interp_loop(player, prog, fr, 0);
 }
 
 void http::send_ws_frame(const std::string& payload, unsigned char opcode)

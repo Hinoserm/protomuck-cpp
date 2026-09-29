@@ -15,6 +15,7 @@
 #include "netresolve.h"
 #include "Modules.h"
 #include "ObjectAccess.h"
+#include "JSONConvert.h"
 
 int
 check_descr_flag(const char *dflag)
@@ -518,11 +519,20 @@ prim_descr_setuser(PRIM_PROTOTYPE)
 
         if (passwd) {
             if (!check_password(ref, ptr)) {
+                /* A wrong password is a refusal. This used to push the
+                 * 0 and then fall straight through to pset_user2, so
+                 * the descriptor was logged in anyway and the caller
+                 * got two values on the stack: any wizard program that
+                 * implemented a login screen with this prim let anyone
+                 * in with any password. */
                 result = 0;
                 PushInt(result);
+                return;
             }
         }
     }
+    /* logged only once the password has actually been accepted, so the
+     * log never records a login that did not happen */
     if (ref != NOTHING) {
         log_status("SUSR: %d %s(%d) to %s(%d)\n", oper[2].data.number, OkObj(player) ? MUCK::getName(player) : "(Login)", player, MUCK::getName(ref), ref);
     }
@@ -1194,6 +1204,77 @@ prim_descrtype(PRIM_PROTOTYPE)
 
     CHECKOFLOW(1);
     PushString((char *) dtype);
+}
+
+/* DESCRTYPE reports a websocket as "HTTP", and changing that would
+ * change MUF-visible behavior, so websockets get their own test. */
+void
+prim_descr_websocketp(PRIM_PROTOTYPE)
+{
+    int result = 0;
+
+    if (oper[0].type != PROG_INTEGER)
+        abort_interp("Integer descriptor number expected.");
+    if (!pdescrp(oper[0].data.number))
+        abort_interp("That is not a valid descriptor.");
+#ifdef NEWHTTPD
+    {
+        struct descriptor_data *dr = descrdata_by_descr(oper[0].data.number);
+
+        result = dr && dr->type == CT_HTTP && dr->http && dr->http->websocket;
+    }
+#endif
+
+    CHECKOFLOW(1);
+    PushInt(result);
+}
+
+/* ( i:descr s:cmd x:data -- )
+ *
+ * Send a sideband packet to a websocket client. Nothing is returned:
+ * every refusal is a MUF error, so a program that cares wraps the call
+ * in TRY/CATCH and one that does not cannot silently lose packets. */
+void
+prim_descr_sideband(PRIM_PROTOTYPE)
+{
+#ifdef NEWHTTPD
+    struct descriptor_data *dr;
+    std::string cmd, err;
+    json data;
+
+    if (oper[2].type != PROG_INTEGER)
+        abort_interp("Integer descriptor number expected. (1)");
+    if (oper[1].type != PROG_STRING || !oper[1].data.string)
+        abort_interp("Non-empty command name string expected. (2)");
+    if (!pdescrp(oper[2].data.number))
+        abort_interp("That is not a valid descriptor. (1)");
+    dr = descrdata_by_descr(oper[2].data.number);
+    if (!dr || dr->type != CT_HTTP || !dr->http || !dr->http->websocket)
+        abort_interp("That descriptor is not a websocket. (1)");
+
+    /* Below Mage a program may only talk to its own connection: the one
+     * that triggered it, or one its player is logged in on. Reaching
+     * anyone's connection is DESCRNOTIFY's level, and it stays there. */
+    if (mlev < LMAGE && oper[2].data.number != fr->descr
+        && !(dr->connected && dr->player == player))
+        abort_interp("Permission denied: not your connection. (1)");
+
+    cmd = oper[1].data.string->data;
+    if (!http::sideband_name_ok(cmd))
+        abort_interp("Invalid sideband command name. (2)");
+
+    try {
+        data = MUCK::JSONConvert::fromInst(&oper[0],
+                                           MUCK::JSONConvert::maxBytes());
+    } catch (const MUCK::JSONConvert::Error &e) {
+        abort_interp(e.what());
+    }
+
+    if (!dr->http->queue_sideband_out(cmd, data, program, &err))
+        abort_interp(err.c_str());
+#else
+    abort_interp("This server was built without websocket support.");
+#endif
 }
 
 void

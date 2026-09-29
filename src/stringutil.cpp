@@ -2686,19 +2686,3 @@ escapestr(char *obuf, const size_t olen, const char *ibuf, const size_t ilen, bo
     return o;
 }
 
-std::string
-ascii_to_utf8(const std::string& in)
-{
-    std::string out;
-    out.reserve(in.length());
-
-    for (unsigned char const& c : in) {
-        if (c >= 0x80) {
-            out.push_back(0xC0 | ((c & 0xC0) >> 6));
-            out.push_back(0x80 | (c & 0x3F));
-        } else
-            out.push_back(c);
-    }
-
-    return out;
-}

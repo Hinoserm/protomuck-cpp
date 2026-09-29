@@ -47,6 +47,8 @@ extern void prim_descrbufsize(PRIM_PROTOTYPE);
 extern void prim_descr_sslp(PRIM_PROTOTYPE);
 extern void prim_descr_sendfile(PRIM_PROTOTYPE);
 extern void prim_descrtype(PRIM_PROTOTYPE);
+extern void prim_descr_websocketp(PRIM_PROTOTYPE);
+extern void prim_descr_sideband(PRIM_PROTOTYPE);
 extern void prim_suid(PRIM_PROTOTYPE);
 extern void prim_mccp_start(PRIM_PROTOTYPE);
 extern void prim_mccp_end(PRIM_PROTOTYPE);
@@ -100,9 +102,11 @@ extern void prim_mccp_end(PRIM_PROTOTYPE);
                            { "DESCR_SSL?",            LM3,     1, prim_descr_sslp },            \
                            { "DESCR_SENDFILE",        LBOY,    4, prim_descr_sendfile },        \
                            { "DESCRTYPE",             LM2,     1, prim_descrtype },             \
+                           { "DESCR_WEBSOCKET?",      LM2,     1, prim_descr_websocketp },      \
+                           { "DESCR_SIDEBAND",        LM3,     3, prim_descr_sideband },        \
                            { "MCCP_START",            LM3,     1, prim_mccp_start },            \
                            { "MCCP_END",              LMAGE,   1, prim_mccp_end },              \
                            { "SUID",                  LBOY,    2, prim_suid }
     
 
-#define PRIMS_CONNECTS_CNT 52
+#define PRIMS_CONNECTS_CNT 54

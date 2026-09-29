@@ -32,6 +32,7 @@ extern const char *tp_mysql_database;
 extern const char *tp_mysql_username;
 extern const char *tp_mysql_password;
 extern const char *tp_sex_prop;
+extern const char *tp_web_trusted_proxies;
 
 #ifdef USE_SSL
 extern const char *tp_ssl_keyfile_passwd;
@@ -117,6 +118,7 @@ extern int tp_web_htmuf_mlvl;   /* hinoserm */
 extern int tp_web_max_files;    /* hinoserm */
 extern int tp_web_max_filesize; /* hinoserm */
 extern int tp_web_max_users;    /* hinoserm */
+extern int tp_json_max_len;     /* KB */
 #endif                          /* hinoserm */
 
 extern int tp_mysql_log_lvl;

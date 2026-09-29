@@ -58,6 +58,13 @@ struct text_block {
     struct text_block *nxt;
     char   *start;
     char   *buf;
+    /* A websocket sideband packet rather than a typed line: buf holds
+     * "<cmd>\0<data JSON>". It travels in the input queue so it keeps
+     * its order with typed commands and draws on the same flood quota,
+     * but it is never handed to a READ, never parsed as a command, and
+     * can only be created by the websocket frame handler, so no typed
+     * byte sequence can forge one. */
+    int     sideband;
 };
 
 struct text_queue {
@@ -295,6 +302,10 @@ extern void pdescr_welcome_user(int c);
 /* the pre-login propqueues (_login, @login, ~login); newhttp.cpp fires
  * this when a connection upgrades to a websocket */
 extern void announce_login(struct descriptor_data *d);
+/* queue a websocket sideband packet ("<cmd>\0<data JSON>") on the
+ * descriptor's input queue, flagged so it is dispatched, not parsed */
+extern void queue_sideband_input(struct descriptor_data *d, const char *buf,
+                                 int len);
 extern void pdescr_logout(int c);
 extern void pdump_who_users(int c, char *user);
 extern const char* host_as_hex(unsigned addr);

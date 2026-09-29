@@ -14,6 +14,53 @@
 #include "interp.h"
 #include "props.h"
 #include "ObjectAccess.h"
+#include "JSONConvert.h"
+
+/* ( s -- x )  JSON text to a MUF value; see JSONConvert.h for the
+ * mapping. Anything MUF cannot hold is an error naming where it is. */
+void
+prim_json_to_array(PRIM_PROTOTYPE)
+{
+    struct inst r;
+    std::string text;
+
+    if (oper[0].type != PROG_STRING)
+        abort_interp("String argument expected. (1)");
+    CHECKOFLOW(1);              /* before anything is built */
+    if (oper[0].data.string)
+        text = oper[0].data.string->data;
+
+    try {
+        json j = MUCK::JSONConvert::parse(text, MUCK::JSONConvert::maxBytes());
+
+        MUCK::JSONConvert::toInst(j, &r);
+    } catch (const MUCK::JSONConvert::Error &e) {
+        abort_interp(e.what());
+    }
+    PushInst(&r);
+    CLEAR(&r);
+}
+
+/* ( x -- s )  a MUF value to JSON text. The result is a MUF string,
+ * so it is bounded by the string limit as well as json_max_len. */
+void
+prim_array_to_json(PRIM_PROTOTYPE)
+{
+    size_t limit = MUCK::JSONConvert::maxBytes();
+    std::string s;
+
+    if (limit > (size_t) BUFFER_LEN - 1)
+        limit = (size_t) BUFFER_LEN - 1;
+    CHECKOFLOW(1);
+    try {
+        s = MUCK::JSONConvert::dump(MUCK::JSONConvert::fromInst(&oper[0],
+                                                               limit),
+                                    limit);
+    } catch (const MUCK::JSONConvert::Error &e) {
+        abort_interp(e.what());
+    }
+    PushStringL(s.c_str(), (int) s.size());
+}
 
 extern int prop_read_perms(dbref player, dbref obj, const char *name, int mlev);
 extern int prop_write_perms(dbref player, dbref obj, const char *name, int mlev);

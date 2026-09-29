@@ -3407,7 +3407,22 @@ make_text_block(const char *s, int len, int wclen)
 #endif
     p->start = p->buf;
     p->nxt = 0;
+    p->sideband = 0;
     return p;
+}
+
+void
+queue_sideband_input(struct descriptor_data *d, const char *buf, int len)
+{
+    struct text_block *p;
+
+    if (!d || len <= 0)
+        return;
+    p = make_text_block(buf, len, -2);
+    p->sideband = 1;
+    *d->input.tail = p;
+    d->input.tail = &p->nxt;
+    d->input.lines++;
 }
 
 void
@@ -4322,8 +4337,12 @@ process_commands(void)
                 /* Added in the is_interface_command to seperate out checking
                  * for things like @q, WHO, QUIT, etc. -Akari */
 
-                if ((d->connected && MUCK::playerSession(d->player).block && !is_interface_command(t->start))
-                    || (!d->connected && d->block)) {
+                /* a sideband packet is never input to a READ: a player
+                 * sitting at a prompt must not have a web UI's
+                 * background traffic answer it for them */
+                if (!t->sideband
+                    && ((d->connected && MUCK::playerSession(d->player).block && !is_interface_command(t->start))
+                        || (!d->connected && d->block))) {
                     char *tmp = t->start;
 
                     /* If read_event_notify returns 0, it didn't handle
@@ -4419,6 +4438,18 @@ do_command(struct descriptor_data *d, struct text_block *t)
 #ifdef NEWHTTPD
     if (d->type == CT_HTTP && !d->http->websocket)     /* hinoserm */
         return 1;               /* hinoserm */
+
+    /* A sideband packet is dispatched to its registered program, never
+     * parsed as a command. It is counted like one, but it does not
+     * refresh last_time: a web UI's background traffic (a map that
+     * polls, say) is not the player doing anything, and counting it
+     * would keep an absent player permanently unidle. */
+    if (t->sideband) {
+        if (d->http && d->http->websocket)
+            d->http->dispatch_sideband(t->start, t->nchars);
+        (d->commands)++;
+        return 1;
+    }
 #endif /* NEWHTTPD */
 
     strcpy(cmdbuf, command);
