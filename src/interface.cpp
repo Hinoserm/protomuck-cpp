@@ -2428,20 +2428,7 @@ shovechars(void)
                          * bytes still count there. */
 #endif /* NEWHTTPD */
                     } else {    /* There was input, manage idle stuff */
-                        if (OkObj(d->player) ? Typeof(d->player) == TYPE_PLAYER : 0) {
-                            if (FLAG2(d->player) & F2TRUEIDLE)
-                                announce_unidle(d); /* really idle */
-                            if (FLAG2(d->player) & F2IDLE)
-                                MUCK::clearFlags2(d->player, F2IDLE); /*remove idle */
-                            MUCK::playerSession(d->player).lastDescr = d->descriptor; /* least idle */
-                        } else { /* not a player */
-                            if (DR_RAW_FLAGS(d, DF_TRUEIDLE))
-                                announce_unidle(d);
-                        }
-                        if (DR_RAW_FLAGS(d, DF_TRUEIDLE))
-                            DR_RAW_REM_FLAGS(d, DF_TRUEIDLE);
-                        if (DR_RAW_FLAGS(d, DF_IDLE))
-                            DR_RAW_REM_FLAGS(d, DF_IDLE);
+                        descr_mark_active(d);
                     }           /* else */
                 }
 #ifdef NEWHTTPD
@@ -5688,6 +5675,31 @@ announce_idle(struct descriptor_data *d)
         envpropqueue(d->descriptor, player, MUCK::getLocation(player), NOTHING, player, NOTHING, "_idle", "Idle", 1, 1);
         envpropqueue(d->descriptor, player, MUCK::getLocation(player), NOTHING, player, NOTHING, "_oidle", "Oidle", 1, 0);
     }
+}
+
+/* Everything that happens when a connection shows activity, apart
+ * from refreshing its idle clock (the caller does that): the unidle
+ * propqueues if it had gone truly idle, the player's idle flags
+ * cleared, and this connection recorded as the player's least idle.
+ * The main loop calls it for real input and DESCR_UNIDLE for a program
+ * that says activity happened, so the two can never drift apart. */
+void
+descr_mark_active(struct descriptor_data *d)
+{
+    if (OkObj(d->player) ? Typeof(d->player) == TYPE_PLAYER : 0) {
+        if (FLAG2(d->player) & F2TRUEIDLE)
+            announce_unidle(d); /* really idle */
+        if (FLAG2(d->player) & F2IDLE)
+            MUCK::clearFlags2(d->player, F2IDLE); /*remove idle */
+        MUCK::playerSession(d->player).lastDescr = d->descriptor; /* least idle */
+    } else { /* not a player */
+        if (DR_RAW_FLAGS(d, DF_TRUEIDLE))
+            announce_unidle(d);
+    }
+    if (DR_RAW_FLAGS(d, DF_TRUEIDLE))
+        DR_RAW_REM_FLAGS(d, DF_TRUEIDLE);
+    if (DR_RAW_FLAGS(d, DF_IDLE))
+        DR_RAW_REM_FLAGS(d, DF_IDLE);
 }
 
 void

@@ -103,6 +103,10 @@ a connection, the sideband, the JSON primitives it rests on, and the
        does. A web UI's keepalive or background traffic cannot keep an
        absent player looking present.
 
+       When a sideband packet does stand for something the player
+       really did, its handler says so with DESCR_UNIDLE, which counts
+       as activity exactly as a typed line does (section 5.4).
+
    3.3 Close
 
        Close (0x8) is a handshake. When the client closes, the MUCK
@@ -234,6 +238,19 @@ a connection, the sideband, the JSON primitives it rests on, and the
        its own connection: the descriptor that triggered it, or one its
        player is logged in on. Every refusal is a MUF error that TRY and
        CATCH can catch.
+
+       DESCR_UNIDLE ( i:descr -- )
+
+       Counts as activity on a connection, exactly as a typed line does:
+       idle time restarts, the idle flags clear, and the unidle
+       propqueues fire if the player had gone idle. A handler calls it
+       when its packet stands for something the player really did:
+
+           descr descr_unidle
+
+       It works on every kind of connection that has an idle time, not
+       only websockets, under the same permission rule as
+       DESCR_SIDEBAND.
 
        A connection's unsent output is bounded. A client that stops
        reading lets it back up, and once it exceeds max_output plus

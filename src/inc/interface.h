@@ -302,6 +302,10 @@ extern void pdescr_welcome_user(int c);
 /* the pre-login propqueues (_login, @login, ~login); newhttp.cpp fires
  * this when a connection upgrades to a websocket */
 extern void announce_login(struct descriptor_data *d);
+/* activity on a connection, as input causes it: unidle propqueues,
+ * idle flags cleared, least-idle connection; the caller refreshes
+ * last_time (see DESCR_UNIDLE) */
+extern void descr_mark_active(struct descriptor_data *d);
 /* queue a websocket sideband packet ("<cmd>\0<data JSON>") on the
  * descriptor's input queue, flagged so it is dispatched, not parsed */
 extern void queue_sideband_input(struct descriptor_data *d, const char *buf,

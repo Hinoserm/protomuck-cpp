@@ -1277,6 +1277,43 @@ prim_descr_sideband(PRIM_PROTOTYPE)
 #endif
 }
 
+/* ( i -- )
+ *
+ * Count as activity on a connection, exactly as a typed line does for
+ * idle: its idle time restarts, its player's idle flags clear, it
+ * becomes the player's least idle connection, and the unidle
+ * propqueues fire if it had gone truly idle. For programs that know
+ * activity happened where the server cannot see it, such as a
+ * websocket sideband command the player really did issue (sideband
+ * traffic never counts on its own). Works on every descriptor that has
+ * an idle time; a listening socket has no one on the other end. */
+void
+prim_descr_unidle(PRIM_PROTOTYPE)
+{
+    struct descriptor_data *dr;
+
+    if (oper[0].type != PROG_INTEGER)
+        abort_interp("Integer descriptor number expected.");
+    if (!pdescrp(oper[0].data.number))
+        abort_interp("That is not a valid descriptor.");
+    dr = descrdata_by_descr(oper[0].data.number);
+    if (!dr)
+        abort_interp("That is not a valid descriptor.");
+    if (dr->type == CT_LISTEN)
+        abort_interp("A listening socket has no idle time.");
+
+    /* Below Mage, only your own connection: the one that triggered this
+     * program, or one its player is logged in on. Keeping someone
+     * else's connection from going idle would let a program defeat
+     * idle-boot for other players. */
+    if (mlev < LMAGE && oper[0].data.number != fr->descr
+        && !(dr->connected && dr->player == player))
+        abort_interp("Permission denied: not your connection.");
+
+    dr->last_time = time(NULL);
+    descr_mark_active(dr);
+}
+
 void
 prim_descr_set(PRIM_PROTOTYPE)
 {

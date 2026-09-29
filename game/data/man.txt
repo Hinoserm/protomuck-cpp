@@ -118,7 +118,7 @@ Connection Prims:
   DESCR_FLAG?      DESCRBUFSIZE      DESCRTYPE    DESCR_SSL?
   DESCR_SENDFILE   DESCR_SAFEBOOT    MCCP_START   MCCP_END
   DESCR_SETUSER_NOPASS   NBSOCKRECV_CHAR   SUID
-  DESCR_WEBSOCKET?       DESCR_SIDEBAND
+  DESCR_WEBSOCKET?       DESCR_SIDEBAND    DESCR_UNIDLE
 
 Locks Management:
   SETLOCKSTR     GETLOCKSTR     LOCKED?     PARSELOCK
@@ -497,6 +497,7 @@ For working with Descriptors:
   DESCRTYPE        DESCR_SSL?        DESCR_SENDFILE
   DESCR_SAFEBOOT   MCCP_START        MCCP_END
   SUID             DESCR_WEBSOCKET?  DESCR_SIDEBAND
+  DESCR_UNIDLE
 ~~~~~~
 LOCK PRIMS
 
@@ -10889,11 +10890,13 @@ program may be registered under several names and branch on
 packet.
 
 Packets never count as the player doing something: they do not
-unidle, and neither do the websocket's pings.
+unidle, and neither do the websocket's pings. A handler for something
+the player really did calls DESCR_UNIDLE to say so.
 
 Programs send packets back with DESCR_SIDEBAND.
 
-See: DESCR_SIDEBAND, DESCR_WEBSOCKET?, JSON_TO_ARRAY, ARRAY_TO_JSON
+See: DESCR_SIDEBAND, DESCR_UNIDLE, DESCR_WEBSOCKET?, JSON_TO_ARRAY,
+     ARRAY_TO_JSON
 ~~~~~
 LABELS|MUF LABELS|LABEL|MUFLABELS|LABELS1|LABEL1
 
@@ -11701,6 +11704,34 @@ Example:
     descr_sideband
 
 See: DESCR_WEBSOCKET?, ARRAY_TO_JSON, WEBSOCKET, SIDEBAND
+~~~~
+DESCR_UNIDLE
+
+DESCR_UNIDLE ( i -- )
+---------------------
+Level: M3 Master (Mage for someone else's connection)
+i = a descriptor number
+
+Counts as activity on a connection, exactly as a typed line does: its
+idle time restarts, its player's idle flags clear, it becomes the
+player's least idle connection, and if it had gone idle the unidle
+propqueues fire and the room is told.
+
+The server counts only typed lines as activity. Websocket sideband
+packets and pings never count on their own, so a sideband handler for
+something the player really did (as opposed to a web UI's background
+traffic) calls DESCR_UNIDLE to say so:
+
+    descr descr_unidle
+
+Works on every kind of connection that has an idle time: telnet, SSL,
+Pueblo, websocket, and connections handed to MUF. A listening socket
+has none, and is an error.
+
+Below Mage level a program may unidle only its own connection: the
+descriptor that triggered it, or one its player is logged in on.
+
+See: DESCRIDLE, DESCR_SIDEBAND, WEBSOCKET
 ~~~~
 MCCP_START|MCCP_END|MCCP
 

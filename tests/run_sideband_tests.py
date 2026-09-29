@@ -141,6 +141,19 @@ lvar who
   endcatch
   me @ "PERM:" rot strcat notify
 ;''', 'M3'),
+    'Touch': (': main pop descr descr_unidle ;', 'W2'),
+    'UnSelf': (': main pop descr descr_unidle me @ "UNSELF:ok" notify ;',
+               'M3'),
+    'UnOther': ('''
+: main pop
+  0 try
+    "Mort" pmatch descr_array 0 array_getitem descr_unidle "done"
+  catch
+  endcatch
+  me @ "UNI:" rot strcat notify
+;''', 'M3'),
+    'TouchMe': (': main pop descr descr_unidle me @ "TOUCHED" notify ;',
+                'W2'),
 }
 refs = {}
 for name, (src, lvl) in progs.items():
@@ -148,20 +161,21 @@ for name, (src, lvl) in progs.items():
 
 for cmd, prog in (('Echo', 'Echo'), ('Order', 'Order'), ('Caught', 'Caught'),
                   ('JsonT', 'JsonT'), ('PlayerLogin', 'Login'),
-                  ('Low', 'Low')):
+                  ('Low', 'Low'), ('Touch', 'Touch')):
     sess.cmd('@set #0=_ws/%s:#%d' % (cmd, refs[prog]), 0.3)
 # The permission rule is about M3, and every program the MAN character
 # owns runs at the top level whatever its flags, so the two M3 programs
 # that exercise it belong to a genuine M3 mortal instead.
 sess.cmd('@pcreate Mort=mortpw', 1.0)
 sess.cmd('@set *Mort=M3', 0.4)
-for prog in ('SbSelf', 'SbOther'):
+for prog in ('SbSelf', 'SbOther', 'UnSelf', 'UnOther'):
     sess.cmd('@chown %s=*Mort' % prog, 0.4)
     sess.cmd('@set %s=M3' % prog, 0.3)
     sess.cmd('@set %s=L' % prog, 0.3)
 
 for act, prog in (('waitread', 'ReadProg'), ('sbself', 'SbSelf'),
-                  ('sbother', 'SbOther')):
+                  ('sbother', 'SbOther'), ('unself', 'UnSelf'),
+                  ('unother', 'UnOther'), ('touchme', 'TouchMe')):
     sess.cmd('@act %s=#0' % act, 0.4)
     sess.cmd('@link %s=#%d' % (act, refs[prog]), 0.4)
 sess.cmd('@pcreate WsUser=wspw', 1.0)
@@ -238,6 +252,39 @@ _, f = ws.wait(is_sb('Pong'))
 check('after login me @ is the player',
       f is not None and sideband_of(f)['data']['me'] == wsuser,
       repr(f))
+
+# --- idle: packets never count; DESCR_UNIDLE does -------------------------
+
+
+def idle_of(name):
+    out = sess.cmd('WHO', 1.0).replace('\r', '')
+    m = re.search(r'^%s\s+\S+\s+(\d+)s' % re.escape(name), out, re.M)
+    return int(m.group(1)) if m else None
+
+
+time.sleep(4)
+before = idle_of('WsUser')
+for _ in range(3):
+    ws.sb('Echo', {})
+    ws.wait(is_sb('Pong'))
+    time.sleep(0.5)
+after = idle_of('WsUser')
+check('a sideband packet does not refresh idle',
+      before is not None and after is not None and after >= before,
+      'idle %r -> %r' % (before, after))
+ws.sb('Touch', {})
+time.sleep(1.5)
+touched = idle_of('WsUser')
+check('DESCR_UNIDLE in a handler counts as activity',
+      touched is not None and after is not None and touched < after
+      and touched <= 2, 'idle %r -> %r' % (after, touched))
+
+# ...and on a telnet connection too, not just a websocket (typing the
+# command resets telnet idle by itself, so this shows only that the
+# prim accepts a telnet descriptor)
+out = sess.cmd('touchme', 1.0)
+check('DESCR_UNIDLE works on a telnet connection', 'TOUCHED' in out,
+      out.strip()[-120:])
 
 # ------------------------------------------------------------------
 # output ordering, errors, JSON prims
@@ -319,6 +366,14 @@ check("an M3 program may not send to someone else's connection",
 got = ws2.collect(1.0)
 check('and nothing reached the other connection',
       not any(is_sb('X')(g) for g in got), repr(got))
+ws.cmd('unother')
+_, f = ws.wait(lambda f: 'UNI:' in (text_of(f) or ''))
+check("an M3 program may not DESCR_UNIDLE someone else's connection",
+      f is not None and 'Permission denied' in text_of(f), repr(f))
+ws.cmd('unself')
+_, f = ws.wait(lambda f: 'UNSELF:' in (text_of(f) or ''))
+check('an M3 program may DESCR_UNIDLE its own connection',
+      f is not None and 'UNSELF:ok' in text_of(f), repr(f))
 ws2.close()
 
 # ------------------------------------------------------------------
