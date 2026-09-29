@@ -119,6 +119,7 @@ extern int tp_web_max_files;    /* hinoserm */
 extern int tp_web_max_filesize; /* hinoserm */
 extern int tp_web_max_users;    /* hinoserm */
 extern int tp_json_max_len;     /* KB */
+extern int tp_web_ws_ping_interval; /* seconds, 0 = off */
 #endif                          /* hinoserm */
 
 extern int tp_mysql_log_lvl;

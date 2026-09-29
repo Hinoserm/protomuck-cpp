@@ -201,6 +201,11 @@ int tp_web_max_users = 10;      /* hinoserm */
  * sideband packets, and the JSON conversion prims. Checked before
  * anything is buffered or while output is being built, never after. */
 int tp_json_max_len = 1024;
+/* Seconds between keepalive pings to each websocket; 0 turns them off.
+ * A connection that sends nothing at all (not even the pong a browser
+ * returns automatically) for three intervals is dropped as dead. None
+ * of this counts as activity: pings never unidle anyone. */
+int tp_web_ws_ping_interval = 30;
 #endif /* hinoserm */
 //#ifdef SQL_SUPPORT
 int tp_mysql_result_limit = 40;
@@ -273,6 +278,7 @@ struct tune_val_entry tune_val_list[] = {
     {"HTTPD", "web_max_filesize", &tp_web_max_filesize, WBOY, LMUF}, /* hinoserm */
     {"HTTPD", "web_max_users", &tp_web_max_users, LARCH, LMUF}, /* hinoserm */
     {"System", "json_max_len", &tp_json_max_len, WBOY, LMUF},
+    {"HTTPD", "web_ws_ping_interval", &tp_web_ws_ping_interval, LARCH, LMUF},
 #endif /* hinoserm */
     {"HTTPD", "mysql_thread_count", &tp_mysql_thread_count, WBOY, LMUF}, /* hinoserm */
     {"HTTPD", "mysql_log_level", &tp_mysql_log_lvl, LARCH, LMUF}, /* hinoserm */

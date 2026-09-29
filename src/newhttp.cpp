@@ -136,8 +136,8 @@ http::apply_forwarded_for(void)
         if (!xff_ipv4(*it, &a)) {
             /* a malformed hop means the chain cannot be read; keep the
              * proxy's address rather than guess at the client */
-            this->log(2, "XFF: descr %d: unusable entry '%s'; ignored\n",
-                      d->descriptor, it->c_str());
+            this->log(2, "XFF: descr {}: unusable entry '{}'; ignored\n",
+                      d->descriptor, *it);
             return true;
         }
         if (xff_trusted(a))
@@ -160,8 +160,8 @@ http::apply_forwarded_for(void)
     std::string viaProxy = host_as_hex((unsigned) old->h->a);
     std::string realClient = host_as_hex((unsigned) client);
 
-    this->log(3, "XFF: descr %d is %s via trusted proxy %s\n", d->descriptor,
-              realClient.c_str(), viaProxy.c_str());
+    this->log(3, "XFF: descr {} is {} via trusted proxy {}\n", d->descriptor,
+              realClient, viaProxy);
     d->hu = nhu;
     host_delete(old);
 
@@ -327,56 +327,37 @@ http::~http(void)
     httpucount--;
 }
 
+/* The formatting half lives in the log() template (newhttp.h). This
+ * used to be a varargs vsprintf into a BUFFER_LEN stack buffer, run
+ * before the level check, and the websocket frame handler hands it
+ * whole payloads: any frame over 64KB overflowed the game thread's
+ * stack, whatever the log level. std::string has no such ceiling. */
 void
-  http::log(int debuglvl, char *format, ...)
+http::logText(int debuglvl, const std::string &text)
 {
-    char
-      buf[BUFFER_LEN];
-    char
-      tbuf[40];
-
-    va_list args;
-    FILE *
-        fp;
-
     time_t lt = current_systime;
 
-    va_start(args, format);
-    vsprintf(buf, format, args);
-    va_end(args);
-
-    /* Finish me! */
     if (debuglvl <= tp_web_logwall_lvl)
-        wall_logwizards(buf);
+        wall_logwizards(text.c_str());
 
     if (debuglvl <= tp_web_logfile_lvl) {
-        *tbuf = '\0';
+        std::string line;
+        char tbuf[40];
+        FILE *fp;
+
         if ((fp = fopen(HTTP_LOG, "a")) == NULL) {
             fprintf(stderr, "Unable to open %s!\n", HTTP_LOG);
-            fprintf(stderr, "%.16s: [%d]: %s", ctime(&lt), d ? d->descriptor : -1, buf);
+            line = std::format("{:.16}: [{}]: {}", ctime(&lt),
+                               d ? d->descriptor : -1, text);
+            fputs(line.c_str(), stderr);
         } else {
             format_time(tbuf, 32, "%c\0", localtime(&lt));
-            fprintf(fp, "%.32s: [%d]: %s", tbuf, d ? d->descriptor : -1, buf);
+            line = std::format("{:.32}: [{}]: {}", tbuf,
+                               d ? d->descriptor : -1, text);
+            fputs(line.c_str(), fp);
             fclose(fp);
         }
     }
-}
-
-/* queue_text():                                        */
-/*   Works exactly like queue_write(), but can format   */
-/*   like sprintf().                                    */
-int
-queue_text(struct descriptor_data *d, char *format, ...)
-{
-    va_list args;
-    char
-      buf[BUFFER_LEN];
-
-    va_start(args, format);
-    vsprintf(buf, format, args);
-    va_end(args);
-
-    return queue_write(d, buf, strlen(buf));
 }
 
 /* http_split():                                        */
@@ -461,13 +442,13 @@ void
 
     format_time(tbuf, BUFFER_LEN, "%a, %d %b %Y %T GMT", localtime(&t));
 
-    queue_text(d, "HTTP/1.1 %d %s\r\nDate: %s\r\n" "Server: ProtoMUCK/%s\r\n" "Connection: close\r\n", statcode, this->statlookup(statcode), tbuf, PROTOBASE);
+    queue_text(d, "HTTP/1.1 {} {}\r\nDate: {}\r\n" "Server: ProtoMUCK/{}\r\n" "Connection: close\r\n", statcode, this->statlookup(statcode), tbuf, PROTOBASE);
 
     if (content_length >= 0)
-        queue_text(d, "Content-Length: %d\r\n", content_length);
+        queue_text(d, "Content-Length: {}\r\n", content_length);
 
     if (content_type)
-        queue_text(d, "Content-Type: %s\r\n", content_type);
+        queue_text(d, "Content-Type: {}\r\n", content_type);
     else
         queue_text(d, "Content-Type: text/plain\r\n");
 
@@ -486,24 +467,30 @@ void
     char
       tbuf[50];
     char
-      buf[BUFFER_LEN];
-    char
       buf2[BUFFER_LEN];
 
     escape_url(buf2, (char *) url);
     this->split(host, ':');
     format_time(tbuf, 48, "%a, %d %b %Y %T GMT", localtime(&t));
 
-    sprintf(buf, "<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\">\r\n"
-            "<html><head>\r\n  <title>%d %s</title>\r\n  </head><body>\r\n"
-            "<h1>%s</h1>\r\n  <p>The document has moved <a href=\"%s\">here"
-            "</a>.</p>\r\n  <hr />\r\n  <address>ProtoMUCK %s Server at %s"
-            " Port %d</address>\r\n</body></html>\r\n", 301, statmsg, statmsg, buf2, PROTOBASE, host, this->d->cport);
+    /* The page carries the client's own Host header. It used to be
+     * built with sprintf and then handed to queue_text AS THE FORMAT,
+     * so a request with "Host: %s%s%n" ran a format-string attack on
+     * the server. Now it is data, and data goes through queue_write. */
+    std::string page = std::format(
+        "<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\">\r\n"
+        "<html><head>\r\n  <title>{} {}</title>\r\n  </head><body>\r\n"
+        "<h1>{}</h1>\r\n  <p>The document has moved <a href=\"{}\">here"
+        "</a>.</p>\r\n  <hr />\r\n  <address>ProtoMUCK {} Server at {}"
+        " Port {}</address>\r\n</body></html>\r\n",
+        301, statmsg, statmsg, buf2, PROTOBASE, host, this->d->cport);
+
     queue_text(this->d,
-               "HTTP/1.1 %d %s\r\nDate: %s\r\nServer: ProtoMUCK/%s\r\n"
-               "Location: %s\r\nConnection: close\r\nContent-Type: text/h"
-               "tml; charset=iso-8859-1\r\nContent-Length: %d\r\n\r\n", 301, statmsg, tbuf, PROTOBASE, buf2, strlen(buf));
-    queue_text(this->d, buf);
+               "HTTP/1.1 {} {}\r\nDate: {}\r\nServer: ProtoMUCK/{}\r\n"
+               "Location: {}\r\nConnection: close\r\nContent-Type: text/h"
+               "tml; charset=iso-8859-1\r\nContent-Length: {}\r\n\r\n",
+               301, statmsg, tbuf, PROTOBASE, buf2, page.size());
+    queue_write(this->d, page.data(), (int) page.size());
 
     this->d->booted = 4;
 
@@ -519,22 +506,25 @@ void
         statmsg;
     char *
         host = alloc_string(this->gethost());
-    char
-      buf[BUFFER_LEN];
 
     statmsg = this->statlookup(statcode);
 
-    this->log(2, "ERROR:   '%d, %s'\n", statcode, msg);
+    this->log(2, "ERROR:   '{}, {}'\n", statcode, msg);
     this->split(host, ':');
 
-    sprintf(buf, "<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\">\r\n"
-            "<html><head>\r\n  <title>%d %s</title>\r\n"
-            "</head><body>\r\n  <h1>%s</h1>\r\n"
-            "  <p>%s<br /></p>\r\n  <hr />\r\n"
-            "  <address>ProtoMUCK %s Server at %s Port %d</address>\r\n" "</body></html>\r\n", statcode, statmsg, statmsg, msg, PROTOBASE, host, this->d->cport);
+    /* data, not a format: see sendredirect */
+    std::string page = std::format(
+        "<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\">\r\n"
+        "<html><head>\r\n  <title>{} {}</title>\r\n"
+        "</head><body>\r\n  <h1>{}</h1>\r\n"
+        "  <p>{}<br /></p>\r\n  <hr />\r\n"
+        "  <address>ProtoMUCK {} Server at {} Port {}</address>\r\n"
+        "</body></html>\r\n",
+        statcode, statmsg, statmsg, msg, PROTOBASE, host, this->d->cport);
 
-    this->sendheader(statcode, "text/html; charset=iso-8859-1", strlen(buf));
-    queue_text(this->d, buf);
+    this->sendheader(statcode, "text/html; charset=iso-8859-1",
+                     (int) page.size());
+    queue_write(this->d, page.data(), (int) page.size());
 
     delete[]host;
 
@@ -614,7 +604,7 @@ int
             host = alloc_string(this->gethost());
 
         this->split(host, ':');
-        this->log(4, "VHOST:   '%s'\n", host);
+        this->log(4, "VHOST:   '{}'\n", host);
         sprintf(buf2, "@vhosts/%s", host);
         if (is_propdir(tp_www_root, buf2)) {
             sprintf(buf2, "@vhosts/%s/rootObj", host);
@@ -668,10 +658,10 @@ int
     this->rootobj = ref;
 
     /* http_log(d, 3, "URL:     '%s'\n", d->http->newdest); */
-    this->log(4, "ROOTOBJ: '%s'\n", unparse_object(1, this->rootobj));
-    this->log(4, "ROOTDIR: '%s'\n", this->rootdir);
+    this->log(4, "ROOTOBJ: '{}'\n", unparse_object(1, this->rootobj));
+    this->log(4, "ROOTDIR: '{}'\n", this->rootdir);
     if (this->cgidata.length())
-        this->log(5, "CGIDATA: '%s'\n", this->cgidata.c_str());
+        this->log(5, "CGIDATA: '{}'\n", this->cgidata);
 
     return 0;
 
@@ -709,7 +699,7 @@ http::formarray(const char *data)
             continue;
 
         unescape_url(cur);
-        this->log(6, "FIELD:   '%s' (%d)\n", cur, strlen(cur));
+        this->log(6, "FIELD:   '{}' ({})\n", cur, strlen(cur));
 
         val = new_array_packed(0, 0);
         if (!sep) {
@@ -753,7 +743,7 @@ http::formarray(const char *data)
             temp1.data.string = alloc_prog_string(line);
             array_appenditem(&val, &temp1);
             CLEAR(&temp1);
-            this->log(6, "LINE:    '%s' (%d)\n", line, strlen(line));
+            this->log(6, "LINE:    '{}' ({})\n", line, strlen(line));
             if (etype == '\0') {
                 line = end;
                 break;
@@ -973,7 +963,7 @@ int
             if (tp_web_allow_mpi && *m == '&')
                 m = this->parsempi(what, ++m, buf);
 
-            queue_text(d, "%s\r\n", m);
+            queue_text(d, "{}\r\n", m);
         }
     }
 
@@ -1062,8 +1052,8 @@ void
     this->sendheader(200, "text/html; charset=iso-8859-1", -1);
     queue_text(d,
                "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 3.2 Final//EN\">\r\n"
-               "<html><head>\r\n<title>Index of /%s</title>\r\n</head><body>"
-               "\r\n<h1>Index of /%s</h1>\r\n<pre>   Name                    " "       Last modified           Size<hr />\r\n", this->newdest.c_str(), this->newdest.c_str());
+               "<html><head>\r\n<title>Index of /{}</title>\r\n</head><body>"
+               "\r\n<h1>Index of /{}</h1>\r\n<pre>   Name                    " "       Last modified           Size<hr />\r\n", this->newdest, this->newdest);
 
     while ((dp = readdir(df))) {
         if (*(dp->d_name) != '.') {
@@ -1087,11 +1077,11 @@ void
             sprintf(url, "/%s%s", this->newdest.c_str(), buf);
             escape_url(buf3, url);
             i = 30 - strlen(buf);
-            queue_text(d, "   <a href=\"%s\">%s</a>%-*s %-24s %s\r\n", buf3, buf, i < 0 ? 0 : i, "", tbuf, buf2);
+            queue_text(d, "   <a href=\"{}\">{}</a>{:<{}} {:<24} {}\r\n", buf3, buf, "", i < 0 ? 0 : i, tbuf, buf2);
         }
     }
 
-    queue_text(d, "<hr /></pre>\r\n<address>ProtoMUCK %s Server at %s" " Port %d</address>\r\n</body></html>\r\n", PROTOBASE, this->gethost(), d->cport);
+    queue_text(d, "<hr /></pre>\r\n<address>ProtoMUCK {} Server at {}" " Port {}</address>\r\n</body></html>\r\n", PROTOBASE, this->gethost(), d->cport);
 }
 
 int
@@ -1167,8 +1157,10 @@ int
 
     if (tp_web_allow_mpi && *m == '&') {
         sprintf(buf, "%s/_type", prop);
+        /* the _type value, s: copying m here sent the page's own MPI
+         * source as its Content-Type header */
         if ((s = get_property_class(this->rootobj, buf)))
-            strcpy(buf, m);
+            strcpy(buf, s);
         else
             strcpy(buf, "text/html");
 
@@ -1176,7 +1168,14 @@ int
         if (string_compare(buf, "noheader"))
             this->sendheader(200, buf, -1);
 
-        queue_text(d, this->parsempi(this->rootobj, ++m, buf));
+        /* MPI output is data. It used to be passed to queue_text as the
+         * FORMAT, so a page whose output contained "%s" or "%n" crashed
+         * or corrupted the server. */
+        {
+            const char *out = this->parsempi(this->rootobj, ++m, buf);
+
+            queue_write(d, out, (int) strlen(out));
+        }
     } else {
         this->flags |= HS_REDIRECT;
         this->sendredirect(m);
@@ -1267,7 +1266,7 @@ void
 
     std::string tmp(input, length);
     //this->log(5, "INPUT:   '%s' (%d)\n", strToHex(tmp).c_str(), length);
-    this->log(5, "INPUT:   '%s' (%d)\n", tmp.c_str(), length);
+    this->log(5, "INPUT:   '{}' ({})\n", tmp, length);
 
     if (this->fr && !this->fr->pid) {
         fprintf(stderr, "HTTP_INPUT tried to access bad program frame!\n");
@@ -1318,8 +1317,8 @@ void
 
         /* Strip all but one / from beginning of dest. */
 
-        this->log(1, "WWW: %d %s '%s' %s(%s)\n", d->descriptor, this->method.c_str(), this->dest.c_str(), d->hu->h->name, d->hu->u->user);
-        this->log(4, "VER:     '%s'\n", this->ver.c_str());
+        this->log(1, "WWW: {} {} '{}' {}({})\n", d->descriptor, this->method, this->dest, d->hu->h->name, d->hu->u->user);
+        this->log(4, "VER:     '{}'\n", this->ver);
     } else {
         p = this->split(buf, ':');
         if (!p)
@@ -1341,7 +1340,7 @@ void
         //} else
         //    this->fields[buf] = p;
 
-        this->log(4, "HDR: %s: %s", buf, this->fields[buf].c_str());
+        this->log(4, "HDR: {}: {}", buf, this->fields[buf]);
     }
 
     return;
@@ -1380,7 +1379,7 @@ void
     }
 
     if (!this->dest.compare("/ws")) {
-        this->log(4, "BEGIN WEBSOCKET", this->dest.c_str());
+        this->log(4, "BEGIN WEBSOCKET: {}", this->dest);
         if (!this->fields.count("Upgrade") || strcasecmp(this->fields["Upgrade"].c_str(), "websocket")) {
             this->senderror(400, "A malformed request was sent to the server.");
             return;
@@ -1396,7 +1395,7 @@ void
         return;
     }
 
-    this->log(4, "DEST: %s", this->dest.c_str());
+    this->log(4, "DEST: {}", this->dest);
 
 
     this->smethod = this->methodlookup(this->method);
@@ -1459,23 +1458,24 @@ void http::begin_websocket(void)
 
     format_time(tbuf, BUFFER_LEN, "%a, %d %b %Y %T GMT", localtime(&t));
 
-    queue_text(d, "HTTP/1.1 101 Switching Protocols\r\nDate: %s\r\nServer: ProtoMUCK/%s\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n", tbuf, PROTOBASE);
+    queue_text(d, "HTTP/1.1 101 Switching Protocols\r\nDate: {}\r\nServer: ProtoMUCK/{}\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n", tbuf, PROTOBASE);
 
     string return_key = this->fields["Sec-WebSocket-Key"] + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
     char tmphash[20];
 
-    this->log(9, "HTTP: Sec-WebSocket-Key: %s", this->fields["Sec-WebSocket-Key"].c_str());
+    this->log(9, "HTTP: Sec-WebSocket-Key: {}", this->fields["Sec-WebSocket-Key"]);
 
     SHA1hash((unsigned char *)tmphash, return_key.c_str(), return_key.length());
     return_key.assign(tmphash, 20);
     return_key = http_encode64(return_key);
 
-    queue_text(d, "Sec-WebSocket-Accept: %s\r\n", return_key.c_str());
-    this->log(9, "HTTP SEND: Sec-WebSocket-Accept: %s", return_key.c_str());
+    queue_text(d, "Sec-WebSocket-Accept: {}\r\n", return_key);
+    this->log(9, "HTTP SEND: Sec-WebSocket-Accept: {}", return_key);
 
     queue_text(d, "\r\n");
 
     this->websocket = true;
+    ws_last_rx = ws_last_ping = time(NULL);
 
     /* A websocket is a login screen, and a telnet login screen fires
      * the pre-login propqueues the moment it connects
@@ -1551,20 +1551,38 @@ void http::process_ws_input(const char* input, size_t length)
         ws_buf_plen++;
     }
 
-    /* The header has told us the payload length and none of the
-     * payload is buffered yet: this is the one moment a hostile length
-     * can be refused for free. Checked later, a frame claiming
-     * gigabytes would be buffered in full first. */
-    if (ws_buf_plen == 3 && f_len > MUCK::JSONConvert::maxBytes()) {
-        this->log(1, "WS: descr %d sent a %llu byte frame (json_max_len "
-                  "is %lu); dropping the connection\n", d->descriptor,
-                  (unsigned long long) f_len,
-                  (unsigned long) MUCK::JSONConvert::maxBytes());
-        ws_buffer.clear();
-        ws_buf_plen = 0;
-        f_len = 0;
-        d->booted = 1;
-        return;
+    /* The whole header is in and none of the payload is buffered yet:
+     * the moment to hold the frame to RFC 6455 section 5, and the one
+     * moment a hostile length can be refused for free (checked later,
+     * a frame claiming gigabytes would be buffered in full first). */
+    if (ws_buf_plen == 3) {
+        bool control = (f_opcode & 0x08) != 0;
+
+        if (f_reserved) {
+            ws_fail(1002, "reserved bits set with no extension negotiated");
+            return;
+        }
+        /* 5.1: every frame from a client MUST be masked. The old parser
+         * never checked, and read four payload bytes as a mask key
+         * that was not there. */
+        if (!f_masked) {
+            ws_fail(1002, "client frame not masked");
+            return;
+        }
+        if ((control && f_opcode > 0xA) || (!control && f_opcode > 0x2)) {
+            ws_fail(1002, "unknown opcode");
+            return;
+        }
+        /* 5.5: control frames are never fragmented and carry at most
+         * 125 bytes */
+        if (control && (!f_fin || f_len > 125)) {
+            ws_fail(1002, "control frame fragmented or over 125 bytes");
+            return;
+        }
+        if (f_len > MUCK::JSONConvert::maxBytes()) {
+            ws_fail(1009, "frame larger than json_max_len");
+            return;
+        }
     }
 
     if (ws_buf_plen == 3 && ws_buffer.length() >= 4) {
@@ -1577,6 +1595,8 @@ void http::process_ws_input(const char* input, size_t length)
         f_payload = ws_buffer.substr(0, f_len);
         ws_buffer.erase(0, f_len);
 
+        /* liveness, not activity: any frame, a pong included */
+        ws_last_rx = time(NULL);
         process_ws_frame(f_payload);
         f_len = 0;
         ws_buf_plen = 0;
@@ -1617,16 +1637,95 @@ void http::process_ws_frame(const std::string& payload)
     
     //this->log(9, "WS_IN: RAW: '%s' (%d)\n", strToHex(raw).c_str(), raw.length());
 
-    this->log(9, "WS_IN: f_fin: %s\n", (f_fin ? "true" : "false"));
-    this->log(9, "WS_IN: f_opcode: %u\n", f_opcode);
-    this->log(9, "WS_IN: f_masked: %s\n", (f_masked ? "true" : "false"));
-    this->log(9, "WS_IN: f_len: %llu\n", (unsigned long long int)f_len);
-    this->log(9, "WS_IN: f_mkey: '%s' (%d)\n", strToHex(f_mkey).c_str(), f_mkey.length());
+    this->log(9, "WS_IN: f_fin: {}\n", f_fin);
+    /* an unsigned char formats as a character, not a number */
+    this->log(9, "WS_IN: f_opcode: {}\n", (unsigned) f_opcode);
+    this->log(9, "WS_IN: f_masked: {}\n", f_masked);
+    this->log(9, "WS_IN: f_len: {}\n", f_len);
+    this->log(9, "WS_IN: f_mkey: '{}' ({})\n", strToHex(f_mkey), f_mkey.length());
 
-    this->log(9, "WS_IN: f_payload: '%s' (%d)\n", f_payload.c_str(), f_payload.length());
+    this->log(9, "WS_IN: f_payload: '{}' ({})\n", f_payload, f_payload.length());
+
+    /* After our own Close, only the peer's Close in reply matters
+     * (RFC 6455 section 5.5.1); anything else is ignored. */
+    if (ws_close_sent && f_opcode != 0x8)
+        return;
 
     switch (f_opcode) {
-        case 1: {               /* text: a command or a sideband packet */
+        case 0x8:               /* Close: the closing handshake */
+            if (f_payload.size() == 1) {
+                ws_fail(1002, "close frame with a one-byte payload");
+                return;
+            }
+            if (ws_close_sent) {
+                /* the reply to our own Close: the handshake is done */
+                d->booted = 1;
+                return;
+            }
+            this->log(4, "WS: close frame from descr {}\n", d->descriptor);
+            /* answer in kind, echoing the status code (5.5.1); an
+             * empty Close is answered with an empty one */
+            send_ws_frame(f_payload.substr(0, 2), 8);
+            ws_close_sent = true;
+            d->booted = 1;
+            return;
+
+        case 0x9:               /* Ping: a Pong with the same payload */
+            this->log(9, "WS: ping from descr {}\n", d->descriptor);
+            send_ws_frame(f_payload, 10);
+            return;
+
+        case 0xA:               /* Pong: a reply, or a one-way heartbeat;
+                                 * either way it has already counted as
+                                 * liveness, and never as activity */
+            this->log(9, "WS: pong from descr {}\n", d->descriptor);
+            return;
+
+        case 0x0:               /* continuation of a fragmented message */
+            if (!ws_msg_op) {
+                ws_fail(1002, "continuation frame with no message to continue");
+                return;
+            }
+            ws_msg += f_payload;
+            break;
+
+        default:                /* 0x1 text, 0x2 binary: a new message */
+            if (ws_msg_op) {
+                ws_fail(1002, "new message inside a fragmented one");
+                return;
+            }
+            ws_msg_op = f_opcode;
+            ws_msg = f_payload;
+            break;
+    }
+
+    /* the cap applies to the whole message, not just each fragment */
+    if (ws_msg.size() > MUCK::JSONConvert::maxBytes()) {
+        ws_fail(1009, "message larger than json_max_len");
+        return;
+    }
+    if (!f_fin)
+        return;                 /* more fragments to come */
+
+    {
+        unsigned char op = ws_msg_op;
+        std::string msg;
+
+        msg.swap(ws_msg);
+        ws_msg_op = 0;
+        if (op == 0x2) {
+            ws_fail(1003, "binary messages are not accepted");
+            return;
+        }
+        process_ws_message(msg);
+    }
+}
+
+/* One complete text message: a typed line or a sideband packet. */
+void
+http::process_ws_message(const std::string &text)
+{
+    {
             int queued;
             json j;
             bool envelope = false;
@@ -1635,12 +1734,12 @@ void http::process_ws_frame(const std::string& payload)
              * text that is not JSON at all, is a typed line, exactly as
              * before; a client that just sends raw text still works. */
             try {
-                j = MUCK::JSONConvert::parse(f_payload,
+                j = MUCK::JSONConvert::parse(text,
                                              MUCK::JSONConvert::maxBytes());
                 envelope = j.is_object() && j.contains("muck")
                     && j["muck"].is_object();
             } catch (const std::exception &e) {
-                this->log(9, "WS_IN: not JSON, taken as a typed line (%s)\n",
+                this->log(9, "WS_IN: not JSON, taken as a typed line ({})\n",
                           e.what());
             }
 
@@ -1651,13 +1750,13 @@ void http::process_ws_frame(const std::string& payload)
                 if (!sb.is_object() || !sb.contains("cmd")
                     || !sb["cmd"].is_string()) {
                     sideband_error("", "malformed sideband packet");
-                    break;
+                    return;
                 }
                 cmd = sb["cmd"].get<std::string>();
                 if (!sideband_name_ok(cmd)) {
                     sideband_error(MUCK::ASCIIFromUTF8(cmd).substr(0, 64),
                                    "invalid command name");
-                    break;
+                    return;
                 }
 
                 /* data must be an object, so a handler's argument is
@@ -1666,7 +1765,7 @@ void http::process_ws_frame(const std::string& payload)
 
                 if (!data.is_object()) {
                     sideband_error(cmd, "data must be a JSON object");
-                    break;
+                    return;
                 }
 
                 /* It waits its turn in the input queue like a typed
@@ -1679,14 +1778,14 @@ void http::process_ws_frame(const std::string& payload)
                 packet.push_back('\0');
                 packet += data.dump(-1, ' ', true);
                 queue_sideband_input(d, packet.data(), (int) packet.size());
-                break;
+                return;
             }
 
             if (envelope) {
                 if (!j["muck"].contains("command")
                     || !j["muck"]["command"].is_string()) {
                     sideband_error("", "unrecognized message");
-                    break;
+                    return;
                 }
 
                 /* 7-bit only in, as out: each non-ASCII character
@@ -1696,7 +1795,7 @@ void http::process_ws_frame(const std::string& payload)
 
                 queued = ws_save_line(d, cmd);
             } else {
-                queued = ws_save_line(d, MUCK::ASCIIFromUTF8(f_payload));
+                queued = ws_save_line(d, MUCK::ASCIIFromUTF8(text));
             }
 
             /* THE idle fix. interface.cpp's process_input refreshes
@@ -1710,30 +1809,10 @@ void http::process_ws_frame(const std::string& payload)
              * mid-sentence. Same condition as the telnet side: the
              * unidle word returns -1 and deliberately does not count
              * as activity. */
-            if (queued != -1)
+            if (queued != -1) {
                 d->last_time = time(NULL);
-            break;
-        }
-
-        case 8:                 /* close: answer it, then let go */
-            this->log(4, "WS: close frame from descr %d\n", d->descriptor);
-            send_ws_frame("", 8);
-            d->booted = 1;
-            break;
-
-        case 9:                 /* ping: a pong is not optional */
-            this->log(9, "WS: ping from descr %d\n", d->descriptor);
-            send_ws_frame(f_payload, 10);
-            break;
-
-        case 10:                /* pong: nothing to do but not unknown */
-            this->log(9, "WS: pong from descr %d\n", d->descriptor);
-            break;
-
-        default:
-            this->log(2, "WS: unhandled opcode %u from descr %d\n",
-                      f_opcode, d->descriptor);
-            break;
+                ws_typed = true;        /* lets the main loop unidle */
+            }
     }
         
     //send_ws_frame(f_payload);
@@ -1817,6 +1896,65 @@ void http::ws_add_to_queue(const std::string& in, dbref orig, std::string tag)
 /* ------------------------------------------------------------------ */
 /* Websocket sideband (docs/WEBSOCKET.txt)                            */
 /* ------------------------------------------------------------------ */
+
+void
+http::ws_keepalive(time_t now)
+{
+    int interval = tp_web_ws_ping_interval;
+
+    if (interval <= 0)
+        return;
+
+    /* Three silent intervals is dead: a live browser answers every ping
+     * with a pong on its own, so this only ever catches a connection
+     * whose far end has gone (a laptop lid, a dropped proxy) without
+     * the TCP close ever arriving. */
+    if (ws_last_rx && now - ws_last_rx > 3 * (time_t) interval) {
+        log(2, "WS: descr {} sent nothing for {}s; dropping it\n",
+            d->descriptor, (long long) (now - ws_last_rx));
+        ws_close(1001, "no response to keepalive");
+        d->booted = 1;
+        return;
+    }
+
+    /* Keeps a reverse proxy from timing out a quiet connection (nginx
+     * closes one after 60s by default). Output only: last_time and the
+     * idle flags are never touched. */
+    if (now - ws_last_ping >= interval) {
+        send_ws_frame("", 9);
+        ws_last_ping = now;
+    }
+}
+
+void
+http::ws_close(unsigned short code, const std::string &reason)
+{
+    std::string p;
+
+    if (ws_close_sent)
+        return;
+    /* a Close payload is the two-byte status code, then an optional
+     * reason; control frames carry at most 125 bytes in all */
+    p.push_back((char) (code >> 8));
+    p.push_back((char) (code & 0xFF));
+    p += MUCK::ASCIIFromBytes(reason).substr(0, 123);
+    send_ws_frame(p, 8);
+    ws_close_sent = true;
+}
+
+void
+http::ws_fail(unsigned short code, const std::string &why)
+{
+    this->log(1, "WS: descr {} failed: {} (close {})\n", d->descriptor,
+              why, code);
+    ws_close(code, why);
+    ws_buffer.clear();
+    ws_buf_plen = 0;
+    f_len = 0;
+    ws_msg.clear();
+    ws_msg_op = 0;
+    d->booted = 1;
+}
 
 bool
 http::sideband_name_ok(const std::string &name, bool reserved)
@@ -1992,6 +2130,11 @@ void http::send_ws_frame(const std::string& payload, unsigned char opcode)
 {
     std::string out;
 
+    /* Nothing follows our own Close (RFC 6455 section 5.5.1): ws_close
+     * sends it and only then sets the flag. */
+    if (ws_close_sent)
+        return;
+
     out.reserve(payload.length() + 4);
     /* FIN plus the opcode. Text (1) is the default and is all the
      * output path sends; close (8) and pong (10) come from the frame
@@ -2024,7 +2167,7 @@ void
   http::finish(void)
 {
     if (this->body.len && this->body.len < MAX_COMMAND_LEN && this->body.data)
-        this->log(4, "BODY:    '%s' (%d)\n", this->body.data, this->body.len);
+        this->log(4, "BODY:    '{}' ({})\n", this->body.data, this->body.len);
 
     if (this->parsedest())
         return;
@@ -2041,7 +2184,7 @@ void
     //struct frame *fr = NULL;
     char buf[1024];
 
-    this->log(3, "WWW %d Disconnected\n", d->descriptor);
+    this->log(3, "WWW {} Disconnected\n", d->descriptor);
 
     if (this->fr && !this->fr->pid) {
         fprintf(stderr, "HTTP_DISCONNECT tried to access bad program frame!\n");
@@ -2054,7 +2197,7 @@ void
     if (this->fr) {
         struct inst temp;
 
-        this->log(3, "HTTP DBUG: Sending HTTP.DISCONNECT.%d to PID %d (frame %p)\n", d->descriptor, this->fr->pid, (void *) this->fr);
+        this->log(3, "HTTP DBUG: Sending HTTP.DISCONNECT.{} to PID {} (frame {})\n", d->descriptor, this->fr->pid, (const void *) this->fr);
 
         temp.type = PROG_INTEGER;
         temp.data.number = (int) time(NULL);

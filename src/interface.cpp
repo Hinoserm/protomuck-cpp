@@ -2046,6 +2046,15 @@ shovechars(void)
                         if (d->booted == 2) /* booted == 2 means QUIT command */
                             goodbye_user(d);
                         process_output(d); /* send QUIT related notifies */
+                        /* A websocket leaves with a proper Close, after
+                         * its last text and before the half-close below
+                         * shuts the write side. ws_close does nothing if
+                         * a Close already went out (the peer's own, or a
+                         * protocol failure's). */
+                        if (d->http && d->http->websocket) {
+                            d->http->ws_close(1000, "");
+                            process_output(d);
+                        }
 #ifdef NEWHTTPD
                     }
 #endif /* NEWHTTPD */
@@ -2406,6 +2415,18 @@ shovechars(void)
                 if (FD_ISSET(d->fd, &input_set)) {
                     if (!process_input(d)) { /* handle the input */
                         d->booted = 1; /* read error */
+#ifdef NEWHTTPD
+                    } else if (d->http && d->http->websocket
+                               && !d->http->take_typed_activity()) {
+                        /* A websocket read that carried no typed line:
+                         * a ping or pong, a sideband packet, a partial
+                         * frame. None of those is the player doing
+                         * anything, and running the unidle handling on
+                         * them meant a client's keepalive pings (or a
+                         * web UI's background traffic) unidled the
+                         * player forever. Telnet is unchanged: any
+                         * bytes still count there. */
+#endif /* NEWHTTPD */
                     } else {    /* There was input, manage idle stuff */
                         if (OkObj(d->player) ? Typeof(d->player) == TYPE_PLAYER : 0) {
                             if (FLAG2(d->player) & F2TRUEIDLE)
@@ -2436,6 +2457,13 @@ shovechars(void)
                         d->booted = 1;
 #endif
                 }
+#ifdef NEWHTTPD
+                /* every pass, a timed-out select included, so a
+                 * completely quiet server still keeps its websockets
+                 * alive through the proxy */
+                if (d->http && d->http->websocket && !d->booted)
+                    d->http->ws_keepalive(now);
+#endif /* NEWHTTPD */
                 if (d->connected && OkObj(d->player)) { /* begin the idle FLAG/boots management */
                     //int leastIdle = 0;
                     time_t dr_idletime = 0;

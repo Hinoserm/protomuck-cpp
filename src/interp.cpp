@@ -932,7 +932,7 @@ prog_clean(struct frame *fr)
     now = current_systime;
     for (d = descriptor_list; d; d = d->next) {
         if (d->http && d->http->fr == fr) {
-            d->http->log(3, "prog_clean(%d): HTTP removal for descr %d\n", fr->pid, d->descriptor);
+            d->http->log(3, "prog_clean({}): HTTP removal for descr {}\n", fr->pid, d->descriptor);
             d->http->fr = NULL;
         }
     }

@@ -893,7 +893,7 @@ prim_notify_descriptor(PRIM_PROTOTYPE)
         struct descriptor_data *d = descrdata_by_descr(oper[1].data.number);
 
         if (d->http)
-            d->http->log(8, "DESCRNOTIFY(%d:%d, %d): %s\r\n", program, pc->line, fr->pid, buf);
+            d->http->log(8, "DESCRNOTIFY({}:{}, {}): {}\r\n", program, pc->line, fr->pid, buf);
 
         notify_descriptor(oper[1].data.number, buf);
     }

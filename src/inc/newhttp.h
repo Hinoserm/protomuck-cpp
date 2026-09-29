@@ -14,11 +14,34 @@ struct dfile_struct {       /* hinoserm */  /***********************************
 
 #ifdef NEWHTTPD
 
+#include <format>
+#include <string>
+#include <utility>
+
+extern int tp_web_logfile_lvl;  /* the two levels http::log tests */
+extern int tp_web_logwall_lvl;
+
 extern int httpucount;
 extern int httpfcount;
 
 extern int  array_set_strkey_arrval(stk_array **arr, const char *key, stk_array *arr2);
-extern int  queue_text(struct descriptor_data *d, char *format, ...);
+extern int  queue_write(struct descriptor_data *d, const char *b, int n);
+
+/* Queue formatted text to a descriptor, std::format syntax. The format
+ * must be a compile-time string, which is the point: the vsprintf
+ * version this replaces was handed built text as its format (MPI page
+ * output, and error pages carrying the client's own Host header), so a
+ * web client could send "%s%n" and run a format-string attack on the
+ * server. Text that is data goes through queue_write, never here. */
+template <typename... Args>
+int
+queue_text(struct descriptor_data *d, std::format_string<Args...> fmt,
+           Args &&...args)
+{
+    std::string s = std::format(fmt, std::forward<Args>(args)...);
+
+    return queue_write(d, s.data(), (int) s.size());
+}
 
 //struct descriptor_data;
 
@@ -118,9 +141,60 @@ class http {
         struct ws_queue* ws_q_tail;
         size_t ws_q_bytes = 0;        /* bytes waiting in ws_q            */
 
+        /* Keepalive and activity. Liveness (any frame at all, pongs
+         * included) and activity (a typed line) are separate on
+         * purpose: a ping exchange proves the connection is alive but
+         * says nothing about the player, so it must never unidle
+         * them. */
+        time_t ws_last_rx = 0;        /* last complete frame received     */
+        time_t ws_last_ping = 0;      /* last keepalive ping sent         */
+        bool ws_typed = false;        /* a typed line since last asked    */
+
+        /* true once per typed line; the main loop's unidle handling
+         * runs for a websocket only when this says so */
+        bool take_typed_activity(void)
+        {
+            bool t = ws_typed;
+
+            ws_typed = false;
+            return t;
+        }
+
+        /* ping on schedule; drop a connection silent for 3 intervals */
+        void ws_keepalive(time_t now);
+
+        /* RFC 6455 closing handshake. ws_close sends our Close frame
+         * (status code, then an optional reason) exactly once; after
+         * it nothing else is sent, and the peer's Close in reply
+         * completes the handshake. ws_fail is for protocol violations:
+         * it closes with the given code and drops the connection. */
+        bool ws_close_sent = false;
+        void ws_close(unsigned short code, const std::string &reason = "");
+        void ws_fail(unsigned short code, const std::string &why);
+
+        /* a fragmented message being reassembled: its opcode (1 text,
+         * 2 binary; 0 when none is in progress) and the text so far */
+        unsigned char ws_msg_op = 0;
+        std::string ws_msg;
+
+        /* one complete text message, reassembled if it was fragmented */
+        void process_ws_message(const std::string &text);
+
        
         /* Functions */
-        void log(int debuglvl, char *format, ...);
+
+        /* Web log, std::format syntax. The level test comes first so a
+         * disabled level costs nothing, not even formatting: several
+         * callers pass whole websocket payloads. */
+        template <typename... Args>
+        void log(int debuglvl, std::format_string<Args...> fmt,
+                 Args &&...args)
+        {
+            if (debuglvl > tp_web_logwall_lvl && debuglvl > tp_web_logfile_lvl)
+                return;
+            logText(debuglvl, std::format(fmt, std::forward<Args>(args)...));
+        }
+        void logText(int debuglvl, const std::string &text);
         void process_input(const char *input, const size_t length);
         void process_ws_input(const char* input, size_t length);
         void process_ws_frame(const std::string& payload);

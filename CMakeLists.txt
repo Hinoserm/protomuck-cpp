@@ -14,7 +14,7 @@ set(PROTO_VERSION_BASE "2.1a0.6")
 # IPv6 and loadable modules disabled (both code paths have bit-rotted and do
 # not compile). Proper feature detection can replace this later.
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS ON)
 

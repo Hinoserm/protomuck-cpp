@@ -777,6 +777,10 @@ extern int errno;
 
 #include <string>
 #include <map>
+/* <format> here, before any project header: db.h defines function-like
+ * macros with common names (getloc among them) that rewrite the
+ * standard library's own members if it is parsed after them. */
+#include <format>
 using std::string;
 #include "json.hpp"
 using json = nlohmann::json;
