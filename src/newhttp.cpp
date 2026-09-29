@@ -1338,7 +1338,15 @@ void http::begin_websocket(void)
 
     this->websocket = true;
 
-
+    /* A websocket is a login screen, and a telnet login screen fires
+     * the pre-login propqueues the moment it connects
+     * (initializesock). This never did, so a _login program never saw
+     * a wsclient connection at all. It fires HERE, after websocket is
+     * set and not before: until then queue_write sends raw text
+     * straight into the socket, and a _login program's first notify
+     * would land in the middle of the handshake and corrupt the
+     * stream. */
+    announce_login(d);
 }
 
 void http::process_ws_input(const char* input, size_t length)

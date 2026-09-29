@@ -292,6 +292,9 @@ extern int pdescrflush(int c);
 extern int pdescrp(int c);
 extern int pdescrtype(int c);
 extern void pdescr_welcome_user(int c);
+/* the pre-login propqueues (_login, @login, ~login); newhttp.cpp fires
+ * this when a connection upgrades to a websocket */
+extern void announce_login(struct descriptor_data *d);
 extern void pdescr_logout(int c);
 extern void pdump_who_users(int c, char *user);
 extern const char* host_as_hex(unsigned addr);

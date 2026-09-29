@@ -2051,7 +2051,21 @@ shovechars(void)
 #endif /* NEWHTTPD */
 
 #ifdef NEWHTTPD
-                    if (!d->connected && (d->type != CT_HTTP)) /* quit from login screen (hinoserm changed) */
+                    /* quit from login screen (hinoserm changed).
+                     * A websocket left at the login screen is one too,
+                     * and was skipped with the rest of CT_HTTP: its
+                     * _disclogin never fired and dequeue_prog_descr
+                     * never stopped the programs started for it. It
+                     * fires on the first pass only. A closing HTTP
+                     * descriptor comes through here twice, once to
+                     * half-close and once to shut down, and nothing
+                     * that announce_disclogin checks changes between
+                     * the two, so without the DF_HALFCLOSE test it
+                     * would fire twice. */
+                    if (!d->connected
+                        && (d->type != CT_HTTP
+                            || (d->http && d->http->websocket
+                                && !(d->flags & DF_HALFCLOSE))))
 #else /* !NEWHTTPD */
                     if (!d->connected)
 #endif /* NEWHTTPD */

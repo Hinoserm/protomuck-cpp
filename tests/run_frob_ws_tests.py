@@ -121,6 +121,73 @@ out = sess.cmd('WHO', 1.5)
 check('a websocket disconnect is announced',
       'WsUser has disconnected' in out, out[-200:])
 
+# --- the pre-login propqueues fire for websockets ---
+# A telnet login screen fires _login when it connects and _disclogin
+# when it leaves without logging in. A websocket did neither: _login
+# was never called at upgrade, and _disclogin was skipped for all of
+# CT_HTTP. _login must also run AFTER the upgrade, or its output lands
+# as raw text inside the handshake.
+
+
+def make_prog(name, source):
+    sess.cmd('@prog %s' % name, 0.6)
+    sess.cmd('i', 0.2)
+    for line in source.split('\n'):
+        sess.cmd(line, 0.1)
+    sess.cmd('.', 0.2)
+    sess.cmd('c', 0.8)
+    sess.cmd('q', 0.4)
+    sess.cmd('@set %s=W' % name, 0.3)
+    sess.cmd('@set %s=L' % name, 0.3)
+    m = re.search(r'#(\d+)', sess.cmd('ex %s' % name, 0.6))
+    return int(m.group(1)) if m else None
+
+
+login_prog = make_prog('WsLoginHook',
+                       ': main pop descr "LOGIN-HOOK-FIRED" descrnotify ;')
+disc_prog = make_prog('WsDiscHook',
+                      ': main pop #0 "_test/disclogin" over over getpropval'
+                      ' 1 + setprop ;')
+check('pre-login hook programs created',
+      login_prog is not None and disc_prog is not None,
+      repr((login_prog, disc_prog)))
+sess.cmd('@set #0=_login:#%d' % login_prog, 0.4)
+sess.cmd('@set #0=_disclogin:#%d' % disc_prog, 0.4)
+
+pre = socket.create_connection(('127.0.0.1', wwwport), timeout=10)
+pre.sendall(("GET /ws HTTP/1.1\r\nHost: h\r\nUpgrade: websocket\r\n"
+             "Connection: Upgrade\r\nSec-WebSocket-Key: %s\r\n"
+             "Sec-WebSocket-Version: 13\r\n\r\n"
+             % base64.b64encode(os.urandom(16)).decode()).encode())
+got = b''
+pre.settimeout(1.5)
+deadline = time.time() + 6
+while time.time() < deadline and b'LOGIN-HOOK-FIRED' not in got:
+    try:
+        chunk = pre.recv(65536)
+        if not chunk:
+            break
+        got += chunk
+    except socket.timeout:
+        pass
+head, _, frames = got.partition(b'\r\n\r\n')
+check('websocket upgrade completes before any _login output',
+      head.startswith(b'HTTP/1.1 101') and b'LOGIN-HOOK-FIRED' not in head,
+      repr(head[:120]))
+check('_login fires for a websocket and reaches it as a frame',
+      b'LOGIN-HOOK-FIRED' in frames and frames[:1] == b'\x81',
+      repr(got[:200]))
+
+pre.close()
+time.sleep(4)
+m = re.search(r'_test/disclogin:(\d+)', sess.cmd('ex #0=_test/', 1.0))
+fired = int(m.group(1)) if m else 0
+check('_disclogin fires exactly once when a login-screen websocket leaves',
+      fired == 1, 'fired %d times' % fired)
+
+sess.cmd('@set #0=_login:', 0.4)
+sess.cmd('@set #0=_disclogin:', 0.4)
+
 # --- a websocket left at the login screen follows connidle ---
 # Telnet login screens are dropped after connidle; websockets were
 # exempted along with the rest of CT_HTTP and lived forever. 30s is
