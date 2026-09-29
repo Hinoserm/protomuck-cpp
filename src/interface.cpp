@@ -2490,10 +2490,18 @@ shovechars(void)
                             DR_RAW_ADD_FLAGS(d, DF_IDLE);
                         announce_idle(d);
                     }
-                    /* check connidle times for normal and pueblo login */
+                    /* check connidle times for normal and pueblo login,
+                     * and for websockets. A plain HTTP request is still
+                     * exempt: it closes itself, and a MUF-served one
+                     * can legitimately run long. A websocket is a
+                     * login screen like any other, and exempting it
+                     * with the rest of CT_HTTP meant an abandoned
+                     * wsclient tab that never logged in held its
+                     * descriptor forever. */
                     if (!(
 #ifdef NEWHTTPD
-                             d->type == CT_HTTP ||
+                             (d->type == CT_HTTP
+                              && !(d->http && d->http->websocket)) ||
 #endif /* NEWHTTPD */
                              d->type == CT_MUF)) {
                         int curidle;

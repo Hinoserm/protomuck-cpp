@@ -121,6 +121,36 @@ out = sess.cmd('WHO', 1.5)
 check('a websocket disconnect is announced',
       'WsUser has disconnected' in out, out[-200:])
 
+# --- a websocket left at the login screen follows connidle ---
+# Telnet login screens are dropped after connidle; websockets were
+# exempted along with the rest of CT_HTTP and lived forever. 30s is
+# the smallest value the reaper honors.
+sess.cmd('@tune connidle=30s', 0.8)
+lurker = socket.create_connection(('127.0.0.1', wwwport), timeout=10)
+lurker.sendall(("GET /ws HTTP/1.1\r\nHost: h\r\nUpgrade: websocket\r\n"
+                "Connection: Upgrade\r\nSec-WebSocket-Key: %s\r\n"
+                "Sec-WebSocket-Version: 13\r\n\r\n"
+                % base64.b64encode(os.urandom(16)).decode()).encode())
+time.sleep(1.5)
+check('login-screen websocket upgraded', b'101' in lurker.recv(65536), '')
+
+time.sleep(45)
+closed = False
+lurker.settimeout(5)
+try:
+    while True:
+        chunk = lurker.recv(65536)
+        if not chunk:
+            closed = True
+            break
+except socket.timeout:
+    pass                        # still open: the failure being tested for
+except OSError:
+    closed = True               # reset counts as dropped too
+check('an idle login-screen websocket is dropped after connidle',
+      closed, 'socket still open after 45s')
+lurker.close()
+
 stop(sess)
 shutil.rmtree(STORE, ignore_errors=True)
 sys.exit(check.result())
