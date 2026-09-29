@@ -24,7 +24,11 @@ def frame(payload, opcode=1, fin=True, mask=True):
 
 
 class WS:
-    def __init__(self, port, extra_headers=''):
+    def __init__(self, port, extra_headers='', auto_pong=True):
+        # auto_pong answers the server's keepalive Pings as a browser
+        # does, whenever frames are read; a test that wants to play dead
+        # turns it off
+        self.auto_pong = auto_pong
         self.s = socket.create_connection(('127.0.0.1', port), timeout=10)
         key = base64.b64encode(os.urandom(16)).decode()
         self.s.sendall(("GET /ws HTTP/1.1\r\nHost: h\r\n"
@@ -70,8 +74,11 @@ class WS:
                 i = 10
             if len(self.buf) < i + n:
                 return
-            self.pending.append((op, self.buf[i:i + n]))
+            payload = self.buf[i:i + n]
+            self.pending.append((op, payload))
             self.buf = self.buf[i + n:]
+            if op == 9 and self.auto_pong:
+                self.send(frame(payload, opcode=0xA))
 
     def collect(self, seconds):
         """Every frame that arrives within the given time, in order."""

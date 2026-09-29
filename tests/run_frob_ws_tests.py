@@ -201,21 +201,38 @@ lurker.sendall(("GET /ws HTTP/1.1\r\nHost: h\r\nUpgrade: websocket\r\n"
 time.sleep(1.5)
 check('login-screen websocket upgraded', b'101' in lurker.recv(65536), '')
 
-time.sleep(45)
+# Keepalive would also close a silent socket after three ping intervals
+# (30s at the default), the same time connidle takes. Send an
+# unsolicited Pong heartbeat every few seconds so the connection is
+# visibly alive: that is not activity, so only connidle can drop it,
+# and it must do so with Close 1000 rather than keepalive's 1001.
 closed = False
-lurker.settimeout(5)
-try:
-    while True:
+data = b''
+lurker.settimeout(1.0)
+deadline = time.time() + 45
+last_beat = 0
+while time.time() < deadline and not closed:
+    if time.time() - last_beat >= 4:
+        try:
+            lurker.sendall(frame('', 0xA))
+        except OSError:
+            closed = True
+            break
+        last_beat = time.time()
+    try:
         chunk = lurker.recv(65536)
         if not chunk:
             closed = True
-            break
-except socket.timeout:
-    pass                        # still open: the failure being tested for
-except OSError:
-    closed = True               # reset counts as dropped too
+        data += chunk
+    except socket.timeout:
+        pass
+    except OSError:
+        closed = True           # reset counts as dropped too
 check('an idle login-screen websocket is dropped after connidle',
       closed, 'socket still open after 45s')
+check('by connidle (Close 1000), not by keepalive (1001)',
+      b'\x88\x02\x03\xe8' in data and b'\x03\xe9' not in data,
+      repr(data[-16:]))
 lurker.close()
 
 stop(sess)

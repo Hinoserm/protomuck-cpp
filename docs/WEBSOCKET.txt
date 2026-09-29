@@ -95,8 +95,8 @@ a connection, the sideband, the JSON primitives it rests on, and the
        timing out a quiet connection (nginx closes one after 60 seconds
        by default). A connection that sends nothing at all for three
        intervals, not even the Pong a browser returns on its own, is
-       closed as dead with status 1001. Setting the interval to 0 turns
-       keepalive off.
+       closed as dead with status 1001. The interval is 10 seconds by
+       default and may not be set below 5; keepalive is always on.
 
        NONE OF THIS IS ACTIVITY. Pings, pongs and sideband packets never
        refresh idle time and never unidle a player; only a typed line
@@ -316,8 +316,8 @@ a connection, the sideband, the JSON primitives it rests on, and the
    wwwport                the web port websockets connect to
    json_max_len           largest JSON text accepted or produced, in
                           kilobytes; default 1024
-   web_ws_ping_interval   seconds between keepalive pings; 0 turns them
-                          off; default 30
+   web_ws_ping_interval   time between keepalive pings (a time @tune,
+                          e.g. 10s); at least 5s; default 10s
    web_trusted_proxies    comma-separated addresses of reverse proxies
                           whose X-Forwarded-For is believed; default
                           empty

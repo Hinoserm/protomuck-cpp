@@ -36,8 +36,8 @@ for line in open('data/parmfile.cfg'):
         wwwport = int(line.split('=', 1)[1])
 
 
-def WS():
-    w = wsclient.WS(wwwport)
+def WS(auto_pong=True):
+    w = wsclient.WS(wwwport, auto_pong=auto_pong)
     w.collect(1.0)              # the welcome screen
     return w
 
@@ -182,29 +182,36 @@ q.close()
 
 # --- keepalive ------------------------------------------------------------
 
-ws.close()                    # it would not answer the pings below
-sess.cmd('@tune web_ws_ping_interval=2', 0.5)
-k = WS()
-_, f = k.wait(lambda f: f[0] == 9, 5)
+ws.close()
+
+out = sess.cmd('@tune web_ws_ping_interval', 0.6)
+check('web_ws_ping_interval is a time @tune defaulting to 10s',
+      '0:00:10' in out, out.strip()[-160:])
+out = sess.cmd('@tune web_ws_ping_interval=4s', 0.6)
+check('it refuses anything under 5s', 'Parameter set' not in out,
+      out.strip()[-160:])
+out = sess.cmd('@tune web_ws_ping_interval', 0.6)
+check('and keeps its previous value when refused', '0:00:10' in out,
+      out.strip()[-160:])
+out = sess.cmd('@tune web_ws_ping_interval=5s', 0.6)
+check('5s is accepted', 'Parameter set' in out, out.strip()[-160:])
+
+k = WS(auto_pong=False)
+_, f = k.wait(lambda f: f[0] == 9, 8)
 check('the server pings on web_ws_ping_interval', f is not None, 'no Ping')
-# stay silent: never answer, never send
-got, f = k.wait(is_close, 12)
+# play dead: never answer, never send
+got, f = k.wait(is_close, 25)
 check('a connection silent for three intervals is closed with 1001',
       f is not None and close_code(f) == 1001, repr(got[-3:]))
 k.close()
 
-k = WS()
-alive = True
-for _ in range(10):           # answer every ping, well past 3 intervals
-    for g in k.collect(1.0):
-        if g[0] == 9:
-            k.send(frame(g[1], opcode=0xA))
-        if g[0] == 8:
-            alive = False
-check('a connection that answers its pings is kept', alive and not k.closed,
-      'dropped')
+k = WS()                        # answers its pings, as a browser does
+got = k.collect(20.0)           # well past three intervals
+check('a connection that answers its pings is kept',
+      not k.closed and not any(g[0] == 8 for g in got),
+      repr([g[0] for g in got]))
 k.close()
-sess.cmd('@tune web_ws_ping_interval=30', 0.5)
+sess.cmd('@tune web_ws_ping_interval=10s', 0.5)
 
 # --- server shutdown -------------------------------------------------------
 # close_sockets used to write the shutdown message raw into every

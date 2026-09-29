@@ -105,6 +105,12 @@ struct tune_str_entry tune_str_list[] = {
 /* times */
 time_t tp_dump_interval = DUMP_INTERVAL;
 time_t tp_dump_warntime = DUMP_WARNTIME;
+/* How often the server pings each websocket: keeps a reverse proxy from
+ * timing out a quiet connection, and a connection that sends nothing at
+ * all (not even the Pong a browser returns on its own) for three
+ * intervals is closed as dead. Never below 5s. None of this counts as
+ * activity: pings never unidle anyone. */
+time_t tp_web_ws_ping_interval = 10;
 time_t tp_monolithic_interval = MONOLITHIC_INTERVAL;
 time_t tp_clean_interval = CLEAN_INTERVAL;
 time_t tp_aging_time = AGING_TIME;
@@ -124,11 +130,18 @@ struct tune_time_entry {
     time_t *tim;
     int writemlev;
     int readmlev;
+    /* An optional floor. A flag rather than a plain minimum of 0,
+     * because several time parms may legitimately be negative; entries
+     * that leave both out have no floor, exactly as before. */
+    bool hasmin;
+    time_t min;
 };
 
 struct tune_time_entry tune_time_list[] = {
     {"Database", "dump_interval", &tp_dump_interval, LARCH, LMUF},
     {"Database", "dump_warntime", &tp_dump_warntime, LARCH, LMUF},
+    {"HTTPD", "web_ws_ping_interval", &tp_web_ws_ping_interval, LARCH, LMUF,
+     true, 5},
     {"Database", "monolithic_interval", &tp_monolithic_interval, LARCH, LMUF},
     {"System", "clean_interval", &tp_clean_interval, LARCH, LMUF},
     {"System", "aging_time", &tp_aging_time, LARCH, LMUF},
@@ -201,11 +214,6 @@ int tp_web_max_users = 10;      /* hinoserm */
  * sideband packets, and the JSON conversion prims. Checked before
  * anything is buffered or while output is being built, never after. */
 int tp_json_max_len = 1024;
-/* Seconds between keepalive pings to each websocket; 0 turns them off.
- * A connection that sends nothing at all (not even the pong a browser
- * returns automatically) for three intervals is dropped as dead. None
- * of this counts as activity: pings never unidle anyone. */
-int tp_web_ws_ping_interval = 30;
 #endif /* hinoserm */
 //#ifdef SQL_SUPPORT
 int tp_mysql_result_limit = 40;
@@ -278,7 +286,6 @@ struct tune_val_entry tune_val_list[] = {
     {"HTTPD", "web_max_filesize", &tp_web_max_filesize, WBOY, LMUF}, /* hinoserm */
     {"HTTPD", "web_max_users", &tp_web_max_users, LARCH, LMUF}, /* hinoserm */
     {"System", "json_max_len", &tp_json_max_len, WBOY, LMUF},
-    {"HTTPD", "web_ws_ping_interval", &tp_web_ws_ping_interval, LARCH, LMUF},
 #endif /* hinoserm */
     {"HTTPD", "mysql_thread_count", &tp_mysql_thread_count, WBOY, LMUF}, /* hinoserm */
     {"HTTPD", "mysql_log_level", &tp_mysql_log_lvl, LARCH, LMUF}, /* hinoserm */
@@ -1173,7 +1180,16 @@ tune_setparm(const dbref player, const char *parmname, const char *val)
                     }
                     break;
             }
-            *ttim->tim = (days * 86400) + (3600 * hrs) + (60 * mins) + secs;
+            {
+                time_t total = (days * 86400) + (3600 * hrs) + (60 * mins)
+                    + secs;
+
+                /* refused, not clamped: the setter learns the value was
+                 * not taken, and the parm keeps what it had */
+                if (ttim->hasmin && total < ttim->min)
+                    return TUNESET_BADVAL;
+                *ttim->tim = total;
+            }
             return 0;
         }
         ttim++;

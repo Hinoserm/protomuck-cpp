@@ -1900,10 +1900,9 @@ void http::ws_add_to_queue(const std::string& in, dbref orig, std::string tag)
 void
 http::ws_keepalive(time_t now)
 {
-    int interval = tp_web_ws_ping_interval;
-
-    if (interval <= 0)
-        return;
+    /* the @tune refuses anything under 5s; the floor is repeated here
+     * so no path to the variable can turn keepalive into a ping storm */
+    time_t interval = tp_web_ws_ping_interval < 5 ? 5 : tp_web_ws_ping_interval;
 
     /* Three silent intervals is dead: a live browser answers every ping
      * with a pong on its own, so this only ever catches a connection
