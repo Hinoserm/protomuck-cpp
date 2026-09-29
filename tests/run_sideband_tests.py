@@ -32,140 +32,12 @@ for line in open('data/parmfile.cfg'):
         wwwport = int(line.split('=', 1)[1])
 
 
-# ------------------------------------------------------------------
-# a minimal websocket client
-# ------------------------------------------------------------------
-
-def frame(payload, opcode=1):
-    """One masked client frame, using the 16- and 64-bit length forms
-    when the payload needs them."""
-    p = payload.encode('utf-8') if isinstance(payload, str) else payload
-    m = os.urandom(4)
-    body = bytes(c ^ m[i % 4] for i, c in enumerate(p))
-    n = len(p)
-    hdr = bytes([0x80 | opcode])
-    if n < 126:
-        hdr += bytes([0x80 | n])
-    elif n <= 0xFFFF:
-        hdr += bytes([0x80 | 126]) + struct.pack('>H', n)
-    else:
-        hdr += bytes([0x80 | 127]) + struct.pack('>Q', n)
-    return hdr + m + body
+import wsclient
+from wsclient import frame, sideband_of, text_of, is_sb
 
 
-class WS:
-    def __init__(self, extra_headers=''):
-        self.s = socket.create_connection(('127.0.0.1', wwwport), timeout=10)
-        key = base64.b64encode(os.urandom(16)).decode()
-        self.s.sendall(("GET /ws HTTP/1.1\r\nHost: h\r\n"
-                        "Upgrade: websocket\r\nConnection: Upgrade\r\n"
-                        "Sec-WebSocket-Key: %s\r\n"
-                        "Sec-WebSocket-Version: 13\r\n%s\r\n"
-                        % (key, extra_headers)).encode())
-        self.buf = b''
-        self.closed = False
-        deadline = time.time() + 5
-        while b'\r\n\r\n' not in self.buf and time.time() < deadline:
-            self._read(0.5)
-        head, _, self.buf = self.buf.partition(b'\r\n\r\n')
-        self.status = head.split(b'\r\n', 1)[0]
-        self.pending = []
-
-    def _read(self, t):
-        self.s.settimeout(t)
-        try:
-            chunk = self.s.recv(1 << 20)
-            if not chunk:
-                self.closed = True
-            self.buf += chunk
-        except socket.timeout:
-            pass
-        except OSError:
-            self.closed = True
-
-    def _parse(self):
-        while len(self.buf) >= 2:
-            op = self.buf[0] & 0x0F
-            n = self.buf[1] & 0x7F
-            i = 2
-            if n == 126:
-                if len(self.buf) < 4:
-                    return
-                n = struct.unpack('>H', self.buf[2:4])[0]
-                i = 4
-            elif n == 127:
-                if len(self.buf) < 10:
-                    return
-                n = struct.unpack('>Q', self.buf[2:10])[0]
-                i = 10
-            if len(self.buf) < i + n:
-                return
-            self.pending.append((op, self.buf[i:i + n]))
-            self.buf = self.buf[i + n:]
-
-    def collect(self, seconds):
-        """Every frame that arrives within the given time, in order."""
-        end = time.time() + seconds
-        while time.time() < end and not self.closed:
-            self._read(0.2)
-            self._parse()
-        self._parse()
-        out, self.pending = self.pending, []
-        return out
-
-    def wait(self, pred, seconds=5):
-        """Frames up to and including the first that satisfies pred."""
-        got = []
-        end = time.time() + seconds
-        while time.time() < end and not self.closed:
-            self._read(0.2)
-            self._parse()
-            while self.pending:
-                f = self.pending.pop(0)
-                got.append(f)
-                if pred(f):
-                    return got, f
-        return got, None
-
-    def cmd(self, text):
-        self.s.sendall(frame(json.dumps({"muck": {"command": text}})))
-
-    def sb(self, cmd, data=None, raw=None):
-        body = {"cmd": cmd}
-        if data is not None:
-            body["data"] = data
-        self.s.sendall(frame(raw if raw is not None
-                             else json.dumps({"muck": {"sideband": body}})))
-
-    def close(self):
-        try:
-            self.s.close()
-        except OSError:
-            pass
-
-
-def sideband_of(f):
-    op, payload = f
-    if op != 1:
-        return None
-    try:
-        return json.loads(payload)["muck"]["sideband"]
-    except (ValueError, KeyError, TypeError):
-        return None
-
-
-def text_of(f):
-    op, payload = f
-    if op != 1:
-        return None
-    try:
-        return json.loads(payload)["muck"]["text"]
-    except (ValueError, KeyError, TypeError):
-        return None
-
-
-def is_sb(name):
-    return lambda f: (sideband_of(f) or {}).get("cmd") == name
+def WS(extra_headers=''):
+    return wsclient.WS(wwwport, extra_headers)
 
 
 # ------------------------------------------------------------------
@@ -263,11 +135,11 @@ lvar who
     'SbOther': ('''
 : main pop
   0 try
-    "WsUser" pmatch descr_array 0 array_getitem "X" { }dict
+    "Mort" pmatch descr_array 0 array_getitem "X" { }dict
     descr_sideband "sent"
   catch
   endcatch
-  me @ "_perm" rot setprop
+  me @ "PERM:" rot strcat notify
 ;''', 'M3'),
 }
 refs = {}
@@ -288,11 +160,10 @@ for prog in ('SbSelf', 'SbOther'):
     sess.cmd('@set %s=M3' % prog, 0.3)
     sess.cmd('@set %s=L' % prog, 0.3)
 
-for act, prog in (('waitread', 'ReadProg'), ('sbself', 'SbSelf')):
+for act, prog in (('waitread', 'ReadProg'), ('sbself', 'SbSelf'),
+                  ('sbother', 'SbOther')):
     sess.cmd('@act %s=#0' % act, 0.4)
     sess.cmd('@link %s=#%d' % (act, refs[prog]), 0.4)
-sess.cmd('@act sbother=*Mort', 0.4)
-sess.cmd('@link sbother=#%d' % refs['SbOther'], 0.4)
 sess.cmd('@pcreate WsUser=wspw', 1.0)
 
 # ------------------------------------------------------------------
@@ -430,11 +301,25 @@ ws.cmd('sbself')
 _, f = ws.wait(is_sb('Self'))
 check('an M3 program may send to its own connection', f is not None,
       'no Self')
-# run as Mort (offline, so the result is kept on Mort, not notified)
-sess.cmd('@force Mort=sbother', 1.5)
-out = sess.cmd('ex *Mort=_perm', 1.0)
+# Mort logs in on a second websocket; WsUser then runs an M3 program
+# (owned by Mort, so genuinely M3) that tries to send to Mort's
+# connection. It is neither the triggering descriptor nor one WsUser
+# is logged in on, so it must be refused, and the error comes back to
+# WsUser as text.
+ws2 = WS()
+ws2.collect(1.0)
+ws2.sb('PlayerLogin', {"name": "Mort", "password": "mortpw"})
+_, f = ws2.wait(is_sb('PlayerLogin.Result'))
+check('a second player logs in on a second websocket',
+      f is not None and sideband_of(f)['data'].get('ok') == 1, repr(f))
+ws.cmd('sbother')
+_, f = ws.wait(lambda f: 'PERM:' in (text_of(f) or ''))
 check("an M3 program may not send to someone else's connection",
-      'Permission denied' in out, out.strip()[-200:])
+      f is not None and 'Permission denied' in text_of(f), repr(f))
+got = ws2.collect(1.0)
+check('and nothing reached the other connection',
+      not any(is_sb('X')(g) for g in got), repr(got))
+ws2.close()
 
 # ------------------------------------------------------------------
 # 7-bit input, long lines, the 64-bit length, the frame cap

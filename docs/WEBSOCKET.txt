@@ -1,0 +1,325 @@
+PROTOMUCK WEBSOCKETS AND THE SIDEBAND
+=====================================
+
+A websocket is a player connection made over the web port instead of
+the telnet port, typically by a browser-based client. It carries the
+same game as a telnet connection, plus a sideband: structured packets
+between a web UI and MUF programs that never appear as game text.
+
+This document covers the wire protocol, how a websocket is treated as
+a connection, the sideband, the JSON primitives it rests on, and the
+@tune parameters that govern all of it.
+
+
+1. CONNECTING
+
+   A client opens the web port (the wwwport @tune) and upgrades at the
+   path /ws with an ordinary RFC 6455 handshake. The upgrade is refused
+   unless the www_root @tune names a valid room.
+
+   Upgrading is connecting. At that moment, exactly as a telnet login
+   screen does:
+
+       the pre-login propqueues fire (_login, @login, ~login)
+       the welcome screen is sent
+
+   The connection then sits at the login screen until it logs in,
+   either by sending "connect <name> <password>" as a typed line or
+   through a sideband login program (section 5.6). A websocket that
+   never logs in is dropped after connidle, like any login screen, and
+   fires _disclogin (@disclogin, ~disclogin) when it goes.
+
+   Once logged in it is an ordinary player connection: WHO names it,
+   idle time comes from what the player types, the connect and
+   disconnect propqueues fire, and dump and shutdown walls reach it.
+   WHO shows its port type as "WebSocket Port". DESCRTYPE reports a
+   websocket as HTTP, for compatibility; DESCR_WEBSOCKET? tells the
+   two apart.
+
+
+2. MESSAGES
+
+   Every message in either direction is one JSON object in a text
+   frame, inside a "muck" envelope:
+
+       client to MUCK
+           {"muck":{"command":"look"}}
+           {"muck":{"sideband":{"cmd":"Map.Request","data":{...}}}}
+
+       MUCK to client
+           {"muck":{"text":"You see nothing special.\r\n"}}
+           {"muck":{"sideband":{"cmd":"Map.Update","data":{...}}}}
+
+   A text frame that is not a "muck" envelope at all, including one
+   that is not JSON, is taken as a typed line, so a client that sends
+   raw text still works.
+
+   A typed line is cut to the same length a telnet line is cut to.
+
+   Everything that crosses to or from a user is 7-bit ASCII. Each
+   non-ASCII character arriving from a client becomes a single '?',
+   and any high-bit byte in text on its way out becomes '?'. The JSON
+   the MUCK sends is therefore always plain ASCII.
+
+   Text and sideband packets go out in exactly the order they were
+   produced: a packet sent between two lines of text arrives between
+   them.
+
+
+3. THE WEBSOCKET PROTOCOL (RFC 6455)
+
+   3.1 Frames the MUCK accepts
+
+       Frames from a client must be masked, with the reserved bits
+       clear. Text messages may arrive whole or fragmented; fragments
+       are reassembled, and control frames may arrive between them.
+       Control frames may not be fragmented and carry at most 125
+       bytes. A message, whole or reassembled, may be at most
+       json_max_len.
+
+       A frame that breaks any of these rules ends the connection with
+       a Close frame carrying the RFC status code (section 3.3). The
+       length limit is enforced as soon as a frame's header arrives,
+       before any of its payload is read.
+
+   3.2 Ping and Pong
+
+       A Ping (opcode 0x9) is answered with a Pong (0xA) carrying the
+       same payload.
+
+       A Pong is accepted as the reply to one of the MUCK's pings or as
+       an unsolicited one-way heartbeat.
+
+       Keepalive: the MUCK pings every websocket every
+       web_ws_ping_interval seconds, which keeps a reverse proxy from
+       timing out a quiet connection (nginx closes one after 60 seconds
+       by default). A connection that sends nothing at all for three
+       intervals, not even the Pong a browser returns on its own, is
+       closed as dead with status 1001. Setting the interval to 0 turns
+       keepalive off.
+
+       NONE OF THIS IS ACTIVITY. Pings, pongs and sideband packets never
+       refresh idle time and never unidle a player; only a typed line
+       does. A web UI's keepalive or background traffic cannot keep an
+       absent player looking present.
+
+   3.3 Close
+
+       Close (0x8) is a handshake. When the client closes, the MUCK
+       answers with a Close echoing the client's status code (or an
+       empty Close for an empty one) and lets the connection go. When
+       the MUCK ends a connection it sends a Close first, after any
+       remaining text, and sends nothing after it:
+
+           1000  normal: QUIT, a boot
+           1001  going away: the server shutting down (after its
+                 shutdown message), or no response to keepalive
+           1002  protocol error: an unmasked frame, reserved bits,
+                 an unknown opcode, a malformed control frame, a
+                 continuation with nothing to continue
+           1003  unsupported data: a binary message
+           1009  too big: over json_max_len
+
+
+4. JSON AND MUF
+
+   JSON_TO_ARRAY and ARRAY_TO_JSON convert between JSON text and MUF
+   values. The sideband uses the same conversion for its packets.
+
+   4.1 The mapping
+
+       JSON              MUF                 JSON
+       ----------------  ------------------  -------------------------
+       object            dictionary          object
+       array             list array          array
+       string            string              string
+       integer           integer             number
+       number            float               number
+       true / false      1 / 0               (numbers; MUF has no
+                                              boolean)
+
+       Object keys stay strings: the key "1" is the string "1". On the
+       way out, a dictionary's integer keys become their decimal
+       strings.
+
+   4.2 What is refused
+
+       The conversion is strict. A value with no faithful counterpart
+       on the other side is an error, never a guess:
+
+           JSON to MUF   null; an integer too large for a MUF integer
+           MUF to JSON   a dbref, lock, function address, variable or
+                         any other non-data type; a float that is NaN
+                         or infinite; a dictionary key that is neither
+                         a string nor an integer; keys 1 and "1" in
+                         one dictionary, which would both become "1"
+
+       Every error names the path to the offending value, for example
+       "$.items[3]: null has no MUF equivalent". A dbref must be
+       converted explicitly before it is sent, with INT or as a string.
+
+   4.3 Limits
+
+       json_max_len    the largest JSON text accepted or produced, in
+                       kilobytes (default 1024)
+       32              levels of nesting
+       10000           values in one document
+       BUFFER_LEN      any single string that becomes a MUF string, and
+                       the result of ARRAY_TO_JSON, which is a MUF
+                       string
+
+       Every limit is checked while the work is being done, never
+       afterwards: an oversized or deeply nested document is refused
+       before it has been built in memory.
+
+
+5. THE SIDEBAND
+
+   5.1 Packets
+
+       {"muck":{"sideband":{"cmd":"<name>","data":{...}}}}
+
+       A name is 1 to 64 characters of letters, digits, '.', '_' and
+       '-', and may not begin with '.' or '_'. Names beginning with '_'
+       are the MUCK's own (see 5.5). Dotted names in the style of GMCP
+       ("Map.Request", "Char.Vitals") keep a large registry readable.
+
+       From a client, data must be a JSON object; a missing data is an
+       empty object.
+
+   5.2 Registration
+
+       A client's packet runs the program registered for its name, as
+       a property on the web root room:
+
+           @set #<www_root>=_ws/Map.Request:#1234
+
+       The value is read the way propqueue properties are read: a
+       dbref, "#1234", a bare number, or a $registered name. It is read
+       afresh for every packet, so repointing a registration takes
+       effect on the next one. Names match regardless of case.
+
+       When a packet's turn comes, the registration must resolve to a
+       PROGRAM that is LINK_OK, and both the program and its owner must
+       be at least W1. A program that has not been compiled is compiled
+       then.
+
+   5.3 How the program runs
+
+       A packet waits its turn in the connection's input queue with
+       typed lines, so it stays in order with them and is subject to
+       the same command-flood limit. It is never handed to a READ: a
+       player at a prompt keeps the prompt.
+
+       The program runs in the background with:
+
+           the stack        one dictionary, the packet's data
+           command @        the name as the client sent it
+           me @             the player, or #-1 before login
+           descr            the websocket the packet came from
+           trigger          the web root room
+
+       One program may be registered under many names and branch on
+       command @.
+
+       Before login, me @ is #-1 on purpose. A handler written for
+       logged-in players then fails safely on an anonymous connection
+       instead of running as anyone, least of all its wizard owner.
+
+   5.4 Sending
+
+       DESCR_SIDEBAND ( i:descr s:cmd ?:data -- )
+
+       Sends one packet. Below Mage level a program may send only to
+       its own connection: the descriptor that triggered it, or one its
+       player is logged in on. Every refusal is a MUF error that TRY and
+       CATCH can catch.
+
+       A connection's unsent output is bounded. A client that stops
+       reading lets it back up, and once it exceeds max_output plus
+       json_max_len, DESCR_SIDEBAND refuses rather than let the server
+       buffer without limit. One full-size packet can always be sent
+       on a connection that is keeping up.
+
+   5.5 Errors
+
+       A packet the MUCK cannot run is answered with
+
+           {"muck":{"sideband":{"cmd":"_error",
+                    "data":{"cmd":"<name>","error":"<why>"}}}}
+
+       An unregistered name, and a registration that fails its checks,
+       both answer "unknown command": which names exist, and why one
+       was refused, is not for the client to learn. The real reason
+       goes to the status log. A packet whose own data cannot become
+       MUF (a null, say) is told exactly what and where, since that is
+       the client's data.
+
+   5.6 Example: a login dialog
+
+       A web UI can show its own login dialog instead of the text login
+       screen. A _login program (see section 1) tells the client to
+       show it:
+
+           : main
+             pop
+             descr descr_websocket? not if exit then
+             descr "PlayerLogin" { "guest" 1 }dict descr_sideband
+           ;
+
+       The dialog answers with a PlayerLogin packet, handled by a
+       program registered as _ws/PlayerLogin (owned by a W2 wizard,
+       since DESCR_SETUSER is a W2 primitive):
+
+           lvar data
+           lvar who
+           : main
+             data !
+             data @ "name" array_getitem pmatch who !
+             who @ ok? not if
+               descr "PlayerLogin.Result"
+               { "ok" 0 "error" "no such player" }dict descr_sideband
+               exit
+             then
+             descr who @ data @ "password" array_getitem descr_setuser if
+               descr "PlayerLogin.Result" { "ok" 1 }dict descr_sideband
+             else
+               descr "PlayerLogin.Result"
+               { "ok" 0 "error" "bad password" }dict descr_sideband
+             then
+           ;
+
+       DESCR_SETUSER refuses a wrong password and returns 0; on success
+       the connection is logged in and the normal connect sequence
+       runs.
+
+
+6. BEHIND A REVERSE PROXY
+
+   Behind a reverse proxy every websocket appears to come from the
+   proxy. If the proxy's address is listed in web_trusted_proxies, the
+   MUCK believes the X-Forwarded-For header it adds, reading the list
+   right to left past any further trusted proxies; the first address
+   that is not a trusted proxy is the client. That address is used for
+   site bans, WHO and the logs, and a blocked site is refused.
+
+   The header is believed from nowhere else. Any client can send one,
+   and believing it from anyone would let a banned player choose their
+   own address. With web_trusted_proxies empty, the default, it is
+   ignored entirely.
+
+
+7. @TUNE PARAMETERS
+
+   www_root               the room whose _ws/ propdir is the sideband
+                          registry; the upgrade is refused without it
+   wwwport                the web port websockets connect to
+   json_max_len           largest JSON text accepted or produced, in
+                          kilobytes; default 1024
+   web_ws_ping_interval   seconds between keepalive pings; 0 turns them
+                          off; default 30
+   web_trusted_proxies    comma-separated addresses of reverse proxies
+                          whose X-Forwarded-For is believed; default
+                          empty
+   connidle               how long a websocket may sit at the login
+                          screen, as for telnet

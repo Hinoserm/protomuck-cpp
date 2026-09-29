@@ -118,6 +118,7 @@ Connection Prims:
   DESCR_FLAG?      DESCRBUFSIZE      DESCRTYPE    DESCR_SSL?
   DESCR_SENDFILE   DESCR_SAFEBOOT    MCCP_START   MCCP_END
   DESCR_SETUSER_NOPASS   NBSOCKRECV_CHAR   SUID
+  DESCR_WEBSOCKET?       DESCR_SIDEBAND
 
 Locks Management:
   SETLOCKSTR     GETLOCKSTR     LOCKED?     PARSELOCK
@@ -196,6 +197,7 @@ ARRAY_REGMATCHVAL   ARRAY_REGMATCHKEY   ARRAY_REGSUB        ARRAY_REGFILTER_PROP
 ARRAY_CUT           ARRAY_COMPARE       ARRAY_SORT_INDEXED  ARRAY_NESTED_GET
 ARRAY_SUM           GETLINKS_ARRAY      ARRAY_FMTSTRINGS    ARRAY_NESTED_SET
 ARRAY_STRING_FRAGMENT                                       ARRAY_NESTED_DEL
+JSON_TO_ARRAY       ARRAY_TO_JSON
 
             }ARRAY     }LIST     }DICT     }JOIN    }CAT      }TELL    
 
@@ -494,7 +496,7 @@ For working with Descriptors:
   DESCRBOOT        DESCR_SET         DESCR_FLAG?   DESCRBUFSIZE
   DESCRTYPE        DESCR_SSL?        DESCR_SENDFILE
   DESCR_SAFEBOOT   MCCP_START        MCCP_END
-  SUID
+  SUID             DESCR_WEBSOCKET?  DESCR_SIDEBAND
 ~~~~~~
 LOCK PRIMS
 
@@ -6022,6 +6024,7 @@ ARRAY_REGMATCHVAL   ARRAY_REGMATCHKEY   ARRAY_REGSUB        ARRAY_REGFILTER_PROP
 ARRAY_CUT           ARRAY_COMPARE       ARRAY_SORT_INDEXED  ARRAY_NESTED_GET
 ARRAY_SUM           GETLINKS_ARRAY      ARRAY_FMTSTRINGS    ARRAY_NESTED_SET
 ARRAY_STRING_FRAGMENT                                       ARRAY_NESTED_DEL
+JSON_TO_ARRAY       ARRAY_TO_JSON
 
             }ARRAY     }LIST     }DICT     }JOIN     }CAT     }TELL    
             []         ->[]      []<-      [^]      [x]       [..]
@@ -10792,9 +10795,105 @@ For example:
 "Greetings" 3 array_string_fragment would return an array with
 "Gre" "eti" "ngs" as the 3 values. 
 Using a value of 1 for i will break the string into individual
-characters. i must be greater than 0. 
+characters. i must be greater than 0.
 
 See: ARRAYS2
+~~~~~
+JSON_TO_ARRAY
+
+JSON_TO_ARRAY ( s -- ? )
+------------------------
+Level: M1 Apprentice
+s = JSON text
+? = the MUF value it describes
+
+Parses JSON text into a MUF value:
+
+    object          dictionary (keys stay strings: "1" is "1")
+    array           list array
+    string          string
+    integer         integer
+    number          float
+    true / false    1 / 0
+
+Anything MUF cannot hold is an error that names the path to it, for
+example "$.items[3]: null has no MUF equivalent": null, and an integer
+too large for a MUF integer. Text outside 7-bit ASCII becomes '?', one
+per character.
+
+The text may be at most json_max_len kilobytes, nest at most 32 levels
+and hold at most 10000 values; any single string is limited to the
+MUF string length.
+
+See: ARRAY_TO_JSON, WEBSOCKET
+~~~~~
+ARRAY_TO_JSON
+
+ARRAY_TO_JSON ( ? -- s )
+------------------------
+Level: M1 Apprentice
+? = a MUF value: an array, string, integer or float
+s = its JSON text
+
+Converts a MUF value to JSON text:
+
+    dictionary      object (string keys; an integer key becomes its
+                    decimal string)
+    list array      array
+    string          string
+    integer         number
+    float           number
+
+Anything else is an error naming the path to it: a dbref, a lock, a
+function address, a variable, a float that is NaN or infinite, a
+dictionary key that is neither a string nor an integer, or keys 1
+and "1" in one dictionary (both would become "1"). Convert a dbref
+first, with INT or a string. Bytes outside 7-bit ASCII become '?'.
+
+The result is a MUF string, so it is limited to the MUF string length
+as well as json_max_len.
+
+Example:
+    { "name" me @ name "hp" 12 }dict array_to_json
+    returns {"hp":12,"name":"Hinoserm"}
+
+See: JSON_TO_ARRAY, DESCR_SIDEBAND, WEBSOCKET
+~~~~~
+WEBSOCKET|SIDEBAND|WEBSOCKETS
+
+WEBSOCKET SIDEBAND
+------------------
+A websocket client (such as the web client) exchanges JSON messages
+with the MUCK over the web port, at /ws. Ordinary text travels as
+
+    client to MUCK:  {"muck":{"command":"look"}}
+    MUCK to client:  {"muck":{"text":"..."}}
+
+Alongside it runs the sideband: structured packets for a web UI that
+never appear as game text.
+
+    {"muck":{"sideband":{"cmd":"Map.Request","data":{...}}}}
+
+A packet from the client runs the program registered for its name, as
+the property _ws/<cmd> on the web root room (the www_root @tune):
+
+    @set #<webroot>=_ws/Map.Request:#1234
+
+The program must be LINK_OK, and it and its owner must be at least W1.
+Names match regardless of case. The program runs in the background,
+with the packet's data object on the stack as a dictionary, the name
+the client sent in "command @", the websocket in "descr", and the
+player in "me @", or #-1 before the connection has logged in. One
+program may be registered under several names and branch on
+"command @". A packet the MUCK cannot run is answered with an _error
+packet.
+
+Packets never count as the player doing something: they do not
+unidle, and neither do the websocket's pings.
+
+Programs send packets back with DESCR_SIDEBAND.
+
+See: DESCR_SIDEBAND, DESCR_WEBSOCKET?, JSON_TO_ARRAY, ARRAY_TO_JSON
 ~~~~~
 LABELS|MUF LABELS|LABEL|MUFLABELS|LABELS1|LABEL1
 
@@ -11534,9 +11633,11 @@ INBOUND   An accepted inbound socket.
 OUTBOUND  An outbound socket opened by the MUCK.
 PUEBLO    A connection in Pueblo mode.
 HTTP      A connection being served by the built in web server.
+          A websocket connection also reports HTTP; use
+          DESCR_WEBSOCKET? to tell the two apart.
 SSL       A connection wrapped in SSL.
 
-See: DESCR_SSL?, DESCRIPTORS, GETDESCRINFO
+See: DESCR_SSL?, DESCR_WEBSOCKET?, DESCRIPTORS, GETDESCRINFO
 ~~~~
 DESCR_SSL?|DESCRSECURE?
 
@@ -11552,6 +11653,54 @@ built without SSL support this always returns 0.
 DESCRSECURE? is an alias, provided for compatibility with FB6.
 
 See: DESCRTYPE, SOCKSECURE, SOCKUNSECURE
+~~~~
+DESCR_WEBSOCKET?
+
+DESCR_WEBSOCKET? ( i -- i2 )
+----------------------------
+Level: M2 Journeyman
+i = a valid descriptor number
+i2 = 1 if the connection is a websocket, 0 if it is not
+
+Returns true if the descriptor is a websocket connection, such as a
+player using a web client. Only a websocket can receive sideband
+packets. DESCRTYPE reports a websocket as HTTP, so use this to tell
+them apart.
+
+See: DESCR_SIDEBAND, DESCRTYPE, WEBSOCKET
+~~~~
+DESCR_SIDEBAND
+
+DESCR_SIDEBAND ( i s ? -- )
+---------------------------
+Level: M3 Master (Mage to send to someone else's connection)
+i = a websocket descriptor number
+s = the sideband command name
+? = the data: an array, string, integer or float
+
+Sends a sideband packet to a websocket client, in order with any text
+the connection has been sent before it. The client receives:
+
+    {"muck":{"sideband":{"cmd":"<s>","data":<?>}}}
+
+The command name is 1 to 64 characters of letters, digits, '.', '_'
+and '-', and may not begin with '.' or '_'. The data is converted to
+JSON by the same rules as ARRAY_TO_JSON.
+
+Below Mage level a program may send only to its own connection: the
+descriptor that triggered it, or one its player is logged in on.
+
+Nothing is returned. Every refusal is a MUF error, which a program can
+catch with TRY and CATCH: an invalid descriptor, a descriptor that is
+not a websocket, an invalid name, data that cannot become JSON, a
+packet larger than json_max_len, or a connection whose output is
+already backed up.
+
+Example:
+    descr "Map.Update" { "room" loc @ int "exits" 3 }dict
+    descr_sideband
+
+See: DESCR_WEBSOCKET?, ARRAY_TO_JSON, WEBSOCKET, SIDEBAND
 ~~~~
 MCCP_START|MCCP_END|MCCP
 

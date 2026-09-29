@@ -4876,6 +4876,17 @@ close_sockets(const char *msg)
     for (d = descriptor_list; d; d = dnext) {
         dnext = d->next;
 
+#ifdef NEWHTTPD
+        if (d->http && d->http->websocket) {
+            /* A raw write lands outside any frame and corrupts the
+             * stream. The message goes out as a text frame, and then
+             * the Close handshake's "going away". */
+            d->http->ws_add_to_queue(msg, NOTHING, "SYS");
+            process_output(d);
+            d->http->ws_close(1001, "server shutting down");
+            process_output(d);
+        } else
+#endif /* NEWHTTPD */
         sockwrite(d, msg, strlen(msg));
         announce_disconnect(d);
         if (shutdown(d->fd, 2) < 0)
