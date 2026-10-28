@@ -243,6 +243,10 @@ class http {
 #define HTTP_LOG "logs/webserver"
 #define HTTP_DIR "files/public_html"
 
+/* Distinct header names one request may send. Each field's own length
+ * is held under MAX_COMMAND_LEN, repeats included. */
+#define HTTP_MAX_FIELDS 100
+
 /* The following flags are used in the http_methods[] table to tell */
 /* which options the method supports, and is also used in the main  */
 /* struct to tell what kind of page was found.                      */

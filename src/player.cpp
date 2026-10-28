@@ -135,6 +135,7 @@ int
 rotate_alias(dbref target, int killold)
 {
     const char *oldalias = NULL;
+    char oldbuf[BUFFER_LEN];
     PropPtr pptr;
     int valid;
 
@@ -142,7 +143,14 @@ rotate_alias(dbref target, int killold)
     pptr = get_property(0, abuf);
     if (pptr) {
         if ((valid = PropType(pptr) == PROP_STRTYP)) {
-            oldalias = PropDataUNCStr(pptr);
+            /* a copy: the string lives in the 'last' property, which
+             * the remove_property below frees before it is read */
+            const char *s = PropDataUNCStr(pptr);
+
+            if (s) {
+                strcpyn(oldbuf, sizeof(oldbuf), s);
+                oldalias = oldbuf;
+            }
         }
 
         if (killold || !valid) {

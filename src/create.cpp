@@ -246,6 +246,13 @@ _link_exit(int descr, dbref player, dbref exit, char *dest_name, dbref *dest_lis
         if (dest == NIL) {
             dest_list[ndest++] = dest;
             anotify_nolisten2(player, CSUCC "Linked to NIL.");
+            /* the same limit as below, which this continue skipped:
+             * "nil;nil;..." wrote past the caller's dest_list */
+            if (ndest >= MAX_LINKS) {
+                anotify_nolisten2(player, CSUCC "Too many destinations, extra ignored.");
+                error = dryrun;
+                break;
+            }
             continue;
         }
 

@@ -1,5 +1,8 @@
 /* ProtoMUCK's main interface.c */
 /*  int main() is in this file  */
+#include <string>
+#include <vector>
+
 #include "copyright.h"
 #include "config.h"
 
@@ -952,85 +955,63 @@ anotify_descriptor(int descr, const char *msg)
 }
 
 
-char *
+/* An entity is up to six bytes for one. This escaped into a BUFFER_LEN
+ * stack buffer with no limit, and a line of quotes overwrote the
+ * return address. The result still ends where that buffer did, at
+ * BUFFER_LEN - 1, before any entity that would not fit whole. */
+std::string
 html_escape(const char *msg)
 {
-    char *tempstr;
-    static char buf[BUFFER_LEN];
-    char buff[BUFFER_LEN];
+    std::string out;
 
-    buff[0] = '\0';
-    tempstr = buff;
-    while (*msg) {
+    for (; *msg; msg++) {
+        const char *ent;
+        size_t elen;
+
         switch (*msg) {
-            case '&':{
-                *tempstr++ = '&';
-                *tempstr++ = 'a';
-                *tempstr++ = 'm';
-                *tempstr++ = 'p';
-                *tempstr++ = ';';
+            case '&':
+                ent = "&amp;";
                 break;
-            }
-            case '\"':{
-                *tempstr++ = '&';
-                *tempstr++ = 'q';
-                *tempstr++ = 'u';
-                *tempstr++ = 'o';
-                *tempstr++ = 't';
-                *tempstr++ = ';';
+            case '\"':
+                ent = "&quot;";
                 break;
-            }
-            case '<':{
-                *tempstr++ = '&';
-                *tempstr++ = 'l';
-                *tempstr++ = 't';
-                *tempstr++ = ';';
+            case '<':
+                ent = "&lt;";
                 break;
-            }
-            case '>':{
-                *tempstr++ = '&';
-                *tempstr++ = 'g';
-                *tempstr++ = 't';
-                *tempstr++ = ';';
+            case '>':
+                ent = "&gt;";
                 break;
-            }
-/*			case ' ': {
-				*tempstr++ = '&';
-				*tempstr++ = '#';
-				*tempstr++ = '3';
-				*tempstr++ = '2';
-				*tempstr++ = ';';
-				break;
-			} */
-            case '\n':{
-                break;
-            }
+/*			case ' ':
+				ent = "&#32;";
+				break; */
+            case '\n':
+                continue;
             default:
-                *tempstr++ = *msg;
+                ent = NULL;
         }
-        (void) msg++;
+        elen = ent ? strlen(ent) : 1;
+        if (out.size() + elen > BUFFER_LEN - 1)
+            break;
+        if (ent)
+            out += ent;
+        else
+            out += *msg;
     }
-    *tempstr = '\0';
-/*	strcpy(buf, "<TT><PRE>"); */
-    strcpy(buf, buff);
-/*	strcat(buf, "</TT></PRE>"); */
-    return buf;
+    return out;
 }
 
-char *
-html_escape2(char *msg, int addbr)
+std::string
+html_escape2(const char *msg, int addbr)
 {
-    char buf2[BUFFER_LEN];
-    static char buff[BUFFER_LEN];
+    std::string buff = "<PRE>"; //Used to be <CODE>
 
-    strcpy(buf2, msg);
-    if (strlen(buf2) >= (BUFFER_LEN - 18))
-        buf2[BUFFER_LEN - 18] = '\0';
-    strcpy(buff, "<PRE>"); //Used to be <CODE>
-    strcat(buff, html_escape(buf2));
-    strcat(buff, "</PRE>"); //Used to be </CODE>
+    if (strlen(msg) >= (BUFFER_LEN - 18))
+        buff += html_escape(std::string(msg, BUFFER_LEN - 18).c_str());
+    else
+        buff += html_escape(msg);
+    buff += "</PRE>"; //Used to be </CODE>
     if (addbr) {
-        strcat(buff, "<BR>");
+        buff += "<BR>";
     }
     return buff;
 }
@@ -1188,45 +1169,48 @@ parse_html(char *msg)
 int
 queue_ansi(struct descriptor_data *d, const char *msg)
 {
-    char buf[BUFFER_LEN + 5];
-    char buf2[BUFFER_LEN + 5];
-
     if (!msg || !*msg)
         return 0;
 
+    /* Sized from msg, not BUFFER_LEN: msg has no fixed limit (an
+     * escaped HTML line is up to six times its source), and
+     * strip_bad_ansi grows its input -- "\n" becomes "\r\n", an
+     * unterminated code gains its 'm', and a reset is added at the
+     * end -- to at most twice its length plus four. */
+    size_t len = strlen(msg);
+    std::string buf(2 * len + 5, '\0');
+    std::string buf2(len + 1, '\0');
+
     if (d->connected) {
         if (DR_RAW_FLAGS(d, DF_256COLOR) && (FLAGS(d->player) & CHOWN_OK)) {
-            strip_bad_ansi(buf, msg);
+            strip_bad_ansi(buf.data(), msg);
         } else if (FLAGS(d->player) & CHOWN_OK) {
-            strip_256_ansi(buf2, msg);
-            strip_bad_ansi(buf, buf2);
+            strip_256_ansi(buf2.data(), msg);
+            strip_bad_ansi(buf.data(), buf2.data());
         } else {
-            strip_ansi(buf, msg);
+            strip_ansi(buf.data(), msg);
         }
     } else {
         if (DR_RAW_FLAGS(d, DF_256COLOR) && DR_RAW_FLAGS(d, DF_COLOR)) {
-            strip_bad_ansi(buf, msg);
+            strip_bad_ansi(buf.data(), msg);
         } else if (DR_RAW_FLAGS(d, DF_COLOR)) {
-            strip_256_ansi(buf2, msg);
-            strip_bad_ansi(buf, buf2);
+            strip_256_ansi(buf2.data(), msg);
+            strip_bad_ansi(buf.data(), buf2.data());
         } else {
-            strip_ansi(buf, msg);
+            strip_ansi(buf.data(), msg);
         }
     }
 
-    queue_string(d, buf);
+    queue_string(d, buf.c_str());
 
-    return strlen(buf);
+    return strlen(buf.c_str());
 }
 
 int
 queue_html(struct descriptor_data *d, char *msg)
 {
-    char buf[BUFFER_LEN];
-
     if ((d->connected && OkObj(d->player)) ? (Html(d->player)) : (d->type == CT_PUEBLO)) {
-        strncpy(buf, msg, BUFFER_LEN);
-        return queue_ansi(d, buf);
+        return queue_ansi(d, msg);
     } else {
 /*		strcpy(buf, parse_html(msg)); */
         return 0;
@@ -1236,11 +1220,9 @@ queue_html(struct descriptor_data *d, char *msg)
 int
 queue_unhtml(struct descriptor_data *d, char *msg)
 {
-    char buf[BUFFER_LEN];
-
     if ((d->connected && OkObj(d->player)) ? (Html(d->player)) : (d->type == CT_PUEBLO)) {
 /*		if(strlen(msg) >= (BUFFER_LEN/6)) { */
-        strncpy(buf, html_escape2(msg, 0), BUFFER_LEN);
+        return queue_ansi(d, html_escape2(msg, 0).c_str());
 /*		} else {
 			strcpy(buf, html_escape(msg));
 			if (d->type == CT_HTTP) {
@@ -1248,10 +1230,8 @@ queue_unhtml(struct descriptor_data *d, char *msg)
 			}
 			strcpy(buf, html_escape2(msg, 0));
 		} */
-    } else {
-        strncpy(buf, msg, BUFFER_LEN);
     }
-    return queue_ansi(d, buf);
+    return queue_ansi(d, msg);
 }
 
 int
@@ -1326,7 +1306,7 @@ notify_nolisten(dbref player, const char *msg, int isprivate)
                         for (di = 0; di < dcount; di++) {
                             d = descrdata_by_index(darr[di]);
                             if (Html(OWNER(player)) && d)
-                                queue_ansi(d, html_escape(buf2));
+                                queue_ansi(d, html_escape(buf2).c_str());
                             else if (d)
                                 queue_unhtml(d, buf2);
                             if (firstpass)
@@ -3202,7 +3182,7 @@ assign_descrnum(int s)
     int dnum = -1;
 
     for (cnt = 0; cnt < DESCR_MAX * 2; cnt++) {
-        if (++descr_cnt > DESCR_MAX)
+        if (++descr_cnt >= DESCR_MAX)
             descr_cnt = 1;
 
         if (descr_table[descr_cnt] == -1) {
@@ -3928,12 +3908,8 @@ process_input(struct descriptor_data *d)
                     d->inIAC = 0;
                     break;
                 case TELOPT_SB: /* SB *//* Go ahead. Treat as NOP */
-                    //if (d->telopt.sb_buf)
-                    delete[]d->telopt.sb_buf;
-                    //d->telopt.sb_buf = (unsigned char *)malloc(TELOPT_MAX_BUF_LEN);
-                    d->telopt.sb_buf = new unsigned char[TELOPT_MAX_BUF_LEN];
-
-                    d->telopt.sb_buf_len = 0;
+                    d->telopt.sb_buf.clear();
+                    d->telopt.sb_overflow = false;
 
                     d->inIAC = 5;
                     break;
@@ -3953,7 +3929,10 @@ process_input(struct descriptor_data *d)
 #if 1
                     /* for future 8 bit clean code, perhaps */
                     /* the future, is NOW! -hinoserm */
-                    *p++ = *q;
+                    /* within the line's room, as for any other byte:
+                     * a stream of IAC IAC wrote on past raw_input */
+                    if (p < pend && !d->truncate)
+                        *p++ = *q;
 #endif
                     d->inIAC = 0;
                     break;
@@ -3962,45 +3941,50 @@ process_input(struct descriptor_data *d)
                     break;
             }
         } else if (d->inIAC == 5) {
-            if (*q == '\xF0' && *(q - 1) == '\xFF') {
-                d->telopt.sb_buf[d->telopt.sb_buf_len - 1] = '\0';
+            std::string &sb = d->telopt.sb_buf;
+
+            /* IAC SE ends it. The IAC is the last byte stored, which may
+             * have come in an earlier read: this used to look at q - 1,
+             * which is before buf when SE is the first byte of a read,
+             * and then wrote sb_buf[-1] when nothing had been stored. */
+            if (*q == '\xF0' && !sb.empty() && sb.back() == '\xFF') {
+                sb.back() = '\0';
 
                 /* Begin processing the TELOPT data buffer */
-                if (d->telopt.sb_buf_len) {
-                    switch (d->telopt.sb_buf[0]) {
+                if (!d->telopt.sb_overflow) {
+                    switch (sb[0]) {
                         case TELOPT_NAWS:
-                            if (d->telopt.sb_buf_len != 6)
+                            if (sb.size() != 6)
                                 break;
 
-                            d->telopt.width = (d->telopt.sb_buf[1] << 8) | d->telopt.sb_buf[2];
-                            d->telopt.height = (d->telopt.sb_buf[3] << 8) | d->telopt.sb_buf[4];
+                            d->telopt.width = ((unsigned char) sb[1] << 8) | (unsigned char) sb[2];
+                            d->telopt.height = ((unsigned char) sb[3] << 8) | (unsigned char) sb[4];
 
                             /* that was easy */
                             break;
                         case TELOPT_TERMTYPE:
-                            if (d->telopt.sb_buf_len < 2) /* At this point, a valid request would have at least two bytes in it. */
+                            if (sb.size() < 2) /* At this point, a valid request would have at least two bytes in it. */
                                 break;
 
-                            if (d->telopt.sb_buf[1] == 1) {
+                            if (sb[1] == 1) {
                                 /* 
                                    The client requested our termtype.  Send it.
                                    It would not be proper to send our version number here.
                                  */
                                 queue_write(d, "\xFF\xFA\x00ProtoMUCK\xFF\xF0", 14);
-                            } else if (!d->telopt.sb_buf[1]) {
+                            } else if (!sb[1]) {
                                 //if (d->telopt.termtype)
                                 delete[]d->telopt.termtype;
 
-                                if (d->telopt.sb_buf_len < 3) {
+                                if (sb.size() < 3) {
                                     /* If the other end sent a blank termtype, don't bother allocating it. */
                                     d->telopt.termtype = NULL;
                                 } else {
-                                    //d->telopt.termtype = (char *)malloc(sizeof(char) * (d->telopt.sb_buf_len-1));
-                                    d->telopt.termtype = new char[d->telopt.sb_buf_len];
+                                    d->telopt.termtype = new char[sb.size()];
 
                                     /* Move the data into the termtype string, making sure to add a null at the end. */
-                                    memcpy(d->telopt.termtype, d->telopt.sb_buf + 2, d->telopt.sb_buf_len - 2);
-                                    d->telopt.termtype[d->telopt.sb_buf_len - 2] = '\0';
+                                    memcpy(d->telopt.termtype, sb.data() + 2, sb.size() - 2);
+                                    d->telopt.termtype[sb.size() - 2] = '\0';
 #ifdef MCCP_ENABLED
                                     /* Due to SimpleMU, we need to determine the termtype before we can enable MCCP. */
                                     if (d->telopt.mccp && !d->mccp)
@@ -4020,59 +4004,54 @@ process_input(struct descriptor_data *d)
 #ifdef UTF8_SUPPORT
                         case TELOPT_CHARSET: /* Check if the remote end says they can handle utf8 */
                         {
-                            char buf2[MAX_COMMAND_LEN];
-                            int spos, dpos, accepted_charsets = 0;
+                            int accepted_charsets = 0;
                             char sep;
 
-                            //log_status("DBUG: (%d) IAC SB CHARSET REQUEST %x %x %s -- len: %d\n",
-                            //    d->descriptor,d->telopt.sb_buf[1],d->telopt.sb_buf[2],d->telopt.sb_buf+3,d->telopt.sb_buf_len);
-                            if (d->telopt.sb_buf_len < 3) /* By now we better have CHARSET REQUEST SEP */
+                            if (sb.size() < 3) /* By now we better have CHARSET REQUEST SEP */
                                 break;
-                            if (d->telopt.sb_buf[1] != '\001') /* REQUEST */
+                            if (sb[1] != '\001') /* REQUEST */
                                 break;
-                            if (d->telopt.sb_buf[2]) /* store the requested charset delimiter */
-                                sep = d->telopt.sb_buf[2];
+                            if (sb[2]) /* store the requested charset delimiter */
+                                sep = sb[2];
                             else
                                 break;
-                            //log_status("DBUG: (%d) CHARSET REQUEST, buffer valid, sep is 0x%x\n",d->descriptor,sep);
-                            spos = 3;
-                            dpos = 4;
-                            strncpy(buf2, "\xFF\xFA\x2A\x02", dpos); /* IAC SB CHARSET ACCEPTED */
-                            /* I just love, scanning for lifeforms */
-                            while (d->telopt.sb_buf[spos]) {
-                                while (!(d->telopt.sb_buf[spos] == sep)) {
-                                    buf2[dpos] = d->telopt.sb_buf[spos];
-                                    dpos++;
-                                    spos++;
-                                    if (!d->telopt.sb_buf[spos])
-                                        break;
-                                }
-                                /* should now be IAC SB CHARSET ACCEPTED <charset> IAC SE */
-                                buf2[dpos] = '\xFF';
-                                buf2[dpos + 1] = '\xF0';
-                                buf2[dpos + 2] = '\0';
-                                dpos++;
-                                dpos++;
-                                //log_status("DBUG: (%d) Found charset, created buffer %s\n",d->descriptor,buf2);
-                                /* if utf8 is mentioned in this charset, enable unicode on this descr 
+                            /* I just love, scanning for lifeforms. The
+                             * data ends at the '\0' that replaced the
+                             * IAC; the last charset has no separator
+                             * after it, and stepping over one here used
+                             * to walk past that end. */
+                            size_t spos = 3;
+
+                            while (sb[spos]) {
+                                size_t end = spos;
+
+                                /* compared as the old unsigned buffer did: a
+                                 * separator byte of 0x80 or more never matched */
+                                while (sb[end] && (unsigned char) sb[end] != sep)
+                                    end++;
+
+                                /* IAC SB CHARSET ACCEPTED <charset> IAC SE */
+                                std::string reply = "\xFF\xFA\x2A\x02";
+
+                                reply.append(sb, spos, end - spos);
+                                reply += "\xFF\xF0";
+                                /* if utf8 is mentioned in this charset, enable unicode on this descr
                                    OBTW: if both ASCII and UNICODE re requested, prefer unicode.
                                  */
-                                if (strcasestr2(buf2, "ascii")
-                                    || strcasestr2(buf2, "ANSI_X3.4-1968")
-                                    || strcasestr2(buf2, "UTF-8")) {
+                                if (strcasestr2(reply.c_str(), "ascii")
+                                    || strcasestr2(reply.c_str(), "ANSI_X3.4-1968")
+                                    || strcasestr2(reply.c_str(), "UTF-8")) {
                                     if ((d->encoding < 2)
-                                        && ((strcasestr2(buf2, "ascii"))
-                                            || strcasestr2(buf2, "ANSI_X3.4-1968")))
+                                        && ((strcasestr2(reply.c_str(), "ascii"))
+                                            || strcasestr2(reply.c_str(), "ANSI_X3.4-1968")))
                                         d->encoding = 1;
                                     else
                                         d->encoding = 2;
                                 }
-                                queue_write(d, buf2, dpos + 1);
+                                /* with its '\0', which was always sent */
+                                queue_write(d, reply.c_str(), (int) reply.size() + 1);
                                 accepted_charsets++;
-                                //log_status("DBUG: (%d) IAC SB CHARSET ACCEPTED %s IAC SE, accepted: %d\n",
-                                //    d->descriptor,buf2,accepted_charsets);
-                                spos++;
-                                dpos = 4; // Reuse this buffer  
+                                spos = sb[end] ? end + 1 : end;
                             }
                             if (!accepted_charsets) {
                                 /* IAC SB CHARSET REJECTED IAC SE */
@@ -4088,16 +4067,18 @@ process_input(struct descriptor_data *d)
                     }
                 }
 
-                delete[]d->telopt.sb_buf; /* don't need the buffer anymore */
-                d->telopt.sb_buf = NULL;
-                d->telopt.sb_buf_len = 0;
+                sb.clear(); /* don't need the buffer anymore */
+                d->telopt.sb_overflow = false;
 
                 d->inIAC = 0;
+            } else if (sb.size() < TELOPT_MAX_BUF_LEN) {
+                sb += *q;
             } else {
-                if (d->telopt.sb_buf_len < TELOPT_MAX_BUF_LEN)
-                    d->telopt.sb_buf[d->telopt.sb_buf_len++] = *q;
-                else
-                    d->inIAC = 0;
+                /* Full: read on to IAC SE and drop the request, keeping
+                 * only the last byte to see the IAC. Going back to plain
+                 * input here fed the rest of the SB in as commands. */
+                d->telopt.sb_overflow = true;
+                sb.back() = *q;
             }
         } else if (d->inIAC == 2) { /* WILL */
             if (*q == TELOPT_TERMTYPE) { /* TERMTYPE */
@@ -4191,9 +4172,13 @@ process_input(struct descriptor_data *d)
                      * validated when we accepted the input. */
 
                     if (!isascii(*p) && d->encoding == 2) { /* UTF-8 */
-                        do {
+                        /* never before raw_input: IAC EC takes one byte,
+                         * and can leave a lead byte first in the line */
+                        while (p > d->raw_input) {
                             p--;
-                        } while ((*p >= '\x80') && (*p <= '\xbf'));
+                            if (!((*p >= '\x80') && (*p <= '\xbf')))
+                                break;
+                        }
                     }
                     wcbuflen--;
 #endif
@@ -5780,32 +5765,31 @@ do_setuid(char *name)
 
 #endif /* MUD_ID */
 
-struct descriptor_data *descr_count_table[MAX_SOCKETS];
+/* Every connected descriptor, in con_number order. It was an array of
+ * MAX_SOCKETS written with no check, while the open-file limit lets
+ * far more than MAX_SOCKETS players be connected. */
+static std::vector<struct descriptor_data *> descr_count_table;
 int current_descr_count = 0;
 
 void
 init_descr_count_lookup(void)
 {
-    int i;
-
-    for (i = 0; i < MAX_SOCKETS; i++)
-        descr_count_table[i] = NULL;
+    descr_count_table.clear();
 }
 
 void
 update_desc_count_table(void)
 {
-    int c;
     struct descriptor_data *d;
 
-    current_descr_count = 0;
-    for (c = 0, d = descriptor_list; d; d = d->next) {
+    descr_count_table.clear();
+    for (d = descriptor_list; d; d = d->next) {
         if (d->connected) {
-            d->con_number = c + 1;
-            descr_count_table[c++] = d;
-            current_descr_count++;
+            descr_count_table.push_back(d);
+            d->con_number = (int) descr_count_table.size();
         }
     }
+    current_descr_count = (int) descr_count_table.size();
 }
 
 struct descriptor_data *
@@ -7095,8 +7079,8 @@ void
 telopt_init(struct telopt *t)
 {
     t->mccp = 0;
-    t->sb_buf = NULL;
-    t->sb_buf_len = 0;
+    t->sb_buf.clear();
+    t->sb_overflow = false;
     t->termtype = NULL;
     t->width = 0;
     t->height = 0;
@@ -7106,9 +7090,8 @@ void
 telopt_clean(struct telopt *t)
 {
     t->mccp = 0;
-    delete[]t->sb_buf;
-    t->sb_buf = NULL;
-    t->sb_buf_len = 0;
+    std::string().swap(t->sb_buf);
+    t->sb_overflow = false;
     t->width = 0;
     t->height = 0;
 
@@ -7120,10 +7103,10 @@ void
 mssp_send(struct descriptor_data *d)
 {
     char buf[BUFFER_LEN];
-    char mssp_var[BUFFER_LEN];
-    char mssp_val[BUFFER_LEN];
     char propname[BUFFER_LEN];
-    char *p;
+    /* a value has no fixed limit: it went through strcpy and sprintf
+     * into these, and any client can ask for it before logging in */
+    std::string mssp_var, mssp_val, item;
     PropPtr propadr, pptr;
     PropPtr prptr;
 
@@ -7142,51 +7125,56 @@ mssp_send(struct descriptor_data *d)
 
     propadr = first_prop(ref, dir, &pptr, propname);
     while (propadr) {
-        strcpy(mssp_var, propname);
-        sprintf(buf, "%s%c%s", dir, PROPDIR_DELIMITER, propname);
+        mssp_var = propname;
+        snprintf(buf, sizeof(buf), "%s%c%s", dir, PROPDIR_DELIMITER, propname);
         prptr = get_property(ref, buf);
         if (prptr) {
 #ifdef DISKBASE
             propfetch(ref, prptr);
 #endif
             switch (PropType(prptr)) {
-                case PROP_STRTYP:
-                    strcpy(mssp_val, PropDataUNCStr(prptr));
+                case PROP_STRTYP:{
+                    const char *s = PropDataUNCStr(prptr);
+
+                    mssp_val = s ? s : "";
                     break;
+                }
                 case PROP_INTTYP:
-                    sprintf(mssp_val, "%d", PropDataVal(prptr));
+                    snprintf(buf, sizeof(buf), "%d", (int) PropDataVal(prptr));
+                    mssp_val = buf;
                     break;
                 case PROP_FLTTYP:
-                    sprintf(mssp_val, "%#.15g", PropDataFVal(prptr));
+                    snprintf(buf, sizeof(buf), "%#.15g", PropDataFVal(prptr));
+                    mssp_val = buf;
                     break;
                 default:
-                    mssp_val[0] = '\0';
+                    mssp_val.clear();
                     break;
             }
         }
         propadr = next_prop(pptr, propadr, propname);
 
-        for (p = mssp_var; *p; p++)
-            *p = UPCASE(*p);
+        for (char &c : mssp_var)
+            c = UPCASE(c);
 
-        if (*mssp_var && *mssp_val) {
-            if (!strcmp("NAME", mssp_var))
+        if (!mssp_var.empty() && !mssp_val.empty()) {
+            if (mssp_var == "NAME")
                 sent_name = 1;
-            else if (!strcmp("PLAYERS", mssp_var))
+            else if (mssp_var == "PLAYERS")
                 sent_players = 1;
-            else if (!strcmp("UPTIME", mssp_var))
+            else if (mssp_var == "UPTIME")
                 sent_uptime = 1;
-            else if (!strcmp("ANSI", mssp_var))
+            else if (mssp_var == "ANSI")
                 sent_ansi = 1;
-            else if (!strcmp("MCCP", mssp_var))
+            else if (mssp_var == "MCCP")
                 sent_mccp = 1;
-            else if (!strcmp("CODEBASE", mssp_var))
+            else if (mssp_var == "CODEBASE")
                 sent_codebase = 1;
-            else if (!strcmp("FAMILY", mssp_var))
+            else if (mssp_var == "FAMILY")
                 sent_family = 1;
 
-            sprintf(buf, "\x01%s\x02%s", mssp_var, mssp_val);
-            queue_write(d, buf, strlen(buf));
+            item = "\x01" + mssp_var + "\x02" + mssp_val;
+            queue_write(d, item.c_str(), (int) item.size());
         }
     }
 

@@ -306,6 +306,8 @@ resolve_hostnames(void)
         got--;
         while (got > 0 && buf[got] != '\n')
             buf[got--] = '\0';
+    } else {
+        buf[got] = '\0'; /* index() below runs to a NUL */
     }
 
     ptr = buf;

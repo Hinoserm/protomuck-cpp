@@ -1,4 +1,5 @@
 /* Primitives package */
+#include <cstdarg>
 #include <stdexcept>
 
 #include "copyright.h"
@@ -18,6 +19,22 @@
 /* FMTTOKEN defines the start of a variable formatting string insertion */
 #define FMTTOKEN '%'
 
+/* vsnprintf for one fmtstring field. Its width and precision are the
+ * program's, so the field can be longer than tbuf ("%.70000f"): return
+ * -1 then, where sprintf used to write past the end of the stack. */
+static int
+fmt_field(char *tbuf, size_t size, const char *sfmt, ...)
+{
+    va_list args;
+    int len;
+
+    va_start(args, sfmt);
+    len = vsnprintf(tbuf, size, sfmt, args);
+    va_end(args);
+
+    return (len < 0 || (size_t) len >= size) ? -1 : len;
+}
+
 void
 prim_fmtstring(PRIM_PROTOTYPE)
 {
@@ -25,8 +42,11 @@ prim_fmtstring(PRIM_PROTOTYPE)
     int slrj, spad1, spad2, slen1, slen2, temp;
 
     //char sstr[BUFFER_LEN], sfmt[255], hold[256], tbuf[BUFFER_LEN];
-    char sstr[BUFFER_LEN], sfmt[BUFFER_LEN], hold[BUFFER_LEN], tbuf[BUFFER_LEN];
-    char buf[BUFFER_LEN];
+    /* tbuf and buf one byte over: a field, or the whole result, of
+     * exactly BUFFER_LEN has always been allowed, and its '\0' went one
+     * past the end */
+    char sstr[BUFFER_LEN], sfmt[BUFFER_LEN], hold[BUFFER_LEN], tbuf[BUFFER_LEN + 1];
+    char buf[BUFFER_LEN + 1];
     char *ptr, *begptr;
     int result;
     dbref ref;
@@ -40,10 +60,12 @@ prim_fmtstring(PRIM_PROTOTYPE)
     }
     /* We now have the non-null format string, parse it */
     result = 0;                 /* End of current string, must be smaller than BUFFER_LEN */
-    slen = oper[0].data.string->length();
     scnt = 0;
     tstop = 0;
     strcpyn(sstr, sizeof(sstr), oper[0].data.string->data.c_str());
+    /* the copy's length: a longer string is cut to fit sstr, and the
+     * loop used to read on past the cut */
+    slen = strlen(sstr);
 
     while ((scnt < slen) && (result < BUFFER_LEN)) {
         if (sstr[scnt] == FMTTOKEN) {
@@ -157,7 +179,9 @@ prim_fmtstring(PRIM_PROTOTYPE)
                         };
                     }
                 }
-                if ((slen1 > 0) && ((abs(slen1) + result) > BUFFER_LEN)) {
+                /* a '*' width can be negative (left-justified), and was
+                 * not checked at all when it was */
+                if ((slen1 < 0 ? -(long long) slen1 : slen1) + result > BUFFER_LEN) {
                     CLEAR(oper2);
                     abort_interp("Specified format field width too large.");
                 }
@@ -210,7 +234,10 @@ prim_fmtstring(PRIM_PROTOTYPE)
                             CLEAR(oper2);
                             abort_interp("Format specified integer argument not found.");
                         }
-                        sprintf(tbuf, sfmt, (long long) oper2->data.number);
+                        if (fmt_field(tbuf, sizeof(tbuf), sfmt, (long long) oper2->data.number) < 0) {
+                            CLEAR(oper2);
+                            abort_interp("Resultant string would overflow buffer.");
+                        }
                         tlen = strlen(tbuf);
                         if (slrj == 2) {
                             tnum = 0;
@@ -240,7 +267,10 @@ prim_fmtstring(PRIM_PROTOTYPE)
                             CLEAR(oper2);
                             abort_interp("Format specified string argument not found.");
                         }
-                        sprintf(tbuf, sfmt, ((oper2->data.string) ? oper2->data.string->data.c_str() : ""));
+                        if (fmt_field(tbuf, sizeof(tbuf), sfmt, ((oper2->data.string) ? oper2->data.string->data.c_str() : "")) < 0) {
+                            CLEAR(oper2);
+                            abort_interp("Resultant string would overflow buffer.");
+                        }
                         tlen = strlen(tbuf);
                         if (slrj == 2) {
                             tnum = 0;
@@ -311,7 +341,10 @@ prim_fmtstring(PRIM_PROTOTYPE)
                             default:
                                 strcpy(hold, "UNKNOWN");
                         }
-                        sprintf(tbuf, sfmt, hold);
+                        if (fmt_field(tbuf, sizeof(tbuf), sfmt, hold) < 0) {
+                            CLEAR(oper2);
+                            abort_interp("Resultant string would overflow buffer.");
+                        }
                         tlen = strlen(tbuf);
                         if (slrj == 2) {
                             tnum = 0;
@@ -341,7 +374,10 @@ prim_fmtstring(PRIM_PROTOTYPE)
                             abort_interp("Format specified object not found.");
                         }
                         sprintf(hold, "#%d", oper2->data.objref);
-                        sprintf(tbuf, sfmt, hold);
+                        if (fmt_field(tbuf, sizeof(tbuf), sfmt, hold) < 0) {
+                            CLEAR(oper2);
+                            abort_interp("Resultant string would overflow buffer.");
+                        }
                         tlen = strlen(tbuf);
                         if (slrj == 2) {
                             tnum = 0;
@@ -384,7 +420,10 @@ prim_fmtstring(PRIM_PROTOTYPE)
                         } else {
                             hold[0] = '\0';
                         }
-                        sprintf(tbuf, sfmt, hold);
+                        if (fmt_field(tbuf, sizeof(tbuf), sfmt, hold) < 0) {
+                            CLEAR(oper2);
+                            abort_interp("Resultant string would overflow buffer.");
+                        }
                         tlen = strlen(tbuf);
                         if (slrj == 2) {
                             tnum = 0;
@@ -414,7 +453,10 @@ prim_fmtstring(PRIM_PROTOTYPE)
                             abort_interp("Format specified lock not found.");
                         }
                         strcpy(hold, unparse_boolexp(tbuf, ProgUID, oper2->data.lock, 1));
-                        sprintf(tbuf, sfmt, hold);
+                        if (fmt_field(tbuf, sizeof(tbuf), sfmt, hold) < 0) {
+                            CLEAR(oper2);
+                            abort_interp("Resultant string would overflow buffer.");
+                        }
                         tlen = strlen(tbuf);
                         if (slrj == 2) {
                             tnum = 0;
@@ -447,7 +489,10 @@ prim_fmtstring(PRIM_PROTOTYPE)
                             CLEAR(oper2);
                             abort_interp("Format specified float not found.");
                         }
-                        sprintf(tbuf, sfmt, oper2->data.fnumber);
+                        if (fmt_field(tbuf, sizeof(tbuf), sfmt, oper2->data.fnumber) < 0) {
+                            CLEAR(oper2);
+                            abort_interp("Resultant string would overflow buffer.");
+                        }
                         tlen = strlen(tbuf);
                         if (slrj == 2) {
                             tnum = 0;
@@ -2401,12 +2446,14 @@ prim_array_fmtstrings(PRIM_PROTOTYPE)
     if (oper[0].type != PROG_STRING)
         abort_interp("Expected string argument. (2)");
     fmtstr = DoNullInd(oper[0].data.string);
-    slen = strlen(fmtstr);
 
     nu = new_array_packed(0, 0);
     if (array_first(arr, &temp1)) {
         do {
             strcpyn(sstr, sizeof(sstr), fmtstr);
+            /* the copy's length, as in fmtstring: a longer format is
+             * cut to fit sstr */
+            slen = strlen(sstr);
             result = 0;         /* End of current string, must be smaller than BUFFER_LEN */
             scnt = 0;
             tstop = 0;

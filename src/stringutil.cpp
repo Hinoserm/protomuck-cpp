@@ -1610,7 +1610,9 @@ strip_ansi(char *buf, const char *input)
                     is++;
                 if (*is == 'm')
                     is++;
-            } else {
+            } else if (*is) {
+                /* not past the end: an ESC as the last character
+                 * stepped over the terminator here */
                 is++;
             }
         } else {
@@ -1686,7 +1688,10 @@ strip_bad_ansi(char *buf, const char *input)
                 if (*is != 'm') {
                     *os++ = 'm';
                 }
-                *os++ = *is++;
+                /* a code at the very end has no next character: this
+                 * copied the terminator and read on past it */
+                if (*is)
+                    *os++ = *is++;
             }
         } else {
             if ((*is == '\r') || (*is == '\n')) {

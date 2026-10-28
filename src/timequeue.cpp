@@ -1486,8 +1486,9 @@ listenqueue(int descr, dbref player, dbref where, dbref trigger, dbref what, dbr
             if (*sep == '=') {
                 for (ptr = tmpchar, ptr2 = buf; ptr < sep; *ptr2++ = *ptr++) ;
                 *ptr2 = '\0';
-                strcpy(exbuf, toparg);
-                if (!equalstr(buf, exbuf)) {
+                /* toparg itself: copying it into exbuf overflowed for
+                 * an HTML-escaped line, up to six times its source */
+                if (!equalstr(buf, toparg)) {
                     tmpchar = NULL;
                 } else {
                     tmpchar = ++sep;

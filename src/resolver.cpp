@@ -16,6 +16,7 @@
 #include <netdb.h>
 #include <errno.h>
 #include <signal.h>
+#include <string>
 
 /*
  * SunOS can't include signal.h and sys/signal.h, stupid broken OS.
@@ -57,7 +58,7 @@ const char *addrout(int, int, int);
 
 struct hostcache {
     int ipnum;
-    char name[128];
+    char name[256];             /* a DNS name is at most 253 */
     time_t time;
     struct hostcache *next;
     struct hostcache **prev;
@@ -145,7 +146,7 @@ hostadd(int ip, const char *name)
     hostcache_list = ptr;
     ptr->ipnum = ip;
     ptr->time = 0;
-    strcpy(ptr->name, name);
+    snprintf(ptr->name, sizeof(ptr->name), "%s", name);
     hostprune();
 }
 
@@ -252,7 +253,7 @@ get_username(int a, int prt, int myprt)
 {
     int fd, len, result;
     struct sockaddr_in addr;
-    char *ptr, *ptr2;
+    char *ptr;
     static char buf[1024];
     int lasterr;
     int timeout = IDENTD_TIMEOUT;
@@ -296,7 +297,7 @@ get_username(int a, int prt, int myprt)
         goto bad2;
 
     do {
-        result = read(fd, buf, sizeof(buf));
+        result = read(fd, buf, sizeof(buf) - 1);
         lasterr = errno;
         if (result < 0) {
             if (!timeout--)
@@ -306,6 +307,7 @@ get_username(int a, int prt, int myprt)
     } while (result < 0 && lasterr == EAGAIN);
     if (result < 0)
         goto bad2;
+    buf[result] = '\0';
 
     ptr = index(buf, ':');
     if (!ptr)
@@ -325,8 +327,9 @@ get_username(int a, int prt, int myprt)
     ptr++;
     shutdown(fd, 2);
     close(fd);
-    if ((ptr2 = index(ptr, '\r')))
-        *ptr2 = '\0';
+    /* a '\n' as well: it would end the line we print for the game
+     * early, and start a second one the identd made up */
+    ptr[strcspn(ptr, "\r\n")] = '\0';
     if (!*ptr)
         return (0);
     return ptr;
@@ -344,9 +347,9 @@ get_username(int a, int prt, int myprt)
 const char *
 addrout(int a, int prt, int myprt)
 {
-    static char buf[128];
-    char tmpbuf[128];
-    const char *ptr, *ptr2;
+    static std::string buf;
+    std::string host;
+    const char *ptr;
     struct in_addr addr;
     struct hostent *he;
 
@@ -354,38 +357,23 @@ addrout(int a, int prt, int myprt)
 
     ptr = hostfetch(ntohl(a));
     if (ptr) {
-        ptr2 = get_username(a, prt, myprt);
-        if (ptr2) {
-            sprintf(buf, "%s(%s)", ptr, ptr2);
-        } else {
-            sprintf(buf, "%s(%d)", ptr, prt);
-        }
-        return buf;
-    }
-
-    he = gethostbyaddr(((char *) &addr), sizeof(addr), AF_INET);
-    if (he) {
-        strcpy(tmpbuf, he->h_name);
-        hostadd(ntohl(a), tmpbuf);
-        ptr = get_username(a, prt, myprt);
-        if (ptr) {
-            sprintf(buf, "%s(%s)", tmpbuf, ptr);
-        } else {
-            sprintf(buf, "%s(%d)", tmpbuf, prt);
-        }
-        return buf;
-    }
-
-    a = ntohl(a);
-    sprintf(tmpbuf, "%d.%d.%d.%d", (a >> 24) & 0xff, (a >> 16) & 0xff, (a >> 8) & 0xff, a & 0xff);
-    hostadd_timestamp(a, tmpbuf);
-    ptr = get_username(htonl(a), prt, myprt);
-    if (ptr) {
-        sprintf(buf, "%s(%s)", tmpbuf, ptr);
+        host = ptr;
+    } else if ((he = gethostbyaddr(((char *) &addr), sizeof(addr), AF_INET))) {
+        host = he->h_name;
+        hostadd(ntohl(a), host.c_str());
     } else {
-        sprintf(buf, "%s(%d)", tmpbuf, prt);
+        char tmpbuf[16];
+
+        a = ntohl(a);
+        snprintf(tmpbuf, sizeof(tmpbuf), "%d.%d.%d.%d", (a >> 24) & 0xff, (a >> 16) & 0xff, (a >> 8) & 0xff, a & 0xff);
+        host = tmpbuf;
+        hostadd_timestamp(a, tmpbuf);
+        a = htonl(a);
     }
-    return buf;
+
+    ptr = get_username(a, prt, myprt);
+    buf = host + "(" + (ptr ? std::string(ptr) : std::to_string(prt)) + ")";
+    return buf.c_str();
 }
 
 

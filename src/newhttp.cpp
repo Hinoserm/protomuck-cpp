@@ -224,6 +224,7 @@ struct http_statstruct http_statcodes[] = {
     {415, "Unsupported Media Type"},
     {416, "Requested Range Not Satisfiable"},
     {417, "Expectation Failed"},
+    {431, "Request Header Fields Too Large"},
     {500, "Internal Server Error"},
     {501, "Not Implemented"},
     {502, "Bad Gateway"},
@@ -464,10 +465,9 @@ void
     time_t t = time(NULL) + get_tz_offset();
     char
       tbuf[50];
-    char
-      buf2[BUFFER_LEN];
+    std::string
+      buf2 = escape_url(url);
 
-    escape_url(buf2, (char *) url);
     this->split(host, ':');
     format_time(tbuf, 48, "%a, %d %b %Y %T GMT", localtime(&t));
 
@@ -578,8 +578,6 @@ int
 {
     char
       buf[BUFFER_LEN];
-    char
-      buf2[BUFFER_LEN];
     char *
     cgi, *
         dir = NULL;
@@ -603,13 +601,12 @@ int
 
         this->split(host, ':');
         this->log(4, "VHOST:   '{}'\n", host);
-        sprintf(buf2, "@vhosts/%s", host);
-        if (is_propdir(tp_www_root, buf2)) {
-            sprintf(buf2, "@vhosts/%s/rootObj", host);
-            ref = smart_prop_getref(tp_www_root, buf2);
+        std::string
+            vhost = std::string("@vhosts/") + host;
 
-            sprintf(buf2, "@vhosts/%s/rootDir", host);
-            s = get_property_class(tp_www_root, buf2);
+        if (is_propdir(tp_www_root, vhost.c_str())) {
+            ref = smart_prop_getref(tp_www_root, (vhost + "/rootObj").c_str());
+            s = get_property_class(tp_www_root, (vhost + "/rootDir").c_str());
 
             dir = alloc_string(s);
             if (OkObj(ref) || dir)
@@ -872,7 +869,7 @@ int
 
     /* Get the type. */
     if ((m = get_property_class(ref, "/_type")))
-        strcpy(buf, m);
+        strcpyn(buf, sizeof(buf), m);
     else
         strcpy(buf, "text/html");
 
@@ -883,7 +880,9 @@ int
         this->sendheader(200, buf, -1);
 
     /* Do it! */
-    sprintf(match_args, "%d|%s|%s|%s", d->descriptor, d->hu->h->name, d->hu->u->user, this->cgidata.c_str());
+    /* match_args is a fixed BUFFER_LEN global; the query string and the
+     * ident name are not bounded to fit it with the rest */
+    snprintf(match_args, BUFFER_LEN, "%d|%s|%s|%s", d->descriptor, d->hu->h->name, d->hu->u->user, this->cgidata.c_str());
     strcpy(match_cmdname, "(WWW)");
     tmpfr = interp(d->descriptor, player, NOTHING, ref, this->rootobj, BACKGROUND, STD_HARDUID, 0);
     if (tmpfr) {
@@ -930,22 +929,24 @@ int
     //    return 0;
 
     /* Get lines count. */
-    sprintf(buf, "%s#", prop);
-    if ((lines = get_property_value(what, buf))
-        || (m = get_property_class(what, buf))) {
+    std::string
+        pname = std::string(prop) + "#";
+
+    if ((lines = get_property_value(what, pname.c_str()))
+        || (m = get_property_class(what, pname.c_str()))) {
         if (number(m))
             lines = atoi(m);
     }
 
     /* If 0 or below, exit. */
-    sprintf(buf, "%s#/%d", prop, lines);
-    if (lines <= 0 || !get_property_class(what, buf))
+    pname = std::string(prop) + "#/" + std::to_string(lines);
+    if (lines <= 0 || !get_property_class(what, pname.c_str()))
         return 0;
 
     /* Get the type. */
-    sprintf(buf, "%s/_type", prop);
-    if ((m = get_property_class(what, buf)))
-        strcpy(buf, m);
+    pname = std::string(prop) + "/_type";
+    if ((m = get_property_class(what, pname.c_str())))
+        strcpyn(buf, sizeof(buf), m);
     else
         strcpy(buf, "text/html");
 
@@ -956,8 +957,8 @@ int
 
     /* Send the list. */
     for (i = 1; i <= lines; i++) {
-        sprintf(buf, "%s#/%d", prop, i);
-        if ((m = get_property_class(what, buf))) {
+        pname = std::string(prop) + "#/" + std::to_string(i);
+        if ((m = get_property_class(what, pname.c_str()))) {
             if (tp_web_allow_mpi && *m == '&')
                 m = this->parsempi(what, ++m, buf);
 
@@ -1023,14 +1024,8 @@ fileexists(const char *filename)
 void
   http::listdir(const char *dir, DIR * df)
 {
-    char
-      buf2[BUFFER_LEN];
-    char
-      buf3[BUFFER_LEN];
-    char
-      buf[BUFFER_LEN];
-    char
-      url[BUFFER_LEN];
+    std::string
+        buf, buf2;
     struct dirent *
         dp;
     struct stat
@@ -1055,27 +1050,25 @@ void
 
     while ((dp = readdir(df))) {
         if (*(dp->d_name) != '.') {
-            strcpy(buf, dp->d_name);
-            sprintf(buf2, "%s/%s", dir, dp->d_name);
-            if ((dh = opendir(buf2))) {
+            buf = dp->d_name;
+            buf2 = std::string(dir) + "/" + dp->d_name;
+            if ((dh = opendir(buf2.c_str()))) {
                 closedir(dh);
-                strcat(buf, "/");
-                strcpy(buf2, "-");
+                buf += "/";
+                buf2 = "-";
                 strcpy(tbuf, "");
             } else {
-                sprintf(buf2, "%s/%s%s", HTTP_DIR, this->newdest.c_str(), buf);
-                if (!stat(buf2, &fs)) {
-                    sprintf(buf2, "%d", (int) fs.st_size);
+                buf2 = std::string(HTTP_DIR) + "/" + this->newdest + buf;
+                if (!stat(buf2.c_str(), &fs)) {
+                    buf2 = std::to_string((int) fs.st_size);
                     format_time(tbuf, 40, "%d-%b-%Y %H:%M\0", localtime(&fs.st_mtime));
                 } else {
                     continue;
                 }
             }
 
-            sprintf(url, "/%s%s", this->newdest.c_str(), buf);
-            escape_url(buf3, url);
-            i = 30 - strlen(buf);
-            queue_text(d, "   <a href=\"{}\">{}</a>{:<{}} {:<24} {}\r\n", buf3, buf, "", i < 0 ? 0 : i, tbuf, buf2);
+            i = 30 - (int) buf.size();
+            queue_text(d, "   <a href=\"{}\">{}</a>{:<{}} {:<24} {}\r\n", escape_url(("/" + this->newdest + buf).c_str()), buf, "", i < 0 ? 0 : i, tbuf, buf2);
         }
     }
 
@@ -1085,8 +1078,8 @@ void
 int
   http::dofile(void)
 {
-    char
-      buf[BUFFER_LEN];
+    std::string
+        buf;
     const char **
         m = http_defaulthomes;
     int
@@ -1094,10 +1087,13 @@ int
     DIR *
         df;
 
-    if (this->newdest.find(".."))
+    /* find() is 0 when the path STARTS with "..", which this used to
+     * test as false: "GET /../data/proto.db" was served, and every
+     * path without ".." was refused. */
+    if (this->newdest.find("..") != std::string::npos)
         return 0;
 
-    if ((i = this->newdest.length()) > BUFFER_LEN)
+    if ((i = this->newdest.length()) >= BUFFER_LEN)
         return 0;
 
     const char *
@@ -1106,21 +1102,21 @@ int
     if (!*nd || (i && nd[i - 1] == '/')) {
         for (; *m; m++) {
             if (**m) {
-                sprintf(buf, "%s/%s%s", HTTP_DIR, nd, *m);
-                if ((i = this->sendfile(buf)))
+                buf = std::string(HTTP_DIR) + "/" + nd + *m;
+                if ((i = this->sendfile(buf.c_str())))
                     return i;
             }
         }
     }
 
-    sprintf(buf, "%s/%s", HTTP_DIR, nd);
+    buf = std::string(HTTP_DIR) + "/" + nd;
 
-    if ((df = opendir(buf))) {
+    if ((df = opendir(buf.c_str()))) {
         if (i && nd[i - 1] != '/') {
-            sprintf(buf, "http://%s/%s/", this->gethost(), nd);
-            this->sendredirect(buf);
+            buf = std::string("http://") + this->gethost() + "/" + nd + "/";
+            this->sendredirect(buf.c_str());
         } else {
-            this->listdir(buf, df);
+            this->listdir(buf.c_str(), df);
             d->booted = 4;
         }
 
@@ -1128,7 +1124,7 @@ int
         return 1;
     }
 
-    return (this->sendfile(buf));
+    return (this->sendfile(buf.c_str()));
 }
 
 int
@@ -1154,11 +1150,10 @@ int
         return 0;
 
     if (tp_web_allow_mpi && *m == '&') {
-        sprintf(buf, "%s/_type", prop);
         /* the _type value, s: copying m here sent the page's own MPI
          * source as its Content-Type header */
-        if ((s = get_property_class(this->rootobj, buf)))
-            strcpy(buf, s);
+        if ((s = get_property_class(this->rootobj, (std::string(prop) + "/_type").c_str())))
+            strcpyn(buf, sizeof(buf), s);
         else
             strcpy(buf, "text/html");
 
@@ -1186,20 +1181,19 @@ int
 int
   http::dourl(void)
 {
-    char
-      prop[BUFFER_LEN];
-    int
-      i;
-
     if (!OkObj(this->rootobj)) {
         this->senderror(404, "Page not found.");
         return -1;
     }
 
-    sprintf(prop, "%s/%s", this->rootdir, this->newdest.c_str());
-    i = strlen(prop);
-    while ((i-- > 0) && (prop[i] == '/'))
-        prop[i] = '\0';
+    std::string
+        propname = std::string(this->rootdir) + "/" + this->newdest;
+
+    while (!propname.empty() && propname.back() == '/')
+        propname.pop_back();
+
+    const char *
+        prop = propname.c_str();
 
     if ((this->flags & HS_PROPLIST)
         && this->doproplist(this->rootobj, prop, 200))
@@ -1328,8 +1322,21 @@ void
         if (!buf[0] || !*p)
             return;
 
+        /* One line is already bounded by the input buffer, but a
+         * repeated header is joined onto the first with no limit:
+         * a dozen "Host:" lines made a Host longer than every
+         * buffer it is later copied into. */
+        if (this->fields.size() >= HTTP_MAX_FIELDS && !this->fields.count(buf)) {
+            this->senderror(431, "Too many header fields.");
+            return;
+        }
+
         //if (this->fields.count(buf)) {
         std::string & s = this->fields[buf];
+        if (s.length() + 2 + strlen(p) >= MAX_COMMAND_LEN) {
+            this->senderror(431, "Header field too large.");
+            return;
+        }
         if (s.length()) {
             s += ", ";
             s += p;

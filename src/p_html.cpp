@@ -122,14 +122,14 @@ prim_unescape_url(PRIM_PROTOTYPE)
 void
 prim_escape_url(PRIM_PROTOTYPE)
 {
-    char buf[BUFFER_LEN];
-
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string argument. (1)");
     if (oper[0].data.string) {
-        escape_url(buf, oper[0].data.string->data.c_str()); /* Found in cgi.c */
+        /* three bytes out for every byte in: a BUFFER_LEN buffer took
+         * any string over a third of that off the end of the stack */
+        std::string buf = escape_url(oper[0].data.string->data.c_str()); /* Found in cgi.c */
 
-        PushString(buf);
+        PushString(buf.c_str());
     } else {
 
         PushNullStr;

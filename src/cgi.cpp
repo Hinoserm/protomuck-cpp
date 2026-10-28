@@ -106,33 +106,38 @@ getcgivar(char *cgistring, char *param)
     return (result2);
 }
 
-void
-escape_url(char *out, const char *in)
+/* An escape is three bytes for one, so this wrote past any buffer the
+ * input merely fit in: the result is a std::string now. */
+std::string
+escape_url(const char *in)
 {
-    char *tmp = out;
-    int cnt = 0;
+    std::string out;
+    char hex[4];
     int isvalid_cgichar(char);
 
-    for (; *in != '\0'; in++, tmp++, cnt++) {
+    for (; *in != '\0'; in++) {
         if (*in == SPACE)
-            *tmp = PLUS;
+            out += PLUS;
         else if (isvalid_cgichar(*in))
-            *tmp = *in;
+            out += *in;
         else {
-            sprintf(tmp, "%%%.2X", *in);
-            cnt += 2;
-            tmp += 2;
+            /* A signed char of 0x80 or above printed as %FFFFFFxx, and
+             * only its first three bytes were ever kept: such a byte
+             * escapes to "%FF", as it always has. */
+            unsigned int v = (unsigned int) *in;
+
+            snprintf(hex, sizeof(hex), "%%%.2X", v > 0xFF ? 0xFF : v);
+            out += hex;
         }
     }
 
-    *tmp = '\0';
-
+    return out;
 }
 
 int
 isvalid_cgichar(char c)
 {
-    if (isalnum(c) || (c == UNDERSCORE) || (c == HYPHEN) || (c == ':') ||
+    if (isalnum((unsigned char) c) || (c == UNDERSCORE) || (c == HYPHEN) || (c == ':') ||
 /*      (c == '\\') || */
         (c == '/') || (c == '.') ||
 /*      (c == PLUS) ||

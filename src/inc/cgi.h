@@ -5,10 +5,12 @@
 #ifndef CGI_H
 #define CGI_H
 
+#include <string>
+
 extern char x2c(char *what);
 extern void unescape_url(char *url);
 extern char * getcgivar(char *cgiinput, char *param);
-extern void escape_url(char *out, const char *in);
+extern std::string escape_url(const char *in);
 
 #define SPACE       ' '
 #define TAB         '\t'

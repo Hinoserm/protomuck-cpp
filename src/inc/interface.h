@@ -84,8 +84,8 @@ struct mccp {
 #endif /* MCCP_ENABLED */
 
 struct telopt {
-    unsigned char           *sb_buf;        /* hinoserm: Used by SD request/response system, init to NULL */
-    size_t                   sb_buf_len;    /* hinoserm: Used by SD request/response system, init to 0 */
+    std::string              sb_buf;        /* hinoserm: Used by SD request/response system: the bytes after IAC SB */
+    bool                     sb_overflow;   /* the subnegotiation outgrew TELOPT_MAX_BUF_LEN: discard it at IAC SE */
     char                    *termtype;      /* hinoserm: Indicates the client's TERMINAL TYPE info, or NULL */
     signed char              mccp;          /* hinoserm: Indicates that client is able/willing to compress */
     unsigned short           width;         /* hinoserm: for NAWS */
