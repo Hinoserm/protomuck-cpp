@@ -1696,8 +1696,7 @@ mfn_ansi(MFUNARGS)
         }
         anotify_from_echo(player, obj, buf, 1);
     }
-    strcpy(buf2, argv[0]);
-    unparse_ansi(buf, buf2);
+    strcpyn(buf, BUFFER_LEN, unparse_ansi(argv[0]).c_str());
     return buf;
 }
 

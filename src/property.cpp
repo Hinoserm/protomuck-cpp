@@ -27,12 +27,33 @@ extern const char *old_uncompress(const char *);
 
 #define fltostr(x,y) (sprintf(x, "%.15g", y) ? x : x)
 
+/* A writable copy of a property name, which the propdir code cuts up in
+ * place. It was a strcpy into a BUFFER_LEN array, and a MUF string can be
+ * BUFFER_LEN long: a name that size goes to the heap, and every other
+ * stays on the stack as before, as these run for every property access. */
+class PropNameCopy {
+    char sbuf[BUFFER_LEN];
+    std::string big;
+    char *p;
+
+  public:
+    explicit PropNameCopy(const char *s) {
+        size_t n = strlen(s);
+
+        if (n < sizeof(sbuf)) {
+            memcpy(sbuf, s, n + 1);
+            p = sbuf;
+        } else {
+            big = s;
+            p = big.data();
+        }
+    }
+    char *data() { return p; }
+};
+
 void
 set_property_nofetch(dbref object, const char *pname, PData * dat, bool pure)
 {
-    /* Property names are worked on in place, in a copy. That copy was a
-     * BUFFER_LEN array, and a MUF string can be BUFFER_LEN long. */
-    std::string name;
     char *buf;
     char *n;
     PropPtr p;
@@ -44,7 +65,8 @@ set_property_nofetch(dbref object, const char *pname, PData * dat, bool pure)
     while (*pname == PROPDIR_DELIMITER)
         pname++;
 
-    name = pname;
+    PropNameCopy name(pname);
+
     buf = name.data();
 
     /* truncate propnames with a ':' in them at the ':' */
@@ -226,7 +248,7 @@ void
 remove_property_nofetch(dbref player, const char *type)
 {
     PropPtr l;
-    std::string name = type;
+    PropNameCopy name(type);
     char *w = name.data();
 
     /* if( tp_db_readonly ) return; *//* Why did we remove this? */
@@ -271,7 +293,7 @@ PropPtr
 get_property(dbref player, const char *type)
 {
     PropPtr p;
-    std::string name = type;
+    PropNameCopy name(type);
 
     p = propdir_get_elem(DBFETCH(player)->properties, name.data());
     return (p);
@@ -476,7 +498,6 @@ genderof(int descr, dbref player)
 PropPtr
 first_prop_nofetch(dbref player, const char *dir, PropPtr *list, char *name)
 {
-    std::string buf;
     PropPtr p;
 
     if (dir) {
@@ -495,7 +516,8 @@ first_prop_nofetch(dbref player, const char *dir, PropPtr *list, char *name)
         return (p);
     }
 
-    buf = dir;
+    PropNameCopy buf(dir);
+
     *list = p = propdir_get_elem(DBFETCH(player)->properties, buf.data());
     if (!p) {
         *name = '\0';
@@ -561,7 +583,7 @@ char *
 next_prop_name(dbref player, char *outbuf, char *name)
 {
     char *ptr;
-    std::string buf = name;
+    PropNameCopy buf(name);
     PropPtr p, l;
 
     if (!*name || name[strlen(name) - 1] == PROPDIR_DELIMITER) {
@@ -607,7 +629,7 @@ int
 is_propdir_nofetch(dbref player, const char *type)
 {
     PropPtr p;
-    std::string w = type;
+    PropNameCopy w(type);
 
     p = propdir_get_elem(DBFETCH(player)->properties, w.data());
     if (!p)

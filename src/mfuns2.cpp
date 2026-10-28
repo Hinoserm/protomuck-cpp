@@ -1953,8 +1953,7 @@ const char *
 mfn_parse_ansi(MFUNARGS)
 {
     int atype = 0;
-    char abuf[BUFFER_LEN];
-    char tbuf[BUFFER_LEN];
+    std::string out;
 
     if (!number(argv[0]))
         ABORT_MPI("PARSE_ANSI", "Need numeric ANSI type. (1)");
@@ -1963,16 +1962,16 @@ mfn_parse_ansi(MFUNARGS)
     if (atype < 0 || atype > 3)
         ABORT_MPI("PARSE_ANSI", "ANSI type must be between 0 and 3. (1)");
 
-    strcpy(abuf, argv[1]);
-
     if (atype == 0)
-        sprintf(buf, "%s", abuf);
+        out = argv[1];
     else if (atype == 1)
-        sprintf(buf, "%s", parse_ansi(player, tbuf, abuf, ANSINORMAL));
+        out = parse_ansi(player, argv[1], ANSINORMAL);
     else if (atype == 2)
-        sprintf(buf, "%s", parse_mush_ansi(tbuf, abuf));
+        out = parse_mush_ansi(argv[1]);
     else if (atype == 3)
-        sprintf(buf, "%s", parse_tilde_ansi(tbuf, abuf));
+        out = parse_tilde_ansi(argv[1]);
 
+    /* an MPI result is a BUFFER_LEN buffer: the codes grew past it */
+    strcpyn(buf, BUFFER_LEN, out.c_str());
     return buf;
 }

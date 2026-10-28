@@ -873,9 +873,9 @@ main(int argc, char **argv)
 void
 notify_descriptor(int descr, const char *msg)
 {
-    char *ptr1;
+    const char *ptr1;
     const char *ptr2;
-    char buf[BUFFER_LEN + 2];
+    std::string line;           /* one line of msg: a BUFFER_LEN copy had no bound */
     struct descriptor_data *d;
 
     if (!msg || !*msg)
@@ -886,15 +886,14 @@ notify_descriptor(int descr, const char *msg)
 
     ptr2 = msg;
     while (ptr2 && *ptr2) {
-        ptr1 = buf;
+        ptr1 = ptr2;
         while ((ptr2) && (*ptr2) && (*ptr2 != '\r') && (*ptr2 != '\n'))
-            *(ptr1++) = *(ptr2++);
-        *(ptr1++) = '\r';
-        *(ptr1++) = '\n';
-        *(ptr1++) = '\0';
+            ptr2++;
+        line.assign(ptr1, ptr2 - ptr1);
+        line += "\r\n";
         while ((*ptr2 == '\r') || (*ptr2 == '\n'))
             ptr2++;
-        queue_ansi(d, buf);
+        queue_ansi(d, line.c_str());
         //process_output(d);
     }
 }
@@ -944,13 +943,11 @@ anotify_descriptor(int descr, const char *msg)
      * connections not connected to a player that have a 
      * DR_COLOR flag set.
      */
-    char buf3[BUFFER_LEN + 2];
     struct descriptor_data* d = NULL;
 
     for (d = descriptor_list; d && (d->descriptor != descr); d = d->next);
 
-    parse_ansi(d, NOTHING, buf3, msg, ANSINORMAL);
-    notify_descriptor(descr, buf3);
+    notify_descriptor(descr, parse_ansi(d, NOTHING, msg, ANSINORMAL).c_str());
 
 }
 
@@ -1193,7 +1190,7 @@ queue_ansi(struct descriptor_data *d, const char *msg)
 }
 
 int
-queue_html(struct descriptor_data *d, char *msg)
+queue_html(struct descriptor_data *d, const char *msg)
 {
     if ((d->connected && OkObj(d->player)) ? (Html(d->player)) : (d->type == CT_PUEBLO)) {
         return queue_ansi(d, msg);
@@ -1225,10 +1222,11 @@ notify_nolisten(dbref player, const char *msg, int isprivate)
 {
     struct descriptor_data *d;
     int retval = 0;
-    char buf[BUFFER_LEN + 2];
-    char buf2[BUFFER_LEN + 2];
+    /* a line of msg, and the zombie's echo of it: fixed BUFFER_LEN copies
+     * of these had no bound, and a line of BUFFER_LEN overran them */
+    std::string buf, buf2;
     int firstpass = 1;
-    char *ptr1;
+    const char *ptr1;
     const char *ptr2;
     dbref ref;
     int *darr;
@@ -1239,12 +1237,13 @@ notify_nolisten(dbref player, const char *msg, int isprivate)
         return retval;          /* no one to notify */
     ptr2 = msg;
     while (ptr2 && *ptr2) {
-        ptr1 = buf;
-        while ((ptr2) && (*ptr2) && (*ptr2 != '\r') && (*ptr2 != '\r'))
-            *(ptr1++) = *(ptr2++);
-        *(ptr1++) = '\r';
-        *(ptr1++) = '\n';
-        *(ptr1++) = '\0';
+        /* lines end at '\r' only, as they always have: the test was
+         * written "!= '\r' && != '\r'", so a '\n' stays in its line */
+        ptr1 = ptr2;
+        while ((ptr2) && (*ptr2) && (*ptr2 != '\r'))
+            ptr2++;
+        buf.assign(ptr1, ptr2 - ptr1);
+        buf += "\r\n";
         while ((*ptr2 == '\r') || (*ptr2 == '\n'))
             ptr2++;
 
@@ -1255,9 +1254,9 @@ notify_nolisten(dbref player, const char *msg, int isprivate)
             if (d->connected && d->player == player) {
                 if ((d->linelen > 0) && !(FLAGS(player) & CHOWN_OK)) {
                     if (d)
-                        queue_unhtml(d, buf);
+                        queue_unhtml(d, buf.c_str());
                 } else if (d)
-                    queue_unhtml(d, buf);
+                    queue_unhtml(d, buf.c_str());
 
                 if (firstpass)
                     retval++;
@@ -1281,20 +1280,22 @@ notify_nolisten(dbref player, const char *msg, int isprivate)
                             prefix = do_parse_mesg(-1, player, player, prefix, "(@Pecho)", pbuf, MPI_ISPRIVATE);
                             *match_args = ch;
                         }
+                        /* no longer cut to fit a BUFFER_LEN buf2, which a long
+                         * prefix made a negative precision: all of buf */
                         if (!prefix || !*prefix) {
                             prefix = NAME(player);
-                            sprintf(buf2, "%s> %.*s", prefix, (int) (BUFFER_LEN - (strlen(prefix) + 3)), buf);
+                            buf2 = std::string(prefix) + "> " + buf;
                         } else {
-                            sprintf(buf2, "%s %.*s", prefix, (int) (BUFFER_LEN - (strlen(prefix) + 2)), buf);
+                            buf2 = std::string(prefix) + " " + buf;
                         }
                         darr = get_player_descrs(OWNER(player), &dcount);
 
                         for (di = 0; di < dcount; di++) {
                             d = descrdata_by_index(darr[di]);
                             if (Html(OWNER(player)) && d)
-                                queue_ansi(d, html_escape(buf2).c_str());
+                                queue_ansi(d, html_escape(buf2.c_str()).c_str());
                             else if (d)
-                                queue_unhtml(d, buf2);
+                                queue_unhtml(d, buf2.c_str());
                             if (firstpass)
                                 retval++;
                         }
@@ -1313,10 +1314,9 @@ notify_html_nolisten(dbref player, const char *msg, int isprivate)
 {
     struct descriptor_data *d;
     int retval = 0;
-    char buf[BUFFER_LEN + 2];
-    char buf2[BUFFER_LEN + 2];
+    std::string buf, buf2;      /* see notify_nolisten */
     int firstpass = 1;
-    char *ptr1;
+    const char *ptr1;
     const char *ptr2;
     dbref ref;
     int *darr;
@@ -1327,16 +1327,15 @@ notify_html_nolisten(dbref player, const char *msg, int isprivate)
         return retval;          /* no one to notify */
     ptr2 = msg;
     while (ptr2 && *ptr2) {
-        ptr1 = buf;
+        ptr1 = ptr2;
         while ((ptr2) && (*ptr2) && (*ptr2 != '\r') && (*ptr2 != '\n'))
-            *(ptr1++) = *(ptr2++);
+            ptr2++;
+        buf.assign(ptr1, ptr2 - ptr1);
         if ((*ptr2 == '\r') || (*ptr2 == '\n')) {
             while ((*ptr2 == '\r') || (*ptr2 == '\n'))
                 ptr2++;
-            *(ptr1++) = '\r';
-            *(ptr1++) = '\n';
+            buf += "\r\n";
         }
-        *(ptr1++) = '\0';
 
         darr = get_player_descrs(player, &dcount);
 
@@ -1344,10 +1343,10 @@ notify_html_nolisten(dbref player, const char *msg, int isprivate)
             d = descrdata_by_index(darr[di]);
             if ((d->linelen > 0) && !(FLAGS(player) & CHOWN_OK)) {
                 if (d)
-                    queue_html(d, buf);
+                    queue_html(d, buf.c_str());
             } else {
                 if (d)
-                    queue_html(d, buf);
+                    queue_html(d, buf.c_str());
                 if (NHtml(d->player) && d)
                     queue_html(d, "<BR>");
             }
@@ -1374,16 +1373,16 @@ notify_html_nolisten(dbref player, const char *msg, int isprivate)
                         }
                         if (!prefix || !*prefix) {
                             prefix = NAME(player);
-                            sprintf(buf2, "%s> %.*s", prefix, (int) (BUFFER_LEN - (strlen(prefix) + 3)), buf);
+                            buf2 = std::string(prefix) + "> " + buf;
                         } else {
-                            sprintf(buf2, "%s %.*s", prefix, (int) (BUFFER_LEN - (strlen(prefix) + 2)), buf);
+                            buf2 = std::string(prefix) + " " + buf;
                         }
                         darr = get_player_descrs(OWNER(player), &dcount);
 
                         for (di = 0; di < dcount; di++) {
                             d = descrdata_by_index(darr[di]);
                             if (d)
-                                queue_html(d, buf2);
+                                queue_html(d, buf2.c_str());
                             if (firstpass)
                                 retval++;
                         }
@@ -1451,17 +1450,17 @@ anotify_nolisten(dbref player, const char* msg, int isprivate)
 int
 anotify_nolisten(descriptor_data *d, dbref player, const char *msg, int isprivate)
 {
-    char buf[BUFFER_LEN + 2];
+    std::string buf;
 
     if (!OkObj(player))
         return 0;
 
     if ((FLAGS(OWNER(player)) & CHOWN_OK) && !(FLAG2(OWNER(player)) & F2HTML)) {
-        parse_ansi(d, player, buf, msg, ANSINORMAL);
+        buf = parse_ansi(d, player, msg, ANSINORMAL);
     } else {
-        unparse_ansi(buf, msg);
+        buf = unparse_ansi(msg);
     }
-    return notify_nolisten(player, buf, isprivate);
+    return notify_nolisten(player, buf.c_str(), isprivate);
 }
 
 int
@@ -2669,13 +2668,11 @@ void
 wall_and_flush(const char *msg)
 {
     struct descriptor_data *d;
-    char buf[BUFFER_LEN + 2];
-    char abuf[BUFFER_LEN + 2];
+    std::string buf;
 
     if (!msg || !*msg)
         return;
-    strcpy(buf, msg);
-    strcat(buf, "\r\n");
+    buf = std::string(msg) + "\r\n";
 
     for (d = descriptor_list; d; d = d->next) {
         /* Websockets are player connections and must hear this: the
@@ -2689,10 +2686,9 @@ wall_and_flush(const char *msg)
 #endif /* NEWHTTPD */
             ) {
             if (d->player != NOTHING) {
-                parse_ansi(d->player, abuf, buf, ANSINORMAL);
-                queue_ansi(d, abuf);
+                queue_ansi(d, parse_ansi(d->player, buf.c_str(), ANSINORMAL).c_str());
             } else {
-                queue_ansi(d, buf);
+                queue_ansi(d, buf.c_str());
             }
             if (!process_output(d)) {
                 d->booted = 1;
@@ -2705,24 +2701,22 @@ void
 wall_logwizards(const char *msg)
 {
     struct descriptor_data *d, *dnext;
-    char buf[BUFFER_LEN + 2];
-    int pos = 0;
+    std::string buf = std::string("LOG> ") + msg;
+    size_t pos = 0;
 
-    sprintf(buf, "LOG> %s", msg);
-
-    while (buf[pos]) {
+    while (pos < buf.size()) {
         if ((buf[pos] == '\n') || !isprint((signed int)buf[pos])) {
-            buf[pos] = '\0';
+            buf.resize(pos);
             break;
         }
         pos++;
     }
-    strcat(buf, "\r\n");
+    buf += "\r\n";
 
     for (d = descriptor_list; d; d = dnext) {
         dnext = d->next;
         if (d->connected && (FLAG2(d->player) & F2LOGWALL)) {
-            queue_unhtml(d, buf);
+            queue_unhtml(d, buf.c_str());
             if (!process_output(d))
                 d->booted = 1;
         }
@@ -2733,14 +2727,11 @@ void
 wall_arches(const char *msg)
 {
     struct descriptor_data *d;
-    char buf[BUFFER_LEN + 2];
-
-    strcpy(buf, msg);
-    strcat(buf, "\r\n");
+    std::string buf = std::string(msg) + "\r\n";
 
     for (d = descriptor_list; d; d = d->next) {
         if (d->connected && /* (d->player >= 0) && */ TArch(d->player)) {
-            queue_ansi(d, buf);
+            queue_ansi(d, buf.c_str());
             if (!process_output(d)) {
                 d->booted = 1;
             }
@@ -2753,14 +2744,11 @@ void
 wall_wizards(const char *msg)
 {
     struct descriptor_data *d;
-    char buf[BUFFER_LEN + 2];
-
-    strcpy(buf, msg);
-    strcat(buf, "\r\n");
+    std::string buf = std::string(msg) + "\r\n";
 
     for (d = descriptor_list; d; d = d->next) {
         if (d->connected && /* (d->player >= 0) && */ TMage(d->player)) {
-            queue_ansi(d, buf);
+            queue_ansi(d, buf.c_str());
             if (!process_output(d)) {
                 d->booted = 1;
             }
@@ -2773,20 +2761,16 @@ void
 ansi_wall_wizards(const char *msg)
 {
     struct descriptor_data *d, *dnext;
-    char buf[BUFFER_LEN + 2], buf2[BUFFER_LEN + 2];
-
-    strcpy(buf, msg);
-    strcat(buf, "\r\n");
+    std::string buf = std::string(msg) + "\r\n";
 
     for (d = descriptor_list; d; d = dnext) {
         dnext = d->next;
         if (d->connected && Mage(d->player)) {
             if (FLAGS(d->player) & CHOWN_OK) {
-                parse_ansi(d->player, buf2, buf, ANSINORMAL);
+                queue_ansi(d, parse_ansi(d->player, buf.c_str(), ANSINORMAL).c_str());
             } else {
-                unparse_ansi(buf2, buf);
+                queue_ansi(d, unparse_ansi(buf.c_str()).c_str());
             }
-            queue_ansi(d, buf2);
             if (!process_output(d))
                 d->booted = 1;
         }
@@ -2829,13 +2813,10 @@ void
 wall_all(const char *msg)
 {
     struct descriptor_data *d;
-    char buf[BUFFER_LEN + 2];
-
-    strcpy(buf, msg);
-    strcat(buf, "\r\n");
+    std::string buf = std::string(msg) + "\r\n";
 
     for (d = descriptor_list; d; d = d->next) {
-        queue_unhtml(d, buf);
+        queue_unhtml(d, buf.c_str());
         if (!process_output(d))
             d->booted = 1;
     }

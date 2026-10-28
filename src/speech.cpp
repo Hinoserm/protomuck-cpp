@@ -322,7 +322,8 @@ ansi_notify_listeners(int descr, dbref who, dbref xprog, dbref obj, dbref room, 
 int
 ansi_notify_listeners(descriptor_data *d, dbref who, dbref xprog, dbref obj, dbref room, const char *msg, int isprivate)
 {
-    char buf[BUFFER_LEN], buf2[BUFFER_LEN], *noabuf;
+    char buf[BUFFER_LEN];
+    const char *noabuf;
     dbref ref;
     int descr = -1;
 
@@ -332,7 +333,9 @@ ansi_notify_listeners(descriptor_data *d, dbref who, dbref xprog, dbref obj, dbr
     if (obj == NOTHING)
         return 0;
 
-    noabuf = unparse_ansi(buf2, msg);
+    std::string noa = unparse_ansi(msg);
+
+    noabuf = noa.c_str();
 
     if (tp_listeners && (tp_listeners_obj || Typeof(obj) == TYPE_ROOM)) {
         listenqueue(descr, who, room, obj, obj, xprog, "_listen", noabuf, tp_listen_mlev, 1, 0);

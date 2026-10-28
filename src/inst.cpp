@@ -19,8 +19,6 @@ char *
 insttotext(struct frame *fr, int lev, struct inst *theinst, char *buffer, int buflen, int strmax, dbref program)
 {
     char buf2[BUFFER_LEN];
-    char buf3[BUFFER_LEN];
-    char buf4[BUFFER_LEN];
     struct inst temp1;
     struct inst *oper2;
     int length;
@@ -233,8 +231,8 @@ insttotext(struct frame *fr, int lev, struct inst *theinst, char *buffer, int bu
             sprintf(buffer, "?(%d)", theinst->type);
             break;
     }
-    sprintf(buf4, "%s", buffer);
-    sprintf(buffer, "%s", escape_ansi(buf3, buf4));
+    /* escaping doubles an ESC: cut to the caller's buflen */
+    strcpyn(buffer, buflen, escape_ansi(buffer).c_str());
     return buffer;
 }
 

@@ -1869,9 +1869,7 @@ prim_tokensplit(PRIM_PROTOTYPE)
 void
 prim_parse_ansi(PRIM_PROTOTYPE)
 {
-    char buf[BUFFER_LEN];
-    char buf3[BUFFER_LEN];
-    char buf4[BUFFER_LEN];
+    std::string out;
     int ctype;
 
     if (oper[0].type != PROG_INTEGER)
@@ -1887,31 +1885,28 @@ prim_parse_ansi(PRIM_PROTOTYPE)
         PushNullStr;
     } else {
 
+        const char *in = oper[1].data.string->data.c_str();
+
+        /* std::string throughout: a color tag grows into its escape code,
+         * and a BUFFER_LEN string did not even fit the first copy */
         ctype = oper[0].data.number;
-        sprintf(buf3, "%s", oper[1].data.string->data.c_str());
-
-
-
         if (ctype == 0)
-            sprintf(buf4, "%s", buf3);
+            out = in;
         else if (ctype == 1)
-            sprintf(buf4, "%s", parse_ansi(PSafe, buf, buf3, ANSINORMAL));
+            out = parse_ansi(PSafe, in, ANSINORMAL);
         else if (ctype == 2)
-            sprintf(buf4, "%s", parse_mush_ansi(buf, buf3));
+            out = parse_mush_ansi(in);
         else if (ctype == 3)
-            sprintf(buf4, "%s", parse_tilde_ansi(buf, buf3));
+            out = parse_tilde_ansi(in);
 
-        PushString(buf4);
+        PushString(out.c_str());
     }
 }
 
 void
 prim_parse_neon(PRIM_PROTOTYPE)
 {
-    char buf[BUFFER_LEN];
-    char buf3[BUFFER_LEN];
-    char buf4[BUFFER_LEN];
-    char buf5[BUFFER_LEN];
+    std::string defcolor, out;
     dbref ref;
 
     if (oper[0].type != PROG_STRING)
@@ -1925,9 +1920,9 @@ prim_parse_neon(PRIM_PROTOTYPE)
 
 
     if (!oper[0].data.string || oper[0].data.string->length() < 1) {
-        sprintf(buf5, "%s", ANSINORMAL);
+        defcolor = ANSINORMAL;
     } else {
-        sprintf(buf5, "%s", oper[0].data.string->data.c_str());
+        defcolor = oper[0].data.string->data.c_str();
     }
 
     if (!oper[1].data.string || oper[1].data.string->length() < 1) {
@@ -1935,20 +1930,15 @@ prim_parse_neon(PRIM_PROTOTYPE)
 
         PushNullStr;
     } else {
-        sprintf(buf3, "%s", oper[1].data.string->data.c_str());
-
-
-        sprintf(buf4, "%s", parse_ansi(ref, buf, buf3, buf5));
-        PushString(buf4);
+        out = parse_ansi(ref, oper[1].data.string->data.c_str(), defcolor.c_str());
+        PushString(out.c_str());
     }
 }
 
 void
 prim_unparse_ansi(PRIM_PROTOTYPE)
 {
-    char buf[BUFFER_LEN];
-    char buf3[BUFFER_LEN];
-    char buf4[BUFFER_LEN];
+    std::string out;
     int ctype;
 
     if (oper[0].type != PROG_INTEGER)
@@ -1964,35 +1954,30 @@ prim_unparse_ansi(PRIM_PROTOTYPE)
         PushNullStr;
     } else {
 
+        const char *in = oper[1].data.string->data.c_str();
+
         ctype = oper[0].data.number;
-        buf[0] = '\0';
-        buf3[0] = '\0';
-        buf4[0] = '\0';
-        sprintf(buf3, "%s", oper[1].data.string->data.c_str());
-
-
-
         if (ctype == 0) {
-            strip_ansi(buf, buf3);
-            sprintf(buf4, "%s", buf);
-        } else if (ctype == 1) {
-            unparse_ansi(buf, buf3);
-            sprintf(buf4, "%s", buf);
-        } else if (ctype == 2)
-            sprintf(buf4, "%s", unparse_mush_ansi(buf, buf3));
-        else if (ctype == 3)
-            sprintf(buf4, "%s", unparse_tilde_ansi(buf, buf3));
+            /* stripping only shortens: the input's length is room enough */
+            std::string tmp(strlen(in) + 1, '\0');
 
-        PushString(buf4);
+            strip_ansi(tmp.data(), in);
+            out = tmp.c_str();
+        } else if (ctype == 1) {
+            out = unparse_ansi(in);
+        } else if (ctype == 2)
+            out = unparse_mush_ansi(in);
+        else if (ctype == 3)
+            out = unparse_tilde_ansi(in);
+
+        PushString(out.c_str());
     }
 }
 
 void
 prim_escape_ansi(PRIM_PROTOTYPE)
 {
-    char buf[BUFFER_LEN];
-    char buf3[BUFFER_LEN];
-    char buf4[BUFFER_LEN];
+    std::string out;
     int ctype;
 
     if (oper[0].type != PROG_INTEGER)
@@ -2008,21 +1993,19 @@ prim_escape_ansi(PRIM_PROTOTYPE)
         PushNullStr;
     } else {
 
+        const char *in = oper[1].data.string->data.c_str();
+
         ctype = oper[0].data.number;
-        sprintf(buf3, "%s", oper[1].data.string->data.c_str());
-
-
-
         if (ctype == 0)
-            sprintf(buf4, "%s", escape_ansi(buf, buf3));
+            out = escape_ansi(in);
         else if (ctype == 1) {
-            sprintf(buf4, "%s", tct(buf3, buf));
+            out = tct(in);
         } else if (ctype == 2)
-            sprintf(buf4, "%s", mush_tct(buf3, buf));
+            out = mush_tct(in);
         else if (ctype == 3)
-            sprintf(buf4, "%s", tilde_tct(buf3, buf));
+            out = tilde_tct(in);
 
-        PushString(buf4);
+        PushString(out.c_str());
     }
 }
 
@@ -2149,7 +2132,6 @@ prim_ansi_strcut(PRIM_PROTOTYPE)
 void
 prim_ansi_strip(PRIM_PROTOTYPE)
 {
-    char buf[BUFFER_LEN];
 
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string argument.");
@@ -2160,9 +2142,13 @@ prim_ansi_strip(PRIM_PROTOTYPE)
         return;
     }
 
-    strip_ansi(buf, oper[0].data.string->data.c_str());
+    /* stripping only shortens, but a MUF string can be BUFFER_LEN long,
+     * one more than buf held with its '\0' */
+    std::string buf(oper[0].data.string->length() + 1, '\0');
 
-    PushString(buf);
+    strip_ansi(buf.data(), oper[0].data.string->data.c_str());
+
+    PushString(buf.c_str());
 }
 
 

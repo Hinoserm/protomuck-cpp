@@ -264,7 +264,7 @@ muf_backtrace(dbref player, dbref program, int count, struct frame *fr)
                 call += k ? SYSWHITE ", " : SYSWHITE;
                 call += nam;
                 call += "=" SYSNORMAL;
-                call += val;
+                call += val ? val : "(null)";
             }
             call += SYSWHITE ")" SYSNORMAL;
             ptr = call.c_str();

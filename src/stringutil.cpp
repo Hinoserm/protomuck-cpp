@@ -1283,7 +1283,7 @@ const char *
 color_lookup(dbref player, const char *color, const char *defcolor, int intrecurse, char *color_buffer)
 {
     const char *tempcolor;
-    char buf[BUFFER_LEN];
+    std::string buf;
     int index = 0;
     hash_data *hd = NULL;
     char temp_buffer[8];
@@ -1341,13 +1341,14 @@ color_lookup(dbref player, const char *color, const char *defcolor, int intrecur
                 tempcolor = CCMOVE;
             color = tempcolor;
         } else {
-            strcpy(buf, "_/COLORS/");
-            strcat(buf, color);
-            tempcolor = GETMESG(player, buf);
+            /* the tag is any text between two '^': this strcat'd it into
+             * a BUFFER_LEN array */
+            buf = std::string("_/COLORS/") + color;
+            tempcolor = GETMESG(player, buf.c_str());
             if (!tempcolor && OkObj(OWNER(player)))
-                tempcolor = GETMESG(OWNER(player), buf);
+                tempcolor = GETMESG(OWNER(player), buf.c_str());
             if (!tempcolor)
-                tempcolor = GETMESG(0, buf);
+                tempcolor = GETMESG(0, buf.c_str());
             if (tempcolor)
                 color = tempcolor;
             else
@@ -1463,7 +1464,7 @@ color_lookup(dbref player, const char *color, const char *defcolor, int intrecur
         return ANSI_STRIKE;
     } else if ((hd = find_hash(color, color_list, COLOR_HASH_SIZE))) {
         /* Color found in color lookup table */
-        sprintf(temp_buffer, "%d", hd->ival);
+        snprintf(temp_buffer, sizeof(temp_buffer), "%d", hd->ival);
         if (intrecurse < 5)
             return color_lookup(player, temp_buffer, defcolor, intrecurse + 1, color_buffer);
 
@@ -1492,54 +1493,49 @@ color_lookup(dbref player, const char *color, const char *defcolor, int intrecur
     return defcolor;
 }
 
-char*
-parse_ansi(dbref player, char* buf, const char* from, const char* defcolor)
+std::string
+parse_ansi(dbref player, const char *from, const char *defcolor)
 {
-    return parse_ansi(NULL, player, buf, from, defcolor);
+    return parse_ansi(NULL, player, from, defcolor);
 }
 
 /* parse_ansi: Converts Neon ANSI tags into standard ANSI for
  * output. I.e, ^RED^ -> \[[1;30m
+ * A std::string: a tag grows to its escape code, and this wrote into
+ * whatever buffer the caller had, BUFFER_LEN or not.
  */
-char *
-parse_ansi(descriptor_data *d, dbref player, char *buf, const char *from, const char *defcolor)
+std::string
+parse_ansi(descriptor_data *d, dbref player, const char *from, const char *defcolor)
 {
-    char *to, *color, cbuf[BUFFER_LEN + 2];
-    char *color_ptr = NULL;
+    std::string out, color;
     char color_buffer[64];
     const char *ansi;
 
-    to = buf;
+    out.reserve(strlen(from) + 16);
     while (*from) {
         if (*from == '^') {
             from++;
-            color = cbuf;
+            color.clear();
             while (*from && *from != '^')
-                *(color++) = (*(from++));
-            *color = '\0';
+                color += *(from++);
             if (*from)
                 from++;
-            if (*cbuf) {
-                if ((ansi = color_lookup(player, cbuf, defcolor, 1, color_buffer))) {
+            if (!color.empty()) {
+                if ((ansi = color_lookup(player, color.c_str(), defcolor, 1, color_buffer))) {
                     if (!strcmp(ansi, ANSI_256)) {
                         /* Copy 256 color from buffer */
-                        color_ptr = color_buffer;
-                        while (*color_ptr) {
-                            *(to++) = (*(color_ptr++));
-                        }
+                        out += color_buffer;
                     } else {
                         /* Otherwise, 'ansi' contains the color code */
-                        while (*ansi)
-                            *(to++) = (*(ansi++));
+                        out += ansi;
                     }
                 }
             } else
-                *(to++) = '^';
+                out += '^';
         } else
-            *(to++) = (*(from++));
+            out += *(from++);
     }
-    *to = '\0';
-    return buf;
+    return out;
 }
 
 /* tct: This escapes Neon ANSI tags. I.e, ^RED^ -> ^^RED^^ */
@@ -1565,31 +1561,32 @@ tct(const char *in)
 {
     std::string out;
 
-    if (in)
+    if (in) {
+        out.reserve(strlen(in) + 8);
         for (; *in; in++) {
             out += *in;
             if (*in == '^')
                 out += '^';
         }
+    }
     return out;
 }
 
 /* This function strips out Neon ANSI tags. I.e., ^RED^ 
  * would be removed.
  */
-char *
-unparse_ansi(char *buf, const char *from)
+std::string
+unparse_ansi(const char *from)
 {
-    char *to;
+    std::string out;
 
-    buf[0] = '\0';
-    to = buf;
+    out.reserve(strlen(from));
     while (*from) {
         if (*from == '^') {
             from++;
 
             if (*from == '^')
-                *(to++) = '^';
+                out += '^';
             else
                 while (*from && *from != '^')
                     from++;
@@ -1597,11 +1594,10 @@ unparse_ansi(char *buf, const char *from)
             if (*from)
                 from++;
         } else {
-            *(to++) = (*(from++));
+            out += *(from++);
         }
     }
-    *to = '\0';
-    return buf;
+    return out;
 }
 
 /* This strips standard ANSI tags. I.e., \[[1;30m would be removed. */
@@ -1738,44 +1734,40 @@ strip_bad_ansi(char *buf, const char *input)
 }
 
 /* This escapes standard ANSI. I.e., \[[1;30m -> \\[[1;30m */
-char *
-escape_ansi(char *buf, const char *input)
+std::string
+escape_ansi(const char *input)
 {
-    const char *is;
-    char *os;
+    std::string out;
 
-    is = input;
-    buf[0] = '\0';
-    os = buf;
-    while (*is) {
-        if (*is == ESCAPE_CHAR) {
-            *os++ = '\\';
-            *os++ = '[';
-            is++;
-        } else {
-            *os++ = *is++;
-        }
+    for (; *input; input++) {
+        if (*input == ESCAPE_CHAR)
+            out += "\\[";
+        else
+            out += *input;
     }
-    *os = '\0';
-
-    return buf;
+    return out;
 }
 
 /* parse_mush_ansi converts MUSH ANSI tags into standard ANSI for
  * output. I.e, %cr -> \[[1;30m
+ * A "%c" at the very end took the terminator as its color, and the
+ * scan went on past it: it ends there now, with the default code.
  */
-char *
-parse_mush_ansi(char *buf, char *from)
+std::string
+parse_mush_ansi(const char *from)
 {
-    char *to, color, *ansi;
+    std::string out;
+    const char *ansi;
+    char color;
 
-    to = buf;
     while (*from) {
         if (*from == '%' && (*(from + 1) != '\0')) {
             from++;
             color = (*(from++));
             if (color == 'c') {
-                color = (*(from++));
+                color = *from;
+                if (*from)
+                    from++;
                 switch (color) {
                 case 'x':
                     ansi = ANSICBLACK;
@@ -1845,82 +1837,73 @@ parse_mush_ansi(char *buf, char *from)
                     ansi = ANSINORMAL;
                     break;
                 }
-                if (*ansi)
-                    while (*ansi)
-                        *(to++) = (*(ansi++));
+                out += ansi;
             } else {
                 if (color == '%')
-                    *(to++) = '%';
+                    out += '%';
 /*            if(*from) *from++; */
             }
         } else
-            *(to++) = (*(from++));
+            out += *(from++);
     }
-    *to = '\0';
-    return buf;
+    return out;
 }
 
 /* unparse_mush_ansi: strip MUSH ANSI tags from a string.
  * I.e., %cr would be removed. 
+ * A '%' or "%c" at the very end stepped over the terminator.
  */
-char *
-unparse_mush_ansi(char *buf, char *from)
+std::string
+unparse_mush_ansi(const char *from)
 {
-    char *to, color, *ansi;
+    std::string out;
+    char color;
 
-    to = buf;
     while (*from) {
         if (*from == '%') {
             from++;
-            color = (*(from++));
+            color = *from;
+            if (*from)
+                from++;
             if (color == 'c') {
-                color = (*(from++));
-                /* switch (color) {
-                   default: */
-                ansi = "";
-                /* break;
-                   } */
-                if (*ansi)
-                    while (*ansi)
-                        *(to++) = (*(ansi++));
+                if (*from)
+                    from++;
             } else if (color == '%')
-                *(to++) = '%';
+                out += '%';
 /*         if(*from) *from++; */
         } else
-            *(to++) = (*(from++));
+            out += *(from++);
     }
-    *to = '\0';
-    return buf;
+    return out;
 }
 
 /* mush_tct: Escapes MUSH ANSI tags. I.e., %cr -> %%cr */
-char *
-mush_tct(const char *in, char out[BUFFER_LEN])
+std::string
+mush_tct(const char *in)
 {
-    char *p = out;
+    std::string out;
 
-    if (!(in) || !(out)) {
-        return out;
-    }
-
-    if (in && (*in))
-        while (*in && (p - out < (BUFFER_LEN - 2)))
-            if ((*(p++) = (*(in++))) == '%')
-                *(p++) = '%';
-    *p = '\0';
+    if (in)
+        for (; *in; in++) {
+            out += *in;
+            if (*in == '%')
+                out += '%';
+        }
     return out;
 }
 
 /* parse_tilde_ansi: Convert FB/Glow style tilde ANSI into
- * standard ANSI for output. I.e., ~&110 -> \[[1;30m 
+ * standard ANSI for output. I.e., ~&110 -> \[[1;30m
+ * The inserted codes used to be dropped once they no longer fitted a
+ * BUFFER_LEN buffer, while plain text was copied on past its end.
  */
-char *
-parse_tilde_ansi(char *buf, char *from)
+std::string
+parse_tilde_ansi(const char *from)
 {
-    char *to, *ansi;
+    std::string out;
+    const char *ansi;
     int isbold = 0;
 
-    to = buf;
     while (*from) {
         if ((*(from) == '~') && (*(from + 1) == '&')) {
             from += 2;
@@ -1929,10 +1912,7 @@ parse_tilde_ansi(char *buf, char *from)
 
             if ((*(from) == '~') && (*(from + 1) == '&')) {
                 /* Escape ~&~& into ~& */
-                ansi = "~&";
-                if (((to - buf) + strlen(ansi)) < BUFFER_LEN)
-                    while (*ansi)
-                        *(to++) = (*(ansi++));
+                out += "~&";
                 from += 2;
                 if (!*from)
                     break;
@@ -1954,35 +1934,34 @@ parse_tilde_ansi(char *buf, char *from)
                 ansi = NULL;
                 switch (*from) {
                 case '0':
-                    ansi = (char *) (isbold ? ANSIGLOOM : ANSIBLACK);
+                    ansi = (isbold ? ANSIGLOOM : ANSIBLACK);
                     break;
                 case '1':
-                    ansi = (char *) (isbold ? ANSIRED : ANSICRIMSON);
+                    ansi = (isbold ? ANSIRED : ANSICRIMSON);
                     break;
                 case '2':
-                    ansi = (char *) (isbold ? ANSIGREEN : ANSIFOREST);
+                    ansi = (isbold ? ANSIGREEN : ANSIFOREST);
                     break;
                 case '3':
-                    ansi = (char *) (isbold ? ANSIYELLOW : ANSIBROWN);
+                    ansi = (isbold ? ANSIYELLOW : ANSIBROWN);
                     break;
                 case '4':
-                    ansi = (char *) (isbold ? ANSIBLUE : ANSINAVY);
+                    ansi = (isbold ? ANSIBLUE : ANSINAVY);
                     break;
                 case '5':
-                    ansi = (char *) (isbold ? ANSIPURPLE : ANSIVIOLET);
+                    ansi = (isbold ? ANSIPURPLE : ANSIVIOLET);
                     break;
                 case '6':
-                    ansi = (char *) (isbold ? ANSICYAN : ANSIAQUA);
+                    ansi = (isbold ? ANSICYAN : ANSIAQUA);
                     break;
                 case '7':
-                    ansi = (char *) (isbold ? ANSIWHITE : ANSIGRAY);
+                    ansi = (isbold ? ANSIWHITE : ANSIGRAY);
                     break;
                 case '-':
                     break;
                 }
-                if (ansi && (((to - buf) + strlen(ansi)) < BUFFER_LEN))
-                    while (*ansi)
-                        *(to++) = (*(ansi++));
+                if (ansi)
+                    out += ansi;
 
                 /* Take care of other first position attribute possibiliies. */
                 ansi = NULL;
@@ -1998,9 +1977,8 @@ parse_tilde_ansi(char *buf, char *from)
                 case '-':      /* leave alone */
                     break;
                 }
-                if (ansi && (((to - buf) + strlen(ansi)) < BUFFER_LEN))
-                    while (*ansi)
-                        *(to++) = (*(ansi++));
+                if (ansi)
+                    out += ansi;
                 from++;
                 if (!*from)
                     break;
@@ -2035,9 +2013,8 @@ parse_tilde_ansi(char *buf, char *from)
                 case '-':
                     break;
                 }
-                if (ansi && (((to - buf) + strlen(ansi)) < BUFFER_LEN))
-                    while (*ansi)
-                        *(to++) = (*(ansi++));
+                if (ansi)
+                    out += ansi;
                 from++;
                 if (!*from)
                     break;
@@ -2059,21 +2036,18 @@ parse_tilde_ansi(char *buf, char *from)
                     ansi = "BEEP";
                     break;
                 }
-                if (ansi && (((to - buf) + strlen(ansi)) < BUFFER_LEN))
-                    while (*ansi)
-                        *(to++) = (*(ansi++));
+                if (ansi)
+                    out += ansi;
                 from++;
                 if (!*from)
                     break;
             }
         } else
-            *(to++) = (*(from++));
+            out += *(from++);
     }
-    *to = '\0';
 
-    if ((to - buf) + strlen(ANSINORMAL) < BUFFER_LEN)
-        strcat(to, ANSINORMAL);
-    return buf;
+    out += ANSINORMAL;
+    return out;
 }
 
 /* tilde_striplen: Used in order to determine the # of characters
@@ -2086,7 +2060,8 @@ tilde_striplen(const char *word)
 
     from = word;
     /* Technically, this test should never even have to be done. */
-    if ((*(from + 0) == '~') && (*(from + 1) == '&') && (*(from + 3) == '~') && (*(from + 4) == '&'))
+    /* from[2] first: "~&" at the very end has nothing at from[3] */
+    if ((*(from + 0) == '~') && (*(from + 1) == '&') && *(from + 2) && (*(from + 3) == '~') && (*(from + 4) == '&'))
         return 4;
     else if ((*(from + 0) == '~') && (*(from + 1) == '&')) {
         from += 2;
@@ -2104,20 +2079,19 @@ tilde_striplen(const char *word)
 /* unparse_tilde_ansi: This removes tilde style ANSI tags from
  * a string. I.e., ~&110 would be removed.
  */
-char *
-unparse_tilde_ansi(char *buf, char *from)
+std::string
+unparse_tilde_ansi(const char *from)
 {
     /* If escaped tilde ansi, take off first pair of ~& */
     /* Otherwise remove # of characters according to tilde_striplen */
     size_t count;
-    char *to;
+    std::string out;
 
-    to = buf;
     while (*from) {
         if ((*(from + 0) == '~') && (*(from + 1) == '&') && (*(from + 2) == '~') && (*(from + 3) == '&')) {
             from += 2;
-            *(to++) = (*(from++));
-            *(to++) = (*(from++));
+            out += *(from++);
+            out += *(from++);
         } else if ((*from == '~') && (*(from + 1) == '&')) {
             count = tilde_striplen(from);
             if ((count > 0) && (count <= strlen(from)))
@@ -2125,32 +2099,36 @@ unparse_tilde_ansi(char *buf, char *from)
             else
                 break;
         } else
-            *(to++) = (*(from++));
+            out += *(from++);
     }
-    *to = '\0';
-    return buf;
+    return out;
 }
 
 /* tilde_tct: escapes tilde style ANSI tags. 
  * i.e., ~&110 -> ~~&110
+ * A '~' at the very end copied the terminator and read on past it.
  */
-char *
-tilde_tct(const char *in, char out[BUFFER_LEN])
+std::string
+tilde_tct(const char *in)
 {
-    char *p = out;
+    std::string out;
 
-    if (!(in) || !(out)) {
+    if (!in)
         return out;
-    }
 
-    if (in && (*in))
-        while (*in && (p - out < (BUFFER_LEN - 3)))
-            if (((*(p++) = (*(in++))) == '~')
-                && ((*(p++) = (*(in++))) == '&')) {
-                *(p++) = '~';
-                *(p++) = '&';
-            }
-    *p = '\0';
+    while (*in) {
+        char c = *(in++);
+
+        out += c;
+        if (c == '~') {
+            if (!*in)
+                break;
+            c = *(in++);
+            out += c;
+            if (c == '&')
+                out += "~&";
+        }
+    }
     return out;
 }
 

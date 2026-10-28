@@ -565,7 +565,7 @@ flag_description(dbref thing)
 
         for (i = 0; i < 32; i++)
             if (LFLAG(thing) & LFLAGx(i)) {
-                strcpyn(buf2, 33, lflag_name[i]);
+                strcpyn(buf2, sizeof(buf2), lflag_name[i]);
                 for (j = 0; buf2[j]; j++)
                     buf2[j] = UPCASE(buf2[j]);
                 strcat(buf, " ");

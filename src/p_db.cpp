@@ -698,13 +698,10 @@ prim_truename(PRIM_PROTOTYPE)
         ts_lastuseobject(program, ref);
     if ((Typeof(ref) == TYPE_PLAYER) || (Typeof(ref) == TYPE_THING)) {
         if ((msg = GETMESG(ref, "%n"))) {
-            strcpy(buf, msg);
-
-            strcpy(buf2, buf);
-            if (lookup_player(buf2) != NOTHING) {
-                strcpy(buf, NAME(ref));
-            }
-            PushString(buf);
+            /* the %n property is any string, up to BUFFER_LEN long itself */
+            if (lookup_player(msg) != NOTHING)
+                msg = NAME(ref);
+            PushString(msg);
             return;
         }
     }
