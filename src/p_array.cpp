@@ -1053,13 +1053,13 @@ prim_array_get_propdirs(PRIM_PROTOTYPE)
 {
     stk_array *nw;
     char propname[BUFFER_LEN];
-    char dir[BUFFER_LEN];
+    std::string dir;
     PropPtr propadr, pptr;
     PropPtr prptr;
     int count = 0;
     int len = 0;
     dbref ref;
-    char buf[BUFFER_LEN];
+    std::string buf;
     struct inst temp1, temp2;
 
     /* dbref strPropDir -- array */
@@ -1071,20 +1071,20 @@ prim_array_get_propdirs(PRIM_PROTOTYPE)
         abort_interp("String required. (2)");
 
     ref = oper[1].data.objref;
-    strcpy(dir, DoNullInd(oper[0].data.string));
-    if (!*dir)
-        strcpy(dir, "/");
+    dir = DoNullInd(oper[0].data.string);
+    if (dir.empty())
+        dir = "/";
 
-    len = strlen(dir) - 1;
+    len = (int) dir.size() - 1;
     if (len > 0 && dir[len] == PROPDIR_DELIMITER)
-        dir[len] = '\0';
+        dir.resize(len);
 
     nw = new_array_packed(0, 0);
-    propadr = first_prop(ref, dir, &pptr, propname);
+    propadr = first_prop(ref, dir.c_str(), &pptr, propname);
     while (propadr) {
-        snprintf(buf, sizeof(buf), "%s%c%s", dir, PROPDIR_DELIMITER, propname);
-        if (prop_read_perms(ProgUID, ref, buf, mlev)) {
-            prptr = get_property(ref, buf);
+        buf = dir + PROPDIR_DELIMITER + propname;
+        if (prop_read_perms(ProgUID, ref, buf.c_str(), mlev)) {
+            prptr = get_property(ref, buf.c_str());
             if (prptr) {
 #ifdef DISKBASE
                 propfetch(ref, prptr);
@@ -1112,12 +1112,12 @@ prim_array_get_propvals(PRIM_PROTOTYPE)
 {
     stk_array *nw;
     char propname[BUFFER_LEN];
-    char dir[BUFFER_LEN];
+    std::string dir;
     PropPtr propadr, pptr;
     PropPtr prptr;
     dbref ref;
     struct inst temp1, temp2;
-    char buf[BUFFER_LEN];
+    std::string buf;
 
     /* dbref strPropDir -- array */
 
@@ -1129,17 +1129,17 @@ prim_array_get_propvals(PRIM_PROTOTYPE)
         abort_interp("String required. (2)");
 
     ref = oper[1].data.objref;
-    strcpy(dir, DoNullInd(oper[0].data.string));
+    dir = DoNullInd(oper[0].data.string);
 
-    if (!*dir)
-        strcpy(dir, "/");
+    if (dir.empty())
+        dir = "/";
 
     nw = new_array_dictionary();
-    propadr = first_prop(ref, dir, &pptr, propname);
+    propadr = first_prop(ref, dir.c_str(), &pptr, propname);
     while (propadr) {
-        snprintf(buf, sizeof(buf), "%s%c%s", dir, PROPDIR_DELIMITER, propname);
-        if (prop_read_perms(ProgUID, ref, buf, mlev)) {
-            prptr = get_property(ref, buf);
+        buf = dir + PROPDIR_DELIMITER + propname;
+        if (prop_read_perms(ProgUID, ref, buf.c_str(), mlev)) {
+            prptr = get_property(ref, buf.c_str());
             if (prptr) {
                 int goodflag = 1;
 
@@ -1381,11 +1381,9 @@ void
 prim_array_put_proplist(PRIM_PROTOTYPE)
 {
     stk_array *arr;
-    char propname[BUFFER_LEN];
-    char dir[BUFFER_LEN];
+    std::string propname;
+    std::string dir;
     const char *fmtin;
-    char *fmtout;
-    int dirlen;
     int count = 0;
     PData pdat;
     dbref ref;
@@ -1406,60 +1404,41 @@ prim_array_put_proplist(PRIM_PROTOTYPE)
     if (oper[0].data.array && oper[0].data.array->type != ARRAY_PACKED)
         abort_interp("Argument must be a list type array. (3)");
     ref = oper[2].data.objref;
-    strcpy(dir, DoNullInd(oper[1].data.string));
+    dir = DoNullInd(oper[1].data.string);
     arr = oper[0].data.array;
-    dirlen = strlen(dir);
-    fmtout = propname;
-    fmtin = tp_proplist_counter_fmt;
-    while (*fmtin) {
-        if (*fmtin == 'P') {
-            if ((fmtout + dirlen) - propname > sizeof(propname))
-                break;
-            strcpy(fmtout, dir);
-            fmtout = &fmtout[strlen(fmtout)];
-        } else {
-            *fmtout++ = *fmtin;
-        }
-        fmtin++;
+    /* the names are std::string: dir fills a BUFFER_LEN buffer by itself,
+     * and only 'P' was checked for room */
+    for (fmtin = tp_proplist_counter_fmt; *fmtin; fmtin++) {
+        if (*fmtin == 'P')
+            propname += dir;
+        else
+            propname += *fmtin;
     }
-    *fmtout++ = '\0';
 
-    if (!prop_write_perms(ProgUID, ref, propname, mlev))
+    if (!prop_write_perms(ProgUID, ref, propname.c_str(), mlev))
         abort_interp("Permission denied while trying to set protected property.");
 
-    remove_property(ref, propname);
+    remove_property(ref, propname.c_str());
 
-    char cntrpname[BUFFER_LEN];
-
-    strcpy(cntrpname, propname);
+    std::string cntrpname = propname;
 
     if (array_first(arr, &temp1)) {
         struct inst *oper4;
 
         do {
             oper4 = array_getitem(arr, &temp1);
-            fmtout = propname;
-            fmtin = tp_proplist_entry_fmt;
-            while (*fmtin) {
-                if (*fmtin == 'N') {
-                    if ((fmtout + 18) - propname > sizeof(propname))
-                        break;
-                    //sprintf(fmtout, "%d", temp1.data.number + 1);
-                    sprintf(fmtout, "%d", count + 1);
-                    fmtout = &fmtout[strlen(fmtout)];
-                } else if (*fmtin == 'P') {
-                    if ((fmtout + dirlen) - propname > sizeof(propname))
-                        break;
-                    strcpy(fmtout, dir);
-                    fmtout = &fmtout[strlen(fmtout)];
-                } else {
-                    *fmtout++ = *fmtin;
-                }
-                fmtin++;
+            propname.clear();
+            for (fmtin = tp_proplist_entry_fmt; *fmtin; fmtin++) {
+                if (*fmtin == 'N')
+                    //propname += std::to_string(temp1.data.number + 1);
+                    propname += std::to_string(count + 1);
+                else if (*fmtin == 'P')
+                    propname += dir;
+                else
+                    propname += *fmtin;
             }
-            *fmtout++ = '\0';
 
-            if (!prop_write_perms(ProgUID, ref, propname, mlev))
+            if (!prop_write_perms(ProgUID, ref, propname.c_str(), mlev))
                 abort_interp("Permission denied while trying to set protected property.");
 
             switch (oper4->type) {
@@ -1485,7 +1464,7 @@ prim_array_put_proplist(PRIM_PROTOTYPE)
                     break;
             }
             if (!isempty) {
-                set_property(ref, propname, &pdat);
+                set_property(ref, propname.c_str(), &pdat);
                 count++;
             }
 
@@ -1497,12 +1476,12 @@ prim_array_put_proplist(PRIM_PROTOTYPE)
             /* Alynna - Fix a bug where it wont set the proper value if you try to write an int directly.. */
             pdat.flags = PROP_INTTYP;
             pdat.data.val = count;
-            set_property(ref, cntrpname, &pdat);
+            set_property(ref, cntrpname.c_str(), &pdat);
         } else {
             sprintf(buf, "%d", count);
             pdat.flags = PROP_STRTYP;
             pdat.data.str = buf;
-            set_property(ref, cntrpname, &pdat);
+            set_property(ref, cntrpname.c_str(), &pdat);
         }
     }
 
@@ -2173,7 +2152,7 @@ prim_array_nested_set(PRIM_PROTOTYPE)
 
     idxarr = oper[0].data.array;
     idxcnt = array_count(idxarr);
-    if (idxcnt > sizeof(nest) / sizeof(struct inst))
+    if ((size_t) idxcnt > sizeof(nest) / sizeof(struct inst))
         abort_interp("Nesting would be too deep. (3)");
 
     if (idxcnt == 0) {
@@ -2242,7 +2221,7 @@ prim_array_nested_del(PRIM_PROTOTYPE)
 
     idxarr = oper[0].data.array;
     idxcnt = array_count(idxarr);
-    if (idxcnt > sizeof(nest) / sizeof(struct inst))
+    if ((size_t) idxcnt > sizeof(nest) / sizeof(struct inst))
         abort_interp("Nesting would be too deep. (2)");
 
     if (idxcnt == 0) {
@@ -2400,20 +2379,20 @@ void
 array_props_wildcard(stk_array *arr, dbref player, dbref thing, const char *dir, const char *wild, int mlev)
 {
     char propname[BUFFER_LEN];
-    char wld[BUFFER_LEN];
-    char buf[BUFFER_LEN];
+    std::string wld;
+    std::string buf;
     PropPtr propadr, pptr;
-    char *ptr, *wldcrd = wld;
+    char *ptr, *wldcrd;
     int i;
     bool recurse = 0;
 
-    strcpy(wld, wild);
-    i = strlen(wld);
+    wld = wild;
+    i = wld.size();
 
     if (i && wld[i - 1] == PROPDIR_DELIMITER)
-        strcat(wld, "*");
+        wld += "*";
 
-    for (wldcrd = wld; *wldcrd == PROPDIR_DELIMITER; wldcrd++) ;
+    for (wldcrd = wld.data(); *wldcrd == PROPDIR_DELIMITER; wldcrd++) ;
 
     if (!strcmp(wldcrd, "**"))
         recurse = 1;
@@ -2425,11 +2404,11 @@ array_props_wildcard(stk_array *arr, dbref player, dbref thing, const char *dir,
     propadr = first_prop(thing, (char *) dir, &pptr, propname);
     while (propadr) {
         if (equalstr(wldcrd, propname)) {
-            sprintf(buf, "%s%c%s", dir, PROPDIR_DELIMITER, propname);
-            if (prop_read_perms(player, thing, buf, mlev)) {
+            buf = std::string(dir) + PROPDIR_DELIMITER + propname;
+            if (prop_read_perms(player, thing, buf.c_str(), mlev)) {
                 if (!*ptr || recurse) {
                     struct inst temp2;
-                    PropPtr prptr = get_property(thing, buf);
+                    PropPtr prptr = get_property(thing, buf.c_str());
 
                     if (prptr) {
                         int goodflag = 1;
@@ -2467,13 +2446,13 @@ array_props_wildcard(stk_array *arr, dbref player, dbref thing, const char *dir,
                         }
 
                         if (goodflag) {
-                            array_set_strkey(&arr, buf, &temp2);
+                            array_set_strkey(&arr, buf.c_str(), &temp2);
                         }
                     }
                 }
                 if (recurse)
                     ptr = (char *) "**";
-                array_props_wildcard(arr, player, thing, buf, ptr, mlev);
+                array_props_wildcard(arr, player, thing, buf.c_str(), ptr, mlev);
             }
         }
         propadr = next_prop(pptr, propadr, propname);

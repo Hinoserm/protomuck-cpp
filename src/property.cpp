@@ -30,7 +30,10 @@ extern const char *old_uncompress(const char *);
 void
 set_property_nofetch(dbref object, const char *pname, PData * dat, bool pure)
 {
-    char buf[BUFFER_LEN];
+    /* Property names are worked on in place, in a copy. That copy was a
+     * BUFFER_LEN array, and a MUF string can be BUFFER_LEN long. */
+    std::string name;
+    char *buf;
     char *n;
     PropPtr p;
 
@@ -41,7 +44,8 @@ set_property_nofetch(dbref object, const char *pname, PData * dat, bool pure)
     while (*pname == PROPDIR_DELIMITER)
         pname++;
 
-    strcpy(buf, pname);
+    name = pname;
+    buf = name.data();
 
     /* truncate propnames with a ':' in them at the ':' */
     if ((n = index(buf, PROP_DELIMITER)))
@@ -222,12 +226,11 @@ void
 remove_property_nofetch(dbref player, const char *type)
 {
     PropPtr l;
-    char buf[BUFFER_LEN];
-    char *w;
+    std::string name = type;
+    char *w = name.data();
 
     /* if( tp_db_readonly ) return; *//* Why did we remove this? */
 
-    w = strcpy(buf, type);
 
     l = DBFETCH(player)->properties;
     l = propdir_delete_elem(l, w);
@@ -268,12 +271,9 @@ PropPtr
 get_property(dbref player, const char *type)
 {
     PropPtr p;
-    char buf[BUFFER_LEN];
-    char *w;
+    std::string name = type;
 
-    w = strcpy(buf, type);
-
-    p = propdir_get_elem(DBFETCH(player)->properties, w);
+    p = propdir_get_elem(DBFETCH(player)->properties, name.data());
     return (p);
 }
 
@@ -476,7 +476,7 @@ genderof(int descr, dbref player)
 PropPtr
 first_prop_nofetch(dbref player, const char *dir, PropPtr *list, char *name)
 {
-    char buf[BUFFER_LEN];
+    std::string buf;
     PropPtr p;
 
     if (dir) {
@@ -495,8 +495,8 @@ first_prop_nofetch(dbref player, const char *dir, PropPtr *list, char *name)
         return (p);
     }
 
-    strcpy(buf, dir);
-    *list = p = propdir_get_elem(DBFETCH(player)->properties, buf);
+    buf = dir;
+    *list = p = propdir_get_elem(DBFETCH(player)->properties, buf.data());
     if (!p) {
         *name = '\0';
         return NULL;
@@ -561,13 +561,12 @@ char *
 next_prop_name(dbref player, char *outbuf, char *name)
 {
     char *ptr;
-    char buf[BUFFER_LEN];
+    std::string buf = name;
     PropPtr p, l;
 
-    strcpy(buf, name);
     if (!*name || name[strlen(name) - 1] == PROPDIR_DELIMITER) {
         l = DBFETCH(player)->properties;
-        p = propdir_first_elem(l, buf);
+        p = propdir_first_elem(l, buf.data());
         if (!p) {
             *outbuf = '\0';
             return NULL;
@@ -580,7 +579,7 @@ next_prop_name(dbref player, char *outbuf, char *name)
 	}
 */
         l = DBFETCH(player)->properties;
-        p = propdir_next_elem(l, buf);
+        p = propdir_next_elem(l, buf.data());
         if (!p) {
             *outbuf = '\0';
             return NULL;
@@ -608,10 +607,9 @@ int
 is_propdir_nofetch(dbref player, const char *type)
 {
     PropPtr p;
-    char w[BUFFER_LEN];
+    std::string w = type;
 
-    strcpy(w, type);
-    p = propdir_get_elem(DBFETCH(player)->properties, w);
+    p = propdir_get_elem(DBFETCH(player)->properties, w.data());
     if (!p)
         return 0;
     return (PropDir(p) != (PropPtr) NULL);

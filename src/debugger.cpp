@@ -205,9 +205,9 @@ void
 muf_backtrace(dbref player, dbref program, int count, struct frame *fr)
 {
     char buf[BUFFER_LEN];
-    char buf2[BUFFER_LEN];
+    std::string call;
     char buf3[BUFFER_LEN];
-    char *ptr;
+    const char *ptr;
     dbref ref;
     int i, j, cnt, flag;
     struct inst *pinst, *lastinst;
@@ -240,14 +240,16 @@ muf_backtrace(dbref player, dbref program, int count, struct frame *fr)
         lev = fr->system.top - j;
         if (ptr) {
             int k;
-            char *bufend = buf2;
             struct inst *fntop = pinst;
             struct inst *varinst;
 
             while (fntop->type != PROG_FUNCTION)
                 --fntop;
 
-            bufend += sprintf(buf2, "%.512s" SYSWHITE "(" SYSNORMAL, ptr);
+            /* a std::string: the snprintf sizes here were buf2 - bufend,
+             * negative, so nothing bounded the argument list */
+            call.assign(ptr, strnlen(ptr, 512));
+            call += SYSWHITE "(" SYSNORMAL;
 
             for (k = 0; k < fntop->data.mufproc->args; ++k) {
                 const char *nam = scopedvar_getname(fr, lev, k);
@@ -259,16 +261,19 @@ muf_backtrace(dbref player, dbref program, int count, struct frame *fr)
                 varinst = scopedvar_get(fr, lev, k);
                 val = insttotext(fr, lev, varinst, buf3, sizeof(buf3), 30, program);
 
-                bufend += snprintf(bufend, buf2 - bufend - 18, k ? SYSWHITE ", %s=" SYSNORMAL "%s" : SYSWHITE "%s=" SYSNORMAL "%s", nam, val);
+                call += k ? SYSWHITE ", " : SYSWHITE;
+                call += nam;
+                call += "=" SYSNORMAL;
+                call += val;
             }
-            bufend += snprintf(bufend, buf2 - bufend - 1, SYSWHITE ")" SYSNORMAL);
-            ptr = buf2;
+            call += SYSWHITE ")" SYSNORMAL;
+            ptr = call.c_str();
         }
 
 
         if (pinst != lastinst) {
-            sprintf(buf, "%3d) %s(#%d) %s:", j, NAME(ref), ref, ptr);
-            notify_nolisten(player, buf, 1);
+            snprintf(buf, sizeof(buf), "%3d) %s(#%d) ", j, NAME(ref), ref);
+            notify_nolisten(player, (std::string(buf) + (ptr ? ptr : "(null)") + ":").c_str(), 1);
             flag = ((FLAGS(player) & INTERNAL) ? 1 : 0);
             FLAGS(player) &= ~INTERNAL;
             list_proglines(player, ref, fr, (pinst - 1)->line, 0);

@@ -1749,9 +1749,11 @@ lflags_update()
         p = get_property((dbref) 0, buf);
         if (!p) {
             sprintf(buf, "LFLAG%d", i);
-            strncpy(lflag_name[i], buf, 32);
+            strcpyn(lflag_name[i], sizeof(lflag_name[i]), buf);
         } else {
-            strncpy(lflag_name[i], PropDataUNCStr(p), 32);
+            /* strncpy left a 32-byte name unterminated, running into the
+             * next one */
+            strcpyn(lflag_name[i], sizeof(lflag_name[i]), PropDataUNCStr(p));
         }
     }
 

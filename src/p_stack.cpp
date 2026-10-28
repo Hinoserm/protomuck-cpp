@@ -907,7 +907,8 @@ prim_interp(PRIM_PROTOTYPE)
     CHECKREMOTE(oper[1].data.objref);
 
     strcpy(buf, match_args);
-    strcpy(match_args, oper[0].data.string ? oper[0].data.string->data.c_str() : "");
+    /* a MUF string can be BUFFER_LEN long itself, with no room for the '\0' */
+    strcpyn(match_args, BUFFER_LEN, oper[0].data.string ? oper[0].data.string->data.c_str() : "");
     fr->level++;
     interp_set_depth(fr);
     tmpfr = interp(fr->descr, player, DBFETCH(player)->location, oper[2].data.objref, oper[1].data.objref, PREEMPT, STD_HARDUID, 0);

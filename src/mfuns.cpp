@@ -1451,38 +1451,26 @@ mfn_ltimestr(MFUNARGS)
         tm %= 60;               /* Seconds */
     }
 
-    *buf = '\0';
-    if (wk) {
-        sprintf(buf, "%d week%s", wk, (wk == 1) ? "" : "s");
-    }
-    if (dy) {
-        if (*buf) {
-            sprintf(buf, "%s, %d day%s", buf, dy, (dy == 1) ? "" : "s");
-        } else {
-            sprintf(buf, "%d day%s", dy, (dy == 1) ? "" : "s");
-        }
-    }
-    if (hr) {
-        if (*buf) {
-            sprintf(buf, "%s, %d hour%s", buf, hr, (hr == 1) ? "" : "s");
-        } else {
-            sprintf(buf, "%d hour%s", hr, (hr == 1) ? "" : "s");
-        }
-    }
-    if (mn) {
-        if (*buf) {
-            sprintf(buf, "%s, %d min%s", buf, mn, (mn == 1) ? "" : "s");
-        } else {
-            sprintf(buf, "%d min%s", mn, (mn == 1) ? "" : "s");
-        }
-    }
-    if (tm || !*buf) {
-        if (*buf) {
-            sprintf(buf, "%s, %d sec%s", buf, tm, (tm == 1) ? "" : "s");
-        } else {
-            sprintf(buf, "%d sec%s", tm, (tm == 1) ? "" : "s");
-        }
-    }
+    /* each part joined on with ", ": this was sprintf(buf, "%s, ...", buf),
+     * reading buf while writing it */
+    std::string out;
+    auto part = [&out](int n, const char *unit) {
+        if (!out.empty())
+            out += ", ";
+        out += std::to_string(n) + " " + unit + (n == 1 ? "" : "s");
+    };
+
+    if (wk)
+        part(wk, "week");
+    if (dy)
+        part(dy, "day");
+    if (hr)
+        part(hr, "hour");
+    if (mn)
+        part(mn, "min");
+    if (tm || out.empty())
+        part(tm, "sec");
+    strcpyn(buf, BUFFER_LEN, out.c_str());
     return buf;
 }
 

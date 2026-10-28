@@ -189,21 +189,18 @@ check_mlev(const char *flag, int *truewiz)
 int
 check_flag4(const char *flag)
 {
-    char buf[32];
+    /* strncpy into 32 bytes left a name of 32 or more unterminated */
+    std::string buf = flag;
     int i = 0;
 
-    strncpy(buf, flag, 32);
+    for (char &c : buf)
+        c = UPCASE(c);
 
-    while (*(buf + i)) {
-        *(buf + i) = UPCASE(*(buf + i));
-        i++;
-    }
-
-    if (sscanf(buf, "LFLAG%d", &i) == 1 && i >= 0 && i <= 31)
+    if (sscanf(buf.c_str(), "LFLAG%d", &i) == 1 && i >= 0 && i <= 31)
         return LFLAGx(i);
 
     i = 0;
-    while (i < 32 && string_compare(lflag_name[i], buf))
+    while (i < 32 && string_compare(lflag_name[i], buf.c_str()))
         i++;
     if (i < 32)
         return LFLAGx(i);

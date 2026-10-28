@@ -565,8 +565,8 @@ flag_description(dbref thing)
 
         for (i = 0; i < 32; i++)
             if (LFLAG(thing) & LFLAGx(i)) {
-                strncpy(buf2, lflag_name[i], 32);
-                for (j = 0; j < 32; j++)
+                strcpyn(buf2, 33, lflag_name[i]);
+                for (j = 0; buf2[j]; j++)
                     buf2[j] = UPCASE(buf2[j]);
                 strcat(buf, " ");
                 strcat(buf, buf2);
@@ -878,18 +878,15 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
     time_tm = localtime((&(DBFETCH(thing)->ts.created)));
     ref_tm = (DBFETCH(thing)->ts.dcreated);
     format_time(buf2, BUFFER_LEN, (char *) SYSFOREST "Created:" SYSGREEN "  %a %b %e %T %Z %Y", time_tm);
-    sprintf(buf, "%s by %s", buf2, ref_tm < 0 ? "*NOTHING*" : ansi_unparse_object(OWNER(player), ref_tm));
-    anotify_nolisten(player, buf, 1);
+    anotify_nolisten(player, (std::string(buf2) + " by " + (ref_tm < 0 ? "*NOTHING*" : ansi_unparse_object(OWNER(player), ref_tm))).c_str(), 1);
     time_tm = localtime((&(DBFETCH(thing)->ts.modified)));
     ref_tm = (DBFETCH(thing)->ts.dmodified);
     format_time(buf2, BUFFER_LEN, (char *) SYSFOREST "Modified:" SYSGREEN " %a %b %e %T %Z %Y", time_tm);
-    sprintf(buf, "%s by %s", buf2, ref_tm < 0 ? "*NOTHING*" : ansi_unparse_object(OWNER(player), ref_tm));
-    anotify_nolisten(player, buf, 1);
+    anotify_nolisten(player, (std::string(buf2) + " by " + (ref_tm < 0 ? "*NOTHING*" : ansi_unparse_object(OWNER(player), ref_tm))).c_str(), 1);
     time_tm = localtime((&(DBFETCH(thing)->ts.lastused)));
     ref_tm = (DBFETCH(thing)->ts.dlastused);
     format_time(buf2, BUFFER_LEN, (char *) SYSFOREST "Lastused:" SYSGREEN " %a %b %e %T %Z %Y", time_tm);
-    sprintf(buf, "%s by %s", buf2, ref_tm < 0 ? "*NOTHING*" : ansi_unparse_object(OWNER(player), ref_tm));
-    anotify_nolisten(player, buf, 1);
+    anotify_nolisten(player, (std::string(buf2) + " by " + (ref_tm < 0 ? "*NOTHING*" : ansi_unparse_object(OWNER(player), ref_tm))).c_str(), 1);
     if (Typeof(thing) == TYPE_PROGRAM) {
         sprintf(buf, SYSFOREST "Usecount:" SYSGREEN " %d     " SYSFOREST "Instances:" SYSGREEN " %d", DBFETCH(thing)->ts.usecount, DBFETCH(thing)->sp.program.instances);
     } else

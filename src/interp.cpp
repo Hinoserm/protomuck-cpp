@@ -1395,8 +1395,8 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
                 notify_nolisten(player, m, 1);
             }
         }
-        if (FLAGS(program) & DARK && ((FLAG2(program) & F2PARENT && (OWNER(program) != player)
-                                       || !OkObj(player)))) {
+        if (FLAGS(program) & DARK && (((FLAG2(program) & F2PARENT) && (OWNER(program) != player))
+                                      || !OkObj(player))) {
             char *m = debug_inst(fr, 0, pc, fr->pid, arg, dbuf, sizeof(dbuf), atop,
                                  program);
 

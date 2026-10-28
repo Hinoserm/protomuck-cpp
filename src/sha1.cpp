@@ -36,7 +36,7 @@
 #include "sha1.h"
 
 #ifdef USE_SSL
-# include <openssl/sha.h>
+# include <openssl/evp.h>
 #else
 
 /*
@@ -481,10 +481,7 @@ SHA1hash(unsigned char *dest, const char *orig, int len)
     SHA1Input(&context, (const unsigned char *) orig, len);
     SHA1Result(&context, (uint8_t *) dest);
 #else
-    SHA_CTX ctx;
-    SHA1_Init(&ctx);
-    SHA1_Update(&ctx, orig, len);
-    SHA1_Final(dest, &ctx);
+    EVP_Digest(orig, len, dest, NULL, EVP_sha1(), NULL);
 #endif
 }
 

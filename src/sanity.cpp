@@ -674,7 +674,7 @@ rand_password(void)
 void
 create_lostandfound(dbref *player, dbref *room)
 {
-    char player_name[18] = "lost+found";
+    std::string player_name = "lost+found"; /* 18 bytes held 7 digits */
     int temp = 0;
 
     *room = new_object(*player);
@@ -686,16 +686,16 @@ create_lostandfound(dbref *player, dbref *room)
     PUSH(*room, DBFETCH(GLOBAL_ENVIRONMENT)->contents);
     SanFixed(*room, "Using %s to resolve unknown location");
 
-    while (lookup_player(player_name) != NOTHING && strlen(player_name) < PLAYER_NAME_LIMIT) {
-        sprintf(player_name, "lost+found%d", ++temp);
+    while (lookup_player(player_name.c_str()) != NOTHING && player_name.size() < PLAYER_NAME_LIMIT) {
+        player_name = "lost+found" + std::to_string(++temp);
     }
-    if (strlen(player_name) >= PLAYER_NAME_LIMIT) {
+    if (player_name.size() >= PLAYER_NAME_LIMIT) {
         log2file("logs/sanfixed", "WARNING: Unable to get lost+found player, using %s", unparse(MAN)
             );
         *player = MAN;
     } else {
         *player = new_object(1);
-        NAME(*player) = alloc_string(player_name);
+        NAME(*player) = alloc_string(player_name.c_str());
         LOCATION(*player) = *room;
         FLAGS(*player) = TYPE_PLAYER | PCREATE_FLAGS | SANEBIT;
         OWNER(*player) = *player;

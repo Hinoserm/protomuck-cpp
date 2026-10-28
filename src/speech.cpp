@@ -18,24 +18,23 @@ void
 do_say(int descr, dbref player, const char *message)
 {
     dbref loc;
-    char buf[BUFFER_LEN], buf2[BUFFER_LEN];
 
     if ((loc = getloc(player)) == NOTHING)
         return;
-    tct(message, buf2);
-    /* notify everybody */
-    sprintf(buf, "^SAY/POSE^You say, ^SAY/QUOTES^\"^SAY/TEXT^%s^SAY/QUOTES^\"", buf2);
-    anotify(player, buf);
+    std::string said = tct(message);
 
-    sprintf(buf, "^SAY/POSE^%s says, ^SAY/QUOTES^\"^SAY/TEXT^%s^SAY/QUOTES^\"", PNAME(player), buf2);
-    anotify_except(DBFETCH(loc)->contents, player, buf, player);
+    /* notify everybody */
+    anotify(player, ("^SAY/POSE^You say, ^SAY/QUOTES^\"^SAY/TEXT^" + said + "^SAY/QUOTES^\"").c_str());
+    anotify_except(DBFETCH(loc)->contents, player,
+                   (std::string("^SAY/POSE^") + PNAME(player) + " says, ^SAY/QUOTES^\"^SAY/TEXT^" + said + "^SAY/QUOTES^\"").c_str(), player);
 }
 
 void
 do_whisper(int descr, dbref player, const char *arg1, const char *arg2)
 {
     dbref who;
-    char buf[BUFFER_LEN], buf2[BUFFER_LEN];
+    char buf[BUFFER_LEN];
+    std::string said, line;
     struct match_data md;
 
     if (Guest(player)) {
@@ -60,30 +59,30 @@ do_whisper(int descr, dbref player, const char *arg1, const char *arg2)
         default:
             if (Meeper(OWNER(player))) {
                 do_parse_mesg(descr, player, player, arg2, "(whisper)", buf, MPI_ISPRIVATE);
-                tct(buf, buf2);
+                said = tct(buf);
             } else {
-                tct(arg2, buf2);
+                said = tct(arg2);
             }
 
-            if (buf2[0] == ':' || buf2[0] == ';') {
-                sprintf(buf, SYSBLUE "%s whispers, \"" SYSPURPLE "%s %s" SYSBLUE "\"", PNAME(player), PNAME(player), buf2 + 1);
-                if (!anotify_from(player, who, buf)) {
+            if (said[0] == ':' || said[0] == ';') {
+                line = std::string(SYSBLUE) + PNAME(player) + " whispers, \"" SYSPURPLE + PNAME(player) + " " + said.substr(1) + SYSBLUE "\"";
+                if (!anotify_from(player, who, line.c_str())) {
                     sprintf(buf, SYSBLUE "%s is not connected.", PNAME(who));
                     anotify_nolisten2(player, buf);
                     break;
                 }
-                sprintf(buf, SYSBLUE "You whisper, \"" SYSPURPLE "%s %s" SYSBLUE "\" to %s.", PNAME(player), buf2 + 1, PNAME(who));
-                anotify(player, buf);
+                line = std::string(SYSBLUE "You whisper, \"" SYSPURPLE) + PNAME(player) + " " + said.substr(1) + SYSBLUE "\" to " + PNAME(who) + ".";
+                anotify(player, line.c_str());
                 break;
             } else {
-                sprintf(buf, SYSBLUE "%s whispers, \"" SYSPURPLE "%s" SYSBLUE "\"", PNAME(player), buf2);
-                if (!anotify_from(player, who, buf)) {
+                line = std::string(SYSBLUE) + PNAME(player) + " whispers, \"" SYSPURPLE + said + SYSBLUE "\"";
+                if (!anotify_from(player, who, line.c_str())) {
                     sprintf(buf, SYSBLUE "%s is not connected.", PNAME(who));
                     anotify_nolisten2(player, buf);
                     break;
                 }
-                sprintf(buf, SYSBLUE "You whisper, \"" SYSPURPLE "%s" SYSBLUE "\" to %s.", buf2, PNAME(who));
-                anotify(player, buf);
+                line = std::string(SYSBLUE "You whisper, \"" SYSPURPLE) + said + SYSBLUE "\" to " + PNAME(who) + ".";
+                anotify(player, line.c_str());
                 break;
             }
     }
@@ -93,14 +92,11 @@ void
 do_pose(int descr, dbref player, const char *message)
 {
     dbref loc;
-    char buf[BUFFER_LEN], buf2[BUFFER_LEN];
 
     if ((loc = getloc(player)) == NOTHING)
         return;
-    tct(message, buf2);
     /* notify everybody */
-    sprintf(buf, "^SAY/POSE^%s %s", PNAME(player), buf2);
-    anotify_except(DBFETCH(loc)->contents, NOTHING, buf, player);
+    anotify_except(DBFETCH(loc)->contents, NOTHING, (std::string("^SAY/POSE^") + PNAME(player) + " " + tct(message)).c_str(), player);
 }
 
 void
@@ -166,7 +162,8 @@ do_gripe(dbref player, const char *message)
 void
 do_page(int descr, dbref player, const char *arg1, const char *arg2)
 {
-    char buf[BUFFER_LEN], buf2[BUFFER_LEN];
+    char buf[BUFFER_LEN];
+    std::string said, line;
     dbref target;
 
     if (!payfor(player, tp_lookup_cost)) {
@@ -194,21 +191,22 @@ do_page(int descr, dbref player, const char *arg1, const char *arg2)
     }
     if (Meeper(OWNER(player))) {
         do_parse_mesg(descr, player, player, arg2, "(page)", buf, MPI_ISPRIVATE);
-        tct(buf, buf2);
+        said = tct(buf);
     } else {
-        tct(arg2, buf2);
+        said = tct(arg2);
     }
 
-    if (!*buf2) {
-        sprintf(buf, CSUCC "You sense that %s is looking for you in %s.", PNAME(player), NAME(DBFETCH(player)->location));
+    if (said.empty()) {
+        line = std::string(CSUCC "You sense that ") + PNAME(player) + " is looking for you in " + NAME(DBFETCH(player)->location) + ".";
     } else {
-        if (buf2[0] == ':' || buf2[0] == ';') {
-            sprintf(buf, SYSGREEN "%s pages \"" SYSYELLOW "%s %s" SYSGREEN "\"", PNAME(player), PNAME(player), buf2);
+        /* the pose form keeps its ':', as it always has */
+        if (said[0] == ':' || said[0] == ';') {
+            line = std::string(SYSGREEN) + PNAME(player) + " pages \"" SYSYELLOW + PNAME(player) + " " + said + SYSGREEN "\"";
         } else {
-            sprintf(buf, SYSGREEN "%s pages \"" SYSYELLOW "%s" SYSGREEN "\"", PNAME(player), buf2);
+            line = std::string(SYSGREEN) + PNAME(player) + " pages \"" SYSYELLOW + said + SYSGREEN "\"";
         }
     }
-    if (anotify_from(player, target, buf))
+    if (anotify_from(player, target, line.c_str()))
         anotify_nolisten2(player, CSUCC "Your message has been sent.");
     else {
         sprintf(buf, CSUCC "%s is not connected.", PNAME(target));
@@ -219,14 +217,16 @@ do_page(int descr, dbref player, const char *arg1, const char *arg2)
 int
 notify_listeners(int descr, dbref who, dbref xprog, dbref obj, dbref room, const char *msg, int isprivate)
 {
-    char buf[BUFFER_LEN], buf2[BUFFER_LEN], buf3[BUFFER_LEN], *noamsg;
+    char buf[BUFFER_LEN];
+    const char *noamsg;
     dbref ref;
 
     if (obj == NOTHING)
         return 0;
 
-    strcpy(buf2, msg);
-    noamsg = tct(buf2, buf3);
+    std::string noa = tct(msg);
+
+    noamsg = noa.c_str();
 
     if (tp_listeners && (tp_listeners_obj || Typeof(obj) == TYPE_ROOM)) {
         listenqueue(descr, who, room, obj, obj, xprog, "_listen", msg, tp_listen_mlev, 1, 0);
@@ -276,7 +276,11 @@ notify_listeners(int descr, dbref who, dbref xprog, dbref obj, dbref room, const
                 }
                 if (!prefix || !*prefix)
                     prefix = "Outside>";
-                sprintf(buf, "%s %.*s", prefix, (int) (BUFFER_LEN - 2 - strlen(prefix)), msg);
+                /* the room left after prefix, which can be none: a negative
+                 * precision printed all of msg */
+                size_t plen = strlen(prefix);
+
+                snprintf(buf, sizeof(buf), "%s %.*s", prefix, (int) (plen < BUFFER_LEN - 2 ? BUFFER_LEN - 2 - plen : 0), msg);
                 ref = DBFETCH(obj)->contents;
                 while (ref != NOTHING) {
 #ifdef IGNORE_SUPPORT
@@ -377,7 +381,11 @@ ansi_notify_listeners(descriptor_data *d, dbref who, dbref xprog, dbref obj, dbr
                 }
                 if (!prefix || !*prefix)
                     prefix = "Outside>";
-                sprintf(buf, "%s %.*s", prefix, (int) (BUFFER_LEN - 2 - strlen(prefix)), msg);
+                /* the room left after prefix, which can be none: a negative
+                 * precision printed all of msg */
+                size_t plen = strlen(prefix);
+
+                snprintf(buf, sizeof(buf), "%s %.*s", prefix, (int) (plen < BUFFER_LEN - 2 ? BUFFER_LEN - 2 - plen : 0), msg);
                 ref = DBFETCH(obj)->contents;
                 while (ref != NOTHING) {
 #ifdef IGNORE_SUPPORT
@@ -471,7 +479,11 @@ notify_html_listeners(int descr, dbref who, dbref xprog, dbref obj, dbref room, 
                 }
                 if (!prefix || !*prefix)
                     prefix = "Outside>";
-                sprintf(buf, "%s %.*s", prefix, (int) (BUFFER_LEN - 2 - strlen(prefix)), msg);
+                /* the room left after prefix, which can be none: a negative
+                 * precision printed all of msg */
+                size_t plen = strlen(prefix);
+
+                snprintf(buf, sizeof(buf), "%s %.*s", prefix, (int) (plen < BUFFER_LEN - 2 ? BUFFER_LEN - 2 - plen : 0), msg);
                 ref = DBFETCH(obj)->contents;
                 while (ref != NOTHING) {
 #ifdef IGNORE_SUPPORT

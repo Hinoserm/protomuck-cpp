@@ -25,7 +25,7 @@
  */
 
 #ifdef USE_SSL
-# include <openssl/md5.h>
+# include <openssl/evp.h>
 #else
 
 struct xMD5Context {
@@ -265,10 +265,7 @@ MD5hash(void *dest, const void *orig, int len)
         xMD5Update(&context, (const byte *) orig, len);
     xMD5Final((byte *) dest, &context);
 #else
-    MD5_CTX ctx;
-    MD5_Init(&ctx);
-    MD5_Update(&ctx, orig, len);
-    MD5_Final((unsigned char *)dest, &ctx);
+    EVP_Digest(orig, len, (unsigned char *) dest, NULL, EVP_md5(), NULL);
 #endif /* USE_SSL */
 }
 

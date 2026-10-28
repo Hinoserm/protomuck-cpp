@@ -499,7 +499,14 @@ new_mvar(const char *varname, char *buf)
         return 1;
 
     strcpy(varv[varc].name, varname);
+    /* buf is the caller's own buffer, often on its stack: MPI reads and
+     * writes the variable through it. Every caller puts varc back
+     * before it returns, so the entry never outlives the buffer; the
+     * compiler cannot see that across the calls. */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-pointer"
     varv[varc++].buf = buf;
+#pragma GCC diagnostic pop
 
     return 0;
 }
@@ -781,12 +788,31 @@ cr2slash(char *buf, const char *in)
             *(ptr++) = *(ptr2++);
         }
     } while (*(ptr - 1) && (ptr - buf < BUFFER_LEN - 3));
+    *ptr = '\0';                /* stopped by the limit: nothing ended it there */
     buf[BUFFER_LEN - 1] = '\0';
 
     return buf;
 }
 
 static int mesg_rec_cnt = 0;
+
+/* "<how> <indent>{name(" opening an MPI debug line; how and name are cut
+ * at max, which one of the two lines did with %.512s */
+static std::string
+mpi_debug_head(const char *how, size_t max, const char *name)
+{
+    int width = mesg_rec_cnt * 2 - 4;
+    std::string s;
+
+    how = how ? how : "(null)";
+    s.assign(how, strnlen(how, max));
+    s += ' ';
+    s.append(width < 0 ? -width : width, ' ');
+    s += MFUN_LEADCHAR;
+    s.append(name, strnlen(name, max));
+    s += MFUN_ARGSTART;
+    return s;
+}
 static int mesg_instr_cnt = 0;
 
 /******** HOOK ********/
@@ -797,6 +823,7 @@ mesg_parse(int descr, dbref player, dbref what, dbref perms, const char *inbuf, 
     char buf[BUFFER_LEN];
     char buf2[BUFFER_LEN];
     char dbuf[BUFFER_LEN];
+    std::string dline;
     char ebuf[BUFFER_LEN];
     char cmdbuf[MAX_MFUN_NAME_LEN + 1];
     char argv[9][BUFFER_LEN];
@@ -881,7 +908,7 @@ mesg_parse(int descr, dbref player, dbref what, dbref perms, const char *inbuf, 
                         if (++mesg_instr_cnt > tp_mpi_max_commands) {
                             char *zptr = get_mvar("how");
 
-                            sprintf(dbuf, "%s %c%s%c: Instruction limit exceeded.", zptr, MFUN_LEADCHAR, (varflag ? cmdbuf : mfun_list[s].name), MFUN_ARGEND);
+                            snprintf(dbuf, sizeof(dbuf), "%s %c%s%c: Instruction limit exceeded.", zptr, MFUN_LEADCHAR, (varflag ? cmdbuf : mfun_list[s].name), MFUN_ARGEND);
                             smnotify(descr, player, dbuf);
                             return NULL;
                         }
@@ -897,7 +924,7 @@ mesg_parse(int descr, dbref player, dbref what, dbref perms, const char *inbuf, 
                             if (argc == -1) {
                                 char *zptr = get_mvar("how");
 
-                                sprintf(ebuf, "%s %c%s%c: End brace not found.", zptr, MFUN_LEADCHAR, cmdbuf, MFUN_ARGEND);
+                                snprintf(ebuf, sizeof(ebuf), "%s %c%s%c: End brace not found.", zptr, MFUN_LEADCHAR, cmdbuf, MFUN_ARGEND);
                                 smnotify(descr, player, ebuf);
                                 return NULL;
                             }
@@ -909,7 +936,7 @@ mesg_parse(int descr, dbref player, dbref what, dbref perms, const char *inbuf, 
                             zptr = get_mvar(cmdbuf + 1);
                             if (!zptr) {
                                 zptr = get_mvar("how");
-                                sprintf(ebuf, "%s %c%s%c: Unrecognized variable.", zptr, MFUN_LEADCHAR, cmdbuf, MFUN_ARGEND);
+                                snprintf(ebuf, sizeof(ebuf), "%s %c%s%c: Unrecognized variable.", zptr, MFUN_LEADCHAR, cmdbuf, MFUN_ARGEND);
                                 smnotify(descr, player, ebuf);
 
                                 return NULL;
@@ -919,19 +946,21 @@ mesg_parse(int descr, dbref player, dbref what, dbref perms, const char *inbuf, 
                         if (mesgtyp & MPI_ISDEBUG) {
                             char *zptr = get_mvar("how");
 
-                            sprintf(dbuf, "%s %*s%c%s%c", zptr, (mesg_rec_cnt * 2 - 4), "", MFUN_LEADCHAR, (varflag ? cmdbuf : mfun_list[s].name), MFUN_ARGSTART);
+                            dline = mpi_debug_head(zptr, SIZE_MAX, (varflag ? cmdbuf : mfun_list[s].name));
+
                             for (i = (varflag ? 1 : 0); i < argc; i++) {
                                 if (i)
-                                    sprintf(dbuf, "%.512s%c ", dbuf, MFUN_ARGSEP);
+                                    dline = dline.substr(0, 512) + MFUN_ARGSEP + " ";
 
                                 cr2slash(ebuf, argv[i]);
+                                dline = dline.substr(0, 512) + "\"";
                                 if (strlen(ebuf) > 512)
-                                    sprintf(dbuf, "%.512s\"%.512s...\"", dbuf, ebuf);
+                                    dline += std::string(ebuf, 512) + "...\"";
                                 else
-                                    sprintf(dbuf, "%.512s\"%s\"", dbuf, ebuf);
+                                    dline += std::string(ebuf) + "\"";
                             }
-                            sprintf(dbuf, "%.512s%c", dbuf, MFUN_ARGEND);
-                            smnotify(descr, player, dbuf);
+                            dline = dline.substr(0, 512) + MFUN_ARGEND;
+                            smnotify(descr, player, dline.c_str());
                         }
                         if (mfun_list[s].stripp)
                             for (i = (varflag ? 1 : 0); i < argc; i++)
@@ -943,7 +972,7 @@ mesg_parse(int descr, dbref player, dbref what, dbref perms, const char *inbuf, 
                                 if (!ptr) {
                                     char *zptr = get_mvar("how");
 
-                                    sprintf(dbuf, "%s %c%s%c (arg %d)", zptr, MFUN_LEADCHAR, (varflag ? cmdbuf : mfun_list[s].name), MFUN_ARGEND, i + 1);
+                                    snprintf(dbuf, sizeof(dbuf), "%s %c%s%c (arg %d)", zptr, MFUN_LEADCHAR, (varflag ? cmdbuf : mfun_list[s].name), MFUN_ARGEND, i + 1);
                                     smnotify(descr, player, dbuf);
                                     return NULL;
                                 }
@@ -952,31 +981,32 @@ mesg_parse(int descr, dbref player, dbref what, dbref perms, const char *inbuf, 
                         if (mesgtyp & MPI_ISDEBUG) {
                             char *zptr = get_mvar("how");
 
-                            sprintf(dbuf, "%.512s %*s%c%.512s%c", zptr, (mesg_rec_cnt * 2 - 4), "", MFUN_LEADCHAR, (varflag ? cmdbuf : mfun_list[s].name), MFUN_ARGSTART);
+                            dline = mpi_debug_head(zptr, 512, (varflag ? cmdbuf : mfun_list[s].name));
 
                             for (i = (varflag ? 1 : 0); i < argc; i++) {
                                 if (i)
-                                    sprintf(dbuf, "%.512s%c ", dbuf, MFUN_ARGSEP);
+                                    dline = dline.substr(0, 512) + MFUN_ARGSEP + " ";
 
                                 cr2slash(ebuf, argv[i]);
+                                dline = dline.substr(0, 512) + "\"";
                                 if (strlen(ebuf) > 128)
-                                    sprintf(dbuf, "%.512s\"%.128s...\"", dbuf, ebuf);
+                                    dline += std::string(ebuf, 128) + "...\"";
                                 else
-                                    sprintf(dbuf, "%.512s\"%s\"", dbuf, ebuf);
+                                    dline += std::string(ebuf) + "\"";
                             }
-                            sprintf(dbuf, "%s%c", dbuf, MFUN_ARGEND);
+                            dline += MFUN_ARGEND;
                         }
                         if (argc < mfun_list[s].minargs) {
                             char *zptr = get_mvar("how");
 
-                            sprintf(ebuf, "%s %c%s%c: Too few arguments", zptr, MFUN_LEADCHAR, (varflag ? cmdbuf : mfun_list[s].name), MFUN_ARGEND);
+                            snprintf(ebuf, sizeof(ebuf), "%s %c%s%c: Too few arguments", zptr, MFUN_LEADCHAR, (varflag ? cmdbuf : mfun_list[s].name), MFUN_ARGEND);
                             smnotify(descr, player, ebuf);
 
                             return NULL;
                         } else if (mfun_list[s].maxargs > 0 && argc > mfun_list[s].maxargs) {
                             char *zptr = get_mvar("how");
 
-                            sprintf(ebuf, "%s %c%s%c: Too many arguments", zptr, MFUN_LEADCHAR, (varflag ? cmdbuf : mfun_list[s].name), MFUN_ARGEND);
+                            snprintf(ebuf, sizeof(ebuf), "%s %c%s%c: Too many arguments", zptr, MFUN_LEADCHAR, (varflag ? cmdbuf : mfun_list[s].name), MFUN_ARGEND);
                             smnotify(descr, player, ebuf);
 
                             return NULL;
@@ -992,7 +1022,7 @@ mesg_parse(int descr, dbref player, dbref what, dbref perms, const char *inbuf, 
                                 if (!dptr) {
                                     char *zptr = get_mvar("how");
 
-                                    sprintf(ebuf, "%s %c%s%c (returned string)", zptr, MFUN_LEADCHAR, (varflag ? cmdbuf : mfun_list[s].name), MFUN_ARGEND);
+                                    snprintf(ebuf, sizeof(ebuf), "%s %c%s%c (returned string)", zptr, MFUN_LEADCHAR, (varflag ? cmdbuf : mfun_list[s].name), MFUN_ARGEND);
                                     smnotify(descr, player, ebuf);
 
                                     return NULL;
@@ -1001,8 +1031,9 @@ mesg_parse(int descr, dbref player, dbref what, dbref perms, const char *inbuf, 
                             }
                         }
                         if (mesgtyp & MPI_ISDEBUG) {
-                            sprintf(dbuf, "%.512s = \"%.512s\"", dbuf, cr2slash(ebuf, ptr));
-                            smnotify(descr, player, dbuf);
+                            cr2slash(ebuf, ptr);
+                            dline = dline.substr(0, 512) + " = \"" + std::string(ebuf, strnlen(ebuf, 512)) + "\"";
+                            smnotify(descr, player, dline.c_str());
                         }
                     } else if (msg_is_macro(player, what, perms, cmdbuf)) {
                         if (wbuf[p] == MFUN_ARGEND) {
@@ -1014,7 +1045,7 @@ mesg_parse(int descr, dbref player, dbref what, dbref perms, const char *inbuf, 
                             if (argc == -1) {
                                 char *zptr = get_mvar("how");
 
-                                sprintf(ebuf, "%s %c%s%c: End brace not found.", zptr, MFUN_LEADCHAR, cmdbuf, MFUN_ARGEND);
+                                snprintf(ebuf, sizeof(ebuf), "%s %c%s%c: End brace not found.", zptr, MFUN_LEADCHAR, cmdbuf, MFUN_ARGEND);
                                 smnotify(descr, player, ebuf);
 
                                 return NULL;
@@ -1027,7 +1058,7 @@ mesg_parse(int descr, dbref player, dbref what, dbref perms, const char *inbuf, 
                         /* unknown function */
                         char *zptr = get_mvar("how");
 
-                        sprintf(ebuf, "%s %c%s%c: Unrecognized function.", zptr, MFUN_LEADCHAR, cmdbuf, MFUN_ARGEND);
+                        snprintf(ebuf, sizeof(ebuf), "%s %c%s%c: Unrecognized function.", zptr, MFUN_LEADCHAR, cmdbuf, MFUN_ARGEND);
                         smnotify(descr, player, ebuf);
 
                         return NULL;
@@ -1061,7 +1092,7 @@ mesg_parse(int descr, dbref player, dbref what, dbref perms, const char *inbuf, 
     if ((mesgtyp & MPI_ISDEBUG) && showtextflag) {
         char *zptr = get_mvar("how");
 
-        sprintf(dbuf, "%s %*s\"%s\"", zptr, (mesg_rec_cnt * 2 - 4), "", cr2slash(buf2, outbuf));
+        snprintf(dbuf, sizeof(dbuf), "%s %*s\"%s\"", zptr, (mesg_rec_cnt * 2 - 4), "", cr2slash(buf2, outbuf));
         smnotify(descr, player, dbuf);
     }
     mesg_rec_cnt--;
@@ -1085,20 +1116,27 @@ do_parse_mesg_2(int descr, dbref player, dbref what, dbref perms, const char *in
 
     if (tp_do_mpi_parsing) {
         *outbuf = '\0';         // memset(outbuf, 0, sizeof(outbuf));
+        /* These variables point at this frame's buffers: every way out
+         * puts varc back, or a full table left "how" pointing at a
+         * returned stack frame. */
         if ((mesgtyp & MPI_NOHOW) == 0) {
             if (new_mvar("how", howvar))
                 return outbuf;
-            strcpy(howvar, abuf);
+            strcpyn(howvar, sizeof(howvar), abuf);
         }
 
-        if (new_mvar("cmd", cmdvar))
+        if (new_mvar("cmd", cmdvar)) {
+            varc = mvarcnt;
             return outbuf;
+        }
 
         strcpy(cmdvar, match_cmdname);
         strcpy(tmpcmd, match_cmdname);
 
-        if (new_mvar("arg", argvar))
+        if (new_mvar("arg", argvar)) {
+            varc = mvarcnt;
             return outbuf;
+        }
 
         strcpy(argvar, match_args);
         strcpy(tmparg, match_args);

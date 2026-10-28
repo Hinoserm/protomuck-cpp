@@ -1455,10 +1455,9 @@ mfn_muf(MFUNARGS)
     if (++mpi_muf_call_levels > 18)
         ABORT_MPI("MUF", "Too many call levels.");
 
-    strcpy(match_args, argv[1]);
+    strcpyn(match_args, BUFFER_LEN, argv[1]);
     ptr = get_mvar("how");
-    strcpy(match_cmdname, ptr);
-    strcat(match_cmdname, "(MPI)");
+    strcpyn(match_cmdname, BUFFER_LEN, (std::string(ptr) + "(MPI)").c_str());
     tmpfr = interp(descr, player, DBFETCH(player)->location, obj, perms, PREEMPT, STD_HARDUID, 0);
     if (tmpfr) {
         rv = interp_loop(player, obj, tmpfr, 1);

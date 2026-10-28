@@ -1204,7 +1204,7 @@ queue_html(struct descriptor_data *d, char *msg)
 }
 
 int
-queue_unhtml(struct descriptor_data *d, char *msg)
+queue_unhtml(struct descriptor_data *d, const char *msg)
 {
     if ((d->connected && OkObj(d->player)) ? (Html(d->player)) : (d->type == CT_PUEBLO)) {
 /*		if(strlen(msg) >= (BUFFER_LEN/6)) { */
@@ -5155,7 +5155,8 @@ dump_users(struct descriptor_data *d, char *user)
     short idleplyrs = 0;
     static short player_max = 0;
     const char *p;
-    char buf[BUFFER_LEN], dobuf[BUFFER_LEN];
+    char buf[BUFFER_LEN];
+    std::string doing, head;
     char plyrbuf[BUFFER_LEN], typbuf[BUFFER_LEN];
     char tbuf[BUFFER_LEN], tbuf2[BUFFER_LEN];
 
@@ -5195,31 +5196,33 @@ dump_users(struct descriptor_data *d, char *user)
 
     if (!wizwho && tp_who_doing) {
         if ((p = get_property_class((dbref) 0, "_poll"))) {
-            sprintf(dobuf, "%-43s", p);
+            doing = p;
         } else {
-            sprintf(dobuf, "%-43s", "Doing...");
+            doing = "Doing...";
         }
+        /* "%-43s", then shown with "%-.43s": exactly 43 columns */
+        doing.resize(43, ' ');
     }
     sprintf(plyrbuf, "%-*s", (int) PLAYER_NAME_LIMIT + 6, "Player Name");
     switch (wizwho) {
         case 0:{
             if (tp_who_doing) {
-                sprintf(buf, "%s%s%sOn For %sIdle  %s%-.43s\r\n", SYSGREEN, plyrbuf, SYSPURPLE, SYSYELLOW, SYSCYAN, dobuf);
+                head = SYSGREEN + std::string(plyrbuf) + SYSPURPLE "On For " SYSYELLOW "Idle  " SYSCYAN + doing + "\r\n";
             } else {
-                sprintf(buf, "%s%s%sOn For %sIdle\r\n", SYSGREEN, plyrbuf, SYSPURPLE, SYSYELLOW);
+                head = SYSGREEN + std::string(plyrbuf) + SYSPURPLE "On For " SYSYELLOW "Idle\r\n";
             }
             break;
         }
         case 1:{
-            sprintf(buf, "%sDS  %s%s%sPort    %sOn For %sIdle %sHost\r\n", SYSRED, SYSGREEN, plyrbuf, SYSCYAN, SYSPURPLE, SYSYELLOW, SYSBLUE);
+            head = SYSRED "DS  " SYSGREEN + std::string(plyrbuf) + SYSCYAN "Port    " SYSPURPLE "On For " SYSYELLOW "Idle " SYSBLUE "Host\r\n";
             break;
         }
         case 2:{
-            sprintf(buf, "%sDS  %s%s%sOutput[k]  %sInput[k]  %sCommands %sType\r\n", SYSRED, SYSGREEN, plyrbuf, SYSWHITE, SYSYELLOW, SYSCYAN, SYSBLUE);
+            head = SYSRED "DS  " SYSGREEN + std::string(plyrbuf) + SYSWHITE "Output[k]  " SYSYELLOW "Input[k]  " SYSCYAN "Commands " SYSBLUE "Type\r\n";
             break;
         }
     }
-    queue_unhtml(d, buf);
+    queue_unhtml(d, head.c_str());
     for (dlist = descriptor_list; dlist; dlist = dlist->next) {
         strcpy(plyrbuf, "");
         strcpy(typbuf, "");
@@ -7126,7 +7129,7 @@ mssp_send(struct descriptor_data *d)
                     break;
                 }
                 case PROP_INTTYP:
-                    snprintf(buf, sizeof(buf), "%d", (int) PropDataVal(prptr));
+                    snprintf(buf, sizeof(buf), "%lld", (long long) PropDataVal(prptr));
                     mssp_val = buf;
                     break;
                 case PROP_FLTTYP:

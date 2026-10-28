@@ -1827,9 +1827,10 @@ db_read(FILE * f)
                                     autostart_progs();
                                     return db_top;
                                 } else {
-                                    delete[]special;
+                                    /* compared before it is freed, not after */
                                     db_load_format = !strcmp(special, "***Foxen7 Deltas Dump Extention***")
                                         ? 8 : 7;
+                                    delete[]special;
                                     doing_deltas = 1;
                                 }
 #ifdef ARCHAIC_DATABASES

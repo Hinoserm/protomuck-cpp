@@ -220,7 +220,8 @@ do_open(int descr, dbref player, const char *direction, const char *linkto)
 int
 _link_exit(int descr, dbref player, dbref exit, char *dest_name, dbref *dest_list, bool dryrun)
 {
-    char buf[BUFFER_LEN], qbuf[BUFFER_LEN];
+    char buf[BUFFER_LEN];
+    std::string word;
     bool error = 0;
     char *p, *q;
     int prdest = 0;
@@ -234,8 +235,8 @@ _link_exit(int descr, dbref player, dbref exit, char *dest_name, dbref *dest_lis
 
         while (*dest_name && (*dest_name != EXIT_DELIMITER))
             dest_name++;
-        q = (char *) strncpy(qbuf, p, BUFFER_LEN); /* copy word */
-        q[(dest_name - p)] = '\0'; /* terminate it */
+        word.assign(p, dest_name - p); /* copy word */
+        q = word.data();
 
         if (*dest_name)
             for (dest_name++; *dest_name && isspace(*dest_name); dest_name++) ;

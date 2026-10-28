@@ -1695,8 +1695,6 @@ prim_unparseobj(PRIM_PROTOTYPE)
 void
 prim_smatch(PRIM_PROTOTYPE)
 {
-    char xbuf[BUFFER_LEN];
-    char buf[BUFFER_LEN];
     int result;
 
     if (oper[0].type != PROG_STRING || oper[1].type != PROG_STRING)

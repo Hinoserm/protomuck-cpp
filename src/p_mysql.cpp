@@ -228,7 +228,7 @@ mysql_thread_func(int tid)
                         unsigned long i = 0;
 
                         all_rows = mysql_num_rows(res);
-                        num_rows = all_rows > tp_mysql_result_limit ? tp_mysql_result_limit : all_rows;
+                        num_rows = all_rows > (unsigned long) tp_mysql_result_limit ? tp_mysql_result_limit : all_rows;
                         num_fields = mysql_num_fields(res);
                         fields = mysql_fetch_fields(res);
                         counter = 0;
@@ -564,12 +564,12 @@ prim_sqlquery(PRIM_PROTOTYPE)
         fields = mysql_fetch_fields(res);
         counter = 0;
         fieldsList = new_array_packed(num_fields, 0);
-        for (i = 0; i < num_fields; ++i)
+        for (i = 0; i < (unsigned long) num_fields; ++i)
             array_set_intkey_strval(&fieldsList, i, fields[i].name);
         while ((row = mysql_fetch_row(res))) { /* fetch all rows, push limit */
             nw = new_array_dictionary();
             if (counter++ < num_rows) {
-                for (i = 0; i < num_fields; ++i) {
+                for (i = 0; i < (unsigned long) num_fields; ++i) {
                     /* Alynna: To make this safe, we must normalize the string to
                        16383 characters and a terminating \0 */
                     if (row[i]) {

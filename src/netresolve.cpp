@@ -261,11 +261,10 @@ void
 kill_resolver(void)
 {
     int i;
-    pid_t p;
 
     resolverpid = 0;
     write(resolver_sock[1], "QUIT\n", 5);
-    p = wait(&i);
+    (void) wait(&i);
 }
 
 void

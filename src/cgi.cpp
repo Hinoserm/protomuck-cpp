@@ -66,7 +66,7 @@ getvalue(char *string)
     cgi++;
 
     result = strdup(cgi);
-    delete[]buf;
+    free(buf);
     return (result);
 }
 
@@ -93,16 +93,16 @@ getcgivar(char *cgistring, char *param)
 
         if (!strcasecmp(test, param)) {
             result = getvalue(nvpair);
-            delete[]test;
+            free(test);
             break;
         }
-        delete[]test;
+        free(test);
         nvpair = strtok(NULL, "&");
     }
 
     unescape_url(result);
     strcpy(result2, result);
-    delete[]result;
+    free(result);
     return (result2);
 }
 

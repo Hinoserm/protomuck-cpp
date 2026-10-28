@@ -214,7 +214,6 @@ parse_boolexp_F(int descr, const char **parsebuf, dbref player, int dbloadp)
     char *p;
     struct match_data md;
     char buf[BUFFER_LEN];
-    char msg[BUFFER_LEN];
 
     skip_whitespace(parsebuf);
     switch (**parsebuf) {
@@ -273,13 +272,11 @@ parse_boolexp_F(int descr, const char **parsebuf, dbref player, int dbloadp)
                 b->thing = match_result(&md);
 
                 if (b->thing == NOTHING) {
-                    sprintf(msg, "I don't see %s here.", buf);
-                    notify(player, msg);
+                    notify(player, (std::string("I don't see ") + buf + " here.").c_str());
                     free_boolnode(b);
                     return TRUE_BOOLEXP;
                 } else if (b->thing == AMBIGUOUS) {
-                    sprintf(msg, "I don't know which %s you mean!", buf);
-                    notify(player, msg);
+                    notify(player, (std::string("I don't know which ") + buf + " you mean!").c_str());
                     free_boolnode(b);
                     return TRUE_BOOLEXP;
                 } else {

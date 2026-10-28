@@ -250,7 +250,7 @@ prim_getpropstr(PRIM_PROTOTYPE)
                     temp = PropDataUNCStr(ptr);
                     break;
                 case PROP_INTTYP:
-                    sprintf(buf, "%d", PropDataVal(ptr));
+                    sprintf(buf, "%lld", (long long) PropDataVal(ptr));
                     temp = buf;
                     break;
                 case PROP_FLTTYP:
@@ -1461,8 +1461,7 @@ prim_parsepropex(PRIM_PROTOTYPE)
 
                               copy_props(dbref source, dbref destination, const char *sourcedir, const char *destdir, int recurse) {
                                 char propname[BUFFER_LEN];
-                                char buf[BUFFER_LEN];
-                                char buf2[BUFFER_LEN];
+                                std::string buf, buf2;
                                 PropPtr propadr, pptr, currprop;
                                 PData pdat;
 
@@ -1476,11 +1475,11 @@ prim_parsepropex(PRIM_PROTOTYPE)
                                 propadr = first_prop(source, (char *) sourcedir, &pptr, propname);
                                 while (propadr) {
                                     /* generate name for current property */
-                                    snprintf(buf, sizeof(buf), "%s%c%s", sourcedir, PROPDIR_DELIMITER, propname);
-                                    snprintf(buf2, sizeof(buf2), "%s%c%s", destdir, PROPDIR_DELIMITER, propname);
+                                    buf = std::string(sourcedir) + PROPDIR_DELIMITER + propname;
+                                    buf2 = std::string(destdir) + PROPDIR_DELIMITER + propname;
 
                                     /* read property from source object */
-                                    currprop = get_property(source, buf);
+                                    currprop = get_property(source, buf.c_str());
 #ifdef DISKBASE
                                     propfetch(source, currprop);
 #endif
@@ -1496,12 +1495,12 @@ prim_parsepropex(PRIM_PROTOTYPE)
                                                 pdat.data = currprop->data;
                                                 break;
                                         }
-                                        set_property_nofetch(destination, buf2, &pdat, 1);
+                                        set_property_nofetch(destination, buf2.c_str(), &pdat, 1);
                                         propcount++;
 
                                         /* This has to go here, or it'll miss propdirs with values */
                                         if (recurse)
-                                            propcount += copy_props(source, destination, buf, buf2, recurse);
+                                            propcount += copy_props(source, destination, buf.c_str(), buf2.c_str(), recurse);
                                     }
 
                                     /* find next property in current dir */

@@ -13,7 +13,7 @@ int2str(char *buf, int val, int len, char pref)
     while (((++lp) < (len - 1)) && (buf[lp] == '0'))
         buf[lp] = pref;
     if (!pref)
-        (void) strcpy(buf, buf + lp);
+        memmove(buf, buf + lp, strlen(buf + lp) + 1);
 }
 
 
