@@ -439,7 +439,7 @@ extern char *pronoun_substitute(int descr, dbref player, const char *str);
 extern char *intostr(char *buf, MUFINT i);
 extern std::string html_escape(const char *str);
 extern std::string parse_ansi(dbref player, const char *from, const char *defcolor);
-extern std::string parse_ansi(descriptor_data *d, dbref player, const char *from, const char *defcolor);
+extern std::string parse_ansi(descriptor_data *d, dbref player, const char *from, const char *defcolor, size_t max = SIZE_MAX);
 extern std::string unparse_ansi(const char *from);
 extern char *tct(const char *in, char out[BUFFER_LEN]);
 extern std::string tct(const char *in);

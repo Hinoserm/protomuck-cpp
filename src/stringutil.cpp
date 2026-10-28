@@ -1503,16 +1503,18 @@ parse_ansi(dbref player, const char *from, const char *defcolor)
  * output. I.e, ^RED^ -> \[[1;30m
  * A std::string: a tag grows to its escape code, and this wrote into
  * whatever buffer the caller had, BUFFER_LEN or not.
+ * max stops it early, for a caller that keeps only a prefix: an unknown
+ * tag puts in all of defcolor, which can be the caller's own string.
  */
 std::string
-parse_ansi(descriptor_data *d, dbref player, const char *from, const char *defcolor)
+parse_ansi(descriptor_data *d, dbref player, const char *from, const char *defcolor, size_t max)
 {
     std::string out, color;
     char color_buffer[64];
     const char *ansi;
 
     out.reserve(strlen(from) + 16);
-    while (*from) {
+    while (*from && out.size() < max) {
         if (*from == '^') {
             from++;
             color.clear();
@@ -1535,6 +1537,8 @@ parse_ansi(descriptor_data *d, dbref player, const char *from, const char *defco
         } else
             out += *(from++);
     }
+    if (out.size() > max)
+        out.resize(max);
     return out;
 }
 

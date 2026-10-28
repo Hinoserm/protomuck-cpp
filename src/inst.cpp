@@ -13,10 +13,21 @@
 
 #undef DEBUGARRAYS
 
+static char *insttotext_in(struct frame *fr, int lev, struct inst *theinst, char *buffer, int buflen, size_t bufsize, int strmax, dbref program);
+
 /* converts an instruction into a printable string, stores the string in
    an internal buffer and returns a pointer to it */
 char *
 insttotext(struct frame *fr, int lev, struct inst *theinst, char *buffer, int buflen, int strmax, dbref program)
+{
+    return insttotext_in(fr, lev, theinst, buffer, buflen, buflen, strmax, program);
+}
+
+/* buflen is what is left of the text's budget, and only at the top is it
+ * also the size of buffer: an array's elements are printed into buf2 with
+ * the remaining budget. bufsize is buffer's real size. */
+static char *
+insttotext_in(struct frame *fr, int lev, struct inst *theinst, char *buffer, int buflen, size_t bufsize, int strmax, dbref program)
 {
     char buf2[BUFFER_LEN];
     struct inst temp1;
@@ -91,12 +102,12 @@ insttotext(struct frame *fr, int lev, struct inst *theinst, char *buffer, int bu
                         firstflag = 0;
                         oper2 = array_getitem(theinst->data.array, &temp1);
 
-                        inststr = insttotext(fr, lev, &temp1, buf2, length, strmax, program);
+                        inststr = insttotext_in(fr, lev, &temp1, buf2, length, sizeof(buf2), strmax, program);
                         strcat(buffer, inststr);
                         strcat(buffer, ":");
                         length -= strlen(inststr) + 1;
 
-                        inststr = insttotext(fr, lev, oper2, buf2, length, strmax, program);
+                        inststr = insttotext_in(fr, lev, oper2, buf2, length, sizeof(buf2), strmax, program);
                         strcat(buffer, inststr);
                         length -= strlen(inststr);
 
@@ -231,8 +242,8 @@ insttotext(struct frame *fr, int lev, struct inst *theinst, char *buffer, int bu
             sprintf(buffer, "?(%d)", theinst->type);
             break;
     }
-    /* escaping doubles an ESC: cut to the caller's buflen */
-    strcpyn(buffer, buflen, escape_ansi(buffer).c_str());
+    /* escaping doubles an ESC: this sprintf'd it back with no bound */
+    strcpyn(buffer, bufsize, escape_ansi(buffer).c_str());
     return buffer;
 }
 

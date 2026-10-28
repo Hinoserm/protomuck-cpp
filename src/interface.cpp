@@ -2701,7 +2701,7 @@ void
 wall_logwizards(const char *msg)
 {
     struct descriptor_data *d, *dnext;
-    std::string buf = std::string("LOG> ") + msg;
+    std::string buf = std::string("LOG> ") + (msg ? msg : "(null)");
     size_t pos = 0;
 
     while (pos < buf.size()) {

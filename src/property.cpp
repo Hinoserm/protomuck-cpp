@@ -48,6 +48,9 @@ class PropNameCopy {
             p = big.data();
         }
     }
+    /* p may point into this object's own sbuf: no copies */
+    PropNameCopy(const PropNameCopy &) = delete;
+    PropNameCopy &operator=(const PropNameCopy &) = delete;
     char *data() { return p; }
 };
 

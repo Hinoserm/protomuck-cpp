@@ -1930,7 +1930,10 @@ prim_parse_neon(PRIM_PROTOTYPE)
 
         PushNullStr;
     } else {
-        out = parse_ansi(ref, oper[1].data.string->data.c_str(), defcolor.c_str());
+        /* defcolor is the program's own string, put in for every unknown
+         * tag: a MUF string keeps only BUFFER_LEN of it anyway, so stop
+         * there instead of building gigabytes */
+        out = parse_ansi(NULL, ref, oper[1].data.string->data.c_str(), defcolor.c_str(), BUFFER_LEN + 1);
         PushString(out.c_str());
     }
 }
