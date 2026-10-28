@@ -42,9 +42,10 @@ prim_fmtstring(PRIM_PROTOTYPE)
     int slrj, spad1, spad2, slen1, slen2, temp;
 
     //char sstr[BUFFER_LEN], sfmt[255], hold[256], tbuf[BUFFER_LEN];
-    /* tbuf and buf one byte over: a field, or the whole result, of
-     * exactly BUFFER_LEN has always been allowed, and its '\0' went one
-     * past the end */
+    /* tbuf and buf one byte over: a field of exactly BUFFER_LEN, and the
+     * result while a field is joined on, have always been allowed to
+     * reach BUFFER_LEN, with the '\0' one past the end (a final result
+     * that long is still refused below) */
     char sstr[BUFFER_LEN], sfmt[BUFFER_LEN], hold[BUFFER_LEN], tbuf[BUFFER_LEN + 1];
     char buf[BUFFER_LEN + 1];
     char *ptr, *begptr;
@@ -525,7 +526,10 @@ prim_fmtstring(PRIM_PROTOTYPE)
             }
         } else {
             if ((sstr[scnt] == '\\') && (sstr[scnt + 1] == 't')) {
-                if ((result - (tstop % 8) + 1) >= BUFFER_LEN)
+                /* the padding runs to the next tab stop, up to 8 spaces: the
+                 * first test alone left room for one of them */
+                if ((result - (tstop % 8) + 1) >= BUFFER_LEN
+                    || result + (8 - (tstop % 8)) >= BUFFER_LEN)
                     abort_interp("Resultant string would overflow buffer.");
                 if ((tstop % 8) == 0) {
                     buf[result++] = ' ';
@@ -2868,7 +2872,10 @@ prim_array_fmtstrings(PRIM_PROTOTYPE)
                     }
                 } else {
                     if ((sstr[scnt] == '\\') && (sstr[scnt + 1] == 't')) {
-                        if ((result - (tstop % 8) + 1) >= BUFFER_LEN)
+                        /* the padding runs to the next tab stop, up to 8 spaces: the
+                         * first test alone left room for one of them */
+                        if ((result - (tstop % 8) + 1) >= BUFFER_LEN
+                            || result + (8 - (tstop % 8)) >= BUFFER_LEN)
                             abort_interp("Resultant string would overflow buffer.");
                         if ((tstop % 8) == 0) {
                             buf[result++] = ' ';
