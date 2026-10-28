@@ -260,11 +260,11 @@ debug_inst(struct frame *fr, int lev, struct inst *pc, int pid, struct inst *sta
         strcat(buffer, "..., ");
     count = (sp > 8) ? sp - 8 : 0;
     while (count < sp) {
-        strcat(buffer, insttotext(fr, lev, stack + count, buf2, buflen, 30, program));
+        strcat(buffer, insttotext(fr, lev, stack + count, buf2, sizeof(buf2), 30, program));
         if (++count < sp)
             strcat(buffer, ", ");
     }
     strcat(buffer, ") ");
-    strcat(buffer, insttotext(fr, lev, pc, buf2, buflen, 30, program));
+    strcat(buffer, insttotext(fr, lev, pc, buf2, sizeof(buf2), 30, program));
     return (buffer);
 }
