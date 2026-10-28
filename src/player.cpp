@@ -7,9 +7,6 @@
 #include "tune.h"
 #include "interface.h"
 #include "externs.h"
-#include "Journal.h"
-#include "Modules.h"
-#include "ObjectAccess.h"
 
 static hash_tab player_list[PLAYER_HASH_SIZE];
 
@@ -24,7 +21,7 @@ check_password(dbref player, const char *check_pw)
     if (player == NOTHING)
         return 0;
 
-    password = MUCK::playerPasswordSlot(player);
+    password = DBFETCH(player)->sp.player.password;
 
     /* We now do this smartly based on the DB_NEWPASSES */
     /*  database flag. -Hinoserm                        */
@@ -32,11 +29,11 @@ check_password(dbref player, const char *check_pw)
     if (!password || !*password)
         return 1;
 
-    if (!MUCK::PasswordHash::enabled)
+    if (!db_hash_passwords)
         return !strcmp(check_pw, password);
 
-    if (MUCK::PasswordHash::compare(password, check_pw)) {
-        switch (MUCK::PasswordHash::tagToVal(password)) {
+    if (db_hash_compare(password, check_pw)) {
+        switch (db_hash_tagtoval(password)) {
             case HTYPE_CURRENT:
                 break;          /* Our current best, preserve */
             case HTYPE_NONE:
@@ -63,44 +60,39 @@ set_password(dbref player, const char *password)
     if (player == NOTHING)
         return 0;
 
-    MUCK::journalRecord(player, "$type/password");
-
     if (!password || !*password) {
-        delete[] MUCK::playerPasswordSlot(player);
+        delete[]DBFETCH(player)->sp.player.password;
 
-        if (!MUCK::PasswordHash::enabled) {
-            MUCK::playerPasswordSlot(player) = NULL;
+        if (!db_hash_passwords) {
+            DBFETCH(player)->sp.player.password = NULL;
             return 1;
         }
 
-        res = MUCK::PasswordHash::hash(HTYPE_NONE, hashbuf, NULL, NULL);
+        res = db_hash_password(HTYPE_NONE, hashbuf, NULL, NULL);
 
         if (!res)
             return 0;
-        MUCK::playerPasswordSlot(player) = alloc_string(hashbuf);
-        DBDIRTY(player);
+        DBSTORE(player, sp.player.password, alloc_string(hashbuf));
         return 1;
     }
 
     if (!ok_password(password))
         return 0;
 
-    delete[] MUCK::playerPasswordSlot(player);
+    delete[]DBFETCH(player)->sp.player.password;
 
-    if (MUCK::PasswordHash::enabled) {
+    if (db_hash_passwords) {
         char hashbuf[BUFFER_LEN];
 
-        res = MUCK::PasswordHash::hash(HTYPE_CURRENT, hashbuf, password, NULL);
+        res = db_hash_password(HTYPE_CURRENT, hashbuf, password, NULL);
 
         if (!res)
             return 0;
-        MUCK::playerPasswordSlot(player) = alloc_string(hashbuf);
-        DBDIRTY(player);
+        DBSTORE(player, sp.player.password, alloc_string(hashbuf));
         return 1;
     }
 
-    MUCK::playerPasswordSlot(player) = alloc_string(password);
-    DBDIRTY(player);
+    DBSTORE(player, sp.player.password, alloc_string(password));
     return 1;
 }
 
@@ -274,7 +266,7 @@ connect_player(const char *name, const char *password)
 
     if (*name == NUMBER_TOKEN && number(name + 1) && atoi(name + 1)) {
         player = (dbref) atoi(name + 1);
-        if ((player < 0) || (player >= MUCK::database().top())
+        if ((player < 0) || (player >= db_top)
             || (Typeof(player) != TYPE_PLAYER))
             player = NOTHING;
     } else {
@@ -304,42 +296,60 @@ create_player(dbref creator, const char *name, const char *password)
     clear_alias(0, name);
 
     /* else he doesn't already exist, create him */
-    player = MUCK::database().Create<MUCK::Player>(name, NOTHING)
-        ->object()->ref();
+    player = new_object(creator);
     newp = DBFETCH(player);
+
+    /* initialize everything */
+    NAME(player) = alloc_string(name);
+    FLAGS(player) = TYPE_PLAYER;
 
     if (OkObj(tp_player_prototype)
         && (Typeof(tp_player_prototype) == TYPE_PLAYER)) {
-        MUCK::setFlags(player, MUCK::getFlags(tp_player_prototype));
-        MUCK::setFlags2(player, MUCK::getFlags2(tp_player_prototype));
+        FLAGS(player) = FLAGS(tp_player_prototype);
+        FLAG2(player) = FLAG2(tp_player_prototype);
 
         if (tp_pcreate_copy_props) {
-            copy_prop(tp_player_prototype, player);
+            newp->properties = copy_prop(tp_player_prototype);
+#ifdef DISKBASE
+            newp->propsfpos = 0;
+            newp->propsmode = PROPS_UNLOADED;
+            newp->propstime = 0;
+            newp->nextold = NOTHING;
+            newp->prevold = NOTHING;
+            dirtyprops(player);
+#endif
         }
     }
 
     if (OkObj(tp_player_start)) {
-        MUCK::setLocation(player, tp_player_start);
-        MUCK::database().get(player)->As<MUCK::Player>()->setHome(MUCK::database().get(tp_player_start));
+        DBFETCH(player)->location = tp_player_start;
+        DBFETCH(player)->sp.player.home = tp_player_start;
     } else {
-        MUCK::setLocation(player, GLOBAL_ENVIRONMENT);
-        MUCK::database().get(player)->As<MUCK::Player>()->setHome(MUCK::database().get(GLOBAL_ENVIRONMENT));
+        DBFETCH(player)->location = GLOBAL_ENVIRONMENT;
+        DBFETCH(player)->sp.player.home = GLOBAL_ENVIRONMENT;
     }
 
-    MUCK::setOwner(player, player);
-    MUCK::playerSetPennies(player, tp_start_pennies);
+    OWNER(player) = player;
+    newp->exits = NOTHING;
+    newp->sp.player.pennies = tp_start_pennies;
+    newp->sp.player.password = NULL; /* this has to stay here. -hinoserm */
+    newp->sp.player.curr_prog = NOTHING;
+    newp->sp.player.insert_mode = 0;
+#ifdef IGNORE_SUPPORT
+    newp->sp.player.ignoretime = 0;
+#endif /* IGNORE_SUPPORT */
 
     /* set password */
     set_password(player, password);
 
     /* link him to tp_player_start */
-    MUCK::attachContent(tp_player_start, player);
+    PUSH(player, DBFETCH(tp_player_start)->contents);
     add_player(player);
     DBDIRTY(player);
     DBDIRTY(tp_player_start);
 
-    sprintf(buf, CNOTE "%s is born!", MUCK::getName(player));
-    anotify_except(CONTENTS(tp_player_start), NOTHING, buf, player);
+    sprintf(buf, CNOTE "%s is born!", NAME(player));
+    anotify_except(DBFETCH(tp_player_start)->contents, NOTHING, buf, player);
 
     return player;
 }
@@ -376,7 +386,7 @@ add_player(dbref who)
     hash_data hd;
 
     hd.dbval = who;
-    if (add_hash(MUCK::getName(who), hd, player_list, PLAYER_HASH_SIZE) == NULL)
+    if (add_hash(NAME(who), hd, player_list, PLAYER_HASH_SIZE) == NULL)
         panic("Out of memory");
     else
         return;
@@ -388,7 +398,7 @@ delete_player(dbref who)
 {
     int result;
 
-    result = free_hash(MUCK::getName(who), player_list, PLAYER_HASH_SIZE);
+    result = free_hash(NAME(who), player_list, PLAYER_HASH_SIZE);
 
     /* Nuke the alias managed by this dbref. This will not remove any aliases
      * that were manually set on #0, but they should auto-clean as the lookups
@@ -400,12 +410,12 @@ delete_player(dbref who)
 
         wall_wizards(MARK "WARNING: Playername hashtable is inconsistent.  Rebuilding it.");
         clear_players();
-        for (i = MUCK::database().top(); i-- > 0;) {
+        for (i = db_top; i-- > 0;) {
             if (Typeof(i) == TYPE_PLAYER) {
                 add_player(i);
             }
         }
-        result = free_hash(MUCK::getName(who), player_list, PLAYER_HASH_SIZE);
+        result = free_hash(NAME(who), player_list, PLAYER_HASH_SIZE);
         if (result) {
             wall_wizards(MARK "WARNING: Playername hashtable still inconsistent after rebuild.");
         }

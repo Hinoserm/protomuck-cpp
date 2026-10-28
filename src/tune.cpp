@@ -2,7 +2,6 @@
 #include "params.h"
 #include "defaults.h"
 #include "interface.h"
-#include "ObjectAccess.h"
 #include "tune.h"
 #include "externs.h"
 #include "array.h"
@@ -120,9 +119,6 @@ time_t tp_idletime = IDLETIME;
 time_t tp_cron_interval = CRON_INTERVAL;
 time_t tp_archive_interval = ARCHIVE_INTERVAL;
 time_t tp_shutdown_delay = SHUTDOWN_DELAY;
-/* automatic global snapshot cadence; 0 disables. Checked on the dump
- * path, so the effective granularity is the dump interval. */
-time_t tp_snapshot_interval = 3600;
 
 struct tune_time_entry {
     const char *group;
@@ -151,7 +147,6 @@ struct tune_time_entry tune_time_list[] = {
     {"MUF", "cron_interval", &tp_cron_interval, LARCH, LMUF},
     {"Database", "archive_interval", &tp_archive_interval, LARCH, LMUF},
     {"System", "shutdown_delay", &tp_shutdown_delay, LARCH, LMUF},
-    {"Database", "snapshot_interval", &tp_snapshot_interval, WBOY, LMUF},
     {NULL, NULL, NULL, 0, 0}
 };
 
@@ -187,14 +182,6 @@ int tp_listen_mlev = LISTEN_MLEV;
 int tp_playermax_limit = PLAYERMAX_LIMIT;
 int tp_process_timer_limit = 4;
 int tp_dump_copies = 10;
-int tp_tombstone_retention = 90;   /* days; -1 forever, 0 none */
-/* The snapshot retention ladder (docs/DATABASE.txt 7.2). Each tier
- * keeps at most one snapshot per bucket of its grain, for that many
- * buckets; locked snapshots never age. 0 disables a tier. */
-int tp_keep_hourly_snapshots = 72;
-int tp_keep_daily_snapshots = 90;
-int tp_keep_weekly_snapshots = 52;
-int tp_keep_monthly_snapshots = 24;
 int tp_min_progbreak_lev = 0;
 int tp_max_wiz_preempt_count = 0;
 int tp_wizhidden_access_bit = 3;
@@ -267,11 +254,6 @@ struct tune_val_entry tune_val_list[] = {
     {"Maxplayers", "playermax_limit", &tp_playermax_limit, WBOY, LMUF},
     {"MUF", "process_timer_limit", &tp_process_timer_limit, LARCH, LMUF},
     {"Database", "dump_copies", &tp_dump_copies, WBOY, LMUF},
-    {"Database", "tombstone_retention", &tp_tombstone_retention, WBOY, LMUF},
-    {"Database", "keep_hourly_snapshots", &tp_keep_hourly_snapshots, WBOY, LMUF},
-    {"Database", "keep_daily_snapshots", &tp_keep_daily_snapshots, WBOY, LMUF},
-    {"Database", "keep_weekly_snapshots", &tp_keep_weekly_snapshots, WBOY, LMUF},
-    {"Database", "keep_monthly_snapshots", &tp_keep_monthly_snapshots, WBOY, LMUF},
     {"MUF", "min_progbreak_lev", &tp_min_progbreak_lev, LARCH, LMAGE},
     {"MUF", "max_wiz_preempt_count", &tp_max_wiz_preempt_count, LARCH, LMAGE},
     {"MUF", "max_per_slice", &tp_max_per_slice, LARCH, LMUF},
@@ -308,7 +290,7 @@ dbref tp_www_root = -1;         /* hinoserm */
 struct tune_ref_entry {
     const char *group;
     const char *name;
-    MUCK::ObjectType typ;
+    int typ;
     dbref *ref;
     int writemlev;
     int readmlev;
@@ -327,7 +309,7 @@ struct tune_ref_entry tune_ref_list[] = {
 #ifdef NEWHTTPD                 /* hinoserm */
     {"System", "www_root", TYPE_ROOM, &tp_www_root, LARCH, LMAGE}, /* hinoserm */
 #endif /* hinoserm */
-    {NULL, NULL, MUCK::ObjectType::NoType, NULL, 0, 0}
+    {NULL, NULL, 0, NULL, 0, 0}
 };
 
 /* booleans */
@@ -681,14 +663,11 @@ timestr_full(time_t dtime)
 {
     static char buf[32];
     time_t days, hours, minutes;
-
     /* A negative value is formatted with ONE leading sign and
      * absolute components. Splitting the sign across the fields (the
      * old behaviour) does not survive its own parser: a value of -30
      * printed "0d 0:00:-30", and the reader's %2d stops after "-3",
-     * so the parm came back as -3. This is the format the manifest
-     * stores, so a self-inconsistent round trip silently rewrote the
-     * setting on every boot. */
+     * so the parm came back as -3. */
     const char *sign = "";
 
     if (dtime < 0) {
@@ -742,9 +721,9 @@ tune_show_strings(dbref player, char *name)
 
     while (tstr->name) {
         strcpy(buf, tstr->name);
-        if (MLevel(MUCK::getOwner(player)) >= tstr->readmlev) {
+        if (MLevel(OWNER(player)) >= tstr->readmlev) {
             sprintf(buf, SYSCYAN "(str)  " SYSRED "%c" SYSGREEN "%-24s"
-                    SYSRED " = " SYSCYAN "%.4096s", (WLevel(MUCK::getOwner(player)) >= tstr->writemlev) ? ' ' : '-', tstr->name, tct(*tstr->str, tbuf));
+                    SYSRED " = " SYSCYAN "%.4096s", (WLevel(OWNER(player)) >= tstr->writemlev) ? ' ' : '-', tstr->name, tct(*tstr->str, tbuf));
             anotify_nolisten2(player, buf);
             total++;
         }
@@ -762,9 +741,9 @@ tune_show_times(dbref player, char *name)
 
     while (ttim->name) {
         strcpy(buf, ttim->name);
-        if (MLevel(MUCK::getOwner(player)) >= ttim->readmlev) {
+        if (MLevel(OWNER(player)) >= ttim->readmlev) {
             sprintf(buf, SYSPURPLE "(time) " SYSRED "%c" SYSGREEN "%-24s"
-                    SYSRED " = " SYSPURPLE "%s", (WLevel(MUCK::getOwner(player)) >= ttim->writemlev) ? ' ' : '-', ttim->name, timestr_full(*ttim->tim));
+                    SYSRED " = " SYSPURPLE "%s", (WLevel(OWNER(player)) >= ttim->writemlev) ? ' ' : '-', ttim->name, timestr_full(*ttim->tim));
             anotify_nolisten2(player, buf);
             total++;
         }
@@ -782,9 +761,9 @@ tune_show_vals(dbref player, char *name)
 
     while (tval->name) {
         strcpy(buf, tval->name);
-        if (MLevel(MUCK::getOwner(player)) >= tval->readmlev) {
+        if (MLevel(OWNER(player)) >= tval->readmlev) {
             sprintf(buf, SYSGREEN "(int)  " SYSRED "%c" SYSGREEN "%-24s"
-                    SYSRED " = " SYSYELLOW "%d", (WLevel(MUCK::getOwner(player)) >= tval->writemlev) ? ' ' : '-', tval->name, *tval->val);
+                    SYSRED " = " SYSYELLOW "%d", (WLevel(OWNER(player)) >= tval->writemlev) ? ' ' : '-', tval->name, *tval->val);
             anotify_nolisten2(player, buf);
             total++;
         }
@@ -802,9 +781,9 @@ tune_show_refs(dbref player, char *name)
 
     while (tref->name) {
         strcpy(buf, tref->name);
-        if (MLevel(MUCK::getOwner(player)) >= tref->readmlev) {
+        if (MLevel(OWNER(player)) >= tref->readmlev) {
             sprintf(buf, SYSYELLOW "(ref)  " SYSRED "%c" SYSGREEN "%-24s"
-                    SYSRED " = %s", (WLevel(MUCK::getOwner(player)) >= tref->writemlev) ? ' ' : '-', tref->name, ansi_unparse_object(player, *tref->ref));
+                    SYSRED " = %s", (WLevel(OWNER(player)) >= tref->writemlev) ? ' ' : '-', tref->name, ansi_unparse_object(player, *tref->ref));
             anotify_nolisten2(player, buf);
             total++;
         }
@@ -822,9 +801,9 @@ tune_show_bool(dbref player, char *name)
 
     while (tbool->name) {
         strcpy(buf, tbool->name);
-        if (MLevel(MUCK::getOwner(player)) >= tbool->readmlev) {
+        if (MLevel(OWNER(player)) >= tbool->readmlev) {
             sprintf(buf, SYSWHITE "(bool) " SYSRED "%c" SYSGREEN "%-24s"
-                    SYSRED " = " SYSBLUE "%s", (WLevel(MUCK::getOwner(player)) >= tbool->writemlev) ? ' ' : '-', tbool->name, ((*tbool->boolv) ? "yes" : "no"));
+                    SYSRED " = " SYSBLUE "%s", (WLevel(OWNER(player)) >= tbool->writemlev) ? ' ' : '-', tbool->name, ((*tbool->boolv) ? "yes" : "no"));
             anotify_nolisten2(player, buf);
             total++;
         }
@@ -847,9 +826,9 @@ tune_display_parms(dbref player, char *name)
 
     while (tstr->name) {
         strcpy(buf, tstr->name);
-        if ((MLevel(MUCK::getOwner(player)) >= tstr->readmlev) && (!*name || equalstr(name, buf))) {
+        if ((MLevel(OWNER(player)) >= tstr->readmlev) && (!*name || equalstr(name, buf))) {
             sprintf(buf, SYSCYAN "(str)  " SYSRED "%c" SYSGREEN "%-24s"
-                    SYSRED " = " SYSCYAN "%.4096s", (WLevel(MUCK::getOwner(player)) >= tstr->writemlev) ? ' ' : '-', tstr->name, tct(*tstr->str, tbuf));
+                    SYSRED " = " SYSCYAN "%.4096s", (WLevel(OWNER(player)) >= tstr->writemlev) ? ' ' : '-', tstr->name, tct(*tstr->str, tbuf));
             lastname = tstr->name;
             anotify_nolisten2(player, buf);
             total++;
@@ -859,9 +838,9 @@ tune_display_parms(dbref player, char *name)
 
     while (ttim->name) {
         strcpy(buf, ttim->name);
-        if ((MLevel(MUCK::getOwner(player)) >= ttim->readmlev) && (!*name || equalstr(name, buf))) {
+        if ((MLevel(OWNER(player)) >= ttim->readmlev) && (!*name || equalstr(name, buf))) {
             sprintf(buf, SYSPURPLE "(time) " SYSRED "%c" SYSGREEN "%-24s"
-                    SYSRED " = " SYSPURPLE "%s", (WLevel(MUCK::getOwner(player)) >= ttim->writemlev) ? ' ' : '-', ttim->name, timestr_full(*ttim->tim));
+                    SYSRED " = " SYSPURPLE "%s", (WLevel(OWNER(player)) >= ttim->writemlev) ? ' ' : '-', ttim->name, timestr_full(*ttim->tim));
             lastname = ttim->name;
             anotify_nolisten2(player, buf);
             total++;
@@ -871,9 +850,9 @@ tune_display_parms(dbref player, char *name)
 
     while (tval->name) {
         strcpy(buf, tval->name);
-        if ((MLevel(MUCK::getOwner(player)) >= tval->readmlev) && (!*name || equalstr(name, buf))) {
+        if ((MLevel(OWNER(player)) >= tval->readmlev) && (!*name || equalstr(name, buf))) {
             sprintf(buf, SYSGREEN "(int)  " SYSRED "%c" SYSGREEN "%-24s"
-                    SYSRED " = " SYSYELLOW "%d", (WLevel(MUCK::getOwner(player)) >= tval->writemlev) ? ' ' : '-', tval->name, *tval->val);
+                    SYSRED " = " SYSYELLOW "%d", (WLevel(OWNER(player)) >= tval->writemlev) ? ' ' : '-', tval->name, *tval->val);
             lastname = tval->name;
             anotify_nolisten2(player, buf);
             total++;
@@ -882,9 +861,9 @@ tune_display_parms(dbref player, char *name)
     }
     while (tref->name) {
         strcpy(buf, tref->name);
-        if ((MLevel(MUCK::getOwner(player)) >= tref->readmlev) && (!*name || equalstr(name, buf))) {
+        if ((MLevel(OWNER(player)) >= tref->readmlev) && (!*name || equalstr(name, buf))) {
             sprintf(buf, SYSYELLOW "(ref)  " SYSRED "%c" SYSGREEN "%-24s"
-                    SYSRED " = %s", (WLevel(MUCK::getOwner(player)) >= tref->writemlev) ? ' ' : '-', tref->name, ansi_unparse_object(player, *tref->ref));
+                    SYSRED " = %s", (WLevel(OWNER(player)) >= tref->writemlev) ? ' ' : '-', tref->name, ansi_unparse_object(player, *tref->ref));
             lastname = tref->name;
             anotify_nolisten2(player, buf);
             total++;
@@ -894,10 +873,10 @@ tune_display_parms(dbref player, char *name)
 
     while (tbool->name) {
         strcpy(buf, tbool->name);
-        if ((MLevel(MUCK::getOwner(player)) >= tbool->readmlev) && (!*name || equalstr(name, buf))) {
+        if ((MLevel(OWNER(player)) >= tbool->readmlev) && (!*name || equalstr(name, buf))) {
             sprintf(buf,
                     SYSWHITE "(bool) " SYSRED "%c" SYSGREEN "%-24s" SYSRED
-                    " = " SYSBLUE "%s", (WLevel(MUCK::getOwner(player)) >= tbool->writemlev) ? ' ' : '-', tbool->name, ((*tbool->boolv) ? "yes" : "no"));
+                    " = " SYSBLUE "%s", (WLevel(OWNER(player)) >= tbool->writemlev) ? ' ' : '-', tbool->name, ((*tbool->boolv) ? "yes" : "no"));
             lastname = tbool->name;
             anotify_nolisten2(player, buf);
             total++;
@@ -923,24 +902,7 @@ tune_save_parms_to_file(FILE * f)
     struct tune_bool_entry *tbool = tune_bool_list;
 
     while (tstr->name) {
-        /* One parm per LINE is the whole format, and the manifest
-         * splits this buffer back into lines, so a string parm
-         * containing a newline would be silently truncated at that
-         * newline on the next reload (and the tail read as a bogus
-         * parm). Write it with the newlines escaped; tune_setparm
-         * turns them back. */
-        const char *v = *tstr->str;
-
-        fprintf(f, "%s=", tstr->name);
-        for (int n = 0; v && *v && n < 4096; v++, n++) {
-            if (*v == '\n')
-                fputs("\\n", f);
-            else if (*v == '\\')
-                fputs("\\\\", f);
-            else
-                fputc(*v, f);
-        }
-        fputc('\n', f);
+        fprintf(f, "%s=%.4096s\n", tstr->name, *tstr->str);
         tstr++;
     }
 
@@ -1097,7 +1059,7 @@ tune_setparm(const dbref player, const char *parmname, const char *val)
     while (tstr->name) {
         if (!string_compare(parmname, tstr->name)) {
             if ((player != NOTHING)
-                && (WLevel(MUCK::getOwner(player)) < tstr->writemlev))
+                && (WLevel(OWNER(player)) < tstr->writemlev))
                 return TUNESET_NOPERM;
             if (!tstr->isdefault)
                 delete[] * tstr->str;
@@ -1116,7 +1078,7 @@ tune_setparm(const dbref player, const char *parmname, const char *val)
             char *end;
 
             if ((player != NOTHING)
-                && (WLevel(MUCK::getOwner(player)) < ttim->writemlev))
+                && (WLevel(OWNER(player)) < ttim->writemlev))
                 return TUNESET_NOPERM;
             days = hrs = mins = secs = 0;
             /* An empty value made this point one byte BEFORE the
@@ -1198,7 +1160,7 @@ tune_setparm(const dbref player, const char *parmname, const char *val)
     while (tval->name) {
         if (!string_compare(parmname, tval->name)) {
             if ((player != NOTHING)
-                && (WLevel(MUCK::getOwner(player)) < tval->writemlev))
+                && (WLevel(OWNER(player)) < tval->writemlev))
                 return TUNESET_NOPERM;
             if (!number(parmval))
                 return 2;
@@ -1213,7 +1175,7 @@ tune_setparm(const dbref player, const char *parmname, const char *val)
             dbref obj;
 
             if ((player != NOTHING)
-                && (WLevel(MUCK::getOwner(player)) < tref->writemlev))
+                && (WLevel(OWNER(player)) < tref->writemlev))
                 return TUNESET_NOPERM;
             if (!strcmp(parmval, "me"))
                 obj = player;
@@ -1228,7 +1190,7 @@ tune_setparm(const dbref player, const char *parmname, const char *val)
                     return 2;
                 obj = (dbref) atoi(parmval + 1);
             }
-            if (obj < -1 || obj >= MUCK::database().top())
+            if (obj < -1 || obj >= db_top)
                 return 2;
             if (obj != -1 && tref->typ != NOTYPE && Typeof(obj) != tref->typ)
                 return 3;
@@ -1243,7 +1205,7 @@ tune_setparm(const dbref player, const char *parmname, const char *val)
     while (tbool->name) {
         if (!string_compare(parmname, tbool->name)) {
             if ((player != NOTHING)
-                && (WLevel(MUCK::getOwner(player)) < tbool->writemlev))
+                && (WLevel(OWNER(player)) < tbool->writemlev))
                 return TUNESET_NOPERM;
             if (*parmval == 'y' || *parmval == 'Y') {
                 *tbool->boolv = 1;
@@ -1283,25 +1245,6 @@ tune_load_parms_from_file(FILE * f, dbref player, int cnt)
                     c++;
                 for (p = c; *p && *p != '\n' && *p != '\r'; p++) ;
                 *p = '\0';
-                /* undo the writer's escaping (see tune_save_parms_to_file):
-                 * one parm per line is the format, so a string parm
-                 * holding a newline can only travel escaped */
-                {
-                    char *rd = c, *wr = c;
-
-                    while (*rd) {
-                        if (*rd == '\\' && rd[1] == 'n') {
-                            *wr++ = '\n';
-                            rd += 2;
-                        } else if (*rd == '\\' && rd[1] == '\\') {
-                            *wr++ = '\\';
-                            rd += 2;
-                        } else {
-                            *wr++ = *rd++;
-                        }
-                    }
-                    *wr = '\0';
-                }
                 for (p = buf; isspace(*p); p++) ;
                 if (*p) {
                     result = tune_setparm(player, p, c);
@@ -1363,7 +1306,7 @@ do_tune(dbref player, char *parmname, char *parmval)
         result = tune_setparm(player, parmname, parmval);
         switch (result) {
             case TUNESET_SUCCESS:
-                log_status("TUNE: %s(%d) tuned %s to %s\n", MUCK::getName(player), player, parmname, parmval);
+                log_status("TUNE: %s(%d) tuned %s to %s\n", NAME(player), player, parmname, parmval);
                 anotify_nolisten2(player, CSUCC "Parameter set.");
                 tune_display_parms(player, parmname);
                 break;

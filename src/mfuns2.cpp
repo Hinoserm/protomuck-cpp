@@ -3,11 +3,9 @@
 #include "params.h"
 
 #include "db.h"
-#include "ObjectAccess.h"
 #include "tune.h"
 #include "mpi.h"
 #include "externs.h"
-#include "Modules.h"
 #include "props.h"
 #include "match.h"
 #include "interp.h"
@@ -38,7 +36,7 @@ mfn_match(MFUNARGS)
         match_here(&md);
         match_home(&md);
     }
-    if (Wiz(MUCK::getOwner(what)) || (Mage(player))) {
+    if (Wiz(OWNER(what)) || (Mage(player))) {
         match_absolute(&md);
         match_player(&md);
     }
@@ -63,7 +61,7 @@ mfn_pmatch(MFUNARGS)
         ref = lookup_player(argv[0]);
         if (ref == NOTHING) {
             for (result = pcount(); result && ref == NOTHING; result--)
-                if (string_prefix(MUCK::getName(pdbref(result)), argv[0]))
+                if (string_prefix(PNAME(pdbref(result)), argv[0]))
                     ref = pdbref(result);
         }
     }
@@ -82,8 +80,8 @@ mfn_owner(MFUNARGS)
     if (obj == PERMDENIED)
         ABORT_MPI("OWNER", tp_noperm_mesg);
     if (obj == HOME)
-        obj = MUCK::playerHomeRef(player);
-    return ref2str(MUCK::getOwner(obj), buf);
+        obj = DBFETCH(player)->sp.player.home;
+    return ref2str(OWNER(obj), buf);
 }
 
 
@@ -100,7 +98,7 @@ mfn_controls(MFUNARGS)
     if (obj == PERMDENIED)
         ABORT_MPI("CONTROLS", "Permission denied. (1)");
     if (obj == HOME)
-        obj = MUCK::playerHomeRef(player);
+        obj = DBFETCH(player)->sp.player.home;
     if (argc > 1) {
         obj2 = mesg_dbref_raw(descr, player, what, perms, argv[1]);
         if (obj2 == AMBIGUOUS || obj2 == NOTHING || obj2 == UNKNOWN)
@@ -108,11 +106,11 @@ mfn_controls(MFUNARGS)
         if (obj2 == PERMDENIED)
             ABORT_MPI("CONTROLS", "Permission denied. (2)");
         if (obj2 == HOME)
-            obj2 = MUCK::playerHomeRef(player);
+            obj2 = DBFETCH(player)->sp.player.home;
         if (Typeof(obj2) != TYPE_PLAYER)
-            obj2 = MUCK::getOwner(obj2);
+            obj2 = OWNER(obj2);
     } else {
-        obj2 = MUCK::getOwner(perms);
+        obj2 = OWNER(perms);
     }
     if (controls(obj2, obj)) {
         return "1";
@@ -135,27 +133,23 @@ mfn_links(MFUNARGS)
     if (obj == PERMDENIED)
         ABORT_MPI("LINKS", tp_noperm_mesg);
     switch (Typeof(obj)) {
-        case TYPE_ROOM: {
-            MUCK::Room *r = MUCK::database().get(obj)->As<MUCK::Room>();
-            MUCK::DbObject *d = r ? r->dropTo() : nullptr;
-
-            obj = d ? d->ref() : NOTHING;
+        case TYPE_ROOM:
+            obj = DBFETCH(obj)->sp.room.dropto;
             break;
-        }
         case TYPE_PLAYER:
-            obj = MUCK::playerHomeRef(obj);
+            obj = DBFETCH(obj)->sp.player.home;
             break;
         case TYPE_THING:
-            obj = [&]{ MUCK::Thing *t = MUCK::database().get(obj)->As<MUCK::Thing>(); return (t && t->home()) ? t->home()->ref() : NOTHING; }();
+            obj = DBFETCH(obj)->sp.thing.home;
             break;
         case TYPE_EXIT:
             *buf = '\0';
-            cnt = MUCK::exitDestCount(obj);
+            cnt = DBFETCH(obj)->sp.exit.ndest;
             if (cnt) {
                 dbref obj2;
 
                 for (i = 0; i < cnt; i++) {
-                    obj2 = MUCK::exitDestRef(obj, i);
+                    obj2 = DBFETCH(obj)->sp.exit.dest[i];
                     ref2str(obj2, buf2);
                     if (strlen(buf) + strlen(buf2) + 2 < BUFFER_LEN) {
                         if (*buf)
@@ -215,7 +209,7 @@ mfn_testlock(MFUNARGS)
         ABORT_MPI("TESTLOCK", "Permission denied. (2)");
     if (Prop_Hidden(argv[1]))
         ABORT_MPI("TESTLOCK", "Permission denied. (2)");
-    if (Prop_Private(argv[1]) && MUCK::getOwner(perms) != MUCK::getOwner(what))
+    if (Prop_Private(argv[1]) && OWNER(perms) != OWNER(what))
         ABORT_MPI("TESTLOCK", "Permission denied. (2)");
     lok = get_property_lock(obj, argv[1]);
     if (argc > 3 && lok == TRUE_BOOLEXP)
@@ -234,8 +228,7 @@ mfn_contents(MFUNARGS)
     char buf2[50];
     int list_limit = MAX_MFUN_LIST_LEN;
     dbref obj = mesg_dbref_local(descr, player, what, perms, argv[0]);
-    MUCK::ObjectType typchk;
-    int ownroom;
+    int typchk, ownroom;
     int outlen, nextlen;
 
     if (obj == AMBIGUOUS || obj == UNKNOWN || obj == NOTHING || obj == HOME)
@@ -262,11 +255,11 @@ mfn_contents(MFUNARGS)
     strcpy(buf, "");
     outlen = 0;
     ownroom = controls(perms, obj);
-    obj = CONTENTS(obj);
+    obj = DBFETCH(obj)->contents;
     while (obj != NOTHING && list_limit) {
         if ((typchk == NOTYPE || Typeof(obj) == typchk) &&
             (ownroom || controls(perms, obj) ||
-             !((FLAGS(obj) & DARK) || (FLAGS(MUCK::getLocation(obj)) & DARK) ||
+             !((FLAGS(obj) & DARK) || (FLAGS(getloc(obj)) & DARK) ||
                (Typeof(obj) == TYPE_PROGRAM && !(FLAGS(obj) & LINK_OK)))) && !(Typeof(obj) == TYPE_ROOM && typchk != TYPE_ROOM)) {
             ref2str(obj, buf2);
             nextlen = strlen(buf2);
@@ -278,7 +271,7 @@ mfn_contents(MFUNARGS)
             outlen += nextlen;
             list_limit--;
         }
-        obj = NEXTOBJ(obj);
+        obj = DBFETCH(obj)->next;
     }
     return buf;
 }
@@ -302,7 +295,7 @@ mfn_exits(MFUNARGS)
         case TYPE_ROOM:
         case TYPE_THING:
         case TYPE_PLAYER:
-            obj = EXITS(obj);
+            obj = DBFETCH(obj)->exits;
             break;
         default:
             obj = NOTHING;
@@ -320,7 +313,7 @@ mfn_exits(MFUNARGS)
         strcat((buf + outlen), buf2);
         outlen += nextlen;
         list_limit--;
-        obj = NEXTOBJ(obj);
+        obj = DBFETCH(obj)->next;
     }
     return buf;
 }
@@ -392,7 +385,7 @@ mfn_name(MFUNARGS)
         strcpy(buf, "#HOME#");
         return buf;
     }
-    strcpy(buf, MUCK::getName(obj));
+    strcpy(buf, RNAME(obj));
     if (Typeof(obj) == TYPE_EXIT) {
         ptr = index(buf, ';');
         if (ptr)
@@ -423,7 +416,7 @@ mfn_fullname(MFUNARGS)
         strcpy(buf, "#HOME#");
         return buf;
     }
-    strcpy(buf, MUCK::getName(obj));
+    strcpy(buf, RNAME(obj));
     return buf;
 }
 
@@ -1255,7 +1248,7 @@ mfn_awake(MFUNARGS)
         return ("0");
 
     if (Typeof(obj) == TYPE_THING && (FLAGS(obj) & ZOMBIE)) {
-        obj = MUCK::getOwner(obj);
+        obj = OWNER(obj);
     } else if (Typeof(obj) != TYPE_PLAYER) {
         return ("0");
     }
@@ -1408,7 +1401,7 @@ mfn_delay(MFUNARGS)
 #endif
     cmdchr = get_mvar("cmd");
     argchr = get_mvar("arg");
-    i = add_mpi_event(i, descr, player, MUCK::getLocation(player), perms, argv[1], cmdchr, argchr, (mesgtyp & MPI_ISLISTENER), (!(mesgtyp & MPI_ISPRIVATE)));
+    i = add_mpi_event(i, descr, player, getloc(player), perms, argv[1], cmdchr, argchr, (mesgtyp & MPI_ISLISTENER), (!(mesgtyp & MPI_ISPRIVATE)));
     sprintf(buf, "%d", i);
     return buf;
 }
@@ -1466,7 +1459,7 @@ mfn_muf(MFUNARGS)
     ptr = get_mvar("how");
     strcpy(match_cmdname, ptr);
     strcat(match_cmdname, "(MPI)");
-    tmpfr = interp(descr, player, MUCK::getLocation(player), obj, perms, PREEMPT, STD_HARDUID, 0);
+    tmpfr = interp(descr, player, DBFETCH(player)->location, obj, perms, PREEMPT, STD_HARDUID, 0);
     if (tmpfr) {
         rv = interp_loop(player, obj, tmpfr, 1);
     }
@@ -1524,14 +1517,14 @@ mfn_force(MFUNARGS)
     if (!tp_zombies && !Archperms(perms))
         ABORT_MPI("FORCE", tp_noperm_mesg);
     if (!Archperms(perms)) {
-        const char *ptr = MUCK::getName(obj);
+        const char *ptr = RNAME(obj);
         char objname[BUFFER_LEN], *ptr2;
-        dbref loc = MUCK::getLocation(obj);
+        dbref loc = getloc(obj);
 
         if (Typeof(obj) == TYPE_THING) {
             if (FLAGS(obj) & DARK)
                 ABORT_MPI("FORCE", "Cannot force a dark puppet.");
-            if ((FLAGS(MUCK::getOwner(obj)) & ZOMBIE))
+            if ((FLAGS(OWNER(obj)) & ZOMBIE))
                 ABORT_MPI("FORCE", tp_noperm_mesg);
             if (loc != NOTHING && (FLAGS(loc) & ZOMBIE) && Typeof(loc) == TYPE_ROOM)
                 ABORT_MPI("FORCE", "Cannot force a Puppet in a no-puppets room.");
@@ -1783,8 +1776,7 @@ const char *
 mfn_dirprops(MFUNARGS)
 {
     char propname[BUFFER_LEN];
-    PropPtr propadr;
-    PropDirPtr pptr;
+    PropPtr propadr, pptr;
     char buf2[BUFFER_LEN];
     int list_limit = MAX_MFUN_LIST_LEN;
     dbref obj;
@@ -1802,6 +1794,9 @@ mfn_dirprops(MFUNARGS)
     buf[0] = '\0';
     outlen = 0;
 
+#ifdef DISKBASE
+    fetchprops(obj);
+#endif
 
     propadr = first_prop(obj, argv[0], &pptr, propname);
     while ((propadr) && *propname) {

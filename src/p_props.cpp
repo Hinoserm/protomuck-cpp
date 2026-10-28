@@ -15,7 +15,6 @@
 #include "strutils.h"
 #include "interp.h"
 #include "msgparse.h"
-#include "ObjectAccess.h"
 
 int
 prop_read_perms(dbref player, dbref obj, const char *name, int mlev)
@@ -66,7 +65,7 @@ prim_getpropfval(PRIM_PROTOTYPE)
         abort_interp("Empty string argument (2)");
     if (oper[1].type != PROG_OBJECT)
         abort_interp("Arguement (2) is not a dbref.");
-    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= MUCK::database().top()))
+    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= db_top))
         abort_interp("Non-object argument (1)");
     CHECKREMOTE(oper[1].data.objref);
     {
@@ -107,7 +106,7 @@ prim_getpropval(PRIM_PROTOTYPE)
         abort_interp("Empty string argument (2)");
     if (oper[1].type != PROG_OBJECT)
         abort_interp("Arguement (2) is not a dbref.");
-    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= MUCK::database().top()))
+    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= db_top))
         abort_interp("Non-object argument (1)");
     CHECKREMOTE(oper[1].data.objref);
     {
@@ -149,7 +148,7 @@ prim_getprop(PRIM_PROTOTYPE)
         abort_interp("Non-string argument (2)");
     if (!oper[0].data.string)
         abort_interp("Empty string argument (2)");
-    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= MUCK::database().top()))
+    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= db_top))
         abort_interp("Non-object argument (1)");
     CHECKREMOTE(oper[1].data.objref);
     {
@@ -172,6 +171,9 @@ prim_getprop(PRIM_PROTOTYPE)
 #endif
 
         if (prptr) {
+#ifdef DISKBASE
+            propfetch(obj2, prptr);
+#endif
             switch (PropType(prptr)) {
                 case PROP_STRTYP:
                     PushString(PropDataUNCStr(prptr));
@@ -183,27 +185,15 @@ prim_getprop(PRIM_PROTOTYPE)
                         PushLock(PropDataLok(prptr));
                     }
                     break;
-                case PROP_REFTYP: {
-                    dbref tref = PropDataRef(prptr);
-
-                    PushObject(tref);
+                case PROP_REFTYP:
+                    PushObject(PropDataRef(prptr));
                     break;
-                }
-                case PROP_INTTYP: {
-                    /* MUFINT, not int: property values and the MUF
-                     * stack are both 64-bit, and narrowing here
-                     * silently wrecked any value past 2^31 */
-                    MUFINT tval = PropDataVal(prptr);
-
-                    PushInt(tval);
+                case PROP_INTTYP:
+                    PushInt(PropDataVal(prptr));
                     break;
-                }
-                case PROP_FLTTYP: {
-                    double tfval = PropDataFVal(prptr);
-
-                    PushFloat(tfval);
+                case PROP_FLTTYP:
+                    PushFloat(PropDataFVal(prptr));
                     break;
-                }
                 default:
                     result = 0;
                     PushInt(result);
@@ -232,7 +222,7 @@ prim_getpropstr(PRIM_PROTOTYPE)
         abort_interp("Empty string argument (2)");
     if (oper[1].type != PROG_OBJECT)
         abort_interp("Arguement (2) is not a dbref.");
-    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= MUCK::database().top()))
+    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= db_top))
         abort_interp("Non-object argument (1)");
     CHECKREMOTE(oper[1].data.objref);
     {
@@ -252,12 +242,15 @@ prim_getpropstr(PRIM_PROTOTYPE)
         if (!ptr) {
             temp = "";
         } else {
+#ifdef DISKBASE
+            propfetch(oper[1].data.objref, ptr);
+#endif
             switch (PropType(ptr)) {
                 case PROP_STRTYP:
                     temp = PropDataUNCStr(ptr);
                     break;
                 case PROP_INTTYP:
-                    sprintf(buf, "%lld", (long long) PropDataVal(ptr));
+                    sprintf(buf, "%d", PropDataVal(ptr));
                     temp = buf;
                     break;
                 case PROP_FLTTYP:
@@ -345,7 +338,7 @@ prim_envprop(PRIM_PROTOTYPE)
         abort_interp("Empty string argument (2)");
     if (oper[1].type != PROG_OBJECT)
         abort_interp("Arguement (2) is not a dbref.");
-    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= MUCK::database().top()))
+    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= db_top))
         abort_interp("Non-object argument (1)");
     CHECKREMOTE(oper[1].data.objref);
     {
@@ -370,6 +363,9 @@ prim_envprop(PRIM_PROTOTYPE)
             result = 0;
             PushInt(result);
         } else {
+#ifdef DISKBASE
+            propfetch(what, ptr);
+#endif
             switch (PropType(ptr)) {
                 case PROP_STRTYP:
                     PushString(PropDataUNCStr(ptr));
@@ -412,7 +408,7 @@ prim_envpropstr(PRIM_PROTOTYPE)
         abort_interp("Empty string argument (2)");
     if (oper[1].type != PROG_OBJECT)
         abort_interp("Arguement (2) is not a dbref.");
-    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= MUCK::database().top()))
+    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= db_top))
         abort_interp("Non-object argument (1)");
     CHECKREMOTE(oper[1].data.objref);
     {
@@ -432,6 +428,9 @@ prim_envpropstr(PRIM_PROTOTYPE)
         if (!ptr) {
             temp = "";
         } else {
+#ifdef DISKBASE
+            propfetch(what, ptr);
+#endif
             switch (PropType(ptr)) {
                 case PROP_STRTYP:
                     temp = PropDataUNCStr(ptr);
@@ -616,7 +615,7 @@ prim_nextprop(PRIM_PROTOTYPE)
         abort_interp("String required (2)");
     if (oper[1].type != PROG_OBJECT)
         abort_interp("Dbref required (1)");
-    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= MUCK::database().top()))
+    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= db_top))
         abort_interp("Invalid dbref (1)");
 
     ref = oper[1].data.objref;
@@ -661,7 +660,7 @@ prim_propdirp(PRIM_PROTOTYPE)
 
     if (oper[1].type != PROG_OBJECT)
         abort_interp("Argument must be a dbref (1)");
-    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= MUCK::database().top()))
+    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= db_top))
         abort_interp("Invalid dbref (1)");
     if (oper[0].type != PROG_STRING)
         abort_interp("Argument not a string (2)");
@@ -689,7 +688,7 @@ prim_parsempi(PRIM_PROTOTYPE)
 
     if (oper[3].type != PROG_OBJECT)
         abort_interp("Non-object argument (1)");
-    if ((oper[3].data.objref < 0) || (oper[3].data.objref >= MUCK::database().top()))
+    if ((oper[3].data.objref < 0) || (oper[3].data.objref >= db_top))
         abort_interp("Invalid object (1)");
     if (oper[1].type != PROG_STRING)
         abort_interp("String expected (3)");
@@ -725,7 +724,7 @@ prim_parseprop(PRIM_PROTOTYPE)
 
     if (oper[3].type != PROG_OBJECT)
         abort_interp("Non-object argument. (1)");
-    if ((oper[3].data.objref < 0) || (oper[3].data.objref >= MUCK::database().top()))
+    if ((oper[3].data.objref < 0) || (oper[3].data.objref >= db_top))
         abort_interp("Invalid object. (1)");
     if (oper[1].type != PROG_STRING)
         abort_interp("String expected. (3)");
@@ -784,7 +783,7 @@ prim_propqueue(PRIM_PROTOTYPE)
         abort_interp("Empty string argument (4)");
     if (oper[1].type != PROG_OBJECT)
         abort_interp("Non-object argument. (3)");
-    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= MUCK::database().top()))
+    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= db_top))
         abort_interp("Invalid object. (3)");
     if (oper[2].type != PROG_STRING)
         abort_interp("String expected. (2)");
@@ -801,7 +800,7 @@ prim_propqueue(PRIM_PROTOTYPE)
         char *str1 = string_dup(oper[2].data.string->data.c_str());
         char *str2 = string_dup(oper[0].data.string->data.c_str());
 
-        propqueue(fr->descr, player, OkObj(player) ? MUCK::getLocation(player) : -1, obj1, obj2, NOTHING, str1, str2, 1, 1);
+        propqueue(fr->descr, player, OkObj(player) ? getloc(player) : -1, obj1, obj2, NOTHING, str1, str2, 1, 1);
 
         delete[]str1;
         delete[]str2;
@@ -817,7 +816,7 @@ prim_envpropqueue(PRIM_PROTOTYPE)
         abort_interp("Empty string argument (4)");
     if (oper[1].type != PROG_OBJECT)
         abort_interp("Non-object argument. (3)");
-    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= MUCK::database().top()))
+    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= db_top))
         abort_interp("Invalid object. (3)");
     if (oper[2].type != PROG_STRING)
         abort_interp("String expected. (2)");
@@ -834,7 +833,7 @@ prim_envpropqueue(PRIM_PROTOTYPE)
         char *str1 = string_dup(oper[2].data.string->data.c_str());
         char *str2 = string_dup(oper[0].data.string->data.c_str());
 
-        propqueue(fr->descr, player, OkObj(player) ? MUCK::getLocation(player) : -1, obj1, obj2, NOTHING, str1, str2, 1, 1);
+        propqueue(fr->descr, player, OkObj(player) ? getloc(player) : -1, obj1, obj2, NOTHING, str1, str2, 1, 1);
 
         delete[]str1;
         delete[]str2;
@@ -906,12 +905,12 @@ prim_islockedp(PRIM_PROTOTYPE)
     if (fr->level > 8)
         abort_interp("Interp call loops not allowed");
 
-    if ((oper[2].data.objref < 0) || (oper[2].data.objref >= MUCK::database().top()))
+    if ((oper[2].data.objref < 0) || (oper[2].data.objref >= db_top))
         abort_interp("Invalid argument (1).");
     if (Typeof(oper[2].data.objref) != TYPE_PLAYER && Typeof(oper[2].data.objref) != TYPE_THING)
         abort_interp("Invalid object type (1).");
 
-    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= MUCK::database().top()))
+    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= db_top))
         abort_interp("Invalid argument (2).");
 
     if (oper[0].type != PROG_STRING)
@@ -951,12 +950,12 @@ prim_checklock(PRIM_PROTOTYPE)
     if (fr->level > 8)
         abort_interp("Interp call loops not allowed");
 
-    if ((oper[2].data.objref < 0) || (oper[2].data.objref >= MUCK::database().top()))
+    if ((oper[2].data.objref < 0) || (oper[2].data.objref >= db_top))
         abort_interp("Invalid argument (1).");
     if (Typeof(oper[2].data.objref) != TYPE_PLAYER && Typeof(oper[2].data.objref) != TYPE_THING)
         abort_interp("Invalid object type (1).");
 
-    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= MUCK::database().top()))
+    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= db_top))
         abort_interp("Invalid argument (2).");
 
     if (oper[0].type != PROG_STRING)
@@ -1138,6 +1137,9 @@ prim_array_filter_smart(PRIM_PROTOTYPE)
                             double fresult;
                             char *temp;
 
+#ifdef DISKBASE
+                            propfetch(oper[1].data.objref, prptr);
+#endif
                             switch (PropType(prptr)) {
                                 case PROP_STRTYP:
                                     if (fflags & FILTER_PROP_STRING) {
@@ -1461,12 +1463,14 @@ prim_parsepropex(PRIM_PROTOTYPE)
                                 char propname[BUFFER_LEN];
                                 char buf[BUFFER_LEN];
                                 char buf2[BUFFER_LEN];
-                                PropPtr propadr, currprop;
-                                PropDirPtr pptr;
+                                PropPtr propadr, pptr, currprop;
                                 PData pdat;
 
                                 int propcount = 0;
 
+#ifdef DISKBASE
+                                fetchprops(destination);
+#endif
 
                                 /* loop through all properties in the current propdir */
                                 propadr = first_prop(source, (char *) sourcedir, &pptr, propname);
@@ -1477,28 +1481,19 @@ prim_parsepropex(PRIM_PROTOTYPE)
 
                                     /* read property from source object */
                                     currprop = get_property(source, buf);
+#ifdef DISKBASE
+                                    propfetch(source, currprop);
+#endif
                                     if (currprop) {
                                         pdat.flags = currprop->flags;
 
                                         switch (PropType(currprop)) {
                                             case PROP_LOKTYP:
-                                                pdat.data.lok = copy_bool(PropDataLok(currprop));
+                                                pdat.data.lok = copy_bool((currprop->data).lok);
                                             case PROP_DIRTYP:
                                                 break;
-                                            case PROP_STRTYP:
-                                                pdat.data.str = PropDataStr(currprop);
-                                                break;
-                                            case PROP_INTTYP:
-                                                pdat.data.val = PropDataVal(currprop);
-                                                break;
-                                            case PROP_FLTTYP:
-                                                pdat.data.fval = PropDataFVal(currprop);
-                                                break;
-                                            case PROP_REFTYP:
-                                                pdat.data.ref = PropDataRef(currprop);
-                                                break;
                                             default:
-                                                pdat.data.val = 0;
+                                                pdat.data = currprop->data;
                                                 break;
                                         }
                                         set_property_nofetch(destination, buf2, &pdat, 1);

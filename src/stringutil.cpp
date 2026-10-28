@@ -12,7 +12,6 @@
 #include "interface.h"
 #include "interp.h"
 #include "strutils.h"
-#include "ObjectAccess.h"
 
 /* String utilities */
 
@@ -797,7 +796,7 @@ pronoun_substitute(int descr, dbref player, const char *str)
                     temp_sub = NULL;
                     if (self_sub[0] == '%' && toupper(self_sub[1]) == 'N') {
                         temp_sub = self_sub;
-                        self_sub = MUCK::getName(player);
+                        self_sub = PNAME(player);
                     }
                     if (((result - buf) + strlen(self_sub)) > (BUFFER_LEN - 2))
                         return buf;
@@ -825,13 +824,13 @@ pronoun_substitute(int descr, dbref player, const char *str)
                     case 'S':
                     case 'r':
                     case 'R':
-                        strcatn(result, sizeof(buf) - (result - buf), MUCK::getName(player));
+                        strcatn(result, sizeof(buf) - (result - buf), PNAME(player));
                         break;
                     case 'a':
                     case 'A':
                     case 'p':
                     case 'P':
-                        strcatn(result, sizeof(buf) - (result - buf), MUCK::getName(player));
+                        strcatn(result, sizeof(buf) - (result - buf), PNAME(player));
                         strcatn(result, sizeof(buf) - (result - buf), "'s");
                         break;
                     default:
@@ -869,7 +868,7 @@ pronoun_substitute(int descr, dbref player, const char *str)
                         break;
                     case 'n':
                     case 'N':
-                        strcatn(result, sizeof(buf) - (result - buf), MUCK::getName(player));
+                        strcatn(result, sizeof(buf) - (result - buf), PNAME(player));
                         break;
                     default:
                         *result = *str;
@@ -975,13 +974,13 @@ pronoun_substitute(int descr, dbref player, const char *str)
                         case 'S':
                         case 'r':
                         case 'R':
-                            strcat(result, MUCK::getName(player));
+                            strcat(result, PNAME(player));
                             break;
                         case 'a':
                         case 'A':
                         case 'p':
                         case 'P':
-                            strcat(result, MUCK::getName(player));
+                            strcat(result, PNAME(player));
                             strcat(result, "'s");
                             break;
                         default:
@@ -1019,7 +1018,7 @@ pronoun_substitute(int descr, dbref player, const char *str)
                             break;
                         case 'n':
                         case 'N':
-                            strcat(result, MUCK::getName(player));
+                            strcat(result, PNAME(player));
                             break;
                         default:
                             *result = *str;
@@ -1049,6 +1048,7 @@ pronoun_substitute(int descr, dbref player, const char *str)
     return buf;
 }
 */
+#ifndef MALLOC_PROFILING
 
 char *
 alloc_string(const char *string)
@@ -1111,7 +1111,9 @@ alloc_prog_string_exact(const char *s, int length, int wclength)
 #endif
 }
 
+#endif
 
+#if !defined(MALLOC_PROFILING)
 char *
 string_dup(const char *s)
 {
@@ -1124,6 +1126,7 @@ string_dup(const char *s)
         memcpy(p, s, len);
     return (p);
 }
+#endif
 
 char *
 intostr(char *buf, MUFINT i)
@@ -1294,8 +1297,8 @@ color_lookup(dbref player, const char *color, const char *defcolor, int intrecur
     if (player != NOTHING && OkObj(player) && Typeof(player) != TYPE_GARBAGE) {
         if (!strcasecmp("SUCC", color) || !strcasecmp("CSUCC", color)) {
             tempcolor = GETMESG(player, "_/COLORS/SUCC");
-            if (!tempcolor && OkObj(MUCK::getOwner(player)))
-                tempcolor = GETMESG(MUCK::getOwner(player), "_/COLORS/SUCC");
+            if (!tempcolor && OkObj(OWNER(player)))
+                tempcolor = GETMESG(OWNER(player), "_/COLORS/SUCC");
             if (!tempcolor)
                 tempcolor = GETMESG(0, "_/COLORS/SUCC");
             if (!tempcolor)
@@ -1303,8 +1306,8 @@ color_lookup(dbref player, const char *color, const char *defcolor, int intrecur
             color = tempcolor;
         } else if (!strcasecmp("FAIL", color) || !strcasecmp("CFAIL", color)) {
             tempcolor = GETMESG(player, "_/COLORS/FAIL");
-            if (!tempcolor && OkObj(MUCK::getOwner(player)))
-                tempcolor = GETMESG(MUCK::getOwner(player), "_/COLORS/FAIL");
+            if (!tempcolor && OkObj(OWNER(player)))
+                tempcolor = GETMESG(OWNER(player), "_/COLORS/FAIL");
             if (!tempcolor)
                 tempcolor = GETMESG(0, "_/COLORS/FAIL");
             if (!tempcolor)
@@ -1312,8 +1315,8 @@ color_lookup(dbref player, const char *color, const char *defcolor, int intrecur
             color = tempcolor;
         } else if (!strcasecmp("INFO", color) || !strcasecmp("CINFO", color)) {
             tempcolor = GETMESG(player, "_/COLORS/INFO");
-            if (!tempcolor && OkObj(MUCK::getOwner(player)))
-                tempcolor = GETMESG(MUCK::getOwner(player), "_/COLORS/INFO");
+            if (!tempcolor && OkObj(OWNER(player)))
+                tempcolor = GETMESG(OWNER(player), "_/COLORS/INFO");
             if (!tempcolor)
                 tempcolor = GETMESG(0, "_/COLORS/INFO");
             if (!tempcolor)
@@ -1321,8 +1324,8 @@ color_lookup(dbref player, const char *color, const char *defcolor, int intrecur
             color = tempcolor;
         } else if (!strcasecmp("NOTE", color) || !strcasecmp("CNOTE", color)) {
             tempcolor = GETMESG(player, "_/COLORS/NOTE");
-            if (!tempcolor && OkObj(MUCK::getOwner(player)))
-                tempcolor = GETMESG(MUCK::getOwner(player), "_/COLORS/NOTE");
+            if (!tempcolor && OkObj(OWNER(player)))
+                tempcolor = GETMESG(OWNER(player), "_/COLORS/NOTE");
             if (!tempcolor)
                 tempcolor = GETMESG(0, "_/COLORS/NOTE");
             if (!tempcolor)
@@ -1330,8 +1333,8 @@ color_lookup(dbref player, const char *color, const char *defcolor, int intrecur
             color = tempcolor;
         } else if (!strcasecmp("MOVE", color) || !strcasecmp("CMOVE", color)) {
             tempcolor = GETMESG(player, "_/COLORS/MOVE");
-            if (!tempcolor && OkObj(MUCK::getOwner(player)))
-                tempcolor = GETMESG(MUCK::getOwner(player), "_/COLORS/MOVE");
+            if (!tempcolor && OkObj(OWNER(player)))
+                tempcolor = GETMESG(OWNER(player), "_/COLORS/MOVE");
             if (!tempcolor)
                 tempcolor = GETMESG(0, "_/COLORS/MOVE");
             if (!tempcolor)
@@ -1341,8 +1344,8 @@ color_lookup(dbref player, const char *color, const char *defcolor, int intrecur
             strcpy(buf, "_/COLORS/");
             strcat(buf, color);
             tempcolor = GETMESG(player, buf);
-            if (!tempcolor && OkObj(MUCK::getOwner(player)))
-                tempcolor = GETMESG(MUCK::getOwner(player), buf);
+            if (!tempcolor && OkObj(OWNER(player)))
+                tempcolor = GETMESG(OWNER(player), buf);
             if (!tempcolor)
                 tempcolor = GETMESG(0, buf);
             if (tempcolor)

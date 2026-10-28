@@ -476,8 +476,7 @@ int
 siteStatekey(int site, int obj, const char *startkey)
 {
     char key[BUFFER_LEN], buf[BUFFER_LEN];
-    PropPtr p;
-    PropDirPtr q;
+    PropPtr p, q;
 
     strcpy(key, startkey);
 
@@ -529,8 +528,7 @@ const char *
 reg_site_welcome(int site)
 {
     char key[BUFFER_LEN], buf[BUFFER_LEN];
-    PropPtr p;
-    PropDirPtr q;
+    PropPtr p, q;
     const char *m;
 
     strcpy(key, REG_WELC);

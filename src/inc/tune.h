@@ -45,7 +45,6 @@ extern const char *tp_reslvd_address;
 /* times */
 
 extern time_t tp_dump_interval;
-extern time_t tp_snapshot_interval;
 extern time_t tp_dump_warntime;
 extern time_t tp_monolithic_interval;
 extern time_t tp_clean_interval;
@@ -99,11 +98,6 @@ extern int tp_playermax_limit;
 extern int tp_max_player_name_length;
 
 extern int tp_dump_copies;
-extern int tp_tombstone_retention;
-extern int tp_keep_hourly_snapshots;
-extern int tp_keep_daily_snapshots;
-extern int tp_keep_weekly_snapshots;
-extern int tp_keep_monthly_snapshots;
 extern int tp_min_progbreak_lev;
 extern int tp_max_wiz_preempt_count;
 extern int tp_mysql_result_limit;

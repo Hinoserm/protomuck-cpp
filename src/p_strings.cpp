@@ -8,8 +8,6 @@
 #include "tune.h"
 #include "inst.h"
 #include "externs.h"
-#include "Modules.h"
-#include "ObjectAccess.h"
 #include "match.h"
 #include "interface.h"
 #include "params.h"
@@ -381,8 +379,8 @@ prim_fmtstring(PRIM_PROTOTYPE)
                         if ((Typeof(ref) != TYPE_PLAYER)
                             && (Typeof(ref) != TYPE_PROGRAM))
                             ts_lastuseobject(program, ref);
-                        if (MUCK::getName(ref)) {
-                            strcpy(hold, MUCK::getName(ref));
+                        if (NAME(ref)) {
+                            strcpy(hold, PNAME(ref));
                         } else {
                             hold[0] = '\0';
                         }
@@ -975,11 +973,11 @@ prim_notify(PRIM_PROTOTYPE)
         char buf[BUFFER_LEN * 2];
 
         if (tp_m1_name_notify && mlev < LM2 && PSafe != oper[1].data.objref) {
-            prefix_message(buf, oper[0].data.string->data.c_str(), MUCK::getName(PSafe), BUFFER_LEN, 1);
+            prefix_message(buf, oper[0].data.string->data.c_str(), PNAME(PSafe), BUFFER_LEN, 1);
         } else {
             strcpy(buf, oper[0].data.string->data.c_str());
         }
-        notify_listeners(fr->descr, PSafe, program, oper[1].data.objref, MUCK::getLocation(PSafe), buf, 1);
+        notify_listeners(fr->descr, PSafe, program, oper[1].data.objref, getloc(PSafe), buf, 1);
     }
 
 
@@ -1007,12 +1005,12 @@ prim_notify_html(PRIM_PROTOTYPE)
 
     if (oper[0].data.string) {
         if (tp_m1_name_notify && mlev < LM2 && PSafe != oper[1].data.objref) {
-            prefix_message(buf, oper[0].data.string->data.c_str(), MUCK::getName(PSafe), BUFFER_LEN - 1, 1);
+            prefix_message(buf, oper[0].data.string->data.c_str(), PNAME(PSafe), BUFFER_LEN - 1, 1);
         } else {
             strcpy(buf, oper[0].data.string->data.c_str());
         }
         strcat(buf, "\r");
-        notify_html_listeners(fr->descr, PSafe, program, oper[1].data.objref, MUCK::getLocation(PSafe), buf, 1);
+        notify_html_listeners(fr->descr, PSafe, program, oper[1].data.objref, getloc(PSafe), buf, 1);
     }
 
 
@@ -1040,11 +1038,11 @@ prim_notify_html_nocr(PRIM_PROTOTYPE)
 
     if (oper[0].data.string) {
         if (tp_m1_name_notify && mlev < LM2 && PSafe != oper[1].data.objref) {
-            prefix_message(buf, oper[0].data.string->data.c_str(), MUCK::getName(PSafe), BUFFER_LEN, 1);
+            prefix_message(buf, oper[0].data.string->data.c_str(), PNAME(PSafe), BUFFER_LEN, 1);
         } else {
             strcpy(buf, oper[0].data.string->data.c_str());
         }
-        notify_html_listeners(fr->descr, PSafe, program, oper[1].data.objref, MUCK::getLocation(PSafe), buf, 1);
+        notify_html_listeners(fr->descr, PSafe, program, oper[1].data.objref, getloc(PSafe), buf, 1);
     }
 
 
@@ -1064,11 +1062,11 @@ prim_ansi_notify(PRIM_PROTOTYPE)
 
     if (oper[0].data.string) {
         if (tp_m1_name_notify && mlev < LM2 && PSafe != oper[1].data.objref) {
-            prefix_message(buf, oper[0].data.string->data.c_str(), MUCK::getName(PSafe), BUFFER_LEN, 1);
+            prefix_message(buf, oper[0].data.string->data.c_str(), PNAME(PSafe), BUFFER_LEN, 1);
         } else {
             strcpy(buf, oper[0].data.string->data.c_str());
         }
-        ansi_notify_listeners(fr->descr, PSafe, program, oper[1].data.objref, MUCK::getLocation(PSafe), buf, 1);
+        ansi_notify_listeners(fr->descr, PSafe, program, oper[1].data.objref, getloc(PSafe), buf, 1);
     }
 
 
@@ -1088,7 +1086,7 @@ prim_notify_exclude(PRIM_PROTOTYPE)
         abort_interp("Non-string message argument (top)");
 
     if (tp_m1_name_notify && oper[0].data.string && mlev < LM2 && PSafe != oper[1].data.objref) {
-        prefix_message(buf, oper[0].data.string->data.c_str(), MUCK::getName(PSafe), BUFFER_LEN, 1);
+        prefix_message(buf, oper[0].data.string->data.c_str(), PNAME(PSafe), BUFFER_LEN, 1);
     } else {
         strcpy(buf, DoNullInd(oper[0].data.string));
     }
@@ -1123,7 +1121,7 @@ prim_notify_exclude(PRIM_PROTOTYPE)
             abort_interp("Invalid location argument (1)");
         }
         CHECKREMOTE(where);
-        what = CONTENTS(where);
+        what = DBFETCH(where)->contents;
         CLEAR(oper1);
         if (*buf) {
             while (what != NOTHING) {
@@ -1137,7 +1135,7 @@ prim_notify_exclude(PRIM_PROTOTYPE)
                 }
                 if (!tmp)
                     notify_listeners(fr->descr, PSafe, program, what, where, buf, 0);
-                what = NEXTOBJ(what);
+                what = DBFETCH(what)->next;
             }
         }
 
@@ -1160,7 +1158,7 @@ prim_ansi_notify_exclude(PRIM_PROTOTYPE)
         abort_interp("Non-string message argument (top)");
 
     if (tp_m1_name_notify && oper[0].data.string && mlev < LM2 && PSafe != oper[1].data.objref) {
-        prefix_message(buf, oper[0].data.string->data.c_str(), MUCK::getName(PSafe), BUFFER_LEN, 1);
+        prefix_message(buf, oper[0].data.string->data.c_str(), PNAME(PSafe), BUFFER_LEN, 1);
     } else {
         strcpy(buf, DoNullInd(oper[0].data.string));
     }
@@ -1193,7 +1191,7 @@ prim_ansi_notify_exclude(PRIM_PROTOTYPE)
         if (Typeof(where) != TYPE_ROOM && Typeof(where) != TYPE_THING && Typeof(where) != TYPE_PLAYER)
             abort_interp("Invalid location argument (1)");
         CHECKREMOTE(where);
-        what = CONTENTS(where);
+        what = DBFETCH(where)->contents;
         CLEAR(oper1);
         if (*buf) {
             while (what != NOTHING) {
@@ -1207,7 +1205,7 @@ prim_ansi_notify_exclude(PRIM_PROTOTYPE)
                 }
                 if (!tmp)
                     ansi_notify_listeners(fr->descr, PSafe, program, what, where, buf, 0);
-                what = NEXTOBJ(what);
+                what = DBFETCH(what)->next;
             }
         }
 
@@ -1237,7 +1235,7 @@ prim_notify_html_exclude(PRIM_PROTOTYPE)
         abort_interp("Non-string message argument (top)");
 
     if (tp_m1_name_notify && oper[0].data.string && mlev < LM2 && PSafe != oper[1].data.objref) {
-        prefix_message(buf, oper[0].data.string->data.c_str(), MUCK::getName(PSafe), BUFFER_LEN, 1);
+        prefix_message(buf, oper[0].data.string->data.c_str(), PNAME(PSafe), BUFFER_LEN, 1);
     } else {
         strcpy(buf, DoNullInd(oper[0].data.string));
     }
@@ -1272,7 +1270,7 @@ prim_notify_html_exclude(PRIM_PROTOTYPE)
             abort_interp("Invalid location argument (1)");
         }
         CHECKREMOTE(where);
-        what = CONTENTS(where);
+        what = DBFETCH(where)->contents;
         CLEAR(oper1);
         if (*buf) {
             while (what != NOTHING) {
@@ -1286,7 +1284,7 @@ prim_notify_html_exclude(PRIM_PROTOTYPE)
                 }
                 if (!tmp)
                     notify_html_listeners(fr->descr, PSafe, program, what, where, buf, 0);
-                what = NEXTOBJ(what);
+                what = DBFETCH(what)->next;
             }
         }
 
@@ -1315,7 +1313,7 @@ prim_notify_html_exclude_nocr(PRIM_PROTOTYPE)
         abort_interp("Non-string message argument (top)");
 
     if (tp_m1_name_notify && oper[0].data.string && mlev < LM2 && PSafe != oper[1].data.objref) {
-        prefix_message(buf, oper[0].data.string->data.c_str(), MUCK::getName(PSafe), BUFFER_LEN, 1);
+        prefix_message(buf, oper[0].data.string->data.c_str(), PNAME(PSafe), BUFFER_LEN, 1);
     } else {
         strcpy(buf, DoNullInd(oper[0].data.string));
     }
@@ -1350,7 +1348,7 @@ prim_notify_html_exclude_nocr(PRIM_PROTOTYPE)
             abort_interp("Invalid location argument (1)");
         }
         CHECKREMOTE(where);
-        what = CONTENTS(where);
+        what = DBFETCH(where)->contents;
         CLEAR(oper1);
         if (*buf) {
             while (what != NOTHING) {
@@ -1364,7 +1362,7 @@ prim_notify_html_exclude_nocr(PRIM_PROTOTYPE)
                 }
                 if (!tmp)
                     notify_html_listeners(fr->descr, PSafe, program, what, where, buf, 0);
-                what = NEXTOBJ(what);
+                what = DBFETCH(what)->next;
             }
         }
 
@@ -1635,10 +1633,10 @@ prim_unparseobj(PRIM_PROTOTYPE)
                 sprintf(buf, "*NIL*");
                 break;
             default:
-                if (result < 0 || result >= MUCK::database().top())
+                if (result < 0 || result >= db_top)
                     sprintf(buf, "*INVALID(#%d)*", result);
                 else
-                    sprintf(buf, "%s(#%d%s)", MUCK::getName(result), result, unparse_flags(result, tbuf));
+                    sprintf(buf, "%s(#%d%s)", RNAME(result), result, unparse_flags(result, tbuf));
         }
 
         PushString(buf);
@@ -2733,8 +2731,8 @@ prim_array_fmtstrings(PRIM_PROTOTYPE)
                                     abort_interp("Format specified object not valid.");
                                 ref = oper3->data.objref;
                                 CHECKREMOTE(ref);
-                                if (MUCK::getName(ref)) {
-                                    strcpyn(hold, sizeof(hold), MUCK::getName(ref));
+                                if (NAME(ref)) {
+                                    strcpyn(hold, sizeof(hold), NAME(ref));
                                 } else {
                                     hold[0] = '\0';
                                 }
@@ -2889,7 +2887,7 @@ prim_ansi_unparseobj(PRIM_PROTOTYPE)
             strcpy(buf, SYSCYAN "*NIL*");
             break;
         default:
-            if (result < 0 || result >= MUCK::database().top()) {
+            if (result < 0 || result >= db_top) {
                 sprintf(buf, SYSRED "*INVALID(#%d)*", result);
             } else {
                 sprintf(buf, "%s" SYSYELLOW "(#%d%s)", ansiname(result, tbuf), result, unparse_flags(result, tbuf2));
@@ -2907,13 +2905,13 @@ prim_ansi_name(PRIM_PROTOTYPE)
 
     if (oper[0].type != PROG_OBJECT)
         abort_interp("Arguement (1) is not a dbref.");
-    if ((oper[0].data.objref < 0) || (oper[0].data.objref >= MUCK::database().top()))
+    if ((oper[0].data.objref < 0) || (oper[0].data.objref >= db_top))
         abort_interp("Invalid argument type");
     ref = oper[0].data.objref;
     CHECKREMOTE(ref);
     if ((Typeof(ref) != TYPE_PLAYER) && (Typeof(ref) != TYPE_PROGRAM))
         ts_lastuseobject(program, ref);
-    if (MUCK::getName(ref)) {
+    if (NAME(ref)) {
         ansiname(ref, buf);
     } else {
         buf[0] = '\0';
@@ -2929,7 +2927,7 @@ prim_unparse_flags(PRIM_PROTOTYPE)
 
     if (oper[0].type != PROG_OBJECT)
         abort_interp("Arguement (1) is not a dbref.");
-    if ((oper[0].data.objref < 0) || (oper[0].data.objref >= MUCK::database().top()))
+    if ((oper[0].data.objref < 0) || (oper[0].data.objref >= db_top))
         abort_interp("Invalid argument type");
     ref = oper[0].data.objref;
     CHECKREMOTE(ref);

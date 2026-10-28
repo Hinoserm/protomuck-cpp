@@ -4,7 +4,6 @@
 #include "db.h"
 #include "inst.h"
 #include "externs.h"
-#include "Modules.h"
 #include "match.h"
 #include "mufevent.h"
 #include "interface.h"
@@ -12,7 +11,7 @@
 #include "tune.h"
 #include "strutils.h"
 #include "interp.h"
-#include "ObjectAccess.h"
+extern struct line *read_program(dbref i);
 extern int tune_setparm(const dbref player, const char *parmname, const char *val);
 extern struct frame *aForceFrameStack[9];
 void
@@ -153,7 +152,7 @@ prim_queue(PRIM_PROTOTYPE)
     if (oper[0].type != PROG_STRING)
         abort_interp("Non-string argument (3)");
     if ((oper3 = fr->variables + 1)->type != PROG_OBJECT)
-        temproom = MUCK::getLocation(PSafe);
+        temproom = DBFETCH(PSafe)->location;
     else
         temproom = oper3->data.objref;
     result = add_muf_delayq_event(oper[2].data.number, fr->descr, player, temproom, NOTHING, oper[1].data.objref, DoNullInd(oper[0].data.string), "Queued Event.", 0);
@@ -184,7 +183,7 @@ prim_enqueue(PRIM_PROTOTYPE)
         || (Typeof(oper[3].data.objref) != TYPE_PLAYER && Typeof(oper[3].data.objref) != TYPE_THING))
         abort_interp("Object must be a player or thing. (4)");
     if ((oper4 = fr->variables + 1)->type != PROG_OBJECT)
-        temproom = MUCK::getLocation(PSafe);
+        temproom = DBFETCH(PSafe)->location;
     else
         temproom = oper4->data.objref;
     if (oper[2].type == PROG_INTEGER) {
@@ -232,18 +231,18 @@ prim_timestamps(PRIM_PROTOTYPE)
     if (oper[0].type != PROG_OBJECT)
         abort_interp("Non-object argument (1)");
     ref = oper[0].data.objref;
-    if (ref >= MUCK::database().top() || ref <= NOTHING)
+    if (ref >= db_top || ref <= NOTHING)
         abort_interp("Dbref is not an object nor garbage.");
     CHECKREMOTE(ref);
     CHECKOFLOW(4);
 
-    result = (int) MUCK::getCreated(ref);
+    result = (int) DBFETCH(ref)->ts.created;
     PushInt(result);
-    result = (int) MUCK::getModified(ref);
+    result = (int) DBFETCH(ref)->ts.modified;
     PushInt(result);
-    result = (int) MUCK::getLastUsed(ref);
+    result = (int) DBFETCH(ref)->ts.lastused;
     PushInt(result);
-    result = MUCK::getUseCount(ref);
+    result = DBFETCH(ref)->ts.usecount;
     PushInt(result);
 }
 
@@ -256,16 +255,16 @@ prim_refstamps(PRIM_PROTOTYPE)
     if (oper[0].type != PROG_OBJECT)
         abort_interp("Non-object argument (1)");
     ref = oper[0].data.objref;
-    if (ref >= MUCK::database().top() || ref <= NOTHING)
+    if (ref >= db_top || ref <= NOTHING)
         abort_interp("Dbref is not an object nor garbage.");
     CHECKREMOTE(ref);
     CHECKOFLOW(3);
 
-    result = MUCK::getCreatedBy(ref);
+    result = DBFETCH(ref)->ts.dcreated;
     PushObject(result);
-    result = MUCK::getModifiedBy(ref);
+    result = DBFETCH(ref)->ts.dmodified;
     PushObject(result);
-    result = MUCK::getLastUsedBy(ref);
+    result = DBFETCH(ref)->ts.dlastused;
     PushObject(result);
 }
 
@@ -277,7 +276,7 @@ prim_touch(PRIM_PROTOTYPE)
     if (oper[0].type != PROG_OBJECT)
         abort_interp("Non-object argument (1)");
     ref = oper[0].data.objref;
-    if (ref >= MUCK::database().top() || ref <= NOTHING)
+    if (ref >= db_top || ref <= NOTHING)
         abort_interp("Dbref is not an object nor garbage.");
     CHECKREMOTE(ref);
     ts_useobject(program, ref);
@@ -292,7 +291,7 @@ prim_use(PRIM_PROTOTYPE)
     if (oper[0].type != PROG_OBJECT)
         abort_interp("Non-object argument (1)");
     ref = oper[0].data.objref;
-    if (ref >= MUCK::database().top() || ref <= NOTHING)
+    if (ref >= db_top || ref <= NOTHING)
         abort_interp("Dbref is not an object nor garbage.");
     CHECKREMOTE(ref);
     ts_lastuseobject(program, ref);
@@ -326,7 +325,7 @@ prim_fork(PRIM_PROTOTYPE)
     for (i = 0; i <= fr->caller.top; i++) {
         tmpfr->caller.st[i] = fr->caller.st[i];
         if (i > 0)
-            MUCK::programRuntime(fr->caller.st[i]).instances++;
+            DBFETCH(fr->caller.st[i])->sp.program.instances++;
     }
     tmpfr->trys.top = fr->trys.top;
     tmpfr->trys.st = copy_trys(fr->trys.st);
@@ -426,8 +425,8 @@ prim_stats(PRIM_PROTOTYPE)
 
         /* tmp, ref */
         rooms = exits = things = players = programs = garbage = 0;
-        for (i = 0; i < MUCK::database().top(); i++) {
-            if (ref == NOTHING || MUCK::getOwner(i) == ref) {
+        for (i = 0; i < db_top; i++) {
+            if (ref == NOTHING || OWNER(i) == ref) {
                 switch (Typeof(i)) {
                     case TYPE_ROOM:
                         rooms++;
@@ -755,21 +754,21 @@ prim_cancallp(PRIM_PROTOTYPE)
         abort_interp("Expected string argument. (2)");
     if (!oper[0].data.string)
         abort_interp("Invalid Null string argument. (2)");
-    if (!(MUCK::programRuntime(oper[1].data.objref).code)) {
+    if (!(DBFETCH(oper[1].data.objref)->sp.program.code)) {
         struct line *tmpline;
 
-        tmpline = MUCK::programRuntime(oper[1].data.objref).first;
-        MUCK::programRuntime(oper[1].data.objref).first = ((struct line *) MUCK::programs().read(oper[1].data.objref));
-        do_compile(fr->descr, MUCK::getOwner(oper[1].data.objref), oper[1].data.objref, 0);
-        free_prog_text(MUCK::programRuntime(oper[1].data.objref).first);
-        MUCK::programRuntime(oper[1].data.objref).first = tmpline;
+        tmpline = DBFETCH(oper[1].data.objref)->sp.program.first;
+        DBFETCH(oper[1].data.objref)->sp.program.first = ((struct line *) read_program(oper[1].data.objref));
+        do_compile(fr->descr, OWNER(oper[1].data.objref), oper[1].data.objref, 0);
+        free_prog_text(DBFETCH(oper[1].data.objref)->sp.program.first);
+        DBFETCH(oper[1].data.objref)->sp.program.first = tmpline;
     }
     result = 0;
-    if (ProgMLevel(oper[1].data.objref) > 0 && (mlev >= 4 || MUCK::getOwner(oper[1].data.objref) == ProgUID || Linkable(oper[1].data.objref))
+    if (ProgMLevel(oper[1].data.objref) > 0 && (mlev >= 4 || OWNER(oper[1].data.objref) == ProgUID || Linkable(oper[1].data.objref))
         ) {
         struct publics *pbs;
 
-        pbs = MUCK::programRuntime(oper[1].data.objref).pubs;
+        pbs = DBFETCH(oper[1].data.objref)->sp.program.pubs;
         while (pbs) {
             if (!string_compare(oper[0].data.string->data.c_str(), pbs->subname))
                 break;
@@ -995,13 +994,13 @@ prim_debugger_break(PRIM_PROTOTYPE)
 void
 prim_debug_on(PRIM_PROTOTYPE)
 {
-    MUCK::addFlags(program, DARK);
+    FLAGS(program) |= DARK;
 }
 
 void
 prim_debug_off(PRIM_PROTOTYPE)
 {
-    MUCK::clearFlags(program, DARK);
+    FLAGS(program) &= ~DARK;
 }
 
 void
@@ -1015,8 +1014,8 @@ prim_debug_line(PRIM_PROTOTYPE)
         if (controls(PSafe, program))
             notify_nolisten(PSafe, mesg, 1);
 
-        if ((FLAG2(program) & F2PARENT) && PSafe != MUCK::getOwner(program))
-            notify_nolisten(MUCK::getOwner(program), mesg, 1);
+        if ((FLAG2(program) & F2PARENT) && PSafe != OWNER(program))
+            notify_nolisten(OWNER(program), mesg, 1);
     }
 }
 
@@ -1170,9 +1169,9 @@ prim_funcprof_array(PRIM_PROTOTYPE)
     if (oper[0].type == PROG_OBJECT) {
         nw = new_array_dictionary();
 
-        for (i = MUCK::database().top(); i-- > 0;) {
-            if (i == oper[0].data.objref && Typeof(i) == TYPE_PROGRAM && MUCK::programRuntime(i).code && MUCK::programRuntime(i).fprofile) {
-                struct funcprof *fpe = MUCK::programRuntime(i).fprofile;
+        for (i = db_top; i-- > 0;) {
+            if (i == oper[0].data.objref && Typeof(i) == TYPE_PROGRAM && DBFETCH(i)->sp.program.code && DBFETCH(i)->sp.program.fprofile) {
+                struct funcprof *fpe = DBFETCH(i)->sp.program.fprofile;
 
                 while (fpe) {
                     stk_array *nw2 = new_array_dictionary();

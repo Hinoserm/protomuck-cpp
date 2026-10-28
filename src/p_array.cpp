@@ -13,7 +13,6 @@
 #include "strutils.h"
 #include "interp.h"
 #include "props.h"
-#include "ObjectAccess.h"
 #include "JSONConvert.h"
 
 /* ( s -- x )  JSON text to a MUF value; see JSONConvert.h for the
@@ -742,7 +741,7 @@ prim_array_notify(PRIM_PROTOTYPE)
             strcpy(buf, DoNullInd(oper4->data.string));
 
             if (tp_m1_name_notify && mlev < 2) {
-                prefix_message(buf, DoNullInd(oper4->data.string), MUCK::getName(PSafe), BUFFER_LEN, 1);
+                prefix_message(buf, DoNullInd(oper4->data.string), NAME(PSafe), BUFFER_LEN, 1);
             } else {
                 strcpy(buf, DoNullInd(oper4->data.string));
             }
@@ -751,7 +750,7 @@ prim_array_notify(PRIM_PROTOTYPE)
                 do {
                     oper3 = array_getitem(refarr, &temp1);
                     if (valid_object(oper3))
-                        notify_listeners(fr->descr, PSafe, program, oper3->data.objref, MUCK::getLocation(oper3->data.objref), buf, 1);
+                        notify_listeners(fr->descr, PSafe, program, oper3->data.objref, getloc(oper3->data.objref), buf, 1);
                 } while (array_next(refarr, &temp1));
             }
         } while (array_next(strarr, &temp2));
@@ -786,7 +785,7 @@ prim_array_ansi_notify(PRIM_PROTOTYPE)
             strcpy(buf, DoNullInd(oper4->data.string));
 
             if (tp_m1_name_notify && mlev < 2) {
-                strcpy(buf2, MUCK::getName(PSafe));
+                strcpy(buf2, NAME(PSafe));
                 strcat(buf2, " ");
                 if (!string_prefix(buf, buf2)) {
                     strcat(buf2, buf);
@@ -798,7 +797,7 @@ prim_array_ansi_notify(PRIM_PROTOTYPE)
                 do {
                     oper3 = array_getitem(refarr, &temp1);
                     if (valid_object(oper3))
-                        ansi_notify_listeners(fr->descr, PSafe, program, oper3->data.objref, MUCK::getLocation(oper3->data.objref), buf, 1);
+                        ansi_notify_listeners(fr->descr, PSafe, program, oper3->data.objref, getloc(oper3->data.objref), buf, 1);
 
                 } while (array_next(refarr, &temp1));
             }
@@ -833,7 +832,7 @@ prim_array_notify_html(PRIM_PROTOTYPE)
             oper4 = array_getitem(strarr, &temp2);
             strcpy(buf, DoNullInd(oper4->data.string));
             if (tp_m1_name_notify && mlev < 2) {
-                strcpy(buf2, MUCK::getName(PSafe));
+                strcpy(buf2, NAME(PSafe));
                 strcat(buf2, " ");
                 if (!string_prefix(buf, buf2)) {
                     strcat(buf2, buf);
@@ -845,7 +844,7 @@ prim_array_notify_html(PRIM_PROTOTYPE)
                 do {
                     oper3 = array_getitem(refarr, &temp1);
 
-                    notify_html_listeners(fr->descr, PSafe, program, oper3->data.objref, MUCK::getLocation(oper3->data.objref), buf, 1);
+                    notify_html_listeners(fr->descr, PSafe, program, oper3->data.objref, getloc(oper3->data.objref), buf, 1);
                 } while (array_next(refarr, &temp1));
             }
         } while (array_next(strarr, &temp2));
@@ -1055,8 +1054,7 @@ prim_array_get_propdirs(PRIM_PROTOTYPE)
     stk_array *nw;
     char propname[BUFFER_LEN];
     char dir[BUFFER_LEN];
-    PropPtr propadr;
-    PropDirPtr pptr;
+    PropPtr propadr, pptr;
     PropPtr prptr;
     int count = 0;
     int len = 0;
@@ -1088,6 +1086,9 @@ prim_array_get_propdirs(PRIM_PROTOTYPE)
         if (prop_read_perms(ProgUID, ref, buf, mlev)) {
             prptr = get_property(ref, buf);
             if (prptr) {
+#ifdef DISKBASE
+                propfetch(ref, prptr);
+#endif
                 if (PropDir(prptr)) {
                     temp2.type = PROG_STRING;
                     temp2.data.string = alloc_prog_string(propname);
@@ -1112,8 +1113,7 @@ prim_array_get_propvals(PRIM_PROTOTYPE)
     stk_array *nw;
     char propname[BUFFER_LEN];
     char dir[BUFFER_LEN];
-    PropPtr propadr;
-    PropDirPtr pptr;
+    PropPtr propadr, pptr;
     PropPtr prptr;
     dbref ref;
     struct inst temp1, temp2;
@@ -1143,6 +1143,9 @@ prim_array_get_propvals(PRIM_PROTOTYPE)
             if (prptr) {
                 int goodflag = 1;
 
+#ifdef DISKBASE
+                propfetch(ref, prptr);
+#endif
                 switch (PropType(prptr)) {
                     case PROP_STRTYP:
                         temp2.type = PROG_STRING;
@@ -1254,6 +1257,9 @@ prim_array_get_proplist(PRIM_PROTOTYPE)
                     temp2.type = PROG_STRING;
                     temp2.data.string = NULL;
                 } else {
+#ifdef DISKBASE
+                    propfetch(ref, prptr);
+#endif
                     switch (PropType(prptr)) {
                         case PROP_STRTYP:
                             temp2.type = PROG_STRING;
@@ -1322,12 +1328,12 @@ prim_array_put_propvals(PRIM_PROTOTYPE)
 
         do {
             oper4 = array_getitem(arr, &temp1);
-            /* snprintf, not sprintf: both the directory string and a
-             * dictionary key are player-controlled and can each
-             * approach BUFFER_LEN, so their concatenation overflows a
-             * BUFFER_LEN stack buffer. This is player-triggerable
-             * from ordinary MUF on any writable object. */
             switch (temp1.type) {
+                /* snprintf, not sprintf: both the directory string and
+                 * a dictionary key are player-controlled and can each
+                 * approach BUFFER_LEN, so their concatenation overflows
+                 * a BUFFER_LEN stack buffer. This is player-triggerable
+                 * from ordinary MUF on any writable object. */
                 case PROG_STRING:
                     snprintf(propname, sizeof(propname), "%s%c%s", DoNullInd(oper[1].data.string), PROPDIR_DELIMITER, DoNullInd(temp1.data.string));
                     break;
@@ -1877,12 +1883,12 @@ prim_array_interpret(PRIM_PROTOTYPE)
                     text = buf;
                     break;
                 }
-                if (in->data.number >= MUCK::database().top()) {
+                if (in->data.number >= db_top) {
                     sprintf(buf, "*INVALID(#%d)*", (int) in->data.number);
                     text = buf;
                     break;
                 }
-                sprintf(buf, "%s", MUCK::getName(in->data.number));
+                sprintf(buf, "%s", NAME(in->data.number));
                 text = buf;
                 break;
             case PROG_FLOAT:
@@ -1962,7 +1968,7 @@ prim_array_matchval(PRIM_PROTOTYPE)
                     array_setitem(&nw, &temp1, in);
                 }
             } else if (in->type == PROG_OBJECT) {
-                if (equalstr((char *) DoNullInd(oper[0].data.string), (char *) MUCK::getName(in->data.objref))) {
+                if (equalstr((char *) DoNullInd(oper[0].data.string), (char *) NAME(in->data.objref))) {
                     array_setitem(&nw, &temp1, in);
                 }
             }
@@ -2396,8 +2402,7 @@ array_props_wildcard(stk_array *arr, dbref player, dbref thing, const char *dir,
     char propname[BUFFER_LEN];
     char wld[BUFFER_LEN];
     char buf[BUFFER_LEN];
-    PropPtr propadr;
-    PropDirPtr pptr;
+    PropPtr propadr, pptr;
     char *ptr, *wldcrd = wld;
     int i;
     bool recurse = 0;
@@ -2428,6 +2433,9 @@ array_props_wildcard(stk_array *arr, dbref player, dbref thing, const char *dir,
 
                     if (prptr) {
                         int goodflag = 1;
+#ifdef DISKBASE
+                        propfetch(thing, prptr);
+#endif
                         switch (PropType(prptr)) {
                             case PROP_STRTYP:
                                 temp2.type = PROG_STRING;
@@ -2481,7 +2489,7 @@ prim_properties_array(PRIM_PROTOTYPE)
         abort_interp("Non-string argument (2)");
     if (!oper[0].data.string)
         abort_interp("Empty string argument (2)");
-    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= MUCK::database().top()))
+    if ((oper[1].data.objref < 0) || (oper[1].data.objref >= db_top))
         abort_interp("Non-object argument (1)");
     CHECKREMOTE(oper[1].data.objref);
 

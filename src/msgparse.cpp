@@ -2,7 +2,6 @@
 
 #include "params.h"
 #include "db.h"
-#include "ObjectAccess.h"
 #include "tune.h"
 #include "mpi.h"
 #include "externs.h"
@@ -14,7 +13,7 @@
 #include "mfun.h"
 
 #define smnotify(X, Y, Z) { if (OkObj(Y))                       \
-                                notify_nolisten(MUCK::getOwner(Y), Z, 1); \
+                                notify_nolisten(OWNER(Y), Z, 1);       \
                             else if (X > -1)                    \
                                 notify_descriptor(X, Z);        \
                           }
@@ -24,21 +23,21 @@ time_t mpi_prof_start_time;
 bool
 Archperms(dbref what)
 {
-    return (Arch(what) && TArch(MUCK::getOwner(what)));
+    return (Arch(what) && TArch(OWNER(what)));
 }
 
 
 bool
 Wizperms(dbref what)
 {
-    return (Wiz(what) && TWiz(MUCK::getOwner(what)));
+    return (Wiz(what) && TWiz(OWNER(what)));
 }
 
 
 bool
 Mageperms(dbref what)
 {
-    return (Mage(what) && TMage(MUCK::getOwner(what)));
+    return (Mage(what) && TMage(OWNER(what)));
 }
 
 bool
@@ -81,13 +80,13 @@ safegetprop_limited(dbref player, dbref what, dbref whom, dbref perms, const cha
     const char *ptr;
 
     while (what != NOTHING) {
-        if (MUCK::getOwner(what) == whom || Wizard(what) || safegetprop_strict(player, what, perms, "~mpi_macros_ok")
+        if (OWNER(what) == whom || Wizard(what) || safegetprop_strict(player, what, perms, "~mpi_macros_ok")
             ) {
             ptr = safegetprop_strict(player, what, perms, inbuf);
             if (!ptr || *ptr)
                 return ptr;
         }
-        what = MUCK::database().parent(what);
+        what = getparent(what);
     }
 
     return "";
@@ -114,7 +113,7 @@ safegetprop_strict(dbref player, dbref what, dbref perms, const char *inbuf)
 
     if (!Archperms(perms)) {
         if (Prop_Hidden(inbuf)
-            || (Prop_Private(inbuf) && MUCK::getOwner(perms) != MUCK::getOwner(what))) {
+            || (Prop_Private(inbuf) && OWNER(perms) != OWNER(what))) {
             notify_nolisten(player, "PropFetch: Permission denied.", 1);
             return NULL;
         }
@@ -154,7 +153,7 @@ safegetprop(dbref player, dbref what, dbref perms, const char *inbuf)
         if (!ptr || *ptr)
             return ptr;
 
-        what = MUCK::database().parent(what);
+        what = getparent(what);
     }
 
     return "";
@@ -315,8 +314,8 @@ get_concat_list(dbref player, dbref what, dbref perms, dbref obj, const char *li
 bool
 mesg_read_perms(dbref player, dbref perms, dbref obj)
 {
-    return (!obj || obj == player || obj == perms || MUCK::getOwner(perms) == MUCK::getOwner(obj)
-            || controls(MUCK::getOwner(perms), obj) || Wizperms(perms));
+    return (!obj || obj == player || obj == perms || OWNER(perms) == OWNER(obj)
+            || controls(OWNER(perms), obj) || Wizperms(perms));
 }
 
 bool
@@ -326,15 +325,15 @@ isneighbor(dbref d1, dbref d2)
         return 1;
 
     if (Typeof(d1) != TYPE_ROOM)
-        if (MUCK::getLocation(d1) == d2)
+        if (getloc(d1) == d2)
             return 1;
 
     if (Typeof(d2) != TYPE_ROOM)
-        if (MUCK::getLocation(d2) == d1)
+        if (getloc(d2) == d1)
             return 1;
 
     if (Typeof(d1) != TYPE_ROOM && Typeof(d2) != TYPE_ROOM)
-        if (MUCK::getLocation(d1) == MUCK::getLocation(d2))
+        if (getloc(d1) == getloc(d2))
             return 1;
 
     return 0;
@@ -343,7 +342,7 @@ isneighbor(dbref d1, dbref d2)
 bool
 mesg_local_perms(dbref player, dbref perms, dbref obj)
 {
-    return ((MUCK::getLocation(obj) != NOTHING && MUCK::getOwner(perms) == MUCK::getOwner(MUCK::getLocation(obj)))
+    return ((getloc(obj) != NOTHING && OWNER(perms) == OWNER(getloc(obj)))
             || isneighbor(perms, obj) || isneighbor(player, obj)
             || Mageperms(perms) || mesg_read_perms(player, perms, obj));
 }
@@ -361,7 +360,7 @@ mesg_dbref_raw(int descr, dbref player, dbref what, dbref perms, const char *buf
             obj = player;
         } else if (!string_compare(buf, "here")) {
             if (OkObj(player)) {
-                obj = MUCK::getLocation(player);
+                obj = getloc(player);
             } else {
                 obj = NOTHING;
             }
@@ -387,7 +386,7 @@ mesg_dbref_raw(int descr, dbref player, dbref what, dbref perms, const char *buf
         }
     }
 
-    if (obj < 0 || obj >= MUCK::database().top() || Typeof(obj) == TYPE_GARBAGE)
+    if (obj < 0 || obj >= db_top || Typeof(obj) == TYPE_GARBAGE)
         obj = UNKNOWN;
 
     return obj;
@@ -412,10 +411,10 @@ mesg_dbref_mage(int descr, dbref player, dbref what, dbref perms, char *buf)
 {
     dbref obj = mesg_dbref_raw(descr, player, what, perms, buf);
 
-    if (obj == UNKNOWN || controls(MUCK::getOwner(perms), obj))
+    if (obj == UNKNOWN || controls(OWNER(perms), obj))
         return obj;
 
-    if (!Mageperms(perms) && MUCK::getOwner(perms) != MUCK::getOwner(obj))
+    if (!Mageperms(perms) && OWNER(perms) != OWNER(obj))
         obj = PERMDENIED;
 
     return obj;
@@ -429,7 +428,7 @@ mesg_dbref_strict(int descr, dbref player, dbref what, dbref perms, char *buf)
     if (obj == UNKNOWN)
         return obj;
 
-    if (!Wizperms(perms) && MUCK::getOwner(perms) != MUCK::getOwner(obj))
+    if (!Wizperms(perms) && OWNER(perms) != OWNER(obj))
         obj = PERMDENIED;
 
     return obj;
@@ -452,13 +451,13 @@ mesg_dbref_local(int descr, dbref player, dbref what, dbref perms, char *buf)
 const char *
 ref2str(dbref obj, char *buf)
 {
-    if (obj < -3 || obj >= MUCK::database().top()) {
+    if (obj < -3 || obj >= db_top) {
         sprintf(buf, "Bad");
         return buf;
     }
 
     if (obj >= 0 && Typeof(obj) == TYPE_PLAYER)
-        sprintf(buf, "*%s", MUCK::getName(obj));
+        sprintf(buf, "*%s", NAME(obj));
     else
         sprintf(buf, "#%d", obj);
 
@@ -597,10 +596,10 @@ msg_is_macro(dbref player, dbref what, dbref perms, const char *name)
     ptr = get_mfunc(name);
 
     if (!ptr || !*ptr)
-        ptr = safegetprop_strict(player, MUCK::getOwner(obj), perms, buf2);
+        ptr = safegetprop_strict(player, OWNER(obj), perms, buf2);
 
     if (!ptr || !*ptr)
-        ptr = safegetprop_limited(player, obj, MUCK::getOwner(obj), perms, buf2);
+        ptr = safegetprop_limited(player, obj, OWNER(obj), perms, buf2);
 
     if (!ptr || !*ptr)
         ptr = safegetprop_strict(player, 0, perms, buf2);
@@ -624,10 +623,10 @@ msg_unparse_macro(dbref player, dbref what, dbref perms, char *name, int argc, a
     ptr = get_mfunc(name);
 
     if (!ptr || !*ptr)
-        ptr = safegetprop_strict(player, MUCK::getOwner(obj), perms, buf2);
+        ptr = safegetprop_strict(player, OWNER(obj), perms, buf2);
 
     if (!ptr || !*ptr)
-        ptr = safegetprop_limited(player, obj, MUCK::getOwner(obj), perms, buf2);
+        ptr = safegetprop_limited(player, obj, OWNER(obj), perms, buf2);
 
     if (!ptr || !*ptr)
         ptr = safegetprop_strict(player, 0, perms, buf2);
@@ -1141,7 +1140,13 @@ do_parse_mesg(int descr, dbref player, dbref what, const char *inbuf, const char
             }
             et.tv_usec -= st.tv_usec;
             et.tv_sec -= st.tv_sec;
-            MUCK::mpiProfileAdd(what, et);
+            DBFETCH(what)->mpi_proftime.tv_sec += et.tv_sec;
+            DBFETCH(what)->mpi_proftime.tv_usec += et.tv_usec;
+            if (DBFETCH(what)->mpi_proftime.tv_usec >= 1000000) {
+                DBFETCH(what)->mpi_proftime.tv_usec -= 1000000;
+                DBFETCH(what)->mpi_proftime.tv_sec += 1;
+            }
+            DBFETCH(what)->mpi_prof_use++;
         }
 
         return (tmp);

@@ -11,11 +11,9 @@
 #include "props.h"
 #include "match.h"
 #include "externs.h"
-#include "Modules.h"
 #include "params.h"
 #include "tune.h"
 #include "interface.h"
-#include "ObjectAccess.h"
 
 /* Lachesis note on the routines in this package:
  *   eval_booexp does just evaluation.
@@ -129,9 +127,9 @@ eval_boolexp_rec2(int descr, dbref player, struct boolexp * b, dbref thing, int 
                     if (Typeof(player) == TYPE_PLAYER || Typeof(player) == TYPE_THING)
                         real_player = player;
                     else
-                        real_player = MUCK::getOwner(player);
+                        real_player = OWNER(player);
 
-                    tmpfr = interp(descr, real_player, MUCK::getLocation(player), b->thing, thing, PREEMPT, STD_HARDUID, 0);
+                    tmpfr = interp(descr, real_player, DBFETCH(player)->location, b->thing, thing, PREEMPT, STD_HARDUID, 0);
 
                     if (!tmpfr)
                         return 0;
@@ -140,9 +138,9 @@ eval_boolexp_rec2(int descr, dbref player, struct boolexp * b, dbref thing, int 
 
                     return (rv != NULL);
                 }
-                return (b->thing == player || b->thing == MUCK::getOwner(player)
-                        || member(b->thing, CONTENTS(player))
-                        || b->thing == MUCK::getLocation(player));
+                return (b->thing == player || b->thing == OWNER(player)
+                        || member(b->thing, DBFETCH(player)->contents)
+                        || b->thing == DBFETCH(player)->location);
 #else /* !SANITY */
                 return 0;
 #endif /* !SANITY */
@@ -293,7 +291,7 @@ parse_boolexp_F(int descr, const char **parsebuf, dbref player, int dbloadp)
                     return TRUE_BOOLEXP;
                 }
                 b->thing = (dbref) atoi(buf + 1);
-                if (b->thing < 0 || b->thing >= MUCK::database().top() || Typeof(b->thing) == TYPE_GARBAGE) {
+                if (b->thing < 0 || b->thing >= db_top || Typeof(b->thing) == TYPE_GARBAGE) {
                     free_boolnode(b);
                     return TRUE_BOOLEXP;
                 } else {

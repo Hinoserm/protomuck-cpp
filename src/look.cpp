@@ -9,11 +9,9 @@
 #include "mpi.h"
 #include "props.h"
 #include "interface.h"
+#include <vector>
 #include "match.h"
 #include "externs.h"
-#include "Modules.h"
-#include "ObjectAccess.h"
-#include "ObjectStore.h"
 
 #define UPCASE(x) (toupper(x))
 #define DOWNCASE(x) (tolower(x))
@@ -29,18 +27,17 @@ print_owner(dbref player, dbref thing)
 
     switch (Typeof(thing)) {
         case TYPE_PLAYER:
-            anotify_fmt(player, SYSYELLOW "%s is a player.", MUCK::getName(thing));
+            anotify_fmt(player, SYSYELLOW "%s is a player.", NAME(thing));
             break;
         case TYPE_ROOM:
         case TYPE_THING:
         case TYPE_PROGRAM:
-        case TYPE_UNSUPPORTED:
-            anotify_fmt(player, SYSYELLOW "Owner: %s", MUCK::getName(MUCK::getOwner(thing)));
+            anotify_fmt(player, SYSYELLOW "Owner: %s", NAME(OWNER(thing)));
             break;
         case TYPE_EXIT:
-            anotify_fmt(player, SYSYELLOW "Owner: %s", MUCK::getName(MUCK::getOwner(thing)));
-            if (MUCK::exitDestCount(thing)) {
-                ref = MUCK::exitDestRef(thing, 0);
+            anotify_fmt(player, SYSYELLOW "Owner: %s", NAME(OWNER(thing)));
+            if (DBFETCH(thing)->sp.exit.ndest) {
+                ref = (DBFETCH(thing)->sp.exit.dest)[0];
                 if (ref == NIL || ref == HOME)
                     anotify_fmt(player, SYSCYAN "And is linked to: %s", ansi_unparse_object(MAN, ref));
                 else if (Typeof(ref) == TYPE_PROGRAM && FLAGS(ref) & VEHICLE) {
@@ -49,7 +46,7 @@ print_owner(dbref player, dbref thing)
             }
             break;
         case TYPE_GARBAGE:
-            anotify_fmt(player, SYSBLUE "%s is garbage.", MUCK::getName(thing));
+            anotify_fmt(player, SYSBLUE "%s is garbage.", NAME(thing));
             break;
     }
 }
@@ -89,7 +86,7 @@ exec_or_notify_2(int descr, dbref player, dbref thing, const char *message, cons
             if (*p)
                 p++;
         }
-        if (i < 0 || i >= MUCK::database().top() || (Typeof(i) != TYPE_PROGRAM)) {
+        if (i < 0 || i >= db_top || (Typeof(i) != TYPE_PROGRAM)) {
             if (*p)
                 notify(player, p);
             else
@@ -102,7 +99,7 @@ exec_or_notify_2(int descr, dbref player, dbref thing, const char *message, cons
             p = do_parse_mesg(descr, player, thing, p, whatcalled, buf, MPI_ISPRIVATE);
             strcpy(match_args, p);
             strcpy(match_cmdname, whatcalled);
-            tmpfr = interp(descr, player, MUCK::getLocation(player), i, thing, PREEMPT, STD_HARDUID, 0);
+            tmpfr = interp(descr, player, DBFETCH(player)->location, i, thing, PREEMPT, STD_HARDUID, 0);
             if (tmpfr)
                 interp_loop(player, i, tmpfr, 0);
 
@@ -175,6 +172,7 @@ look_details(dbref player, dbref what, const char *propname)
 static void
 look_contents(dbref player, dbref loc, const char *contents_name)
 {
+    dbref thing;
     bool can_see_loc;
     bool saw_something = 0;
 
@@ -183,12 +181,12 @@ look_contents(dbref player, dbref loc, const char *contents_name)
 
     /* check to see if there is anything there */
     if (((Typeof(loc) != TYPE_ROOM) || !Dark(loc)))
-        for (dbref thing : MUCK::getContents(loc)) {
+        DOLIST(thing, DBFETCH(loc)->contents) {
         if (can_see(player, thing, can_see_loc)) {
             /* something exists!  show him everything */
             saw_something = 1;
             anotify_nolisten(player, contents_name, 1);
-            for (dbref thing : MUCK::getContents(loc)) {
+            DOLIST(thing, DBFETCH(loc)->contents) {
                 if (can_see(player, thing, can_see_loc))
                     anotify_nolisten(player, ansi_unparse_object(player, thing), 1);
             }
@@ -209,8 +207,8 @@ look_simple(int descr, dbref player, dbref thing, const char *name)
 {
     if (Html(player) && GETHTMLDESC(thing))
         exec_or_html_notify(descr, player, thing, GETHTMLDESC(thing), name);
-    else if (MUCK::getDesc(thing))
-        exec_or_notify(descr, player, thing, MUCK::getDesc(thing), name);
+    else if (GETDESC(thing))
+        exec_or_notify(descr, player, thing, GETDESC(thing), name);
     else
         notify(player, "You see nothing special.");
 }
@@ -227,8 +225,8 @@ look_room(int descr, dbref player, dbref loc)
     if (Typeof(loc) == TYPE_ROOM) {
         if (Html(player) && GETHTMLDESC(loc))
             exec_or_html_notify(descr, player, loc, GETHTMLDESC(loc), "(@Desc)");
-        else if (MUCK::getDesc(loc))
-            exec_or_notify(descr, player, loc, MUCK::getDesc(loc), "(@Desc)");
+        else if (GETDESC(loc))
+            exec_or_notify(descr, player, loc, GETDESC(loc), "(@Desc)");
 
         /* tell him the appropriate messages if he has the key */
         if (can_doit(descr, player, loc, 0)) {
@@ -242,7 +240,7 @@ look_room(int descr, dbref player, dbref loc)
                 exec_or_notify(descr, player, loc, GETSUCC(loc), "(@Succ)");
 
             if (GETOSUCC(loc) && !Dark(player))
-                parse_omessage(descr, player, loc, loc, GETOSUCC(loc), MUCK::getName(player), "(@Osucc)");
+                parse_omessage(descr, player, loc, loc, GETOSUCC(loc), NAME(player), "(@Osucc)");
         }
     } else {
         if (Html(player) && GETIHTMLDESC(loc))
@@ -266,7 +264,7 @@ do_look_around(int descr, dbref player)
 {
     dbref loc;
 
-    if ((loc = MUCK::getLocation(player)) == NOTHING)
+    if ((loc = getloc(player)) == NOTHING)
         return;
 
     look_room(descr, player, loc);
@@ -282,10 +280,13 @@ do_look_at(int descr, dbref player, const char *name, const char *detail)
     char obj_num[20];
 
     if (*name == '\0' || !string_compare(name, "here")) {
-        if ((thing = MUCK::getLocation(player)) != NOTHING)
+        if ((thing = getloc(player)) != NOTHING)
             look_room(descr, player, thing);
     } else {
 
+#ifdef DISKBASE
+        fetchprops(DBFETCH(player)->location);
+#endif
 
         /* look at a thing here */
         init_match(descr, player, name, NOTYPE, &md);
@@ -293,7 +294,7 @@ do_look_at(int descr, dbref player, const char *name, const char *detail)
         match_neighbor(&md);
         match_possession(&md);
         /* match_registered(&md); */
-        if (Mage(MUCK::getOwner(player))) {
+        if (Mage(OWNER(player))) {
             match_absolute(&md);
             match_player(&md);
         }
@@ -304,14 +305,14 @@ do_look_at(int descr, dbref player, const char *name, const char *detail)
         if (thing != NOTHING && thing != AMBIGUOUS && !*detail) {
             switch (Typeof(thing)) {
                 case TYPE_ROOM:
-                    if (MUCK::getLocation(player) != thing && !can_link_to(player, TYPE_ROOM, thing)) {
+                    if (getloc(player) != thing && !can_link_to(player, TYPE_ROOM, thing)) {
                         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
                     } else {
                         look_room(descr, player, thing);
                     }
                     break;
                 case TYPE_PLAYER:
-                    if (MUCK::getLocation(player) != MUCK::getLocation(thing)
+                    if (getloc(player) != getloc(thing)
                         && !controls(player, thing)) {
                         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
                     } else {
@@ -324,8 +325,8 @@ do_look_at(int descr, dbref player, const char *name, const char *detail)
                     }
                     break;
                 case TYPE_THING:
-                    if (MUCK::getLocation(player) != MUCK::getLocation(thing)
-                        && MUCK::getLocation(thing) != player && !controls(player, thing)) {
+                    if (getloc(player) != getloc(thing)
+                        && getloc(thing) != player && !controls(player, thing)) {
                         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
                     } else {
                         look_simple(descr, player, thing, name);
@@ -351,8 +352,7 @@ do_look_at(int descr, dbref player, const char *name, const char *detail)
             }
         } else if (thing == NOTHING || (*detail && thing != AMBIGUOUS)) {
             char propname[BUFFER_LEN];
-            PropPtr propadr, lastmatch;
-            PropDirPtr pptr;
+            PropPtr propadr, pptr, lastmatch;
             bool ambig;
 
             lastthing = NOTHING;
@@ -365,6 +365,9 @@ do_look_at(int descr, dbref player, const char *name, const char *detail)
                 sprintf(buf, "%s", detail);
             }
 
+#ifdef DISKBASE
+            fetchprops(thing);
+#endif
 
             lastmatch = NULL;
             ambig = 0;
@@ -399,11 +402,14 @@ do_look_at(int descr, dbref player, const char *name, const char *detail)
                 propadr = next_prop(pptr, propadr, propname);
             }
             if (nomatch && thing == player)
-                if ((thing = MUCK::getLocation(player)) != player)
+                if ((thing = getloc(player)) != player)
                     goto repeat_match;
 
             thing = lastthing;
             if (lastmatch != NULL && PropType(lastmatch) == PROP_STRTYP) {
+#ifdef DISKBASE
+                propfetch(thing, lastmatch); /* DISKBASE PROPVALS */
+#endif
                 exec_or_notify(descr, player, thing, PropDataUNCStr(lastmatch), "(@detail)");
             } else if (ambig) {
                 anotify_nolisten(player, CINFO AMBIGUOUS_MESSAGE, 1);
@@ -445,9 +451,6 @@ flag_description(dbref thing)
             break;
         case TYPE_GARBAGE:
             strcat(buf, "GARBAGE");
-            break;
-        case TYPE_UNSUPPORTED:
-            strcat(buf, "UNSUPPORTED");
             break;
         default:
             strcat(buf, "***UNKNOWN TYPE***");
@@ -580,45 +583,45 @@ power_description(dbref thing)
     static char buf[1024];
 
     strcpy(buf, SYSGREEN "Powers: " SYSYELLOW);
-    if (MUCK::getPowers(thing) & POW_ALL_MUF_PRIMS)
+    if (POWERS(thing) & POW_ALL_MUF_PRIMS)
         strcat(buf, "ALL_MUF_PRIMS ");
-    if (MUCK::getPowers(thing) & POW_ANNOUNCE)
+    if (POWERS(thing) & POW_ANNOUNCE)
         strcat(buf, "ANNOUNCE ");
-    if (MUCK::getPowers(thing) & POW_BOOT)
+    if (POWERS(thing) & POW_BOOT)
         strcat(buf, "BOOT ");
-    if (MUCK::getPowers(thing) & POW_CHOWN_ANYTHING)
+    if (POWERS(thing) & POW_CHOWN_ANYTHING)
         strcat(buf, "CHOWN_ANYTHING ");
-    if (MUCK::getPowers(thing) & POW_CONTROL_ALL)
+    if (POWERS(thing) & POW_CONTROL_ALL)
         strcat(buf, "CONTROL_ALL ");
-    if (MUCK::getPowers(thing) & POW_CONTROL_MUF)
+    if (POWERS(thing) & POW_CONTROL_MUF)
         strcat(buf, "CONTROL_MUF ");
-    if (MUCK::getPowers(thing) & POW_EXPANDED_WHO)
+    if (POWERS(thing) & POW_EXPANDED_WHO)
         strcat(buf, "EXPANDED_WHO ");
-    if (MUCK::getPowers(thing) & POW_HIDE)
+    if (POWERS(thing) & POW_HIDE)
         strcat(buf, "HIDE ");
-    if (MUCK::getPowers(thing) & POW_IDLE)
+    if (POWERS(thing) & POW_IDLE)
         strcat(buf, "IDLE ");
-    if (MUCK::getPowers(thing) & POW_LINK_ANYWHERE)
+    if (POWERS(thing) & POW_LINK_ANYWHERE)
         strcat(buf, "LINK_ANYWHERE ");
-    if (MUCK::getPowers(thing) & POW_LONG_FINGERS)
+    if (POWERS(thing) & POW_LONG_FINGERS)
         strcat(buf, "LONG_FINGERS ");
-    if (MUCK::getPowers(thing) & POW_NO_PAY)
+    if (POWERS(thing) & POW_NO_PAY)
         strcat(buf, "NO_PAY ");
-    if (MUCK::getPowers(thing) & POW_OPEN_ANYWHERE)
+    if (POWERS(thing) & POW_OPEN_ANYWHERE)
         strcat(buf, "OPEN_ANYWHERE ");
-    if (MUCK::getPowers(thing) & POW_PLAYER_CREATE)
+    if (POWERS(thing) & POW_PLAYER_CREATE)
         strcat(buf, "PLAYER_CREATE ");
-    if (MUCK::getPowers(thing) & POW_PLAYER_PURGE)
+    if (POWERS(thing) & POW_PLAYER_PURGE)
         strcat(buf, "PLAYER_PURGE ");
-    if (MUCK::getPowers(thing) & POW_SEARCH)
+    if (POWERS(thing) & POW_SEARCH)
         strcat(buf, "SEARCH ");
-    if (MUCK::getPowers(thing) & POW_SEE_ALL)
+    if (POWERS(thing) & POW_SEE_ALL)
         strcat(buf, "SEE_ALL ");
-    if (MUCK::getPowers(thing) & POW_TELEPORT)
+    if (POWERS(thing) & POW_TELEPORT)
         strcat(buf, "TELEPORT ");
-    if (MUCK::getPowers(thing) & POW_SHUTDOWN)
+    if (POWERS(thing) & POW_SHUTDOWN)
         strcat(buf, "SHUTDOWN ");
-    if (MUCK::getPowers(thing) & POW_STAFF)
+    if (POWERS(thing) & POW_STAFF)
         strcat(buf, "STAFF ");
     return buf;
 }
@@ -637,8 +640,7 @@ listprops_wildcard(dbref player, dbref thing, const char *dir, const char *wild)
     std::vector<char> bufv(BUFFER_LEN), buf2v(BUFFER_LEN);
     char *propname = propnamev.data(), *wld = wldv.data();
     char *buf = bufv.data(), *buf2 = buf2v.data();
-    PropPtr propadr;
-    PropDirPtr pptr;
+    PropPtr propadr, pptr;
     char *ptr, *wldcrd = wld;
     int i, cnt = 0;
     bool recurse = 0;
@@ -665,7 +667,7 @@ listprops_wildcard(dbref player, dbref thing, const char *dir, const char *wild)
             snprintf(buf, BUFFER_LEN, "%s%c%s", dir, PROPDIR_DELIMITER,
                      propname);
             if ((!Prop_Hidden(buf) && !(PropFlags(propadr) & PROP_SYSPERMS))
-                || WizHidden(MUCK::getOwner(player))) {
+                || WizHidden(OWNER(player))) {
                 if (!*ptr || recurse) {
                     cnt++;
                     displayprop(player, thing, buf, buf2);
@@ -688,15 +690,15 @@ size_object(dbref i, int load)
 
     byts = sizeof(struct object);
 
-    if (MUCK::getName(i))
-        byts += strlen(DoNull(MUCK::getName(i))) + 1;
+    if (NAME(i))
+        byts += strlen(NAME(i)) + 1;
 
     byts += size_properties(i, load);
 
-    if (Typeof(i) == TYPE_EXIT) {
-        byts += sizeof(dbref) * MUCK::exitDestCount(i);
-    } else if (Typeof(i) == TYPE_PLAYER && MUCK::playerPasswordSlot(i)) {
-        byts += strlen(MUCK::playerPasswordSlot(i)) + 1;
+    if (Typeof(i) == TYPE_EXIT && DBFETCH(i)->sp.exit.dest) {
+        byts += sizeof(dbref) * DBFETCH(i)->sp.exit.ndest;
+    } else if (Typeof(i) == TYPE_PLAYER && DBFETCH(i)->sp.player.password) {
+        byts += strlen(DBFETCH(i)->sp.player.password) + 1;
     } else if (Typeof(i) == TYPE_PROGRAM) {
         byts += size_prog(i);
     }
@@ -712,6 +714,8 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
     struct match_data md;
     dbref thing;
     int i, cnt;
+    dbref content;
+    dbref exit;
     dbref ref_tm;
     char ubuf[BUFFER_LEN];
 
@@ -723,7 +727,7 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
     }
 
     if (*name == '\0') {
-        if ((thing = MUCK::getLocation(player)) == NOTHING)
+        if ((thing = getloc(player)) == NOTHING)
             return;
     } else {
         /* look it up */
@@ -736,7 +740,7 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
         match_registered(&md);
 
         /* only Wizards can examine other players */
-        if (Mage(MUCK::getOwner(player)) || MUCK::getPowers(MUCK::getOwner(player)) & POW_LONG_FINGERS)
+        if (Mage(OWNER(player)) || POWERS(OWNER(player)) & POW_LONG_FINGERS)
             match_player(&md);
 
         match_here(&md);
@@ -747,9 +751,9 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
             return;
     }
 
-    if ((!(MUCK::getPowers(player) & POW_SEE_ALL) && !ExamineOk(thing)
-         && !can_link(MUCK::getOwner(player), thing) && !Wiz(MUCK::getOwner(player)) && !(!*dir && Mage(MUCK::getOwner(player))))
-        || (Protect(thing) && MLevel(MUCK::getOwner(thing)) >= LBOY && !(MLevel(MUCK::getOwner(player)) >= LBOY))) {
+    if ((!(POWERS(player) & POW_SEE_ALL) && !ExamineOk(thing)
+         && !can_link(OWNER(player), thing) && !Wiz(OWNER(player)) && !(!*dir && Mage(OWNER(player))))
+        || (Protect(thing) && MLevel(OWNER(thing)) >= LBOY && !(MLevel(OWNER(player)) >= LBOY))) {
         print_owner(player, thing);
         return;
     }
@@ -763,58 +767,35 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
     switch (Typeof(thing)) {
         case TYPE_ROOM:
             sprintf(buf, "%.*s" SYSNORMAL "  Owner: %s  Parent: ",
-                    (int) (BUFFER_LEN - strlen(DoNull(MUCK::getName(MUCK::getOwner(thing)))) - 35), ansi_unparse_object(MUCK::getOwner(player), thing), MUCK::getName(MUCK::getOwner(thing)));
-            strcat(buf, ansi_unparse_object(MUCK::getOwner(player), MUCK::getLocation(thing)));
+                    (int) (BUFFER_LEN - strlen(NAME(OWNER(thing))) - 35), ansi_unparse_object(OWNER(player), thing), NAME(OWNER(thing)));
+            strcat(buf, ansi_unparse_object(OWNER(player), DBFETCH(thing)->location));
             break;
         case TYPE_THING:
             sprintf(buf, "%.*s" SYSNORMAL "  Owner: %s  Value: %d",
-                    (int) (BUFFER_LEN - strlen(DoNull(MUCK::getName(MUCK::getOwner(thing)))) - 35), ansi_unparse_object(MUCK::getOwner(player), thing), MUCK::getName(MUCK::getOwner(thing)),
-                    MUCK::database().get(thing)->As<MUCK::Thing>()->value());
+                    (int) (BUFFER_LEN - strlen(NAME(OWNER(thing))) - 35), ansi_unparse_object(OWNER(player), thing), NAME(OWNER(thing)), DBFETCH(thing)->sp.thing.value);
             break;
         case TYPE_PLAYER:
             sprintf(buf, "%.*s" SYSNORMAL "  %s: %d  ",
-                    (int) (BUFFER_LEN - strlen(DoNull(MUCK::getName(MUCK::getOwner(thing)))) - 35), ansi_unparse_object(MUCK::getOwner(player), thing), tp_cpennies, MUCK::playerPennies(thing));
+                    (int) (BUFFER_LEN - strlen(NAME(OWNER(thing))) - 35), ansi_unparse_object(OWNER(player), thing), tp_cpennies, DBFETCH(thing)->sp.player.pennies);
             break;
         case TYPE_EXIT:
         case TYPE_PROGRAM:
-        case TYPE_UNSUPPORTED:
-            sprintf(buf, "%.*s" SYSNORMAL "  Owner: %s", (int) (BUFFER_LEN - strlen(DoNull(MUCK::getName(MUCK::getOwner(thing)))) - 35), ansi_unparse_object(MUCK::getOwner(player), thing), MUCK::getName(MUCK::getOwner(thing)));
+            sprintf(buf, "%.*s" SYSNORMAL "  Owner: %s", (int) (BUFFER_LEN - strlen(NAME(OWNER(thing))) - 35), ansi_unparse_object(OWNER(player), thing), NAME(OWNER(thing)));
             break;
         case TYPE_GARBAGE:
-        default:
-            strcpy(buf, ansi_unparse_object(MUCK::getOwner(player), thing));
+            strcpy(buf, ansi_unparse_object(OWNER(player), thing));
             break;
     }
     anotify_nolisten(player, buf, 1);
 
 #ifdef VERBOSE_EXAMINE
     anotify_nolisten(player, flag_description(thing), 1);
-    {
-        const MUCK::UUID &u = MUCK::database().UUIDOf(thing);
-
-        if (!u.isNil()) {
-            sprintf(buf, SYSGREEN "UUID: " SYSYELLOW "%s" SYSGREEN
-                    "  (short: " SYSYELLOW "%s" SYSGREEN ")",
-                    u.toString().c_str(), u.shortString(12).c_str());
-            anotify_nolisten2(player, buf);
-        }
-    }
-    if (Typeof(thing) == TYPE_UNSUPPORTED) {
-        std::string tn = MUCK::ObjectStore::placeholderTypeName(thing);
-
-        for (auto &c : tn)
-            c = (char) toupper(c);
-        sprintf(buf, SYSGREEN "TYPE: " SYSYELLOW "%s" SYSGREEN
-                "  STATUS: " SYSRED "UNSUPPORTED",
-                tn.empty() ? "UNKNOWN" : tn.c_str());
-        anotify_nolisten2(player, buf);
-    }
-    if ((Typeof(thing) == TYPE_PLAYER) && (MUCK::getPowers(thing)))
+    if ((Typeof(thing) == TYPE_PLAYER) && (POWERS(thing)))
         anotify_nolisten(player, power_description(thing), 1);
 #endif /* VERBOSE_EXAMINE */
 
-    if (MUCK::getDesc(thing)) {
-        sprintf(buf, SYSCYAN "DESC:" SYSAQUA " %s", tct(MUCK::getDesc(thing), buf2));
+    if (GETDESC(thing)) {
+        sprintf(buf, SYSCYAN "DESC:" SYSAQUA " %s", tct(GETDESC(thing), buf2));
         anotify_nolisten(player, buf, 1);
     }
     if (GETIDESC(thing)) {
@@ -840,16 +821,16 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
         anotify_nolisten(player, buf, 1);
     }
 
-    sprintf(buf, SYSVIOLET "Key:" SYSPURPLE " %s", unparse_boolexp(ubuf, MUCK::getOwner(player), GETLOCK(thing), 1));
+    sprintf(buf, SYSVIOLET "Key:" SYSPURPLE " %s", unparse_boolexp(ubuf, OWNER(player), GETLOCK(thing), 1));
     anotify_nolisten(player, buf, 1);
 
-    sprintf(buf, SYSVIOLET "Chown_OK Key:" SYSPURPLE " %s", unparse_boolexp(ubuf, MUCK::getOwner(player), get_property_lock(thing, CHLK_PROP), 1));
+    sprintf(buf, SYSVIOLET "Chown_OK Key:" SYSPURPLE " %s", unparse_boolexp(ubuf, OWNER(player), get_property_lock(thing, CHLK_PROP), 1));
     anotify_nolisten(player, buf, 1);
 
-    sprintf(buf, SYSVIOLET "Container Key:" SYSPURPLE " %s", unparse_boolexp(ubuf, MUCK::getOwner(player), get_property_lock(thing, "_/clk"), 1));
+    sprintf(buf, SYSVIOLET "Container Key:" SYSPURPLE " %s", unparse_boolexp(ubuf, OWNER(player), get_property_lock(thing, "_/clk"), 1));
     anotify_nolisten(player, buf, 1);
 
-    sprintf(buf, SYSVIOLET "Force Key:" SYSPURPLE " %s", unparse_boolexp(ubuf, MUCK::getOwner(player), get_property_lock(thing, "@/flk"), 1));
+    sprintf(buf, SYSVIOLET "Force Key:" SYSPURPLE " %s", unparse_boolexp(ubuf, OWNER(player), get_property_lock(thing, "@/flk"), 1));
     anotify_nolisten(player, buf, 1);
 
     if (GETSUCC(thing)) {
@@ -894,70 +875,50 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
     /* Timestamps */
     /* ex: time_tm = localtime((time_t *)(&(DBFETCH(thing)->ts.created))); */
 
-    time_t tstamp = MUCK::getCreated(thing);
-
-    time_tm = localtime(&tstamp);
-    ref_tm = MUCK::getCreatedBy(thing);
+    time_tm = localtime((&(DBFETCH(thing)->ts.created)));
+    ref_tm = (DBFETCH(thing)->ts.dcreated);
     format_time(buf2, BUFFER_LEN, (char *) SYSFOREST "Created:" SYSGREEN "  %a %b %e %T %Z %Y", time_tm);
-    sprintf(buf, "%s by %s", buf2, ref_tm < 0 ? "*NOTHING*" : ansi_unparse_object(MUCK::getOwner(player), ref_tm));
+    sprintf(buf, "%s by %s", buf2, ref_tm < 0 ? "*NOTHING*" : ansi_unparse_object(OWNER(player), ref_tm));
     anotify_nolisten(player, buf, 1);
-    tstamp = MUCK::getModified(thing);
-    time_tm = localtime(&tstamp);
-    ref_tm = MUCK::getModifiedBy(thing);
+    time_tm = localtime((&(DBFETCH(thing)->ts.modified)));
+    ref_tm = (DBFETCH(thing)->ts.dmodified);
     format_time(buf2, BUFFER_LEN, (char *) SYSFOREST "Modified:" SYSGREEN " %a %b %e %T %Z %Y", time_tm);
-    sprintf(buf, "%s by %s", buf2, ref_tm < 0 ? "*NOTHING*" : ansi_unparse_object(MUCK::getOwner(player), ref_tm));
+    sprintf(buf, "%s by %s", buf2, ref_tm < 0 ? "*NOTHING*" : ansi_unparse_object(OWNER(player), ref_tm));
     anotify_nolisten(player, buf, 1);
-    tstamp = MUCK::getLastUsed(thing);
-    time_tm = localtime(&tstamp);
-    ref_tm = MUCK::getLastUsedBy(thing);
+    time_tm = localtime((&(DBFETCH(thing)->ts.lastused)));
+    ref_tm = (DBFETCH(thing)->ts.dlastused);
     format_time(buf2, BUFFER_LEN, (char *) SYSFOREST "Lastused:" SYSGREEN " %a %b %e %T %Z %Y", time_tm);
-    sprintf(buf, "%s by %s", buf2, ref_tm < 0 ? "*NOTHING*" : ansi_unparse_object(MUCK::getOwner(player), ref_tm));
+    sprintf(buf, "%s by %s", buf2, ref_tm < 0 ? "*NOTHING*" : ansi_unparse_object(OWNER(player), ref_tm));
     anotify_nolisten(player, buf, 1);
     if (Typeof(thing) == TYPE_PROGRAM) {
-        sprintf(buf, SYSFOREST "Usecount:" SYSGREEN " %d     " SYSFOREST "Instances:" SYSGREEN " %d", MUCK::getUseCount(thing), MUCK::programRuntime(thing).instances);
+        sprintf(buf, SYSFOREST "Usecount:" SYSGREEN " %d     " SYSFOREST "Instances:" SYSGREEN " %d", DBFETCH(thing)->ts.usecount, DBFETCH(thing)->sp.program.instances);
     } else
-        sprintf(buf, SYSFOREST "Usecount:" SYSGREEN " %d", MUCK::getUseCount(thing));
+        sprintf(buf, SYSFOREST "Usecount:" SYSGREEN " %d", DBFETCH(thing)->ts.usecount);
     anotify_nolisten(player, buf, 1);
 
     sprintf(buf, SYSVIOLET "In Memory:" SYSPURPLE " %d bytes", size_object(thing, 0));
     anotify_nolisten(player, buf, 1);
 
-    if (MUCK::store().active()) {
-        long oldest = 0;
-        int snaps = MUCK::store().snapshotSummary(thing, &oldest);
-
-        if (snaps > 0) {
-            char when[64];
-            time_t ot = (time_t) oldest;
-            struct tm *otm = localtime(&ot);
-
-            format_time(when, sizeof(when), (char *) "%b %e %Y", otm);
-            sprintf(buf, SYSFOREST "Snapshots:" SYSGREEN
-                    " %d available (oldest %s)", snaps, when);
-            anotify_nolisten(player, buf, 1);
-        }
-    }
-
     anotify_nolisten(player, SYSYELLOW "[ Use 'examine <object>=/' to list root properties. ]", 1);
 
     /* show him the contents */
-    if (!MUCK::getContents(thing).empty()) {
+    if (DBFETCH(thing)->contents != NOTHING) {
         if (Typeof(thing) == TYPE_PLAYER)
             anotify_nolisten(player, SYSBLUE "Carrying:", 1);
         else
             anotify_nolisten(player, SYSBLUE "Contents:", 1);
-        for (dbref content : MUCK::getContents(thing)) {
-            anotify_nolisten(player, ansi_unparse_object(MUCK::getOwner(player), content), 1);
+        DOLIST(content, DBFETCH(thing)->contents) {
+            anotify_nolisten(player, ansi_unparse_object(OWNER(player), content), 1);
         }
     }
     switch (Typeof(thing)) {
         case TYPE_ROOM:
             /* tell him about exits */
-            if (!MUCK::getExits(thing).empty()) {
+            if (DBFETCH(thing)->exits != NOTHING) {
                 anotify_nolisten(player, SYSBLUE "Exits:", 1);
-                for (dbref exit : MUCK::getExits(thing)) {
-                    strcpy(buf, ansi_unparse_object(MUCK::getOwner(player), exit));
-                    anotify_fmt(player, "%s " SYSCYAN "to %s", buf, ansi_unparse_object(MUCK::getOwner(player), MUCK::exitDestCount(exit) > 0 ? MUCK::exitDestRef(exit, 0) : NOTHING)
+                DOLIST(exit, DBFETCH(thing)->exits) {
+                    strcpy(buf, ansi_unparse_object(OWNER(player), exit));
+                    anotify_fmt(player, "%s " SYSCYAN "to %s", buf, ansi_unparse_object(OWNER(player), DBFETCH(exit)->sp.exit.ndest > 0 ? DBFETCH(exit)->sp.exit.dest[0] : NOTHING)
                         );
                 }
             } else {
@@ -965,31 +926,27 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
             }
 
             /* print dropto if present */
-            if (MUCK::Room *r = MUCK::database().get(thing)->As<MUCK::Room>()) {
-                if (r->dropTo()) {
-                    sprintf(buf, SYSAQUA "Dropped objects go to: %s",
-                            ansi_unparse_object(MUCK::getOwner(player), r->dropTo()->ref()));
-                    anotify_nolisten(player, buf, 1);
-                }
+            if (DBFETCH(thing)->sp.room.dropto != NOTHING) {
+                sprintf(buf, SYSAQUA "Dropped objects go to: %s", ansi_unparse_object(OWNER(player), DBFETCH(thing)->sp.room.dropto));
+                anotify_nolisten(player, buf, 1);
             }
             break;
         case TYPE_THING:
             /* print home */
-            sprintf(buf, SYSAQUA "Home: %s",
-                    ansi_unparse_object(MUCK::getOwner(player), [&]{ MUCK::Thing *t = MUCK::database().get(thing)->As<MUCK::Thing>(); return (t && t->home()) ? t->home()->ref() : NOTHING; }())); /* home */
+            sprintf(buf, SYSAQUA "Home: %s", ansi_unparse_object(OWNER(player), DBFETCH(thing)->sp.thing.home)); /* home */
             anotify_nolisten(player, buf, 1);
             /* print location if player can link to it */
-            if (MUCK::getLocation(thing) != NOTHING && (controls(MUCK::getOwner(player), MUCK::getLocation(thing))
-                                                        || can_link_to(MUCK::getOwner(player), NOTYPE, MUCK::getLocation(thing)))) {
-                sprintf(buf, SYSAQUA "Location: %s", ansi_unparse_object(MUCK::getOwner(player), MUCK::getLocation(thing)));
+            if (DBFETCH(thing)->location != NOTHING && (controls(OWNER(player), DBFETCH(thing)->location)
+                                                        || can_link_to(OWNER(player), NOTYPE, DBFETCH(thing)->location))) {
+                sprintf(buf, SYSAQUA "Location: %s", ansi_unparse_object(OWNER(player), DBFETCH(thing)->location));
                 anotify_nolisten(player, buf, 1);
             }
             /* print thing's actions, if any */
-            if (!MUCK::getExits(thing).empty()) {
+            if (DBFETCH(thing)->exits != NOTHING) {
                 anotify_nolisten(player, SYSBLUE "Actions/exits:", 1);
-                for (dbref exit : MUCK::getExits(thing)) {
-                    strcpy(buf, ansi_unparse_object(MUCK::getOwner(player), exit));
-                    anotify_fmt(player, "%s " SYSCYAN "to %s", buf, ansi_unparse_object(MUCK::getOwner(player), MUCK::exitDestCount(exit) > 0 ? MUCK::exitDestRef(exit, 0) : NOTHING)
+                DOLIST(exit, DBFETCH(thing)->exits) {
+                    strcpy(buf, ansi_unparse_object(OWNER(player), exit));
+                    anotify_fmt(player, "%s " SYSCYAN "to %s", buf, ansi_unparse_object(OWNER(player), DBFETCH(exit)->sp.exit.ndest > 0 ? DBFETCH(exit)->sp.exit.dest[0] : NOTHING)
                         );
                 }
             } else {
@@ -999,21 +956,21 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
         case TYPE_PLAYER:
 
             /* print home */
-            sprintf(buf, SYSAQUA "Home: %s", ansi_unparse_object(MUCK::getOwner(player), MUCK::playerHomeRef(thing))); /* home */
+            sprintf(buf, SYSAQUA "Home: %s", ansi_unparse_object(OWNER(player), DBFETCH(thing)->sp.player.home)); /* home */
             anotify_nolisten(player, buf, 1);
 
             /* print location if player can link to it */
-            if (MUCK::getLocation(thing) != NOTHING && (controls(MUCK::getOwner(player), MUCK::getLocation(thing))
-                                                        || can_link_to(MUCK::getOwner(player), NOTYPE, MUCK::getLocation(thing)))) {
-                sprintf(buf, SYSAQUA "Location: %s", ansi_unparse_object(MUCK::getOwner(player), MUCK::getLocation(thing)));
+            if (DBFETCH(thing)->location != NOTHING && (controls(OWNER(player), DBFETCH(thing)->location)
+                                                        || can_link_to(OWNER(player), NOTYPE, DBFETCH(thing)->location))) {
+                sprintf(buf, SYSAQUA "Location: %s", ansi_unparse_object(OWNER(player), DBFETCH(thing)->location));
                 anotify_nolisten(player, buf, 1);
             }
             /* print player's actions, if any */
-            if (!MUCK::getExits(thing).empty()) {
+            if (DBFETCH(thing)->exits != NOTHING) {
                 anotify_nolisten(player, SYSBLUE "Actions/exits:", 1);
-                for (dbref exit : MUCK::getExits(thing)) {
-                    strcpy(buf, ansi_unparse_object(MUCK::getOwner(player), exit));
-                    anotify_fmt(player, "%s " SYSCYAN "to %s", buf, ansi_unparse_object(player, MUCK::exitDestCount(exit) > 0 ? MUCK::exitDestRef(exit, 0) : NOTHING)
+                DOLIST(exit, DBFETCH(thing)->exits) {
+                    strcpy(buf, ansi_unparse_object(OWNER(player), exit));
+                    anotify_fmt(player, "%s " SYSCYAN "to %s", buf, ansi_unparse_object(player, DBFETCH(exit)->sp.exit.ndest > 0 ? DBFETCH(exit)->sp.exit.dest[0] : NOTHING)
                         );
                 }
             } else {
@@ -1021,32 +978,32 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
             }
             break;
         case TYPE_EXIT:
-            if (MUCK::getLocation(thing) != NOTHING) {
-                sprintf(buf, SYSAQUA "Source: %s", ansi_unparse_object(MUCK::getOwner(player), MUCK::getLocation(thing)));
+            if (DBFETCH(thing)->location != NOTHING) {
+                sprintf(buf, SYSAQUA "Source: %s", ansi_unparse_object(OWNER(player), DBFETCH(thing)->location));
                 anotify_nolisten(player, buf, 1);
             }
             /* print destinations */
-            if (MUCK::exitDestCount(thing) == 0)
+            if (DBFETCH(thing)->sp.exit.ndest == 0)
                 break;
-            for (i = 0; i < MUCK::exitDestCount(thing); i++) {
-                switch (MUCK::exitDestRef(thing, i)) {
+            for (i = 0; i < DBFETCH(thing)->sp.exit.ndest; i++) {
+                switch ((DBFETCH(thing)->sp.exit.dest)[i]) {
                     case NOTHING:
                         break;
                     case HOME:
                         anotify_nolisten(player, SYSAQUA "Destination: *HOME*", 1);
                         break;
                     default:
-                        sprintf(buf, SYSAQUA "Destination: %s", ansi_unparse_object(MUCK::getOwner(player), MUCK::exitDestRef(thing, i)));
+                        sprintf(buf, SYSAQUA "Destination: %s", ansi_unparse_object(OWNER(player), (DBFETCH(thing)->sp.exit.dest)[i]));
                         anotify_nolisten(player, buf, 1);
                         break;
                 }
             }
             break;
         case TYPE_PROGRAM:
-            if (MUCK::programRuntime(thing).codeSize) {
-                struct timeval tv = MUCK::programRuntime(thing).profTime;
+            if (DBFETCH(thing)->sp.program.siz) {
+                struct timeval tv = DBFETCH(thing)->sp.program.proftime;
 
-                sprintf(buf, SYSVIOLET "Program compiled size: " SYSPURPLE "%d instructions", MUCK::programRuntime(thing).codeSize);
+                sprintf(buf, SYSVIOLET "Program compiled size: " SYSPURPLE "%d instructions", DBFETCH(thing)->sp.program.siz);
                 anotify_nolisten(player, buf, 1);
                 sprintf(buf, SYSVIOLET "Cumulative runtime: " SYSPURPLE "%ld.%06ld seconds", tv.tv_sec, (long int) tv.tv_usec);
                 anotify_nolisten(player, buf, 1);
@@ -1055,9 +1012,9 @@ do_examine(int descr, dbref player, const char *name, const char *dir)
             }
 
             /* print location if player can link to it */
-            if (MUCK::getLocation(thing) != NOTHING && (controls(MUCK::getOwner(player), MUCK::getLocation(thing))
-                                                        || can_link_to(MUCK::getOwner(player), NOTYPE, MUCK::getLocation(thing)))) {
-                sprintf(buf, SYSAQUA "Location: %s", ansi_unparse_object(MUCK::getOwner(player), MUCK::getLocation(thing)));
+            if (DBFETCH(thing)->location != NOTHING && (controls(OWNER(player), DBFETCH(thing)->location)
+                                                        || can_link_to(OWNER(player), NOTYPE, DBFETCH(thing)->location))) {
+                sprintf(buf, SYSAQUA "Location: %s", ansi_unparse_object(OWNER(player), DBFETCH(thing)->location));
                 anotify_nolisten(player, buf, 1);
             }
             break;
@@ -1073,7 +1030,7 @@ do_score(dbref player)
 {
     char buf[BUFFER_LEN];
 
-    sprintf(buf, CINFO "You have %d %s.", MUCK::playerPennies(player), MUCK::playerPennies(player) == 1 ? tp_penny : tp_pennies);
+    sprintf(buf, CINFO "You have %d %s.", DBFETCH(player)->sp.player.pennies, DBFETCH(player)->sp.player.pennies == 1 ? tp_penny : tp_pennies);
 
     anotify_nolisten(player, buf, 1);
 }
@@ -1083,7 +1040,7 @@ do_inventory(dbref player)
 {
     dbref thing;
 
-    if ((thing = CONTENTS(player)) == NOTHING && !count_details(player, player, "_obj")) {
+    if ((thing = DBFETCH(player)->contents) == NOTHING && !count_details(player, player, "_obj")) {
         anotify_nolisten(player, SYSBLUE "You aren't carrying anything.", 1);
     } else {
         anotify_nolisten(player, SYSBLUE "You are carrying:", 1);
@@ -1133,7 +1090,7 @@ init_checkflags(dbref player, const char *flags, struct flgchkdat *check)
     }
 
     check->fortype = 0;
-    check->istype = MUCK::ObjectType::NoType;
+    check->istype = 0;
     check->isnotroom = 0;
     check->isnotexit = 0;
     check->isnotthing = 0;
@@ -1224,7 +1181,7 @@ init_checkflags(dbref player, const char *flags, struct flgchkdat *check)
                     }
                     break;
                 case '^':
-                    check->loadedsize = (Mage(MUCK::getOwner(player))
+                    check->loadedsize = (Mage(OWNER(player))
                                          && *flags == '^');
                     check->size = atoi(flags + 1);
                     check->issize = !mode;
@@ -1700,12 +1657,12 @@ checkflags(dbref what, struct flgchkdat check)
         return (0);
 
     if (Typeof(what) == TYPE_PLAYER) {
-        if (MUCK::getPowers(what) & check.clearpowers)
+        if (POWERS(what) & check.clearpowers)
             return (0);
-        if ((~MUCK::getPowers(what)) & check.setpowers)
+        if ((~POWERS(what)) & check.setpowers)
             return (0);
         if (check.anypower)
-            if (!(MUCK::getPowers(what)))
+            if (!(POWERS(what)))
                 return (0);
     } else {
         if (check.anypower || check.clearpowers || check.setpowers)
@@ -1714,15 +1671,12 @@ checkflags(dbref what, struct flgchkdat check)
 
     if (check.forlink) {
         switch (Typeof(what)) {
-            case TYPE_ROOM: {
-                MUCK::Room *r = MUCK::database().get(what)->As<MUCK::Room>();
-
-                if ((!r || !r->dropTo()) != (!check.islinked))
+            case TYPE_ROOM:
+                if ((DBFETCH(what)->sp.room.dropto == NOTHING) != (!check.islinked))
                     return (0);
                 break;
-            }
             case TYPE_EXIT:
-                if ((!MUCK::exitDestCount(what)) != (!check.islinked))
+                if ((!DBFETCH(what)->sp.exit.ndest) != (!check.islinked))
                     return (0);
                 break;
             case TYPE_PLAYER:
@@ -1736,8 +1690,8 @@ checkflags(dbref what, struct flgchkdat check)
         }
     }
     if (check.forold) {
-        if (((((current_systime) - MUCK::getLastUsed(what)) < tp_aging_time)
-             || (((current_systime) - MUCK::getModified(what)) < tp_aging_time))
+        if (((((current_systime) - DBFETCH(what)->ts.lastused) < tp_aging_time)
+             || (((current_systime) - DBFETCH(what)->ts.modified) < tp_aging_time))
             != (!check.isold))
             return (0);
     }
@@ -1761,35 +1715,29 @@ display_objinfo(dbref player, dbref obj, char output_type)
 
     switch (output_type) {
         case 1:                /* owners */
-            sprintf(buf, "%-38.512s  %.512s", buf2, ansi_unparse_object(player, MUCK::getOwner(obj)));
+            sprintf(buf, "%-38.512s  %.512s", buf2, ansi_unparse_object(player, OWNER(obj)));
             break;
         case 2:                /* links */
             switch (Typeof(obj)) {
-                case TYPE_ROOM: {
-                    MUCK::Room *r = MUCK::database().get(obj)->As<MUCK::Room>();
-
-                    sprintf(buf, "%-38.512s  %.512s", buf2,
-                            ansi_unparse_object(player,
-                                r && r->dropTo() ? r->dropTo()->ref() : NOTHING));
+                case TYPE_ROOM:
+                    sprintf(buf, "%-38.512s  %.512s", buf2, ansi_unparse_object(player, DBFETCH(obj)->sp.room.dropto));
                     break;
-                }
                 case TYPE_EXIT:
-                    if (MUCK::exitDestCount(obj) == 0) {
+                    if (DBFETCH(obj)->sp.exit.ndest == 0) {
                         sprintf(buf, "%-38.512s  %.512s", buf2, "*UNLINKED*");
                         break;
                     }
-                    if (MUCK::exitDestCount(obj) > 1) {
+                    if (DBFETCH(obj)->sp.exit.ndest > 1) {
                         sprintf(buf, "%-38.512s  %.512s", buf2, "*METALINKED*");
                         break;
                     }
-                    sprintf(buf, "%-38.512s  %.512s", buf2, ansi_unparse_object(player, MUCK::exitDestRef(obj, 0)));
+                    sprintf(buf, "%-38.512s  %.512s", buf2, ansi_unparse_object(player, DBFETCH(obj)->sp.exit.dest[0]));
                     break;
                 case TYPE_PLAYER:
-                    sprintf(buf, "%-38.512s  %.512s", buf2, ansi_unparse_object(player, MUCK::playerHomeRef(obj)));
+                    sprintf(buf, "%-38.512s  %.512s", buf2, ansi_unparse_object(player, DBFETCH(obj)->sp.player.home));
                     break;
                 case TYPE_THING:
-                    sprintf(buf, "%-38.512s  %.512s", buf2,
-                            ansi_unparse_object(player, [&]{ MUCK::Thing *t = MUCK::database().get(obj)->As<MUCK::Thing>(); return (t && t->home()) ? t->home()->ref() : NOTHING; }()));
+                    sprintf(buf, "%-38.512s  %.512s", buf2, ansi_unparse_object(player, DBFETCH(obj)->sp.thing.home));
                     break;
                 default:
                     sprintf(buf, "%-38.512s  %.512s", buf2, "N/A");
@@ -1797,7 +1745,7 @@ display_objinfo(dbref player, dbref obj, char output_type)
             }
             break;
         case 3:                /* locations */
-            sprintf(buf, "%-38.512s  %.512s", buf2, ansi_unparse_object(player, MUCK::getLocation(obj)));
+            sprintf(buf, "%-38.512s  %.512s", buf2, ansi_unparse_object(player, DBFETCH(obj)->location));
             break;
         case 4:
             return;
@@ -1835,10 +1783,10 @@ do_find(dbref player, const char *name, const char *flags)
         anotify_fmt(player, CFAIL "You don't have enough %s.", tp_pennies);
     } else {
         output_type = init_checkflags(player, flags, &check);
-        for (i = 0; i < MUCK::database().top(); i++) {
-            if ((Wiz(MUCK::getOwner(player)) || (MUCK::getPowers(player) & POW_SEARCH)
-                 || MUCK::getOwner(i) == MUCK::getOwner(player)) && checkflags(i, check)
-                && MUCK::getName(i) && (!*name || equalstr(buf, (char *) MUCK::getName(i)))) {
+        for (i = 0; i < db_top; i++) {
+            if ((Wiz(OWNER(player)) || (POWERS(player) & POW_SEARCH)
+                 || OWNER(i) == OWNER(player)) && checkflags(i, check)
+                && NAME(i) && (!*name || equalstr(buf, (char *) NAME(i)))) {
                 display_objinfo(player, i, output_type);
                 total++;
             }
@@ -1868,7 +1816,7 @@ do_owned(dbref player, const char *name, const char *flags)
         return;
     }
 
-    if ((Mage(MUCK::getOwner(player)) && *name) || (MUCK::getPowers(player) & POW_SEARCH)) {
+    if ((Mage(OWNER(player)) && *name) || (POWERS(player) & POW_SEARCH)) {
         if ((victim = strcmp(name, "me") ? lookup_player(name) : player)
             == NOTHING) {
             anotify_nolisten(player, CINFO "Who?", 1);
@@ -1879,8 +1827,8 @@ do_owned(dbref player, const char *name, const char *flags)
 
     output_type = init_checkflags(player, flags, &check);
 
-    for (i = 0; i < MUCK::database().top(); i++) {
-        if ((MUCK::getOwner(i) == MUCK::getOwner(victim)) && checkflags(i, check)) {
+    for (i = 0; i < db_top; i++) {
+        if ((OWNER(i) == OWNER(victim)) && checkflags(i, check)) {
             display_objinfo(player, i, output_type);
             total++;
         }
@@ -1918,7 +1866,7 @@ do_trace(int descr, dbref player, const char *name, int depth)
             anotify_nolisten(player, ansi_unparse_object(player, thing), 1);
         else
             anotify_nolisten(player, CINFO "**Missing**", 1);
-        thing = MUCK::getLocation(thing);
+        thing = DBFETCH(thing)->location;
     }
     anotify_nolisten(player, CINFO "***End of List***", 1);
 }
@@ -1939,14 +1887,14 @@ do_entrances(int descr, dbref player, const char *name, const char *flags)
     }
 
     if (*name == '\0') {
-        thing = MUCK::getLocation(player);
+        thing = getloc(player);
     } else {
         init_match(descr, player, name, NOTYPE, &md);
         match_all_exits(&md);
         match_neighbor(&md);
         match_possession(&md);
         match_registered(&md);
-        if (Mage(MUCK::getOwner(player)) || MUCK::getPowers(player) & POW_SEARCH) {
+        if (Mage(OWNER(player)) || POWERS(player) & POW_SEARCH) {
             match_absolute(&md);
             match_player(&md);
         }
@@ -1961,45 +1909,42 @@ do_entrances(int descr, dbref player, const char *name, const char *flags)
         return;
     }
 
-    if (!controls(MUCK::getOwner(player), thing) && !(MUCK::getPowers(player) & POW_SEARCH)) {
+    if (!controls(OWNER(player), thing) && !(POWERS(player) & POW_SEARCH)) {
         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
         return;
     }
 
     output_type = init_checkflags(player, flags, &check);
 
-    for (i = 0; i < MUCK::database().top(); i++) {
+    for (i = 0; i < db_top; i++) {
         if (checkflags(i, check)) {
             switch (Typeof(i)) {
                 case TYPE_EXIT:
-                    for (j = MUCK::exitDestCount(i); j--;) {
-                        if (MUCK::exitDestRef(i, j) == thing) {
+                    for (j = DBFETCH(i)->sp.exit.ndest; j--;) {
+                        if (DBFETCH(i)->sp.exit.dest[j] == thing) {
                             display_objinfo(player, i, output_type);
                             total++;
                         }
                     }
                     break;
                 case TYPE_PLAYER:
-                    if (MUCK::playerHomeRef(i) == thing) {
+                    if (DBFETCH(i)->sp.player.home == thing) {
                         display_objinfo(player, i, output_type);
                         total++;
                     }
                     break;
                 case TYPE_THING:
-                    if ([&]{ MUCK::Thing *t = MUCK::database().get(i)->As<MUCK::Thing>(); return (t && t->home()) ? t->home()->ref() : NOTHING; }() == thing) {
+                    if (DBFETCH(i)->sp.thing.home == thing) {
                         display_objinfo(player, i, output_type);
                         total++;
                     }
                     break;
-                case TYPE_ROOM: {
-                    MUCK::Room *r = MUCK::database().get(i)->As<MUCK::Room>();
-
-                    if (r && r->dropTo() && r->dropTo()->ref() == thing) {
+                case TYPE_ROOM:
+                    if (DBFETCH(i)->sp.room.dropto == thing) {
                         display_objinfo(player, i, output_type);
                         total++;
                     }
                     break;
-                }
                 case TYPE_PROGRAM:
                 case TYPE_GARBAGE:
                     break;
@@ -2027,7 +1972,7 @@ do_contents(int descr, dbref player, const char *name, const char *flags)
     }
 
     if (*name == '\0') {
-        thing = MUCK::getLocation(player);
+        thing = getloc(player);
     } else {
         init_match(descr, player, name, NOTYPE, &md);
         match_me(&md);
@@ -2036,7 +1981,7 @@ do_contents(int descr, dbref player, const char *name, const char *flags)
         match_neighbor(&md);
         match_possession(&md);
         match_registered(&md);
-        if (Mage(MUCK::getOwner(player)) || MUCK::getPowers(player) & POW_SEARCH) {
+        if (Mage(OWNER(player)) || POWERS(player) & POW_SEARCH) {
             match_absolute(&md);
             match_player(&md);
         }
@@ -2047,13 +1992,13 @@ do_contents(int descr, dbref player, const char *name, const char *flags)
     if (thing == NOTHING)
         return;
 
-    if (!controls(MUCK::getOwner(player), thing) && !(MUCK::getPowers(player) & POW_SEARCH)) {
+    if (!controls(OWNER(player), thing) && !(POWERS(player) & POW_SEARCH)) {
         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
         return;
     }
 
     output_type = init_checkflags(player, flags, &check);
-    DOLIST(i, CONTENTS(thing)) {
+    DOLIST(i, DBFETCH(thing)->contents) {
         if (checkflags(i, check)) {
             display_objinfo(player, i, output_type);
             total++;
@@ -2063,13 +2008,12 @@ do_contents(int descr, dbref player, const char *name, const char *flags)
         case TYPE_EXIT:
         case TYPE_PROGRAM:
         case TYPE_GARBAGE:
-        case TYPE_UNSUPPORTED:
             i = NOTHING;
             break;
         case TYPE_ROOM:
         case TYPE_THING:
         case TYPE_PLAYER:
-            i = EXITS(thing);
+            i = DBFETCH(thing)->exits;
             break;
     }
     DOLIST(i, i) {
@@ -2090,12 +2034,12 @@ exit_matches_name(dbref exit, const char *name)
 
     if (!OkObj(exit))
         return 0;
-    if (!MUCK::exitDestCount(exit))
+    if (!DBFETCH(exit)->sp.exit.ndest)
         return 0;
-    if (!OkObj(MUCK::exitDestRef(exit, 0)))
+    if (!OkObj((DBFETCH(exit)->sp.exit.dest)[0]))
         return 0;
 
-    strcpy(buf, MUCK::getName(exit));
+    strcpy(buf, NAME(exit));
     for (ptr2 = ptr = buf; *ptr; ptr = ptr2) {
         while (*ptr2 && *ptr2 != ';')
             ptr2++;
@@ -2103,7 +2047,7 @@ exit_matches_name(dbref exit, const char *name)
             *ptr2++ = '\0';
         while (*ptr2 == ';')
             ptr2++;
-        if (string_prefix(name, ptr) && MUCK::exitDestCount(exit) && Typeof(MUCK::exitDestRef(exit, 0)) == TYPE_PROGRAM)
+        if (string_prefix(name, ptr) && DBFETCH(exit)->sp.exit.ndest && Typeof((DBFETCH(exit)->sp.exit.dest)[0]) == TYPE_PROGRAM)
             return 1;
     }
     return 0;
@@ -2115,13 +2059,13 @@ exit_match_exists(dbref player, dbref obj, const char *name)
     dbref exit;
     char buf[BUFFER_LEN];
 
-    exit = EXITS(obj);
+    exit = DBFETCH(obj)->exits;
     while (exit != NOTHING) {
         if (exit_matches_name(exit, name)) {
             sprintf(buf, "  %ss are trapped on %.2048s", name, ansi_unparse_object(player, obj));
             anotify_nolisten(player, buf, 1);
         }
-        exit = NEXTOBJ(exit);
+        exit = DBFETCH(exit)->next;
     }
 }
 
@@ -2140,7 +2084,7 @@ do_sweep(int descr, dbref player, const char *name)
     }
 
     if (*name == '\0') {
-        thing = MUCK::getLocation(player);
+        thing = getloc(player);
     } else {
         init_match(descr, player, name, NOTYPE, &md);
         match_me(&md);
@@ -2149,7 +2093,7 @@ do_sweep(int descr, dbref player, const char *name)
         match_neighbor(&md);
         match_possession(&md);
         match_registered(&md);
-        if (Mage(MUCK::getOwner(player))) {
+        if (Mage(OWNER(player))) {
             match_absolute(&md);
             match_player(&md);
         }
@@ -2160,7 +2104,7 @@ do_sweep(int descr, dbref player, const char *name)
         return;
     }
 
-    if (*name && (!controls(MUCK::getOwner(player), thing) && !(MUCK::getPowers(MUCK::getOwner(player)) & POW_SEARCH))) {
+    if (*name && (!controls(OWNER(player), thing) && !(POWERS(OWNER(player)) & POW_SEARCH))) {
         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
         return;
     }
@@ -2168,8 +2112,8 @@ do_sweep(int descr, dbref player, const char *name)
     sprintf(buf, CINFO "Listeners in %s:", ansi_unparse_object(player, thing));
     anotify_nolisten(player, buf, 1);
 
-    ref = CONTENTS(thing);
-    for (; ref != NOTHING; ref = NEXTOBJ(ref)) {
+    ref = DBFETCH(thing)->contents;
+    for (; ref != NOTHING; ref = DBFETCH(ref)->next) {
         switch (Typeof(ref)) {
             case TYPE_PLAYER:
                 if ( /* !Dark(thing) || */ online(ref)) {
@@ -2183,7 +2127,7 @@ do_sweep(int descr, dbref player, const char *name)
                     sprintf(buf, "  %.255s" NORMAL " is a", ansi_unparse_object(player, ref));
                     if (FLAGS(ref) & ZOMBIE) {
                         tellflag = 1;
-                        if (!online(MUCK::getOwner(ref))) {
+                        if (!online(OWNER(ref))) {
                             tellflag = 0;
                             strcat(buf, " sleeping");
                         }
@@ -2201,7 +2145,7 @@ do_sweep(int descr, dbref player, const char *name)
                         tellflag = 1;
                     }
                     strcat(buf, " object owned by ");
-                    strcat(buf, ansi_unparse_object(player, MUCK::getOwner(ref)));
+                    strcat(buf, ansi_unparse_object(player, OWNER(ref)));
                     strcat(buf, NORMAL ".");
                     if (tellflag)
                         anotify_nolisten(player, buf, 1);
@@ -2238,7 +2182,7 @@ do_sweep(int descr, dbref player, const char *name)
         exit_match_exists(player, loc, "whisper");
         exit_match_exists(player, loc, "pose");
         exit_match_exists(player, loc, "say");
-        loc = MUCK::database().parent(loc);
+        loc = getparent(loc);
     }
     anotify_nolisten(player, CINFO "**End of list**", 1);
 }

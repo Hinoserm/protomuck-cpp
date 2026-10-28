@@ -8,14 +8,13 @@
 #include "interface.h"
 #include "inst.h"
 #include "externs.h"
-#include "Modules.h"
 #include "params.h"
 #include "tune.h"
 #include "match.h"
 #include "interp.h"
-#include "ObjectAccess.h"
 
 
+extern struct line *read_program(dbref prog);
 
 void
 list_proglines(dbref player, dbref program, struct frame *fr, int start, int end)
@@ -35,23 +34,23 @@ list_proglines(dbref player, dbref program, struct frame *fr, int start, int end
     }
     if (!fr->brkpt.proglines || program != fr->brkpt.lastproglisted) {
         free_prog_text(fr->brkpt.proglines);
-        fr->brkpt.proglines = MUCK::programs().read(program);
+        fr->brkpt.proglines = read_program(program);
         fr->brkpt.lastproglisted = program;
     }
-    tmpline = MUCK::programRuntime(program).first;
-    MUCK::programRuntime(program).first = fr->brkpt.proglines;
+    tmpline = DBFETCH(program)->sp.program.first;
+    DBSTORE(program, sp.program.first, fr->brkpt.proglines);
     {
         int tmpflg = (FLAGS(player) & INTERNAL);
 
-        MUCK::addFlags(player, INTERNAL);
+        FLAGS(player) |= INTERNAL;
 
         do_list(player, program, range, argc, 0);
 
         if (!tmpflg) {
-            MUCK::clearFlags(player, INTERNAL);
+            FLAGS(player) &= ~INTERNAL;
         }
     }
-    MUCK::programRuntime(program).first = tmpline;
+    DBSTORE(program, sp.program.first, tmpline);
     return;
 }
 
@@ -65,8 +64,8 @@ show_line_prims(struct frame *fr, dbref program, struct inst *pc, int maxprims, 
     int thisline = pc->line;
     struct inst *code, *end, *linestart, *lineend;
 
-    code = MUCK::programRuntime(program).code;
-    end = code + MUCK::programRuntime(program).codeSize;
+    code = DBFETCH(program)->sp.program.code;
+    end = code + DBFETCH(program)->sp.program.siz;
     buf[0] = '\0';
 
     for (linestart = pc, maxback = maxprims; linestart > code && linestart->line == thisline && linestart->type != PROG_FUNCTION && --maxback; --linestart) ;
@@ -115,8 +114,8 @@ funcname_to_pc(dbref program, const char *name)
     int i, siz;
     struct inst *code;
 
-    code = MUCK::programRuntime(program).code;
-    siz = MUCK::programRuntime(program).codeSize;
+    code = DBFETCH(program)->sp.program.code;
+    siz = DBFETCH(program)->sp.program.siz;
     for (i = 0; i < siz; i++) {
         if ((code[i].type == PROG_FUNCTION) && !string_compare(name, code[i].data.mufproc->procname)) {
             return (code + i);
@@ -132,8 +131,8 @@ linenum_to_pc(dbref program, int whatline)
     int i, siz;
     struct inst *code;
 
-    code = MUCK::programRuntime(program).code;
-    siz = MUCK::programRuntime(program).codeSize;
+    code = DBFETCH(program)->sp.program.code;
+    siz = DBFETCH(program)->sp.program.siz;
     for (i = 0; i < siz; i++) {
         if (code[i].line == whatline) {
             return (code + i);
@@ -151,7 +150,7 @@ unparse_sysreturn(dbref *program, struct inst *pc)
     char *fname;
 
     buf[0] = '\0';
-    for (ptr = pc - 1; ptr >= MUCK::programRuntime(*program).code; ptr--) {
+    for (ptr = pc - 1; ptr >= DBFETCH(*program)->sp.program.code; ptr--) {
         if (ptr->type == PROG_FUNCTION) {
             break;
         }
@@ -192,7 +191,7 @@ unparse_breakpoint(struct frame *fr, int brk)
         strcat(buf, buf2);
     }
     if (fr->brkpt.prog[brk] != NOTHING) {
-        sprintf(buf2, " in %s(#%d)", MUCK::getName(fr->brkpt.prog[brk]), fr->brkpt.prog[brk]);
+        sprintf(buf2, " in %s(#%d)", NAME(fr->brkpt.prog[brk]), fr->brkpt.prog[brk]);
         strcat(buf, buf2);
     }
     if (fr->brkpt.level[brk] != -1) {
@@ -268,13 +267,13 @@ muf_backtrace(dbref player, dbref program, int count, struct frame *fr)
 
 
         if (pinst != lastinst) {
-            sprintf(buf, "%3d) %s(#%d) %s:", j, MUCK::getName(ref), ref, ptr);
+            sprintf(buf, "%3d) %s(#%d) %s:", j, NAME(ref), ref, ptr);
             notify_nolisten(player, buf, 1);
             flag = ((FLAGS(player) & INTERNAL) ? 1 : 0);
-            MUCK::clearFlags(player, INTERNAL);
+            FLAGS(player) &= ~INTERNAL;
             list_proglines(player, ref, fr, (pinst - 1)->line, 0);
             if (flag) {
-                MUCK::addFlags(player, INTERNAL);
+                FLAGS(player) |= INTERNAL;
             }
         }
     }
@@ -287,8 +286,8 @@ list_program_functions(dbref player, dbref program, char *arg)
     struct inst *ptr;
     int count;
 
-    ptr = MUCK::programRuntime(program).code;
-    count = MUCK::programRuntime(program).codeSize;
+    ptr = DBFETCH(program)->sp.program.code;
+    count = DBFETCH(program)->sp.program.siz;
     anotify_nolisten(player, CINFO "*function words*", 1);
     while (count-- > 0) {
         if (ptr->type == PROG_FUNCTION) {
@@ -820,7 +819,7 @@ muf_debugger(int descr, dbref player, dbref program, const char *text, struct fr
                 endline = atoi(ptr2);
             }
         }
-        i = (MUCK::programRuntime(program).code + MUCK::programRuntime(program).codeSize - 1)->line;
+        i = (DBFETCH(program)->sp.program.code + DBFETCH(program)->sp.program.siz - 1)->line;
         if (startline > i) {
             anotify_nolisten(player, CFAIL "Starting line is beyond end of program.", 1);
             return 0;

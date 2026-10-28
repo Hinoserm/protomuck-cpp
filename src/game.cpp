@@ -11,11 +11,6 @@
 #include "match.h"
 #include "msgparse.h"
 #include "externs.h"
-#include "Modules.h"
-#include "ObjectAccess.h"
-#include "MacroTable.h"
-#include "ObjectStore.h"
-#include "FlatFileConverter.h"
 #include "strutils.h"
 #include "netresolve.h"
 
@@ -41,9 +36,6 @@ char *in_filename = NULL;
 int dumper_pid;
 
 char dump_done;
-
-bool store_gc_flag = 0;
-bool store_verify_flag = 0;
 
 /* This is the command, @autoarchive. */
 void
@@ -95,15 +87,8 @@ do_dump(dbref player, const char *newfile)
             sprintf(buf, CINFO "Dumping to file %s...", dumpfile);
         }
         anotify_nolisten2(player, buf);
-        /* the completion notice (object count, fire-to-commit time)
-         * comes back to this player when the manifest lands */
-        MUCK::store().addDumpRequester(player);
         dump_db_now();
-        /* the fire returned; the dump thread is still writing. Saying
-         * "Done." here would be a lie by however long the disk takes;
-         * the real completion notice arrives from the commit. */
-        anotify_nolisten2(player, CINFO "Dump fired; the disk write "
-                          "completes in the background.");
+        anotify_nolisten2(player, CINFO "Done.");
         if (*newfile)
             dumpfile = (char *) yerf;
     } else {
@@ -192,7 +177,7 @@ do_shutdown(dbref player, const char *muckname, const char *msg)
     int nodelay = !strcmp(msg, "now");
     int cancel = !strcmp(msg, "abort");
 
-    if ((Arch(player)) || (MUCK::getPowers(player) & POW_SHUTDOWN)) {
+    if ((Arch(player)) || (POWERS(player) & POW_SHUTDOWN)) {
         if (*muckname == '\0' || strcmp(muckname, tp_muckname)) {
             notify(player, SYSCYAN "Usage: " SYSAQUA "@shutdown muckname[=now|abort|message]");
             return;
@@ -233,7 +218,7 @@ do_restart(dbref player, const char *muckname, const char *msg)
     int cancel = !strcmp(msg, "abort");
 
 
-    if ((Arch(player)) || (MUCK::getPowers(player) & POW_SHUTDOWN)) {
+    if ((Arch(player)) || (POWERS(player) & POW_SHUTDOWN)) {
         if (*muckname == '\0' || strcmp(muckname, tp_muckname)) {
             notify(player, SYSCYAN "Syntax: " SYSAQUA "@restart muckname[=now|abort|message]");
             return;
@@ -274,47 +259,51 @@ dump_database_internal(void)
 
     FILE *f;
 
+    int copies;
+
     char buf[BUFFER_LEN];
 
     tune_save_parmsfile();
 
-    /* The object store writes each object to its own file with an
-     * atomic rename, so there is no monolithic tmpfile dance and no
-     * rotating backup copies: unchanged objects are untouched on disk
-     * and history belongs to the versioning layer (step 3). A
-     * -convert run is a format conversion, so it writes every object,
-     * upgrading older-format files in place. */
-    /* A conversion writes every object; normal operation fires the
-     * journal, which seals only what changed and persists that.
-     * docs/DATABASE.txt 7.1. */
-    if (db_conversion_flag) {
-        if (MUCK::store().saveAll(false) < 0) {
-            sprintf(buf, SYSRED "[DANGER] Error writing the object store at %s!  The DB did not save! :(", MUCK::store().root().c_str());
+    sprintf(tmpfile, "%s.#%d#", dumpfile, epoch);
+
+    if ((f = fopen(tmpfile, "w")) != NULL) {
+        char fromfile[512], destfile[512];
+
+        db_write(f);
+        fclose(f);
+        if (tp_dump_copies > 0) {
+            copies = (tp_dump_copies < 25) ? tp_dump_copies : 25;
+            for (; copies > 1; copies--) {
+                sprintf(fromfile, "backup/%s.#%d#", dumpfile, copies - 1);
+                sprintf(destfile, "backup/%s.#%d#", dumpfile, copies);
+#ifdef WIN_VC
+                unlink(destfile);
+#endif
+                rename(fromfile, destfile);
+            }
+            sprintf(destfile, "backup/%s.#1#", dumpfile);
+#ifdef WIN_VC
+            unlink(destfile);   /* proto.new.#1# */
+#endif
+            rename(dumpfile, destfile); /* proto.new -> proto.new.1 */
+
+        }
+#ifdef WIN_VC
+        /* Windows rename() differs from Unix rename(). Won't overwrite. */
+        if (unlink(dumpfile))
+            perror(dumpfile);
+#endif
+        if (rename(tmpfile, dumpfile) < 0) {
+            perror(tmpfile);
+            sprintf(buf, SYSRED "[WARNING] Error renaming the DB from %s to %s.  The DB got saved to %s.", tmpfile, dumpfile, tmpfile);
             ansi_wall_wizards(buf);
         }
+
     } else {
-        /* Automatic snapshots ride the dump path: when the newest
-         * global marker is older than snapshot_interval, this dump
-         * also becomes a restore point. Dumps alone are durability
-         * only; the era advances, and rollback targets exist, only at
-         * snapshot boundaries. docs/DATABASE.txt 7.2. */
-        if (tp_snapshot_interval > 0 && MUCK::store().active()) {
-            long newest = 0;
-
-            for (const auto &m : MUCK::store().globalMarkers())
-                if (m.when > newest)
-                    newest = m.when;
-            if ((long) current_systime - newest >= (long) tp_snapshot_interval)
-                MUCK::store().snapshotGlobal("auto", false);
-        }
-
-        /* Fire and return: the dump thread writes the sealed layers
-         * behind the game. docs/DATABASE.txt 7.1. */
-        /* The dump is the only thing that writes: it hands the writer
-         * everything held since last time, plus what just sealed.
-         * This is also where the retention ladder runs and the
-         * incremental compaction sweep picks its batch (fire(true)). */
-        MUCK::store().flushHeld(MUCK::store().fire(true));
+        perror(tmpfile);
+        sprintf(buf, SYSRED "[DANGER] Error opening the db file %s for writing!  The DB did not save! :(", tmpfile);
+        ansi_wall_wizards(buf);
     }
 
     /* Write out the macros */
@@ -322,7 +311,7 @@ dump_database_internal(void)
     sprintf(tmpfile, "%s.#%d#", MACRO_FILE, epoch);
 
     if ((f = fopen(tmpfile, "w")) != NULL) {
-        MUCK::macros().dump(f);
+        macrodump(macrotop, f);
         fclose(f);
 #ifdef WIN_VC
         if (unlink(MACRO_FILE))
@@ -336,11 +325,7 @@ dump_database_internal(void)
         ansi_wall_wizards(buf);
     }
 
-    /* The journal path announces completion when the manifest lands
-     * (process_commands polls the store); announcing here would say
-     * "Done." at fire time, while the dump thread is still writing.
-     * The synchronous conversion path really is done here. */
-    if (db_conversion_flag && tp_dbdump_warning)
+    if (tp_dbdump_warning)
         wall_and_flush(tp_dumpdone_mesg);
 
     if (tp_periodic_program_purge)
@@ -358,46 +343,13 @@ panic(const char *message)
     log_status("PANIC: %s\n", message);
     fprintf(stderr, "PANIC: %s\n", message);
 
-    /* Exactly one thread writes the panic store. A fault handler
-     * fires on whichever thread died, and two threads walking and
-     * writing the same objects at once produces a worse store than
-     * either would alone. The loser parks; the process exits from
-     * under it in a moment. */
-    if (!MUCK::store().beginPanic()) {
-        for (;;)
-            sleep(1);
-    }
-
-    /* If the fault landed on a worker rather than the GAME thread,
-     * the game thread is still running commands and mutating the
-     * objects saveAll is about to walk. Ask it to park at its next
-     * poll point. Bounded: a game thread wedged in a syscall must not
-     * hang the crash dump forever, and a slightly torn store beats
-     * no store at all. */
-    if (!MUCK::store().onGameThread()) {
-        fprintf(stderr, "PANIC: raised off the game thread; parking it\n");
-        if (!MUCK::store().waitGameParked(3000)) {
-            log_status("PANIC: game thread did not park; store may be torn\n");
-            fprintf(stderr, "PANIC: game thread did not park; "
-                    "store may be torn\n");
-        }
-    }
-
     /* shut down interface */
     emergency_shutdown();
 
-    /* Dump panic state into the object store: a full write of every
-     * object, not just dirty ones, since we no longer trust flags.
-     * This deliberately bypasses the dump thread's queue rather than
-     * draining it: a crashing world cannot wait on a thread that may
-     * itself be the casualty. We do ask that thread to stop first, so
-     * it is not still writing the same files underneath us, but we do
-     * not join it. docs/DATABASE.txt 7.1. */
-    MUCK::store().requestDumpStop();
-    log_status("DUMP: %s (panic)\n", MUCK::store().root().c_str());
-    fprintf(stderr, "DUMP: %s (panic)\n", MUCK::store().root().c_str());
-    if (MUCK::store().saveAll(false) < 0) {
-        perror("CANNOT WRITE PANIC STORE, YOU LOSE");
+    /* dump panic file */
+    sprintf(panicfile, "%s.PANIC", dumpfile);
+    if ((f = fopen(panicfile, "w")) == NULL) {
+        perror("CANNOT OPEN PANIC FILE, YOU LOSE");
 
 #if defined(NOCOREDUMP)
         _exit(135);
@@ -408,14 +360,19 @@ panic(const char *message)
         abort();
 #endif /* NOCOREDUMP */
     } else {
-        log_status("DUMP: %s (panic done)\n", MUCK::store().root().c_str());
-        fprintf(stderr, "DUMP: %s (panic done)\n", MUCK::store().root().c_str());
+        log_status("DUMP: %s\n", panicfile);
+        fprintf(stderr, "DUMP: %s\n", panicfile);
+        db_write(f);
+        fclose(f);
+        log_status("DUMP: %s (done)\n", panicfile);
+        fprintf(stderr, "DUMP: %s (done)\n", panicfile);
+        (void) unlink(DELTAFILE_NAME);
     }
 
     /* Write out the macros */
     sprintf(panicfile, "%s.PANIC", MACRO_FILE);
     if ((f = fopen(panicfile, "w")) != NULL) {
-        MUCK::macros().dump(f);
+        macrodump(macrotop, f);
         fclose(f);
     } else {
         perror("CANNOT OPEN MACRO PANIC FILE, YOU LOSE");
@@ -459,10 +416,26 @@ dump_database(bool dofork)
     if (tp_dbdump_warning)
         wall_and_flush(tp_dumping_mesg);
 
-    /* The dump thread writes behind the game now, so there is nothing
-     * to fork for: forking a process that owns a worker thread would
-     * freeze that thread's locks in the child. docs/DATABASE.txt 7.1. */
-    dump_database_internal();
+    /* Alynna - saving the PID of the dumper so I can get around an SSL issue */
+#ifdef THREADED_DB_DUMP
+    if (dofork) {
+        db_write_threaded();
+    } else
+#else /* !THREADED_DB_DUMP */
+#ifndef WIN_VC
+    if (dofork && tp_dump_forking) {
+        if (!(dumper_pid = fork())) {
+            dump_database_internal();
+            _exit(0);
+        } else if (dumper_pid == -1) {
+            wall_and_flush("!!! Emergency database dump in progress, please wait..."); 
+            dump_database_internal();
+            wall_and_flush("!!! Emergency database dump complete."); 
+        }
+    } else
+#endif
+#endif /* THREADED_DB_DUMP */
+        dump_database_internal();
 
     log_status("DUMP: %s.#%d# (done)\n", dumpfile, epoch);
 }
@@ -493,8 +466,26 @@ fork_and_dump(bool dofork)
     if (tp_dbdump_warning)
         wall_and_flush(tp_dumping_mesg);
 
-    /* No fork: see dump_database. */
-    dump_database_internal();
+    /* Alynna - saving the PID of the dumper so I can get around an SSL issue */
+#ifdef THREADED_DB_DUMP
+    if (dofork) {
+        db_write_threaded();
+    } else
+#else /* !THREADED_DB_DUMP */
+#ifndef WIN_VC
+    if (dofork && tp_dump_forking) {
+        if (!(dumper_pid = fork())) {
+            dump_database_internal();
+            _exit(0);
+        } else if (dumper_pid == -1) { 
+            wall_and_flush("!!! Emergency database dump in progress, please wait..."); 
+            dump_database_internal();
+            wall_and_flush("!!! Emergency database dump complete.");                    
+        }
+    } else
+#endif
+#endif /* THREADED_DB_DUMP */
+        dump_database_internal();
 
     time(&current_systime);
     host_check_cache();
@@ -529,36 +520,17 @@ init_game(const char *infile, const char *outfile)
     if ((f = fopen(MACRO_FILE, "r")) == NULL)
         log_status_nowall("INIT: Macro storage file %s is tweaked.\n", MACRO_FILE);
     else {
-        MUCK::macros().load(f);
+        macroload(f);
         fclose(f);
     }
     log_status_nowall("init_game: macro file loaded\n");
     in_filename = (char *) string_dup(infile);
-
-    /* New-format store? The outfile names the store root from here on;
-     * a flat infile is a one-way import that the first dump converts. */
-    bool from_store = MUCK::ObjectStore::isStore(infile);
-
-    /* -storegc and --verify-entries operate on an EXISTING store and
-     * deliberately skip the conversion-mode exit save. Run against a
-     * flat file, that combination imports the whole database into
-     * memory and then exits without ever writing it: the operator's
-     * import silently evaporates. Refuse the mismatch outright. */
-    if ((store_gc_flag || store_verify_flag) && !from_store) {
-        fprintf(stderr, "%s is not an object store; -storegc and "
-                "--verify-entries maintain an existing store and "
-                "never write one. Import the flat database first "
-                "(run without these flags), then rerun against the "
-                "store.\n", infile);
-        exit(2);
-    }
-
-    if (!from_store && (input_file = fopen(infile, "r")) == NULL) {
+    if ((input_file = fopen(infile, "r")) == NULL) {
         log_status_nowall("DIE: input file not readable\n");
         return -1;
     }
 
-    MUCK::database().freeAll();
+    db_free();
     log_status_nowall("init_game/db_free\n");
     init_primitives();
     log_status_nowall("init_game/init_primitives: MUF initialized\n"); /* init muf compiler */
@@ -572,42 +544,17 @@ init_game(const char *infile, const char *outfile)
     /* ok, read the db in */
     log_status_nowall("LOAD: %s\n", infile);
     fprintf(stderr, "LOAD: %s\n", infile);
-    if (from_store) {
-        extern void autostart_progs(void);
-
-        MUCK::store().setRoot(infile);
-        if (MUCK::store().loadAll() < 0) {
-            log_status_nowall("DIE: object store load error.\n");
-            return -1;
-        }
-        autostart_progs();
-    } else {
-        if (MUCK::flatConverter().import(input_file) < 0) {
-            log_status_nowall("DIE: database load error.  Damnit.\n");
-            return -1;
-        }
-        fclose(input_file);
-        log_status_nowall("LOAD: flat import complete; dumps now write "
-                          "the object store at %s\n", outfile);
+    if (db_read(input_file) < 0) {
+        log_status_nowall("DIE: database load error.  Damnit.\n");
+        return -1;
     }
-    MUCK::store().setRoot(outfile);
+#ifndef DISKBASE
+    fclose(input_file);
+#endif
     log_status_nowall("LOAD: %s (done)\n", infile);
     fprintf(stderr, "LOAD: %s (done)\n", infile);
 
-    /* the manifest is the tune authority on store boots; reloading
-     * parmfile.cfg here would override it. Flat imports still take
-     * their parms from the file. */
-    if (!from_store)
-        tune_load_parmsfile(NOTHING);
-
-    if (store_verify_flag) {
-        log_status_nowall("VERIFY: entry serialization audit\n");
-        MUCK::store().verifyEntrySerialization();
-    }
-    if (store_gc_flag) {
-        log_status_nowall("STOREGC: starting maintenance pass\n");
-        MUCK::store().gcStore();
-    }
+    tune_load_parmsfile(NOTHING); /* load @tune parms from file */
     /* set up dumper */
     delete[]dumpfile;
     dumpfile = alloc_string(outfile);
@@ -731,6 +678,9 @@ const char version_line2[] = SYSGREEN "Compile-time Options: " SYSNORMAL
 #ifdef MCP_SUPPORT
     "MCP "
 #endif
+#ifdef ARCHAIC_DATABASES
+    "ArchaicDB "
+#endif
 #ifdef DETACH
     "Detach "
 #endif
@@ -825,26 +775,26 @@ process_command(int descr, dbref player, char *command, int len, int wclen)
     }
 
     if (force_level >= 32) {
-        anotify_fmt(player, CFAIL "I'm sorry, %s, I'm afraid I cannot do that.  Maximum force recursion depth exceeded.", MUCK::getName(player));
+        anotify_fmt(player, CFAIL "I'm sorry, %s, I'm afraid I cannot do that.  Maximum force recursion depth exceeded.", NAME(player));
         return;
     }
 
     /* robustify player */
-    if (player < 0 || player >= MUCK::database().top() || (Typeof(player) != TYPE_PLAYER && Typeof(player) != TYPE_THING)) {
+    if (player < 0 || player >= db_top || (Typeof(player) != TYPE_PLAYER && Typeof(player) != TYPE_THING)) {
         log_status("process_command: bad player %d\n", player);
         return;
     }
 
-    if (((tp_log_commands || (tp_log_guests && Guest(MUCK::getOwner(player)))) ||
-         (tp_log_suspects && (FLAG2(MUCK::getOwner(player)) & F2SUSPECT)) || (tp_log_wizards && (MLevel(MUCK::getOwner(player)) >= LMAGE))
+    if (((tp_log_commands || (tp_log_guests && Guest(OWNER(player)))) ||
+         (tp_log_suspects && (FLAG2(OWNER(player)) & F2SUSPECT)) || (tp_log_wizards && (MLevel(OWNER(player)) >= LMAGE))
         ) && (tp_log_interactive || !(FLAGS(player) & (INTERACTIVE | READMODE)))) {
         if (*command)           /* To prevent logging of NULL commands? FB6 change */
-            log_command("%s%s%s%s(%d) in %s(%d):%s %s\n", (MLevel(MUCK::getOwner(player)) >= LMAGE) ? "WIZ: " : (FLAG2(MUCK::getOwner(player)) & F2SUSPECT)
+            log_command("%s%s%s%s(%d) in %s(%d):%s %s\n", (MLevel(OWNER(player)) >= LMAGE) ? "WIZ: " : (FLAG2(OWNER(player)) & F2SUSPECT)
                         ? "SUSPECT: " : "",
-                        (Typeof(player) != TYPE_PLAYER) ? MUCK::getName(player) : "",
+                        (Typeof(player) != TYPE_PLAYER) ? NAME(player) : "",
                         (Typeof(player) != TYPE_PLAYER) ? " by " : "",
-                        MUCK::getName(MUCK::getOwner(player)), (int) player,
-                        MUCK::getName(MUCK::getLocation(player)), (int) MUCK::getLocation(player), (FLAGS(player) & INTERACTIVE) ? " [interactive]" : " ", command);
+                        NAME(OWNER(player)), (int) player,
+                        NAME(DBFETCH(player)->location), (int) DBFETCH(player)->location, (FLAGS(player) & INTERACTIVE) ? " [interactive]" : " ", command);
     }
 
     if (FLAGS(player) & INTERACTIVE) {
@@ -1308,11 +1258,6 @@ process_command(int descr, dbref player, char *command, int len, int wclen)
                             Matched("@memory");
                             do_memory(player);
                             break;
-                        case 'o':
-                        case 'O':
-                            Matched("@module");
-                            do_module(descr, player, arg1, arg2);
-                            break;
                         case 'p':
                         case 'P':
                             Matched("@mpitops");
@@ -1479,14 +1424,8 @@ process_command(int descr, dbref player, char *command, int len, int wclen)
 #endif /* PCRE_SUPPORT */
                         case 'l':
                         case 'L':
-                            /* @relink and @rollback share command[3] */
-                            if (!string_compare(command, "@relink")) {
-                                do_relink(descr, player, arg1, arg2);
-                            } else if (!string_compare(command, "@rollback")) {
-                                do_rollback(descr, player, arg1, arg2);
-                            } else {
-                                goto bad;
-                            }
+                            Matched("@relink");
+                            do_relink(descr, player, arg1, arg2);
                             break;
                         case 's':
                         case 'S':
@@ -1532,11 +1471,6 @@ process_command(int descr, dbref player, char *command, int len, int wclen)
                             if (string_compare(command, "@shutdown"))
                                 goto bad;
                             do_shutdown(player, arg1, arg2);
-                            break;
-                        case 'n':
-                        case 'N':
-                            Matched("@snapshot");
-                            do_snapshot(descr, player, arg1, arg2);
                             break;
                         case 'q':
                         case 'Q':
@@ -1900,12 +1834,12 @@ process_command(int descr, dbref player, char *command, int len, int wclen)
 
             /* Do the propqueue, with the HUH args on the stack */
             sprintf(zbuf, "HUH:%s %s", command, full_command);
-            propqueue(descr, player, MUCK::getLocation(player), player, 0, -1, "@huh", zbuf, 1, 1);
+            propqueue(descr, player, DBFETCH(player)->location, player, 0, -1, "@huh", zbuf, 1, 1);
 
             /* Regular logging */
-            if (tp_log_failed_commands && !controls(player, MUCK::getLocation(player))) {
+            if (tp_log_failed_commands && !controls(player, DBFETCH(player)->location)) {
                 log_status("HUH from %s(%d) in %s(%d)[%s]: %s %s\n",
-                           MUCK::getName(player), player, MUCK::getName(MUCK::getLocation(player)), MUCK::getLocation(player), MUCK::getName(MUCK::getOwner(MUCK::getLocation(player))), command, full_command);
+                           NAME(player), player, NAME(DBFETCH(player)->location), DBFETCH(player)->location, NAME(OWNER(DBFETCH(player)->location)), command, full_command);
             }
         }
             break;
@@ -2000,18 +1934,18 @@ prop_command(int descr, dbref player, const char *command, const char *arg, cons
                     dbref plyr;
 
                     sprintf(bbuf, ">> %.4000s", pronoun_substitute(descr, player, cbuf));
-                    plyr = CONTENTS(where);
+                    plyr = DBFETCH(where)->contents;
                     while (plyr != NOTHING) {
                         if (Typeof(plyr) == TYPE_PLAYER && plyr != player)
                             notify_nolisten(plyr, bbuf, 0);
-                        plyr = NEXTOBJ(plyr);
+                        plyr = DBFETCH(plyr)->next;
                     }
                 }
             }
         }
         return 1;
     } else {
-        if (progRef < 0 || progRef >= MUCK::database().top()) {
+        if (progRef < 0 || progRef >= db_top) {
             if (player < 1)
                 notify_descriptor(descr, "Invalid program call from a command prop.");
             else
@@ -2036,12 +1970,12 @@ prop_command(int descr, dbref player, const char *command, const char *arg, cons
                 notify_descriptor(descr, "Invalid program call from a command prop.");
                 return 1;
             } else {
-                if (OkObj(MUCK::exitDestRef(progRef, 0))
-                    && Typeof(MUCK::exitDestRef(progRef, 0)) == TYPE_ROOM) {
+                if (OkObj((DBFETCH(progRef)->sp.exit.dest)[0])
+                    && Typeof((DBFETCH(progRef)->sp.exit.dest)[0]) == TYPE_ROOM) {
                     if (Wizard(player) || Mage(where)
                         || controls(player, progRef) || (FLAGS(progRef)
                                                          & JUMP_OK))
-                        enter_room(descr, player, (int) MUCK::exitDestRef(progRef, 0), progRef);
+                        enter_room(descr, player, (int) (DBFETCH(progRef)->sp.exit.dest)[0], progRef);
                     else
                         notify_descriptor(descr, RED "Permission denied.");
                 } else {
@@ -2056,9 +1990,9 @@ prop_command(int descr, dbref player, const char *command, const char *arg, cons
                 notify_descriptor(descr, "Invalid program call from a command prop.");
 		return 1;
             } else {
-            if (OkObj(DBFETCH(progRef)->location) &&
+            if (OkObj(DBFETCH(progRef)->location) && 
 		(Typeof(DBFETCH(progRef)->location == TYPE_ROOM) || Typeof(DBFETCH(progRef)->location) == TYPE_THING)) {
-    	        if (Wizard(player) || Mage(where) || controls(player,progRef) ||
+    	        if (Wizard(player) || Mage(where) || controls(player,progRef) || 
                    ((FLAGS(progRef) & JUMP_OK) || (FLAGS(DBFETCH(progRef)->location) & JUMP_OK)) )
 		    enter_room(descr, player, (int) (DBFETCH(progRef)->location), progRef);
         	else
@@ -2076,16 +2010,16 @@ prop_command(int descr, dbref player, const char *command, const char *arg, cons
                 notify_descriptor(descr, "Invalid program call from a command prop.");
                 return 1;
             } else {
-                if (OkObj(MUCK::getLocation(progRef)) && ((Typeof(MUCK::getLocation(progRef)) == TYPE_ROOM)
-                                                          || Typeof(MUCK::getLocation(progRef)) == TYPE_THING)) {
+                if (OkObj(DBFETCH(progRef)->location) && ((Typeof(DBFETCH(progRef)->location) == TYPE_ROOM)
+                                                          || Typeof(DBFETCH(progRef)->location) == TYPE_THING)) {
                     if (Wizard(player) || Mage(where)
                         || (controls(player, progRef)
-                            && controls(player, MUCK::getLocation(progRef)))
+                            && controls(player, DBFETCH(progRef)->location))
                         || (((FLAGS(progRef) & JUMP_OK)
                              || (FLAGS(progRef) & VEHICLE))
-                            && ((FLAGS(MUCK::getLocation(progRef)) & JUMP_OK)
-                                && !(FLAGS(MUCK::getLocation(progRef)) & VEHICLE))))
-                        enter_room(descr, player, (int) (MUCK::getLocation(progRef)), progRef);
+                            && ((FLAGS(DBFETCH(progRef)->location) & JUMP_OK)
+                                && !(FLAGS(DBFETCH(progRef)->location) & VEHICLE))))
+                        enter_room(descr, player, (int) (DBFETCH(progRef)->location), progRef);
                     else
                         notify_descriptor(descr, RED "Permission denied.");
                 } else {
@@ -2103,7 +2037,7 @@ prop_command(int descr, dbref player, const char *command, const char *arg, cons
         } else {
             struct frame *tmpfr;
 
-            tmpfr = interp(descr, player, (OkObj(player)) ? MUCK::getLocation(player) : -1, progRef, where, FOREGROUND, STD_HARDUID, 0);
+            tmpfr = interp(descr, player, (OkObj(player)) ? DBFETCH(player)->location : -1, progRef, where, FOREGROUND, STD_HARDUID, 0);
             if (tmpfr) {
                 interp_loop(player, progRef, tmpfr, 0);
             }

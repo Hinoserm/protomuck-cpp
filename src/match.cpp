@@ -10,8 +10,6 @@
 #include "match.h"
 #include "interface.h"
 #include "externs.h"
-#include "Modules.h"
-#include "ObjectAccess.h"
 
 #define DOWNCASE(x) (tolower(x))
 
@@ -19,8 +17,7 @@ char match_cmdname[BUFFER_LEN]; /* triggering command */
 char match_args[BUFFER_LEN];    /* remaining text */
 
 void
-init_match(int descr, dbref player, const char *name, MUCK::ObjectType type,
-           struct match_data *md)
+init_match(int descr, dbref player, const char *name, int type, struct match_data *md)
 {
     md->exact_match = md->last_match = NOTHING;
     md->match_count = 0;
@@ -36,16 +33,14 @@ init_match(int descr, dbref player, const char *name, MUCK::ObjectType type,
 }
 
 void
-init_match_check_keys(int descr, dbref player, const char *name,
-                      MUCK::ObjectType type, struct match_data *md)
+init_match_check_keys(int descr, dbref player, const char *name, int type, struct match_data *md)
 {
     init_match(descr, player, name, type, md);
     md->check_keys = 1;
 }
 
 void
-init_match_remote(int descr, dbref player, dbref what, const char *name,
-                  MUCK::ObjectType type, struct match_data *md)
+init_match_remote(int descr, dbref player, dbref what, const char *name, int type, struct match_data *md)
 {
     init_match(descr, player, name, type, md);
     md->match_from = what;
@@ -56,7 +51,7 @@ choose_thing(int descr, dbref thing1, dbref thing2, struct match_data *md)
 {
     int has1;
     int has2;
-    MUCK::ObjectType preferred = md->preferred_type;
+    int preferred = md->preferred_type;
 
     if (thing1 == NOTHING) {
         return thing2;
@@ -98,7 +93,7 @@ match_player(struct match_data *md)
     dbref match;
     const char *p;
 
-    if (*(md->match_name) == LOOKUP_TOKEN && (payfor(MUCK::getOwner(md->match_from), tp_lookup_cost))) {
+    if (*(md->match_name) == LOOKUP_TOKEN && (payfor(OWNER(md->match_from), tp_lookup_cost))) {
         for (p = (md->match_name) + 1; isspace(*p); p++) ;
         if ((match = lookup_player(p)) != NOTHING) {
             md->exact_match = match;
@@ -138,6 +133,9 @@ find_registered_obj(dbref player, const char *name)
 #ifdef HIDDEN_REG
     }
 #endif
+#ifdef DISKBASE
+    propfetch(player, ptr);     /* DISKBASE PROPVALS */
+#endif
     switch (PropType(ptr)) {
         case PROP_STRTYP:
             p = PropDataUNCStr(ptr);
@@ -145,19 +143,19 @@ find_registered_obj(dbref player, const char *name)
                 p++;
             if (number(p)) {
                 match = (dbref) atoi(p);
-                if ((match >= 0) && (match < MUCK::database().top()) && (Typeof(match) != TYPE_GARBAGE))
+                if ((match >= 0) && (match < db_top) && (Typeof(match) != TYPE_GARBAGE))
                     return (match);
             }
             break;
         case PROP_REFTYP:
             match = PropDataRef(ptr);
-            if (((match >= 0) && (match < MUCK::database().top())
+            if (((match >= 0) && (match < db_top)
                  && (Typeof(match) != TYPE_GARBAGE)) || (match == -4))
                 return (match);
             break;
         case PROP_INTTYP:
             match = (dbref) PropDataVal(ptr);
-            if ((match > 0) && (match < MUCK::database().top())
+            if ((match > 0) && (match < db_top)
                 && (Typeof(match) != TYPE_GARBAGE))
                 return (match);
             break;
@@ -188,32 +186,14 @@ absolute_name(struct match_data *md)
 
     if (*(md->match_name) == NUMBER_TOKEN) {
         match = parse_dbref((md->match_name) + 1);
-        if (match < 0 || match >= MUCK::database().top()) {
+        if (match < 0 || match >= db_top) {
             return NOTHING;
         } else {
             return match;
         }
+    } else {
+        return NOTHING;
     }
-
-    /* uuid short-form: a run of six or more hex digits (dashes
-     * allowed) resolves like a git prefix when it names exactly one
-     * object. Six hex chars keeps ordinary names from ever matching. */
-    {
-        const char *p = md->match_name;
-        int hexes = 0;
-
-        while (*p && (isxdigit(*p) || *p == '-')) {
-            if (*p != '-')
-                hexes++;
-            p++;
-        }
-        if (!*p && hexes >= 6) {
-            match = MUCK::database().resolveUUIDPrefix(md->match_name);
-            if (match != NOTHING && match != AMBIGUOUS)
-                return match;
-        }
-    }
-    return NOTHING;
 }
 
 void
@@ -262,8 +242,8 @@ void
 match_here(struct match_data *md)
 {
     if (!string_compare(md->match_name, "here")
-        && MUCK::getLocation(md->match_who) != NOTHING) {
-        md->exact_match = MUCK::getLocation(md->match_who);
+        && DBFETCH(md->match_who)->location != NOTHING) {
+        md->exact_match = DBFETCH(md->match_who)->location;
     }
 }
 
@@ -297,17 +277,17 @@ match_list(dbref first, struct match_data *md)
     dbref absolute;
 
     absolute = absolute_name(md);
-    if (!controls(MUCK::getOwner(md->match_from), absolute))
+    if (!controls(OWNER(md->match_from), absolute))
         absolute = NOTHING;
 
     DOLIST(first, first) {
         if (first == absolute) {
             md->exact_match = first;
             return;
-        } else if (!string_compare(MUCK::getName(first), md->match_name)) {
+        } else if (!string_compare(RNAME(first), md->match_name)) {
             /* if there are multiple exact matches, randomly choose one */
             md->exact_match = choose_thing(md->match_descr, md->exact_match, first, md);
-        } else if (string_match(MUCK::getName(first), md->match_name)) {
+        } else if (string_match(RNAME(first), md->match_name)) {
             md->last_match = first;
             (md->match_count)++;
         }
@@ -319,7 +299,7 @@ match_possession(struct match_data *md)
 {
     if (!OkObj(md->match_from))
         return;                 /* Don't match for invalid objects! */
-    match_list(CONTENTS(md->match_from), md);
+    match_list(DBFETCH(md->match_from)->contents, md);
 }
 
 void
@@ -327,8 +307,8 @@ match_neighbor(struct match_data *md)
 {
     dbref loc;
 
-    if ((loc = MUCK::getLocation(md->match_from)) != NOTHING) {
-        match_list(CONTENTS(loc), md);
+    if ((loc = DBFETCH(md->match_from)->location) != NOTHING) {
+        match_list(DBFETCH(loc)->contents, md);
     }
 }
 
@@ -345,11 +325,11 @@ match_exits(dbref first, struct match_data *md)
 
     if (first == NOTHING)
         return;                 /* Easy fail match */
-    if ((MUCK::getLocation(md->match_from)) == NOTHING)
+    if ((DBFETCH(md->match_from)->location) == NOTHING)
         return;
 
     absolute = absolute_name(md); /* parse #nnn entries */
-    if (!controls(MUCK::getOwner(md->match_from), absolute))
+    if (!controls(OWNER(md->match_from), absolute))
         absolute = NOTHING;
 
     DOLIST(exit, first) {
@@ -360,14 +340,14 @@ match_exits(dbref first, struct match_data *md)
 
         /*
            if (FLAGS(exit) & HAVEN || !tp_require_has_mpi_arg) {
-           } else if (MUCK::exitDestCount(exit)) {
-           for (i = 0; i < MUCK::exitDestCount(exit); i++) {
-           if (MUCK::exitDestRef(exit, i) != NIL)
-           if (Typeof(MUCK::exitDestRef(exit, i)) == TYPE_PROGRAM)
+           } else if (DBFETCH(exit)->sp.exit.dest) {
+           for (i = 0; i < DBFETCH(exit)->sp.exit.ndest; i++) {
+           if ((DBFETCH(exit)->sp.exit.dest)[i] != NIL)
+           if (Typeof((DBFETCH(exit)->sp.exit.dest)[i]) == TYPE_PROGRAM)
            }
            }
          */
-        exitname = MUCK::getName(exit);
+        exitname = NAME(exit);
         while (*exitname) {     /* for all exit aliases */
             for (p = md->match_name; /* check out 1 alias */
                  *p && DOWNCASE(*p) == DOWNCASE(*exitname)
@@ -379,7 +359,7 @@ match_exits(dbref first, struct match_data *md)
                     exitname++;
                 lev = MLevel(exit);
                 if (tp_compatible_priorities && (lev == 1) &&
-                    (MUCK::getLocation(exit) == NOTHING || Typeof(MUCK::getLocation(exit)) != TYPE_THING || controls(MUCK::getOwner(exit), MUCK::getLocation(md->match_from))))
+                    (DBFETCH(exit)->location == NOTHING || Typeof(DBFETCH(exit)->location) != TYPE_THING || controls(OWNER(exit), getloc(md->match_from))))
                     lev = 2;
                 if (*exitname == '\0' || *exitname == EXIT_DELIMITER) {
                     /* we got a match on this alias */
@@ -454,13 +434,15 @@ match_exits(dbref first, struct match_data *md)
 void
 match_invobj_actions(struct match_data *md)
 {
+    dbref thing;
+
     if (md->match_from == NOTHING) /* Don't match #-1's contents. */
         return;
-    if (MUCK::getContents(md->match_from).empty())
+    if (DBFETCH(md->match_from)->contents == NOTHING)
         return;
-    for (dbref thing : MUCK::getContents(md->match_from)) {
-        if (Typeof(thing) == TYPE_THING && !MUCK::getExits(thing).empty()) {
-            match_exits(EXITS(thing), md);
+    DOLIST(thing, DBFETCH(md->match_from)->contents) {
+        if (Typeof(thing) == TYPE_THING && DBFETCH(thing)->exits != NOTHING) {
+            match_exits(DBFETCH(thing)->exits, md);
         }
     }
 }
@@ -472,17 +454,17 @@ match_invobj_actions(struct match_data *md)
 void
 match_roomobj_actions(struct match_data *md)
 {
-    dbref loc;
+    dbref thing, loc;
 
     if (md->match_from == NOTHING)
         return;
-    if ((loc = MUCK::getLocation(md->match_from)) == NOTHING)
+    if ((loc = DBFETCH(md->match_from)->location) == NOTHING)
         return;
-    if (MUCK::getContents(loc).empty())
+    if (DBFETCH(loc)->contents == NOTHING)
         return;
-    for (dbref thing : MUCK::getContents(loc)) {
-        if (Typeof(thing) == TYPE_THING && !MUCK::getExits(thing).empty()) {
-            match_exits(EXITS(thing), md);
+    DOLIST(thing, DBFETCH(loc)->contents) {
+        if (Typeof(thing) == TYPE_THING && DBFETCH(thing)->exits != NOTHING) {
+            match_exits(DBFETCH(thing)->exits, md);
         }
     }
 }
@@ -500,7 +482,7 @@ match_player_actions(struct match_data *md)
         case TYPE_PLAYER:
         case TYPE_ROOM:
         case TYPE_THING:
-            obj = EXITS(md->match_from);
+            obj = DBFETCH(md->match_from)->exits;
             break;
         default:
             obj = NOTHING;
@@ -528,7 +510,7 @@ match_room_exits(dbref loc, struct match_data *md)
         case TYPE_PLAYER:
         case TYPE_ROOM:
         case TYPE_THING:
-            obj = EXITS(loc);
+            obj = DBFETCH(loc)->exits;
             break;
         default:
             obj = NOTHING;
@@ -555,7 +537,7 @@ match_all_exits(struct match_data *md)
     if (md->match_from == NOTHING)
         return;
     if (md->match_from != NOTHING)
-        if ((loc = MUCK::getLocation(md->match_from)) != NOTHING)
+        if ((loc = DBFETCH(md->match_from)->location) != NOTHING)
             match_room_exits(loc, md);
 
     if (md->exact_match != NOTHING)
@@ -575,7 +557,7 @@ match_all_exits(struct match_data *md)
 
     /* if player is in a vehicle, use environment of vehicle's home */
     if (Typeof(loc) == TYPE_THING) {
-        loc = [&]{ MUCK::Thing *t = MUCK::database().get(loc)->As<MUCK::Thing>(); return (t && t->home()) ? t->home()->ref() : NOTHING; }();
+        loc = DBFETCH(loc)->sp.thing.home;
         if (loc == NOTHING)
             return;
         if (loc == NIL)
@@ -585,7 +567,7 @@ match_all_exits(struct match_data *md)
         match_room_exits(loc, md);
     }
 
-    while ((loc = MUCK::getLocation(loc)) != NOTHING) {
+    while ((loc = DBFETCH(loc)->location) != NOTHING) {
         if (md->exact_match != NOTHING)
             md->block_equals = 1;
         match_room_exits(loc, md);
@@ -603,7 +585,7 @@ match_everything(struct match_data *md)
     match_me(md);
     match_here(md);
     match_registered(md);
-    if (Mage(MUCK::getOwner(md->match_from)) || Mage(md->match_who) || MUCK::getPowers(MUCK::getOwner(md->match_who)) & POW_LONG_FINGERS) {
+    if (Mage(OWNER(md->match_from)) || Mage(md->match_who) || POWERS(OWNER(md->match_who)) & POW_LONG_FINGERS) {
         match_absolute(md);
         match_player(md);
     }
@@ -663,8 +645,8 @@ match_rmatch(dbref arg1, struct match_data *md)
         case TYPE_PLAYER:
         case TYPE_ROOM:
         case TYPE_THING:
-            match_list(CONTENTS(arg1), md);
-            match_exits(EXITS(arg1), md);
+            match_list(DBFETCH(arg1)->contents, md);
+            match_exits(DBFETCH(arg1)->exits, md);
             break;
     }
 }

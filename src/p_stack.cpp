@@ -6,14 +6,12 @@
 #include "db.h"
 #include "inst.h"
 #include "externs.h"
-#include "Modules.h"
 #include "match.h"
 #include "interface.h"
 #include "params.h"
 #include "tune.h"
 #include "strutils.h"
 #include "interp.h"
-#include "ObjectAccess.h"
 
 /* We'll put the external temp vars here */
 
@@ -144,7 +142,7 @@ prim_at(PRIM_PROTOTYPE)
         copyinst(&(fr->variables[temp1.data.number]), &arg[(*top)++]);
     } else if (temp1.type == PROG_STVAR) {
         /* STATICVAR */
-        copyinst(&(MUCK::programRuntime(program).staticVars[temp1.data.number]), &arg[(*top)++]);
+        copyinst(&(DBFETCH(program)->sp.program.staticvars[temp1.data.number]), &arg[(*top)++]);
     } else {
         /* SCOPEDVAR */
         struct inst *tmp;
@@ -176,8 +174,8 @@ prim_bang(PRIM_PROTOTYPE)
         copyinst(&oper[1], &(fr->variables[oper[0].data.number]));
     } else if (oper[0].type == PROG_STVAR) {
         /* STATICVAR */
-        CLEAR(&(MUCK::programRuntime(program).staticVars[oper[0].data.number]));
-        copyinst(&oper[1], &(MUCK::programRuntime(program).staticVars[oper[0].data.number]));
+        CLEAR(&(DBFETCH(program)->sp.program.staticvars[oper[0].data.number]));
+        copyinst(&oper[1], &(DBFETCH(program)->sp.program.staticvars[oper[0].data.number]));
     } else {
         /* SCOPEDVAR */
         struct inst *tmp;
@@ -383,10 +381,10 @@ sort4(const void *op1, const void *op2)
     if ((o1->data.objref < 0) || (o2->data.objref < 0))
         return 0;
 
-    if ((o1->data.objref >= MUCK::database().top()) || (o2->data.objref >= MUCK::database().top()))
+    if ((o1->data.objref >= db_top) || (o2->data.objref >= db_top))
         return 0;
 
-    return strcasecmp(MUCK::getName(o1->data.objref), MUCK::getName(o2->data.objref));
+    return strcasecmp(NAME(o1->data.objref), NAME(o2->data.objref));
 }
 
 int
@@ -401,10 +399,10 @@ sort5(const void *op1, const void *op2)
     if ((o1->data.objref < 0) || (o2->data.objref < 0))
         return 0;
 
-    if ((o1->data.objref >= MUCK::database().top()) || (o2->data.objref >= MUCK::database().top()))
+    if ((o1->data.objref >= db_top) || (o2->data.objref >= db_top))
         return 0;
 
-    return -strcasecmp(MUCK::getName(o1->data.objref), MUCK::getName(o2->data.objref));
+    return -strcasecmp(NAME(o1->data.objref), NAME(o2->data.objref));
 }
 
 void
@@ -478,7 +476,7 @@ prim_rotate(PRIM_PROTOTYPE)
 void
 prim_dbtop(PRIM_PROTOTYPE)
 {
-    dbref ref = (dbref) MUCK::database().top();
+    dbref ref = (dbref) db_top;
 
     CHECKOFLOW(1);
     PushObject(ref);
@@ -736,7 +734,7 @@ prim_checkargs(PRIM_PROTOTYPE)
                     if (arg[stackpos].type != PROG_OBJECT)
                         ABORT_CHECKARGS("Expected a dbref");
                     ref = arg[stackpos].data.objref;
-                    if ((ref >= MUCK::database().top()) || (ref < HOME))
+                    if ((ref >= db_top) || (ref < HOME))
                         ABORT_CHECKARGS("Invalid dbref");
                     switch (buf[currpos]) {
                         case 'D':
@@ -912,7 +910,7 @@ prim_interp(PRIM_PROTOTYPE)
     strcpy(match_args, oper[0].data.string ? oper[0].data.string->data.c_str() : "");
     fr->level++;
     interp_set_depth(fr);
-    tmpfr = interp(fr->descr, player, MUCK::getLocation(player), oper[2].data.objref, oper[1].data.objref, PREEMPT, STD_HARDUID, 0);
+    tmpfr = interp(fr->descr, player, DBFETCH(player)->location, oper[2].data.objref, oper[1].data.objref, PREEMPT, STD_HARDUID, 0);
     if (tmpfr) {
         rv = interp_loop(player, oper[2].data.objref, tmpfr, 1);
     }

@@ -7,7 +7,6 @@
 #include "tune.h"
 #include "interface.h"
 #include "props.h"
-#include "ObjectAccess.h"
 
 static char upb[BUFFER_LEN];
 
@@ -15,9 +14,11 @@ const char *
 unparse_flags(dbref thing, char buf[BUFFER_LEN])
 {
     char *p;
+    const char *type_codes = "R-EPFG";
+
     p = buf;
     if (Typeof(thing) != TYPE_THING)
-        *p++ = MUCK::typeCode(Typeof(thing));
+        *p++ = type_codes[Typeof(thing)];
     if (FLAGS(thing) & ~TYPE_MASK) {
         /* print flags */
         if (FLAGS(thing) & BUILDER)
@@ -126,47 +127,47 @@ unparse_flags(dbref thing, char buf[BUFFER_LEN])
                 break;
         }
     }
-    if ((Typeof(thing) == TYPE_PLAYER) && MUCK::getPowers(thing)) {
+    if ((Typeof(thing) == TYPE_PLAYER) && POWERS(thing)) {
         *p++ = ':';
-        if (MUCK::getPowers(thing) & POW_ANNOUNCE)
+        if (POWERS(thing) & POW_ANNOUNCE)
             *p++ = 'a';
-        if (MUCK::getPowers(thing) & POW_BOOT)
+        if (POWERS(thing) & POW_BOOT)
             *p++ = 'b';
-        if (MUCK::getPowers(thing) & POW_CHOWN_ANYTHING)
+        if (POWERS(thing) & POW_CHOWN_ANYTHING)
             *p++ = 'c';
-        if (MUCK::getPowers(thing) & POW_EXPANDED_WHO)
+        if (POWERS(thing) & POW_EXPANDED_WHO)
             *p++ = 'x';
-        if (MUCK::getPowers(thing) & POW_HIDE)
+        if (POWERS(thing) & POW_HIDE)
             *p++ = 'h';
-        if (MUCK::getPowers(thing) & POW_IDLE)
+        if (POWERS(thing) & POW_IDLE)
             *p++ = 'i';
-        if (MUCK::getPowers(thing) & POW_LINK_ANYWHERE)
+        if (POWERS(thing) & POW_LINK_ANYWHERE)
             *p++ = 'l';
-        if (MUCK::getPowers(thing) & POW_LONG_FINGERS)
+        if (POWERS(thing) & POW_LONG_FINGERS)
             *p++ = 'g';
-        if (MUCK::getPowers(thing) & POW_NO_PAY)
+        if (POWERS(thing) & POW_NO_PAY)
             *p++ = 'n';
-        if (MUCK::getPowers(thing) & POW_OPEN_ANYWHERE)
+        if (POWERS(thing) & POW_OPEN_ANYWHERE)
             *p++ = 'o';
-        if (MUCK::getPowers(thing) & POW_PLAYER_CREATE)
+        if (POWERS(thing) & POW_PLAYER_CREATE)
             *p++ = 'p';
-        if (MUCK::getPowers(thing) & POW_PLAYER_PURGE)
+        if (POWERS(thing) & POW_PLAYER_PURGE)
             *p++ = 'u';
-        if (MUCK::getPowers(thing) & POW_SEARCH)
+        if (POWERS(thing) & POW_SEARCH)
             *p++ = 's';
-        if (MUCK::getPowers(thing) & POW_SEE_ALL)
+        if (POWERS(thing) & POW_SEE_ALL)
             *p++ = 'e';
-        if (MUCK::getPowers(thing) & POW_TELEPORT)
+        if (POWERS(thing) & POW_TELEPORT)
             *p++ = 't';
-        if (MUCK::getPowers(thing) & POW_SHUTDOWN)
+        if (POWERS(thing) & POW_SHUTDOWN)
             *p++ = 'd';
-        if (MUCK::getPowers(thing) & POW_CONTROL_MUF)
+        if (POWERS(thing) & POW_CONTROL_MUF)
             *p++ = 'f';
-        if (MUCK::getPowers(thing) & POW_CONTROL_ALL)
+        if (POWERS(thing) & POW_CONTROL_ALL)
             *p++ = 'r';
-        if (MUCK::getPowers(thing) & POW_ALL_MUF_PRIMS)
+        if (POWERS(thing) & POW_ALL_MUF_PRIMS)
             *p++ = 'm';
-        if (MUCK::getPowers(thing) & POW_STAFF)
+        if (POWERS(thing) & POW_STAFF)
             *p++ = 'w';
     }
     *p = '\0';
@@ -314,7 +315,7 @@ unparse_object(dbref player, dbref loc)
     char tbuf[BUFFER_LEN];
 
     if (Typeof(player) != TYPE_PLAYER)
-        player = MUCK::getOwner(player);
+        player = OWNER(player);
     switch (loc) {
         case NOTHING:
             return "*NOTHING*";
@@ -325,7 +326,7 @@ unparse_object(dbref player, dbref loc)
         case NIL:
             return "*NIL*";
         default:
-            if (loc < 0 || loc >= MUCK::database().top())
+            if (loc < 0 || loc >= db_top)
 #ifdef SANITY
             {
                 sprintf(upb, "*INVALID*(#%d)", loc);
@@ -336,17 +337,17 @@ unparse_object(dbref player, dbref loc)
 #endif
 #ifndef SANITY
             if (!(FLAGS(player) & STICKY) &&
-                (TMage(player) || MUCK::getPowers(player) & POW_SEE_ALL ||
+                (TMage(player) || POWERS(player) & POW_SEE_ALL ||
                  can_link_to(player, NOTYPE, loc) || controls_link(player, loc) || ((Typeof(loc) != TYPE_PLAYER) && (FLAGS(loc) & CHOWN_OK))
                 )) {
                 /* show everything */
 #endif
-                sprintf(upb, "%s(#%d%s)", MUCK::getName(loc), loc, unparse_flags(loc, tbuf));
+                sprintf(upb, "%s(#%d%s)", NAME(loc), loc, unparse_flags(loc, tbuf));
                 return upb;
 #ifndef SANITY
             } else {
                 /* show only the name */
-                return MUCK::getName(loc);
+                return NAME(loc);
             }
 #endif
     }
@@ -379,7 +380,7 @@ ansiname(dbref loc, char buf[BUFFER_LEN])
             strcpy(buf, SYSNORMAL);
     }
 
-    strcat(buf, tct(MUCK::getName(loc), tbuf));
+    strcat(buf, tct(NAME(loc), tbuf));
     return buf;
 }
 
@@ -389,7 +390,7 @@ ansi_unparse_object(dbref player, dbref loc)
     char tbuf[BUFFER_LEN], tbuf2[BUFFER_LEN];
 
     if (Typeof(player) != TYPE_PLAYER)
-        player = MUCK::getOwner(player);
+        player = OWNER(player);
     switch (loc) {
         case NOTHING:
             return SYSNORMAL "*NOTHING*";
@@ -400,14 +401,14 @@ ansi_unparse_object(dbref player, dbref loc)
         case NIL:
             return SYSCYAN "*NIL*";
         default:
-            if (loc < 0 || loc >= MUCK::database().top()) {
+            if (loc < 0 || loc >= db_top) {
                 sprintf(upb, SYSRED "*INVALID(#%d)*", loc);
                 return upb;
             }
 #ifndef SANITY
             if (!(FLAGS(player) & STICKY) &&
-                (TMage(player) || MUCK::getPowers(player) & POW_SEE_ALL ||
-                 MUCK::getPowers(player) & POW_SEARCH || can_link_to(player, NOTYPE, loc) || controls_link(player, loc) || ((Typeof(loc) != TYPE_PLAYER) && (FLAGS(loc) & CHOWN_OK))
+                (TMage(player) || POWERS(player) & POW_SEE_ALL ||
+                 POWERS(player) & POW_SEARCH || can_link_to(player, NOTYPE, loc) || controls_link(player, loc) || ((Typeof(loc) != TYPE_PLAYER) && (FLAGS(loc) & CHOWN_OK))
                 )) {
 #endif
                 /* show everything */

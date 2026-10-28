@@ -37,7 +37,6 @@
 #include "interface.h"
 #include "mufevent.h"
 #include "externs.h"
-#include "Modules.h"
 #include "newhttp.h"
 #include "JSONConvert.h"
 #include "reg.h"
@@ -180,7 +179,6 @@ http::apply_forwarded_for(void)
 #include "tune.h"
 #include "cgi.h"
 #include "mpi.h"
-#include "ObjectAccess.h"
 
 #ifdef MCCP_ENABLED
 void mccp_start(struct descriptor_data *d, int version);
@@ -570,7 +568,7 @@ http::parsempi(dbref what, const char *yerf, char *buf)
     this->flags |= HS_MPI;
 
     if (yerf)
-        return (do_parse_mesg(d->descriptor, MUCK::getOwner(what), what, yerf, "WWW", buf, 0));
+        return (do_parse_mesg(d->descriptor, OWNER(what), what, yerf, "WWW", buf, 0));
     else
         return "";
 }
@@ -842,7 +840,7 @@ int
         return 1;
     }
 
-    player = MUCK::getOwner(ref);
+    player = OWNER(ref);
     /* Insanity check! */
     if (!OkObj(player))
         return 0;
@@ -856,17 +854,17 @@ int
         this->senderror(403, "Permission denied. (Program not set LINK_OK.)");
         return 1;
     } else {
-        if (!MUCK::programRuntime(ref).start) {
+        if (!DBFETCH(ref)->sp.program.start) {
             struct line *
-                tmpline = MUCK::programRuntime(ref).first;
+                tmpline = DBFETCH(ref)->sp.program.first;
 
-            MUCK::programRuntime(ref).first = MUCK::programs().read(ref);
+            DBFETCH(ref)->sp.program.first = read_program(ref);
             do_compile(d->descriptor, player, ref, 0);
-            free_prog_text(MUCK::programRuntime(ref).first);
-            MUCK::programRuntime(ref).first = tmpline;
+            free_prog_text(DBFETCH(ref)->sp.program.first);
+            DBSTORE(ref, sp.program.first, tmpline);
         }
 
-        if (!MUCK::programRuntime(ref).codeSize) {
+        if (!DBFETCH(ref)->sp.program.siz) {
             this->senderror(500, "Program not compilable.");
             return 1;
         }
@@ -2066,19 +2064,19 @@ http::dispatch_sideband(const char *buf, int len)
             why = "program is not LINK_OK";
         else if (MLevel(prog) < LMAGE)
             why = "program is below W1";
-        else if (MLevel(MUCK::getOwner(prog)) < LMAGE)
+        else if (MLevel(OWNER(prog)) < LMAGE)
             why = "program's owner is below W1";
     }
 
-    if (why.empty() && !MUCK::programRuntime(prog).start) {
+    if (why.empty() && !DBFETCH(prog)->sp.program.start) {
         /* compiled on demand, as the web server's MUF pages are */
-        struct line *tmpline = MUCK::programRuntime(prog).first;
+        struct line *tmpline = DBFETCH(prog)->sp.program.first;
 
-        MUCK::programRuntime(prog).first = MUCK::programs().read(prog);
-        do_compile(d->descriptor, MUCK::getOwner(prog), prog, 0);
-        free_prog_text(MUCK::programRuntime(prog).first);
-        MUCK::programRuntime(prog).first = tmpline;
-        if (!MUCK::programRuntime(prog).codeSize)
+        DBFETCH(prog)->sp.program.first = read_program(prog);
+        do_compile(d->descriptor, OWNER(prog), prog, 0);
+        free_prog_text(DBFETCH(prog)->sp.program.first);
+        DBSTORE(prog, sp.program.first, tmpline);
+        if (!DBFETCH(prog)->sp.program.siz)
             why = "program does not compile";
     }
 
@@ -2112,7 +2110,7 @@ http::dispatch_sideband(const char *buf, int len)
      * let a handler written for logged-in players act as a wizard for
      * an anonymous client. */
     dbref player = (d->connected && OkObj(d->player)) ? d->player : NOTHING;
-    dbref loc = OkObj(player) ? MUCK::getLocation(player) : NOTHING;
+    dbref loc = OkObj(player) ? getloc(player) : NOTHING;
     struct frame *fr;
 
     strcpy(match_args, "");

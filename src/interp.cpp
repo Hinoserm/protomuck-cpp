@@ -3,10 +3,8 @@
 #include "copyright.h"
 #include "config.h"
 #include "db.h"
-#include "ObjectAccess.h"
 #include "inst.h"
 #include "externs.h"
-#include "Modules.h"
 #include "match.h"
 #include "interface.h"
 #include "params.h"
@@ -15,14 +13,13 @@
 #include "strutils.h"
 #include "interp.h"
 #include "mufevent.h"
-#include "ObjectStore.h"
 
 /* This package performs the interpretation of mud forth programs.
    It is a basically push pop kinda thing, but I'm making some stuff
    inline for maximum efficiency.
    Oh yeah, because it is an interpreted language, please do type
    checking during this time.  While you're at it, any objects you
-   are referencing should be checked against MUCK::database().top().
+   are referencing should be checked against db_top.
    */
 
 /* in cases of boolean expressions, we do return a value, the stuff
@@ -341,7 +338,7 @@ RCLEAR(struct inst *oper, const char *file, int line)
         return;
     }
     case PROG_ADD:
-        MUCK::programRuntime(oper->data.addr->progref).instances--;
+        DBFETCH(oper->data.addr->progref)->sp.program.instances--;
         oper->data.addr->links--;
         break;
     case PROG_STRING:
@@ -552,8 +549,8 @@ muf_funcprof_exit(struct frame *fr)
         if (fr->fprofile)
             fr->fprofile->totaltime -= fpr->totaltime;
 
-        if (MUCK::programRuntime(prog).fprofile) {
-            struct funcprof *fpe = MUCK::programRuntime(prog).fprofile;
+        if (DBFETCH(prog)->sp.program.fprofile) {
+            struct funcprof *fpe = DBFETCH(prog)->sp.program.fprofile;
 
             while (fpe) {
                 if (!string_compare(fpe->funcname, fpr->funcname))
@@ -568,11 +565,11 @@ muf_funcprof_exit(struct frame *fr)
                 delete[]fpr->funcname;
                 delete fpr;
             } else {
-                fpr->next = MUCK::programRuntime(prog).fprofile;
-                MUCK::programRuntime(prog).fprofile = fpr;
+                fpr->next = DBFETCH(prog)->sp.program.fprofile;
+                DBFETCH(prog)->sp.program.fprofile = fpr;
             }
         } else
-            MUCK::programRuntime(prog).fprofile = fpr;
+            DBFETCH(prog)->sp.program.fprofile = fpr;
     }
 }
 
@@ -589,11 +586,11 @@ interp(int descr, dbref player, dbref location, dbref program, dbref source, int
 /*    if (program == -1)
  *        return NULL;
  */
-    if (!MLevel(program) || !MLevel(MUCK::getOwner(program)) || ((OkObj(source)
+    if (!MLevel(program) || !MLevel(OWNER(program)) || ((OkObj(source)
                                                          && Typeof(source)
                                                          != TYPE_GARBAGE)
-                                                        ? (!TMage(MUCK::getOwner(source))
-                                                           && !can_link_to(MUCK::getOwner(source), TYPE_EXIT, program))
+                                                        ? (!TMage(OWNER(source))
+                                                           && !can_link_to(OWNER(source), TYPE_EXIT, program))
                                                         : 0)) {
         anotify_nolisten(PSafe, CFAIL "Program call: Permission denied.", 1);
         return 0;
@@ -651,7 +648,7 @@ interp(int descr, dbref player, dbref location, dbref program, dbref source, int
     fr->waiters = NULL;
     fr->dlogids = NULL;
     fr->argument.top = 0;
-    fr->pc = MUCK::programRuntime(program).start; /* TYPEROOM taken out for command props. */
+    fr->pc = DBFETCH(program)->sp.program.start; /* TYPEROOM taken out for command props. */
     fr->writeonly = ((OkObj(source) && (Typeof(source) == TYPE_PLAYER)
                       && (!online(source)))
                      || (OkObj(player)
@@ -664,6 +661,10 @@ interp(int descr, dbref player, dbref location, dbref program, dbref source, int
     fr->preemptlimit = 0;
     tptr = get_property(program, "_/instlimit");
     if (tptr) {
+#ifdef DISKBASE
+        propfetch(program, tptr);
+#endif /* 
+        */
         if (PropType(tptr) == PROP_STRTYP)
             fr->preemptlimit = atoi(PropDataUNCStr(tptr));
     }
@@ -711,10 +712,10 @@ interp(int descr, dbref player, dbref location, dbref program, dbref source, int
     fr->variables[2].data.objref = source;
     fr->variables[3].type = PROG_STRING;
     fr->variables[3].data.string = (!*match_cmdname) ? 0 : alloc_prog_string(match_cmdname);
-    if (MUCK::programRuntime(program).code) {
-        MUCK::programRuntime(program).profUses++;
+    if (DBFETCH(program)->sp.program.code) {
+        DBFETCH(program)->sp.program.profuses++;
     }
-    MUCK::programRuntime(program).instances++;
+    DBFETCH(program)->sp.program.instances++;
     push(fr->argument.st, &(fr->argument.top), PROG_STRING, *match_args ? MIPSCAST alloc_prog_string(match_args) : 0);
     return fr;
 }
@@ -944,7 +945,7 @@ prog_clean(struct frame *fr)
     if (OkObj(fr->player) && (FLAG2(fr->player) & F2MUFCOUNT)
         && (controls(fr->player, fr->prog)
             || (Mage(fr->player)
-                && (MUCK::getOwner(fr->prog) != MAN)))
+                && (OWNER(fr->prog) != MAN)))
         ) {
         notify_fmt(fr->player, "MUF> %ld %s %ds", fr->instcnt, unparse_object(fr->player, fr->prog), (now - fr->started)
             );
@@ -985,7 +986,7 @@ prog_clean(struct frame *fr)
     for (i = 0; i < fr->argument.top; i++)
         CLEAR(&fr->argument.st[i]);
     for (i = 1; i <= fr->caller.top; i++)
-        MUCK::programRuntime(fr->caller.st[i]).instances--;
+        DBFETCH(fr->caller.st[i])->sp.program.instances--;
     for (i = 0; i < MAX_VAR; i++)
         CLEAR(&fr->variables[i]);
     localvar_freeall(fr);
@@ -1101,7 +1102,7 @@ copyinst(struct inst *from, struct inst *to)
         break;
     case PROG_ADD:
         from->data.addr->links++;
-        MUCK::programRuntime(from->data.addr->progref).instances++;
+        DBFETCH(from->data.addr->progref)->sp.program.instances++;
         break;
     case PROG_LOCK:
         if (from->data.lock != TRUE_BOOLEXP) {
@@ -1153,15 +1154,15 @@ calc_profile_timing(dbref prog, struct frame *fr)
     }
     tv.tv_usec -= fr->proftime.tv_usec;
     tv.tv_sec -= fr->proftime.tv_sec;
-    tv2 = MUCK::programRuntime(prog).profTime;
+    tv2 = DBFETCH(prog)->sp.program.proftime;
     tv2.tv_sec += tv.tv_sec;
     tv2.tv_usec += tv.tv_usec;
     if (tv2.tv_usec >= 1000000) {
         tv2.tv_usec -= 1000000;
         tv2.tv_sec += 1;
     }
-    MUCK::programRuntime(prog).profTime.tv_sec = tv2.tv_sec;
-    MUCK::programRuntime(prog).profTime.tv_usec = tv2.tv_usec;
+    DBFETCH(prog)->sp.program.proftime.tv_sec = tv2.tv_sec;
+    DBFETCH(prog)->sp.program.proftime.tv_usec = tv2.tv_usec;
     fr->totaltime.tv_sec += tv.tv_sec;
     fr->totaltime.tv_usec += tv.tv_usec;
     if (fr->totaltime.tv_usec > 1000000) {
@@ -1208,13 +1209,13 @@ do_abort_loop(dbref player, dbref program, const char *msg, struct frame *fr, st
     fr->pc = pc;
     if (!fr->trys.top) {
         if (pc) {
-            interp_err(fr, MUCK::getOwner(PSafe), program, pc, fr->argument.st, fr->argument.top, fr->caller.st[1], insttotext(fr, 0, pc, buffer, sizeof(buffer), 30, program), msg, fr->pid);
+            interp_err(fr, OWNER(PSafe), program, pc, fr->argument.st, fr->argument.top, fr->caller.st[1], insttotext(fr, 0, pc, buffer, sizeof(buffer), 30, program), msg, fr->pid);
             if (OkObj(player)
-                && (controls(MUCK::getOwner(player), program)
-                    || (FLAG2(MUCK::getOwner(player)) & F2PARENT)))
+                && (controls(OWNER(player), program)
+                    || (FLAG2(OWNER(player)) & F2PARENT)))
                 muf_backtrace(player, program, ADDR_SIZE, fr);
-            else if (FLAG2(program) & F2PARENT && player != MUCK::getOwner(program))
-                muf_backtrace(MUCK::getOwner(program), program, ADDR_SIZE, fr);
+            else if (FLAG2(program) & F2PARENT && player != OWNER(program))
+                muf_backtrace(OWNER(program), program, ADDR_SIZE, fr);
         } else {
             if (OkObj(player))
                 notify_nolisten(player, msg, 1);
@@ -1223,7 +1224,7 @@ do_abort_loop(dbref player, dbref program, const char *msg, struct frame *fr, st
         fr->aborted = 1;
         prog_clean(fr);
         if (OkObj(player)) {
-            MUCK::playerSession(player).block = 0;
+            DBSTORE(player, sp.player.block, 0);
         } else {
             if ((curdescr = get_descr(fr->descr, NOTHING))) {
                 curdescr->block = 0;
@@ -1234,6 +1235,7 @@ do_abort_loop(dbref player, dbref program, const char *msg, struct frame *fr, st
     }
 }
 
+extern struct line *read_program(dbref prog);
 extern char *show_line_prims(struct frame *fr, dbref program, struct inst *pc, int maxprims, int markpc);
 void
 interp_set_depth(struct frame *fr)
@@ -1277,20 +1279,20 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
     if (!pc) {
         struct line *tmpline;
 
-        tmpline = MUCK::programRuntime(program).first;
-        MUCK::programRuntime(program).first = MUCK::programs().read(program);
-        do_compile(-1, MUCK::getOwner(program), program, 0);
-        free_prog_text(MUCK::programRuntime(program).first);
-        MUCK::programRuntime(program).first = tmpline;
-        pc = fr->pc = MUCK::programRuntime(program).start;
+        tmpline = DBFETCH(program)->sp.program.first;
+        DBFETCH(program)->sp.program.first = read_program(program);
+        do_compile(-1, OWNER(program), program, 0);
+        free_prog_text(DBFETCH(program)->sp.program.first);
+        DBSTORE(program, sp.program.first, tmpline);
+        pc = fr->pc = DBFETCH(program)->sp.program.start;
         if (!pc) {
             char smallBuf[50];
 
             sprintf(smallBuf, "Program %d not compilable. Cannot run.", program);
             abort_loop_hard(smallBuf, NULL, NULL);
         }
-        MUCK::programRuntime(program).profUses++;
-        MUCK::programRuntime(program).instances++;
+        DBFETCH(program)->sp.program.profuses++;
+        DBFETCH(program)->sp.program.instances++;
     }
     ts_useobject(player, program);
     fr->err = 0;
@@ -1303,9 +1305,6 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
     }
     /* This is the 'natural' way to exit a function */
     while (stop) {
-        /* a long-running program must not keep mutating objects that
-         * a panic on another thread is busy walking */
-        MUCK::store().panicPark();
         /* Stores the time of the last shutdown processed instead of 1, just in
          * case I add the ability to cancel a delayed shutdown later. -brevantes */
         if (delayed_shutdown && (fr->shutdown_seen < delayed_shutdown)) {
@@ -1366,7 +1365,7 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
                 fr->pc = pc;
                 reload(fr, atop, stop);
                 if (OkObj(player)) {
-                    MUCK::playerSession(player).block = (!fr->been_background);
+                    DBSTORE(player, sp.player.block, (!fr->been_background));
                 } else {
                     if ((curdescr = get_descr(fr->descr, NOTHING)))
                         curdescr->block = !(fr->been_background);
@@ -1384,10 +1383,10 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
         } else {
             fr->brkpt.debugging = 0;
         }
-        if (OkObj(player) && OkObj(MUCK::getOwner(player))) {
+        if (OkObj(player) && OkObj(OWNER(player))) {
             if (((FLAGS(program) & DARK) || (fr->brkpt.debugging && fr->brkpt.showstack && !fr->brkpt.bypass))
-                && (controls(MUCK::getOwner(player), program)
-                    || (FLAG2(MUCK::getOwner(player)) & F2PARENT))
+                && (controls(OWNER(player), program)
+                    || (FLAG2(OWNER(player)) & F2PARENT))
                 ) {
                 /* Small fix so only program owner can see debug traces */
                 char *m = debug_inst(fr, 0, pc, fr->pid, arg, dbuf, sizeof(dbuf),
@@ -1396,12 +1395,12 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
                 notify_nolisten(player, m, 1);
             }
         }
-        if (FLAGS(program) & DARK && ((FLAG2(program) & F2PARENT && (MUCK::getOwner(program) != player)
+        if (FLAGS(program) & DARK && ((FLAG2(program) & F2PARENT && (OWNER(program) != player)
                                        || !OkObj(player)))) {
             char *m = debug_inst(fr, 0, pc, fr->pid, arg, dbuf, sizeof(dbuf), atop,
                                  program);
 
-            notify_nolisten(MUCK::getOwner(program), m, 1);
+            notify_nolisten(OWNER(program), m, 1);
         }
         if (fr->brkpt.debugging) {
             if (fr->brkpt.count) {
@@ -1441,8 +1440,8 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
                             fr->brkpt.bypass = 0;
                             fr->brkpt.dosyspop = 0;
                             if (OkObj(player)) {
-                                MUCK::playerSession(player).currProg = program;
-                                MUCK::playerSession(player).block = 0;
+                                DBSTORE(player, sp.player.curr_prog, program);
+                                DBSTORE(player, sp.player.block, 0);
                             } else {
                                 if ((curdescr = get_descr(fr->descr, NOTHING))) {
                                     curdescr->block = 0;
@@ -1454,7 +1453,7 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
                                 m = debug_inst(fr, 0, pc, fr->pid, arg, dbuf, sizeof(dbuf), atop, program);
                                 notify_nolisten(player, m, 1);
                             }
-                            if (pc <= MUCK::programRuntime(program).code || (pc - 1)->line != pc->line) {
+                            if (pc <= DBFETCH(program)->sp.program.code || (pc - 1)->line != pc->line) {
                                 list_proglines(player, program, fr, pc->line, 0);
                             } else {
                                 m = show_line_prims(fr, program, pc, 15, 1);
@@ -1702,7 +1701,7 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
                     program = temp1->data.addr->progref;
                     fr->caller.st[++fr->caller.top] = program;
                     mlev = ProgMLevel(program);
-                    MUCK::programRuntime(program).instances++;
+                    DBFETCH(program)->sp.program.instances++;
                 }
                 pc = temp1->data.addr->data;
                 CLEAR(temp1);
@@ -1731,32 +1730,32 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
                 if (!valid_object(temp1)
                     || Typeof(temp1->data.objref) != TYPE_PROGRAM)
                     abort_loop("invalid object.", temp1, temp2);
-                if (!(MUCK::programRuntime(temp1->data.objref).code)) {
+                if (!(DBFETCH(temp1->data.objref)->sp.program.code)) {
                     struct line *tmpline;
 
-                    tmpline = MUCK::programRuntime(temp1->data.objref).first;
-                    MUCK::programRuntime(temp1->data.objref).first = MUCK::programs().read(temp1->data.objref);
-                    do_compile(-1, MUCK::getOwner(temp1->data.objref), temp1->data.objref, 0);
-                    free_prog_text(MUCK::programRuntime(temp1->data.objref).first);
-                    MUCK::programRuntime(temp1->data.objref).first = tmpline;
-                    if (!(MUCK::programRuntime(temp1->data.objref).code))
+                    tmpline = DBFETCH(temp1->data.objref)->sp.program.first;
+                    DBFETCH(temp1->data.objref)->sp.program.first = read_program(temp1->data.objref);
+                    do_compile(-1, OWNER(temp1->data.objref), temp1->data.objref, 0);
+                    free_prog_text(DBFETCH(temp1->data.objref)->sp.program.first);
+                    DBSTORE(temp1->data.objref, sp.program.first, tmpline);
+                    if (!(DBFETCH(temp1->data.objref)->sp.program.code))
                         abort_loop("Program not compilable.", temp1, temp2);
                 }
                 if (ProgMLevel(temp1->data.objref) == 0)
                     abort_loop(tp_noperm_mesg, temp1, temp2);
-                if (mlev < LMAGE && MUCK::getOwner(temp1->data.objref) != ProgUID && !Linkable(temp1->data.objref))
+                if (mlev < LMAGE && OWNER(temp1->data.objref) != ProgUID && !Linkable(temp1->data.objref))
                     abort_loop(tp_noperm_mesg, temp1, temp2);
                 if (stop >= ADDR_SIZE)
                     abort_loop("System Stack Overflow", temp1, temp2);
                 sys[stop].progref = program;
                 sys[stop].offset = pc + 1;
                 if (!temp2) {
-                    pc = MUCK::programRuntime(temp1->data.objref).start;
+                    pc = DBFETCH(temp1->data.objref)->sp.program.start;
                 } else {
                     struct publics *pbs;
                     int tmpint;
 
-                    pbs = MUCK::programRuntime(temp1->data.objref).pubs;
+                    pbs = DBFETCH(temp1->data.objref)->sp.program.pubs;
                     while (pbs) {
                         tmpint = string_compare(temp2->data.string->data.c_str(), pbs->subname);
                         if (!tmpint)
@@ -1778,10 +1777,10 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
                     gettimeofday(&fr->proftime, NULL);
                     program = temp1->data.objref;
                     fr->caller.st[++fr->caller.top] = program;
-                    MUCK::programRuntime(program).instances++;
+                    DBFETCH(program)->sp.program.instances++;
                     mlev = ProgMLevel(program);
                 }
-                MUCK::programRuntime(program).profUses++;
+                DBFETCH(program)->sp.program.profuses++;
                 ts_useobject(player, program);
                 CLEAR(temp1);
                 if (temp2)
@@ -1790,11 +1789,11 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
             case IN_RET:
                 muf_funcprof_exit(fr);
                 if (stop > 1 && program != sys[stop - 1].progref) {
-                    if (sys[stop - 1].progref >= MUCK::database().top() || sys[stop - 1].progref < 0 || (Typeof(sys[stop - 1].progref) != TYPE_PROGRAM))
+                    if (sys[stop - 1].progref >= db_top || sys[stop - 1].progref < 0 || (Typeof(sys[stop - 1].progref) != TYPE_PROGRAM))
                         abort_loop_hard("Internal error.  Invalid address.", NULL, NULL);
                     calc_profile_timing(program, fr);
                     gettimeofday(&fr->proftime, NULL);
-                    MUCK::programRuntime(program).instances--;
+                    DBFETCH(program)->sp.program.instances--;
                     program = sys[stop - 1].progref;
                     mlev = ProgMLevel(program);
                     fr->caller.top--;
@@ -1950,7 +1949,7 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
                     delete[]events;
                 }
                 if (OkObj(player)) {
-                    MUCK::playerSession(player).block = (!fr->been_background);
+                    DBSTORE(player, sp.player.block, (!fr->been_background));
                 } else {
                     if ((curdescr = get_descr(fr->descr, NOTHING))) {
                         curdescr->block = 1;
@@ -1972,8 +1971,8 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
                 fr->brkpt.isread = 1;
                 fr->pc = pc + 1;
                 if (OkObj(fr->player)) {
-                    MUCK::playerSession(player).currProg = program;
-                    MUCK::playerSession(player).block = 0;
+                    DBSTORE(player, sp.player.curr_prog, program);
+                    DBSTORE(player, sp.player.block, 0);
                 } else {
                     if ((curdescr = get_descr(fr->descr, NOTHING))) {
                         DR_RAW_ADD_FLAGS(curdescr, DF_INTERACTIVE);
@@ -2005,8 +2004,8 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
                 fr->brkpt.isread = 1;
                 fr->pc = pc + 1;
                 if (OkObj(fr->player)) {
-                    MUCK::playerSession(player).currProg = program;
-                    MUCK::playerSession(player).block = 0;
+                    DBSTORE(player, sp.player.curr_prog, program);
+                    DBSTORE(player, sp.player.block, 0);
                 } else {
                     if ((curdescr = get_descr(fr->descr, NOTHING))) {
                         curdescr->block = 0;
@@ -2034,7 +2033,7 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
                     abort_loop("Timetravel beyond scope of muf.", temp1, NULL);
                 add_muf_delay_event(temp1->data.number, fr->descr, player, NOTHING, NOTHING, program, fr, "SLEEPING");
                 if (OkObj(player)) {
-                    MUCK::playerSession(player).block = (!fr->been_background);
+                    DBSTORE(player, sp.player.block, (!fr->been_background));
                 } else {
                     if ((curdescr = get_descr(fr->descr, NOTHING)))
                         curdescr->block = !(fr->been_background);
@@ -2098,7 +2097,7 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
                             abort_loop_hard("Internal error.  Invalid address.", NULL, NULL);
                         calc_profile_timing(program, fr);
                         gettimeofday(&fr->proftime, NULL);
-                        MUCK::programRuntime(program).instances--;
+                        DBFETCH(program)->sp.program.instances--;
                         program = sys[stop - 1].progref;
                         mlev = ProgMLevel(program);
                         fr->caller.top--;
@@ -2112,7 +2111,7 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
                 reload(fr, atop, stop);
                 prog_clean(fr);
                 if (OkObj(player)) {
-                    MUCK::playerSession(player).block = 0;
+                    DBSTORE(player, sp.player.block, 0);
                 } else {
                     if ((curdescr = get_descr(fr->descr, NOTHING)))
                         curdescr->block = 0;
@@ -2128,7 +2127,7 @@ interp_loop(dbref player, dbref program, struct frame *fr, int rettyp)
  *       that might be waiting for input from this user.
  */
     if (OkObj(player)) {
-        MUCK::playerSession(player).block = 0;
+        DBSTORE(player, sp.player.block, 0);
     } else {
         if ((curdescr = get_descr(fr->descr, NOTHING)))
             curdescr->block = 0;
@@ -2166,8 +2165,7 @@ void
 interp_err(struct frame *fr, dbref player, dbref program, struct inst *pc, struct inst *arg, int atop, dbref origprog, const char *msg1, const char *msg2, int pid)
 {
     char buf[BUFFER_LEN];
-    /* MUFINT: the property is 64-bit and a 32-bit local truncates it */
-    MUFINT errcount;
+    MUFINT errcount;               /* the property is 64-bit and a 32-bit local truncates it */
     time_t lt;
     char tbuf[40];
 
@@ -2180,13 +2178,13 @@ interp_err(struct frame *fr, dbref player, dbref program, struct inst *pc, struc
     }
     if (OkObj(player))
         notify_nolisten(player, buf, 1);
-    if (FLAG2(origprog) & F2PARENT && player != MUCK::getOwner(origprog))
-        notify_nolisten(MUCK::getOwner(origprog), "Program Error.  Your program just got the following error.", 1);
-    sprintf(buf, "%s(#%d), line %d; %s: %s", MUCK::getName(program), program, pc->line, msg1, msg2);
+    if (FLAG2(origprog) & F2PARENT && player != OWNER(origprog))
+        notify_nolisten(OWNER(origprog), "Program Error.  Your program just got the following error.", 1);
+    sprintf(buf, "%s(#%d), line %d; %s: %s", NAME(program), program, pc->line, msg1, msg2);
     if (OkObj(player) && controls(player, origprog))
         notify_nolisten(player, buf, 1);
-    if (FLAG2(origprog) & F2PARENT && MUCK::getOwner(origprog) != player)
-        notify_nolisten(MUCK::getOwner(origprog), buf, 1);
+    if (FLAG2(origprog) & F2PARENT && OWNER(origprog) != player)
+        notify_nolisten(OWNER(origprog), buf, 1);
     log_status("MUF: %s\n", buf);
     lt = time(NULL);
     format_time(tbuf, 32, "%c", localtime(&lt));
@@ -2276,13 +2274,13 @@ push(struct inst *stack, int *top, const char *str, int len)
 int
 valid_player(struct inst *oper)
 {
-    return (!(oper->type != PROG_OBJECT || oper->data.objref >= MUCK::database().top() || oper->data.objref < 0 || (Typeof(oper->data.objref) != TYPE_PLAYER)));
+    return (!(oper->type != PROG_OBJECT || oper->data.objref >= db_top || oper->data.objref < 0 || (Typeof(oper->data.objref) != TYPE_PLAYER)));
 }
 
 int
 valid_object(struct inst *oper)
 {
-    return (!(oper->type != PROG_OBJECT || oper->data.objref >= MUCK::database().top() || (oper->data.objref < 0)
+    return (!(oper->type != PROG_OBJECT || oper->data.objref >= db_top || (oper->data.objref < 0)
               || Typeof(oper->data.objref) == TYPE_GARBAGE));
 }
 
@@ -2298,36 +2296,36 @@ newpermissions(int mlev, dbref player, dbref thing, bool true_c)
     if (mlev < 0 || mlev > LMAN)
         return 0;
     if (OkObj(player) && thing == -3)
-        thing = MUCK::playerHomeRef(player);
+        thing = DBFETCH(player)->sp.player.home;
     /* never do this check if one object or the other is invalid */
     if (OkObj(thing)) {
         if (((Protect(thing) && !(mlev >= LBOY)
-              && (MLevel(MUCK::getOwner(thing)) >= LBOY))
-             || (Protect(thing) && !(mlev > MLevel(MUCK::getOwner(thing))))
+              && (MLevel(OWNER(thing)) >= LBOY))
+             || (Protect(thing) && !(mlev > MLevel(OWNER(thing))))
             )
-            && !((FLAG2(MUCK::getOwner(thing)) & F2ANTIPROTECT)
+            && !((FLAG2(OWNER(thing)) & F2ANTIPROTECT)
                  || (FLAG2(thing) & F2ANTIPROTECT))
             )
             return 0;
     }
-    if ((mlev >= LWIZ) && (mlev >= MLevel(MUCK::getOwner(thing))))
+    if ((mlev >= LWIZ) && (mlev >= MLevel(OWNER(thing))))
         return 1;
     if (!OkObj(player) || !OkObj(thing))
         return 0;
     if (thing == player)
         return 1;
-    if (newcontrols(MUCK::getOwner(player), thing, true_c))
+    if (newcontrols(OWNER(player), thing, true_c))
         return 1;
     switch (Typeof(thing)) {
     case TYPE_PLAYER:
         return 0;
     case TYPE_EXIT:
-        return (MUCK::getOwner(thing) == MUCK::getOwner(player)
-                || MUCK::getOwner(thing) == NOTHING);
+        return (OWNER(thing) == OWNER(player)
+                || OWNER(thing) == NOTHING);
     case TYPE_ROOM:
     case TYPE_THING:
     case TYPE_PROGRAM:
-        return (MUCK::getOwner(thing) == MUCK::getOwner(player));
+        return (OWNER(thing) == OWNER(player));
     }
     return 0;
 }
@@ -2341,54 +2339,54 @@ permissions(int mlev, dbref player, dbref thing)
 int
 find_mlev(dbref prog, struct frame *fr, int st)
 {
-    int maxmlev = (MUCK::getPowers(MUCK::getOwner(prog)) & POW_ALL_MUF_PRIMS) ? LBOY : MLevel(MUCK::getOwner(prog));
+    int maxmlev = (POWERS(OWNER(prog)) & POW_ALL_MUF_PRIMS) ? LBOY : MLevel(OWNER(prog));
     int mlev;
 
     if (!tp_compatible_muf_perms) { /* Do it the proto/neon way */
         if ((FLAGS(prog) & STICKY) && (FLAGS(prog) & HAVEN)
-            && ((st > 1) && (TMage(MUCK::getOwner(prog))))) {
+            && ((st > 1) && (TMage(OWNER(prog))))) {
             mlev = find_mlev(fr->caller.st[st - 1], fr, st - 1);
         } else {
-            if ((FLAGS(prog) & HAVEN) && ((st > 1) && (TMage(MUCK::getOwner(prog))))) {
-                mlev = MLevel(MUCK::getOwner(fr->caller.st[st - 1]));
+            if ((FLAGS(prog) & HAVEN) && ((st > 1) && (TMage(OWNER(prog))))) {
+                mlev = MLevel(OWNER(fr->caller.st[st - 1]));
             } else {
                 if ((FLAGS(prog) & QUELL) && (FLAGS(prog) & HAVEN)) {
                     mlev = MLevel(prog);
                 } else {
                     if ((FLAGS(prog) & QUELL)
-                        && (((fr->player > 0) && (fr->player < MUCK::database().top()))
-                            && (TMage(MUCK::getOwner(prog))))) {
-                        mlev = QLevel(MUCK::getOwner(fr->player));
+                        && (((fr->player > 0) && (fr->player < db_top))
+                            && (TMage(OWNER(prog))))) {
+                        mlev = QLevel(OWNER(fr->player));
                     } else {
-                        mlev = (MUCK::getPowers(MUCK::getOwner(prog)) & POW_ALL_MUF_PRIMS) ? LBOY : MLevel(MUCK::getOwner(prog));
+                        mlev = (POWERS(OWNER(prog)) & POW_ALL_MUF_PRIMS) ? LBOY : MLevel(OWNER(prog));
                     }
                 }
             }
         }
     } else {                    /* do it the FB6/Glow way */
-        /* W S and H, give it the level of the owner of the program, or the player
+        /* W S and H, give it the level of the owner of the program, or the player 
            if not a program */
         if ((FLAGS(prog) & STICKY) && (FLAGS(prog) & HAVEN)
-            && ((st > 1) && (TMage(MUCK::getOwner(prog))))) {
+            && ((st > 1) && (TMage(OWNER(prog))))) {
             mlev = find_mlev(fr->caller.st[st - 1], fr, st - 1);
         } else {
             /* HARDUID, give it permissions of the owner of the trigger */
             if ((FLAGS(prog) & HAVEN)
-                && ((st > 1) && (TMage(MUCK::getOwner(prog))))) {
-                mlev = MLevel(MUCK::getOwner(fr->caller.st[st - 1]));
+                && ((st > 1) && (TMage(OWNER(prog))))) {
+                mlev = MLevel(OWNER(fr->caller.st[st - 1]));
             } else {
                 /* SETUID, give it the owners permissions */
                 if ((FLAGS(prog) & STICKY)) {
-                    mlev = MLevel(MUCK::getOwner(prog));
+                    mlev = MLevel(OWNER(prog));
                 } else {
                     /* QUELL, give it the permissions of the caller */
                     if ((FLAGS(prog) & QUELL)
-                        && (((fr->player > 0) && (fr->player < MUCK::database().top()))
-                            && (TMage(MUCK::getOwner(prog))))) {
-                        mlev = MLevel(MUCK::getOwner(fr->player));
+                        && (((fr->player > 0) && (fr->player < db_top))
+                            && (TMage(OWNER(prog))))) {
+                        mlev = MLevel(OWNER(fr->player));
                     } else {
                         /* Give it W4 if the owner has ALL_MUF_PRIMS, else give it its MLevel */
-                        mlev = (MUCK::getPowers(MUCK::getOwner(prog)) & POW_ALL_MUF_PRIMS) ? LBOY : MLevel(prog);
+                        mlev = (POWERS(OWNER(prog)) & POW_ALL_MUF_PRIMS) ? LBOY : MLevel(prog);
                     }
                 }
             }
@@ -2405,26 +2403,26 @@ find_uid(dbref player, struct frame * fr, int st, dbref program)
 {
     if ((FLAGS(program) & STICKY) || (fr->perms == STD_SETUID)) {
         if (FLAGS(program) & HAVEN) {
-            if ((st > 1) && (TMage(MUCK::getOwner(program)))) {
+            if ((st > 1) && (TMage(OWNER(program)))) {
                 return (find_uid(player, fr, st - 1, fr->caller.st[st - 1]));
             } else {
-                return (MUCK::getOwner(program));
+                return (OWNER(program));
             }
         }
-        return (MUCK::getOwner(program));
+        return (OWNER(program));
     }
     if (ProgMLevel(program) < 2)
-        return (MUCK::getOwner(program));
+        return (OWNER(program));
     if ((FLAGS(program) & HAVEN) || (fr->perms == STD_HARDUID)) {
-        if (OkObj(fr->trig) && OkObj(MUCK::getOwner(fr->trig)))
-            return (MUCK::getOwner(fr->trig));
+        if (OkObj(fr->trig) && OkObj(OWNER(fr->trig)))
+            return (OWNER(fr->trig));
         else
-            return (MUCK::getOwner(program));
+            return (OWNER(program));
     }
     if (OkObj(player))
-        return (MUCK::getOwner(player));
+        return (OWNER(player));
     else
-        return (MUCK::getOwner(program));
+        return (OWNER(program));
 }
 
 void
@@ -2447,8 +2445,8 @@ do_abort_interp(dbref player, const char *msg, struct inst *pc, struct inst *arg
         if (OkObj(player) && controls(player, program))
             muf_backtrace(player, program, ADDR_SIZE, fr);
         /*    else */
-        if (FLAG2(program) & F2PARENT && player != MUCK::getOwner(program))
-            muf_backtrace(MUCK::getOwner(program), program, ADDR_SIZE, fr);
+        if (FLAG2(program) & F2PARENT && player != OWNER(program))
+            muf_backtrace(OWNER(program), program, ADDR_SIZE, fr);
         muf_oper_clean(fr, file, line);
     }
     return;

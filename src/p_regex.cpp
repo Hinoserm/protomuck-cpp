@@ -26,7 +26,6 @@
 #include "strutils.h"
 #include "interp.h"
 #include "props.h"
-#include "ObjectAccess.h"
 
 #define MUF_RE_CACHE_ITEMS 256
 
@@ -65,7 +64,7 @@ show_re_cache(dbref player)
     size_t size_re = 0;
     size_t size_extra = 0;
 
-    if (!Boy(MUCK::getOwner(player))) {
+    if (!Boy(OWNER(player))) {
         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
         return;
     }
@@ -750,7 +749,7 @@ prim_array_regmatchval(PRIM_PROTOTYPE)
                     array_setitem(&nw, &temp1, in);
                 }
             } else if (in->type == PROG_OBJECT) {
-                text = (char *) MUCK::getName(in->data.objref);
+                text = (char *) NAME(in->data.objref);
                 if ((matchcnt = regmatch_exec(re, text)) < 0) {
                     if (matchcnt != PCRE_ERROR_NOMATCH)
                         abort_interp(muf_re_error(matchcnt));
@@ -865,7 +864,7 @@ prim_regfind_array(PRIM_PROTOTYPE)
         abort_interp("Expected string argument. (2)");
     if (oper[3].type != PROG_OBJECT)
         abort_interp("Expected dbref argument. (1)");
-    if (oper[3].data.objref < NOTHING || oper[3].data.objref >= MUCK::database().top())
+    if (oper[3].data.objref < NOTHING || oper[3].data.objref >= db_top)
         abort_interp("Bad object. (1)");
 
 
@@ -897,12 +896,12 @@ prim_regfind_array(PRIM_PROTOTYPE)
     /* The "result = array_appendref" stuff was copied from find_array. I'm
      * making sure these alterations work as-is before attempting to remove it.
      * -brevantes */
-    for (ref = (dbref) 0; ref < MUCK::database().top(); ref++) {
-        if (((who == NOTHING) ? 1 : (MUCK::getOwner(ref) == who)) && checkflags(ref, check) && MUCK::getName(ref)) {
+    for (ref = (dbref) 0; ref < db_top; ref++) {
+        if (((who == NOTHING) ? 1 : (OWNER(ref) == who)) && checkflags(ref, check) && NAME(ref)) {
             if (!*name)
                 array_appendref(&nw, ref);
             else
-                text = (char *) MUCK::getName(ref);
+                text = (char *) NAME(ref);
             if ((matchcnt = regmatch_exec(re, text)) < 0) {
                 if (matchcnt != PCRE_ERROR_NOMATCH)
                     abort_interp(muf_re_error(matchcnt));
@@ -935,11 +934,11 @@ prim_regfindnext(PRIM_PROTOTYPE)
         abort_interp("Expected string argument. (3)");
     if (oper[3].type != PROG_OBJECT)
         abort_interp("Expected dbref argument. (2)");
-    if (oper[3].data.objref < NOTHING || oper[3].data.objref >= MUCK::database().top())
+    if (oper[3].data.objref < NOTHING || oper[3].data.objref >= db_top)
         abort_interp("Bad object. (2)");
     if (oper[4].type != PROG_OBJECT)
         abort_interp("Expected dbref argument. (1)");
-    if (oper[4].data.objref < NOTHING || oper[4].data.objref >= MUCK::database().top())
+    if (oper[4].data.objref < NOTHING || oper[4].data.objref >= db_top)
         abort_interp("Bad object. (1)");
     if (oper[3].data.objref != NOTHING && Typeof(oper[3].data.objref) == TYPE_GARBAGE)
         abort_interp("Owner dbref is garbage. (2)");
@@ -986,13 +985,13 @@ prim_regfindnext(PRIM_PROTOTYPE)
 
     ref = NOTHING;
     init_checkflags(PSafe, DoNullInd(oper[1].data.string), &check);
-    for (i = item; i < MUCK::database().top(); i++) {
-        if ((who == NOTHING || MUCK::getOwner(i) == who) && checkflags(i, check) && MUCK::getName(i)) {
+    for (i = item; i < db_top; i++) {
+        if ((who == NOTHING || OWNER(i) == who) && checkflags(i, check) && NAME(i)) {
             if (!*name) {
                 ref = i;
                 break;
             } else {
-                text = (char *) MUCK::getName(i);
+                text = (char *) NAME(i);
                 if ((matchcnt = regmatch_exec(re, text)) < 0) {
                     if (matchcnt != PCRE_ERROR_NOMATCH)
                         abort_interp(muf_re_error(matchcnt));

@@ -199,6 +199,8 @@ extern void undirtyprops(dbref obj);
 #endif
 
 /* from edit.c */
+extern struct macrotable *new_macro(const char *name, const char *definition, dbref player);
+extern char *macro_expansion(struct macrotable *node, const char *match);
 extern void match_and_list(int descr, dbref player, const char *name,
                            char *linespec, int editor);
 extern void do_list(dbref player, dbref program, int arg[], int argc,
@@ -310,7 +312,7 @@ extern bool test_lock(int descr, dbref player, dbref thing,
                       const char *lockprop);
 extern bool test_lock_false_default(int descr, dbref player, 
                                   dbref thing, const char *lockprop);
-extern bool can_link_to(dbref who, MUCK::ObjectType what_type, dbref where);
+extern bool can_link_to(dbref who, object_flag_type what_type, dbref where);
 extern bool can_link(dbref who, dbref what);
 extern bool could_doit(int descr, dbref player, dbref thing);
 extern bool could_doit2(int descr, dbref player, dbref thing, char *prop,
@@ -472,11 +474,14 @@ extern int wcharlen_slice(char* buf, int slice, int buflen);
 //#define prefix_message_mush(v,w,x,y,z) (prefix_message(v,mushformat_substitute(w),x,y,z))
 
 
+#if !defined(MALLOC_PROFILING)
 extern char *string_dup(const char *s);
+#endif
 
 
 /* From utils.c */
 extern int member(dbref thing, dbref list);
+extern dbref remove_first(dbref first, dbref what);
 
 /* From wiz.c */
 extern void do_wizchat(dbref player, const char *arg);
@@ -493,9 +498,6 @@ extern void do_teleport(int descr, dbref player, const char *arg1,
                         const char *arg2);
 extern void do_force(int descr, dbref player, const char *what, char *command);
 extern void do_stats(dbref player, const char *name);
-extern void do_snapshot(int descr, dbref player, const char *arg1, const char *arg2);
-extern void do_rollback(int descr, dbref player, const char *arg1, const char *arg2);
-extern void do_module(int descr, dbref player, const char *arg1, const char *arg2);
 extern void do_toad(int descr, dbref player, const char *name,
                     const char *recip);
 extern void do_purge(int descr, dbref player, const char *arg1,
@@ -578,6 +580,7 @@ extern void show_status(const char *format, ...);
 extern void log_other(const char *format, ...);
 extern void notify_fmt(dbref player, const char *format, ...);
 extern void anotify_fmt(dbref player, const char *format, ...);
+extern void log_program_text(struct line *first, dbref player, dbref i);
 
 /* From signal.c */
 extern void set_signals(void);

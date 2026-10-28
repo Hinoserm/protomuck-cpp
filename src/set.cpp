@@ -5,14 +5,12 @@
 #include "strutils.h"
 
 #include "db.h"
-#include "ObjectAccess.h"
 #include "params.h"
 #include "tune.h"
 #include "props.h"
 #include "match.h"
 #include "interface.h"
 #include "externs.h"
-#include "Modules.h"
 
 char lflag_name[32][32];
 int lflag_mlev[32];
@@ -62,13 +60,13 @@ do_name(int descr, dbref player, const char *name, char *newname)
     thing = noisy_match_result(&md);
 
     if (thing != NOTHING && !(controls(player, thing)
-                              || (Typeof(thing) == TYPE_PLAYER && (MUCK::getPowers(player) & POW_PLAYER_CREATE)))) {
+                              || (Typeof(thing) == TYPE_PLAYER && (POWERS(player) & POW_PLAYER_CREATE)))) {
         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
         return;
     }
 
     if (thing != NOTHING) {
-        if (Protect(thing) && !(MLevel(player) > MLevel(MUCK::getOwner(thing)))) {
+        if (Protect(thing) && !(MLevel(player) > MLevel(OWNER(thing)))) {
             anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
             return;
         }
@@ -82,7 +80,7 @@ do_name(int descr, dbref player, const char *name, char *newname)
         /* check for renaming a player */
         if (Typeof(thing) == TYPE_PLAYER) {
             if (tp_wiz_name && (!Mage(player)
-                                && !(MUCK::getPowers(player) & POW_PLAYER_CREATE))) {
+                                && !(POWERS(player) & POW_PLAYER_CREATE))) {
                 anotify_nolisten2(player, CINFO "Only wizards can change player names.");
                 return;
             }
@@ -135,33 +133,34 @@ do_name(int descr, dbref player, const char *name, char *newname)
             if (!*password) {
                 anotify_nolisten2(player, CINFO "You must specify a password to change a player name.");
                 anotify_nolisten2(player, CNOTE "E.g.: name player=newname=password");
-                if (Wiz(MUCK::getOwner(player)) || MUCK::getPowers(player) & POW_PLAYER_CREATE)
+                if (Wiz(OWNER(player)) || POWERS(player) & POW_PLAYER_CREATE)
                     anotify_nolisten2(player, SYSYELLOW "Wizards may use 'yes' for non-wizard players.");
                 return;
             }
-            if (!(Wiz(player) || MUCK::getPowers(player) & POW_PLAYER_CREATE)
+            if (!(Wiz(player) || POWERS(player) & POW_PLAYER_CREATE)
                 || TMage(thing) || strcmp(password, "yes")) {
                 if (!check_password(thing, password)) {
                     anotify_nolisten2(player, CFAIL "Incorrect password.");
                     return;
                 }
             }
-            if (string_compare(newname, MUCK::getName(thing))
+            if (string_compare(newname, NAME(thing))
                 && !ok_player_name(newname)) {
                 anotify_nolisten2(player, CFAIL "That name is either taken or invalid.");
                 return;
             }
             /* everything ok, notify */
-            log_status("NAME: %s(%d) to %s by %s\n", MUCK::getName(thing), thing, newname, MUCK::getName(player));
+            log_status("NAME: %s(%d) to %s by %s\n", NAME(thing), thing, newname, NAME(player));
 
             /* remove alias sharing the new name, if present. */
             clear_alias(0, newname);
 
-            strcpy(oldName, MUCK::getName(thing));
+            strcpy(oldName, NAME(thing));
             strcpy(nName, newname);
             delete_player(thing);
+            delete[]NAME(thing);
             ts_modifyobject(player, thing);
-            MUCK::setName(thing, newname);
+            NAME(thing) = alloc_string(newname);
             add_player(thing);
             anotify_fmt(player, CSUCC "Name changed from %s to %s.", oldName, nName);
             return;
@@ -173,10 +172,11 @@ do_name(int descr, dbref player, const char *name, char *newname)
         }
 
         /* everything ok, change the name */
-        strcpy(oldName, MUCK::getName(thing));
+        strcpy(oldName, NAME(thing));
         strcpy(nName, newname);
+        delete[]NAME(thing);
         ts_modifyobject(player, thing);
-        MUCK::setName(thing, newname);
+        NAME(thing) = alloc_string(newname);
         anotify_fmt(player, CSUCC "Name changed from %s to %s.", oldName, nName);
         DBDIRTY(thing);
         if (Typeof(thing) == TYPE_EXIT && MLevel(thing)) {
@@ -200,12 +200,12 @@ do_describe(int descr, dbref player, const char *name, const char *description)
     }
 
     if ((thing = match_controlled(descr, player, name)) != NOTHING) {
-        if (Protect(thing) && !(MLevel(player) > MLevel(MUCK::getOwner(thing)))) {
+        if (Protect(thing) && !(MLevel(player) > MLevel(OWNER(thing)))) {
             anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
             return;
         }
         ts_modifyobject(player, thing);
-        MUCK::setDesc(thing, description);
+        SETDESC(thing, description);
         if (*description)
             anotify_nolisten2(player, CSUCC "Description set.");
         else
@@ -227,7 +227,7 @@ do_idescribe(int descr, dbref player, const char *name, const char *description)
     }
 
     if ((thing = match_controlled(descr, player, name)) != NOTHING) {
-        if (Protect(thing) && !(MLevel(player) > MLevel(MUCK::getOwner(thing)))) {
+        if (Protect(thing) && !(MLevel(player) > MLevel(OWNER(thing)))) {
             anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
             return;
         }
@@ -255,7 +255,7 @@ do_ansidescribe(int descr, dbref player, const char *name, const char *descripti
     }
 
     if ((thing = match_controlled(descr, player, name)) != NOTHING) {
-        if (Protect(thing) && !(MLevel(player) > MLevel(MUCK::getOwner(thing)))) {
+        if (Protect(thing) && !(MLevel(player) > MLevel(OWNER(thing)))) {
             anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
             return;
         }
@@ -282,7 +282,7 @@ do_iansidescribe(int descr, dbref player, const char *name, const char *descript
     }
 
     if ((thing = match_controlled(descr, player, name)) != NOTHING) {
-        if (Protect(thing) && !(MLevel(player) > MLevel(MUCK::getOwner(thing)))) {
+        if (Protect(thing) && !(MLevel(player) > MLevel(OWNER(thing)))) {
             anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
             return;
         }
@@ -310,7 +310,7 @@ do_htmldescribe(int descr, dbref player, const char *name, const char *descripti
     }
 
     if ((thing = match_controlled(descr, player, name)) != NOTHING) {
-        if (Protect(thing) && !(MLevel(player) > MLevel(MUCK::getOwner(thing)))) {
+        if (Protect(thing) && !(MLevel(player) > MLevel(OWNER(thing)))) {
             anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
             return;
         }
@@ -337,7 +337,7 @@ do_ihtmldescribe(int descr, dbref player, const char *name, const char *descript
     }
 
     if ((thing = match_controlled(descr, player, name)) != NOTHING) {
-        if (Protect(thing) && !(MLevel(player) > MLevel(MUCK::getOwner(thing)))) {
+        if (Protect(thing) && !(MLevel(player) > MLevel(OWNER(thing)))) {
             anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
             return;
         }
@@ -370,7 +370,7 @@ do_doing(int descr, dbref player, const char *name, const char *mesg)
         mesg = name;
     }
     if (thing != NOTHING) {
-        if (Protect(thing) && !(MLevel(player) > MLevel(MUCK::getOwner(thing)))) {
+        if (Protect(thing) && !(MLevel(player) > MLevel(OWNER(thing)))) {
             anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
             return;
         }
@@ -818,36 +818,34 @@ controls_link(dbref who, dbref what)
     switch (Typeof(what)) {
         case TYPE_EXIT:
         {
-            int i = MUCK::exitDestCount(what);
+            int i = DBFETCH(what)->sp.exit.ndest;
 
             while (i > 0) {
-                if (controls(who, MUCK::exitDestRef(what, --i)))
+                if (controls(who, DBFETCH(what)->sp.exit.dest[--i]))
                     return 1;
             }
-            if (who == MUCK::getOwner(MUCK::getLocation(what)))
+            if (who == OWNER(DBFETCH(what)->location))
                 return 1;
             return 0;
         }
 
         case TYPE_ROOM:
         {
-            MUCK::Room *r = MUCK::database().get(what)->As<MUCK::Room>();
-
-            if (r && r->dropTo() && controls(who, r->dropTo()->ref()))
+            if (controls(who, DBFETCH(what)->sp.room.dropto))
                 return 1;
             return 0;
         }
 
         case TYPE_PLAYER:
         {
-            if (controls(who, MUCK::playerHomeRef(what)))
+            if (controls(who, DBFETCH(what)->sp.player.home))
                 return 1;
             return 0;
         }
 
         case TYPE_THING:
         {
-            if (controls(who, [&]{ MUCK::Thing *t = MUCK::database().get(what)->As<MUCK::Thing>(); return (t && t->home()) ? t->home()->ref() : NOTHING; }()))
+            if (controls(who, DBFETCH(what)->sp.thing.home))
                 return 1;
             return 0;
         }
@@ -894,17 +892,16 @@ _do_unlink(int descr, dbref player, const char *name, int quiet)
             } else {
                 switch (Typeof(exit)) {
                     case TYPE_EXIT:
-                        if (MUCK::exitDestCount(exit) != 0) {
-                            MUCK::playerAddPennies(MUCK::getOwner(exit), tp_link_cost);
-                            DBDIRTY(MUCK::getOwner(exit));
+                        if (DBFETCH(exit)->sp.exit.ndest != 0) {
+                            DBFETCH(OWNER(exit))->sp.player.pennies += tp_link_cost;
+                            DBDIRTY(OWNER(exit));
                         }
                         ts_modifyobject(player, exit);
-                        {
-                            MUCK::Exit *e = MUCK::database().get(exit)->As<MUCK::Exit>();
-
-                            if (e->destCount())
-                                strcpy(destin, unparse_object(player, e->destRef(0)));
-                            e->setDestRefs(NULL, 0);
+                        DBSTORE(exit, sp.exit.ndest, 0);
+                        if (DBFETCH(exit)->sp.exit.dest) {
+                            strcpy(destin, unparse_object(player, DBFETCH(exit)->sp.exit.dest[0]));
+                            delete[]DBFETCH(exit)->sp.exit.dest;
+                            DBSTORE(exit, sp.exit.dest, NULL);
                         }
                         if (!quiet)
                             anotify_fmt(player, CSUCC "%s unlinked from %s.", unparse_object(player, exit), destin);
@@ -916,23 +913,21 @@ _do_unlink(int descr, dbref player, const char *name, int quiet)
                         break;
                     case TYPE_ROOM:
                         ts_modifyobject(player, exit);
-                        MUCK::database().get(exit)->As<MUCK::Room>()->setDropTo(nullptr);
+                        DBSTORE(exit, sp.room.dropto, NOTHING);
                         if (!quiet)
                             anotify_fmt(player, CSUCC "Dropto removed from %s.", unparse_object(player, exit));
                         break;
                     case TYPE_THING:
                         ts_modifyobject(player, exit);
-                        MUCK::database().get(exit)->As<MUCK::Thing>()
-                            ->setHome(MUCK::database().get(MUCK::getOwner(exit)));
+                        DBSTORE(exit, sp.thing.home, OWNER(exit));
                         if (!quiet)
-                            anotify_fmt(player, CSUCC "%s's home reset to owner.", MUCK::getName(exit));
+                            anotify_fmt(player, CSUCC "%s's home reset to owner.", NAME(exit));
                         break;
                     case TYPE_PLAYER:
                         ts_modifyobject(player, exit);
-                        MUCK::database().get(exit)->As<MUCK::Player>()
-                            ->setHome(MUCK::database().get(tp_player_start));
+                        DBSTORE(exit, sp.player.home, tp_player_start);
                         if (!quiet)
-                            anotify_fmt(player, CSUCC "%s's home reset to default player start room.", MUCK::getName(exit));
+                            anotify_fmt(player, CSUCC "%s's home reset to default player start room.", NAME(exit));
                         break;
                     default:
                         anotify_nolisten2(player, CFAIL "You can't unlink that!");
@@ -975,7 +970,7 @@ do_relink(int descr, dbref player, const char *thing_name, const char *dest_name
     match_here(&md);
     match_absolute(&md);
     match_registered(&md);
-    if (Mage(MUCK::getOwner(player)) || MUCK::getPowers(MUCK::getOwner(player)) & POW_LONG_FINGERS)
+    if (Mage(OWNER(player)) || POWERS(OWNER(player)) & POW_LONG_FINGERS)
         match_player(&md);
 
     if ((thing = noisy_match_result(&md)) == NOTHING)
@@ -984,13 +979,13 @@ do_relink(int descr, dbref player, const char *thing_name, const char *dest_name
     /* check if new target would be valid. */
     switch (Typeof(thing)) {
         case TYPE_EXIT:
-            if (MUCK::exitDestCount(thing) != 0)
+            if (DBFETCH(thing)->sp.exit.ndest != 0)
                 if (!controls(player, thing)) {
                     anotify(player, CFAIL "Permission denied.");
                     return;
                 }
-            if (!Wizard(MUCK::getOwner(player))
-                && (MUCK::playerPennies(player) < (tp_link_cost + tp_exit_cost))) {
+            if (!Wizard(OWNER(player))
+                && (DBFETCH(player)->sp.player.pennies < (tp_link_cost + tp_exit_cost))) {
                 anotify_fmt(player, CFAIL "It costs %d %s to link this exit.", (tp_link_cost + tp_exit_cost), (tp_link_cost + tp_exit_cost == 1) ? tp_penny : tp_pennies);
                 return;
             }
@@ -1047,9 +1042,6 @@ do_relink(int descr, dbref player, const char *thing_name, const char *dest_name
             anotify(player, CFAIL "You can't link programs to things.");
             return;
             break;
-        case TYPE_UNSUPPORTED:
-            anotify(player, CFAIL "That object's type module is not loaded.");
-            return;
         default:
             init_match(descr, player, dest_name, NOTYPE, &md);
             match_null(&md);
@@ -1095,50 +1087,49 @@ do_chown(int descr, dbref player, const char *name, const char *newowner)
             return;
         }
     } else {
-        owner = MUCK::getOwner(player);
+        owner = OWNER(player);
     }
 
-    if (!truecontrols(MUCK::getOwner(player), owner)) {
+    if (!truecontrols(OWNER(player), owner)) {
         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
         return;
     }
-    if (!truecontrols(MUCK::getOwner(player), thing) && (!(FLAGS(thing) & CHOWN_OK) || Typeof(thing) == TYPE_PROGRAM || !test_lock(descr, player, thing, CHLK_PROP))) {
-        if (!(MUCK::getPowers(player) & POW_CHOWN_ANYTHING)) {
+    if (!truecontrols(OWNER(player), thing) && (!(FLAGS(thing) & CHOWN_OK) || Typeof(thing) == TYPE_PROGRAM || !test_lock(descr, player, thing, CHLK_PROP))) {
+        if (!(POWERS(player) & POW_CHOWN_ANYTHING)) {
             anotify_nolisten2(player, CFAIL "You can't take possession of that.");
             return;
         }
     }
     if ((Protect(owner) && !(player == owner))
-        || (Protect(MUCK::getOwner(thing)) && !(player == MUCK::getOwner(thing)))) {
+        || (Protect(OWNER(thing)) && !(player == OWNER(thing)))) {
         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
         return;
     }
-    oldOwner = MUCK::getOwner(thing);
+    oldOwner = OWNER(thing);
     switch (Typeof(thing)) {
         case TYPE_ROOM:
-            if (!Mage(MUCK::getOwner(player)) && MUCK::getLocation(player) != thing) {
+            if (!Mage(OWNER(player)) && DBFETCH(player)->location != thing) {
                 anotify_nolisten2(player, CINFO "You can only chown \"here\".");
                 return;
             }
             ts_modifyobject(player, thing);
-            MUCK::setOwner(thing, MUCK::getOwner(owner));
+            OWNER(thing) = OWNER(owner);
             break;
         case TYPE_THING:
-            if (!Mage(MUCK::getOwner(player)) && MUCK::getLocation(thing) != player) {
+            if (!Mage(OWNER(player)) && DBFETCH(thing)->location != player) {
                 anotify_nolisten2(player, CINFO "You aren't carrying that.");
                 return;
             }
             ts_modifyobject(player, thing);
-            MUCK::setOwner(thing, MUCK::getOwner(owner));
+            OWNER(thing) = OWNER(owner);
             break;
         case TYPE_PLAYER:
             anotify_nolisten2(player, CFAIL "Players always own themselves.");
             return;
         case TYPE_EXIT:
         case TYPE_PROGRAM:
-        case TYPE_UNSUPPORTED:
             ts_modifyobject(player, thing);
-            MUCK::setOwner(thing, MUCK::getOwner(owner));
+            OWNER(thing) = OWNER(owner);
             break;
         case TYPE_GARBAGE:
             anotify_nolisten2(player, CFAIL "Nobody wants garbage.");
@@ -1179,7 +1170,7 @@ do_chown(int descr, dbref player, const char *name, const char *newowner)
 void
 do_sm(dbref player, dbref thing, int mlev)
 {
-    player = MUCK::getOwner(player);
+    player = OWNER(player);
 
     if ((mlev > MLevel(player)) || (MLevel(thing) > MLevel(player)) ||
         ((mlev > LMPI) && !Mage(player) && (Typeof(thing) != TYPE_PROGRAM)) || ((Typeof(thing) == TYPE_PLAYER) && !Man(player) && !Boy(player) && ((mlev >= LMAGE) || TMage(thing))
@@ -1239,12 +1230,12 @@ do_mush_set(int descr, dbref player, char *name, char *setting, char *command)
         return;
     }
 
-    if (!WizHidden(MUCK::getOwner(player)) && Prop_Hidden(prop)) {
+    if (!WizHidden(OWNER(player)) && Prop_Hidden(prop)) {
         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
         return;
     }
 
-    if (!Wiz(MUCK::getOwner(player)) && Prop_SeeOnly(prop)) {
+    if (!Wiz(OWNER(player)) && Prop_SeeOnly(prop)) {
         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
         return;
     }
@@ -1253,7 +1244,7 @@ do_mush_set(int descr, dbref player, char *name, char *setting, char *command)
     if ((thing = match_controlled(descr, player, name)) == NOTHING)
         return;
 
-    if (Protect(thing) && !(MLevel(player) > MLevel(MUCK::getOwner(thing)))) {
+    if (Protect(thing) && !(MLevel(player) > MLevel(OWNER(thing)))) {
         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
         return;
     }
@@ -1313,7 +1304,7 @@ do_set(int descr, dbref player, const char *name, const char *flag)
         char *temp;
         int ival = 0;
 
-        if (Protect(thing) && !(MLevel(player) > MLevel(MUCK::getOwner(thing)))) {
+        if (Protect(thing) && !(MLevel(player) > MLevel(OWNER(thing)))) {
             anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
             return;
         }
@@ -1330,7 +1321,7 @@ do_set(int descr, dbref player, const char *name, const char *flag)
                 delete[]x;
                 return;
             }
-            remove_property_list(thing, Arch(MUCK::getOwner(player)));
+            remove_property_list(thing, Arch(OWNER(player)));
             ts_modifyobject(player, thing);
             anotify_nolisten2(player, CSUCC "All user-owned properties removed.");
             delete[]x;
@@ -1351,12 +1342,12 @@ do_set(int descr, dbref player, const char *name, const char *flag)
             anotify_nolisten2(player, CFAIL "That property is already used as a system property.");
         }
 
-        if (!WizHidden(MUCK::getOwner(player)) && Prop_Hidden(type)) {
+        if (!WizHidden(OWNER(player)) && Prop_Hidden(type)) {
             anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
             delete[]x;
             return;
         }
-        if (!Wiz(MUCK::getOwner(player)) && Prop_SeeOnly(type)) {
+        if (!Wiz(OWNER(player)) && Prop_SeeOnly(type)) {
             anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
             delete[]x;
             return;
@@ -1427,9 +1418,9 @@ do_set(int descr, dbref player, const char *name, const char *flag)
         f = ZOMBIE;
     } else if (string_prefix("VEHICLE", p) || string_prefix("VIEWABLE", p)) {
         if (*flag == NOT_TOKEN && Typeof(thing) == TYPE_THING) {
-            dbref obj = CONTENTS(thing);
+            dbref obj = DBFETCH(thing)->contents;
 
-            for (; obj != NOTHING; obj = NEXTOBJ(obj)) {
+            for (; obj != NOTHING; obj = DBFETCH(obj)->next) {
                 if (Typeof(obj) == TYPE_PLAYER) {
                     anotify_nolisten2(player, CINFO "That vehicle still has players in it!");
                     return;
@@ -1506,7 +1497,7 @@ do_set(int descr, dbref player, const char *name, const char *flag)
         } else
             f4 = LFLAGx(i);
     }
-    if ((Protect(thing) && !(MLevel(player) > MLevel(MUCK::getOwner(thing))))
+    if ((Protect(thing) && !(MLevel(player) > MLevel(OWNER(thing))))
         && !(f2 == F2PROTECT)) {
         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
         return;
@@ -1520,13 +1511,13 @@ do_set(int descr, dbref player, const char *name, const char *flag)
         if (*flag == NOT_TOKEN) {
             /* reset the flag */
             ts_modifyobject(player, thing);
-            MUCK::clearFlags4(thing, f4);
+            LFLAG(thing) &= ~f4;
             DBDIRTY(thing);
             anotify_nolisten2(player, CSUCC "Flag reset.");
         } else {
             /* set the flag */
             ts_modifyobject(player, thing);
-            MUCK::addFlags4(thing, f4);
+            LFLAG(thing) |= f4;
             DBDIRTY(thing);
             anotify_nolisten2(player, CSUCC "Flag set.");
         }
@@ -1542,7 +1533,7 @@ do_set(int descr, dbref player, const char *name, const char *flag)
         if (*flag == NOT_TOKEN) {
             /* reset the flag */
             ts_modifyobject(player, thing);
-            MUCK::clearFlags(thing, f);
+            FLAGS(thing) &= ~f;
             DBDIRTY(thing);
             anotify_nolisten2(player, CSUCC "Flag reset.");
             if (f == F256COLOR) {
@@ -1552,7 +1543,7 @@ do_set(int descr, dbref player, const char *name, const char *flag)
         } else {
             /* set the flag */
             ts_modifyobject(player, thing);
-            MUCK::addFlags(thing, f);
+            FLAGS(thing) |= f;
             DBDIRTY(thing);
             anotify_nolisten2(player, CSUCC "Flag set.");
             if (f == F256COLOR) {
@@ -1573,13 +1564,13 @@ do_set(int descr, dbref player, const char *name, const char *flag)
         if (*flag == NOT_TOKEN) {
             /* reset the flag */
             ts_modifyobject(player, thing);
-            MUCK::clearFlags2(thing, f2);
+            FLAG2(thing) &= ~f2;
             DBDIRTY(thing);
             anotify_nolisten2(player, CSUCC "Flag reset.");
         } else {
             /* set the flag */
             ts_modifyobject(player, thing);
-            MUCK::addFlags2(thing, f2);
+            FLAG2(thing) |= f2;
             DBDIRTY(thing);
             anotify_nolisten2(player, CSUCC "Flag set.");
         }
@@ -1599,13 +1590,13 @@ do_set(int descr, dbref player, const char *name, const char *flag)
         if (*flag == NOT_TOKEN) {
             /* reset the flag */
             ts_modifyobject(player, thing);
-            MUCK::clearFlags4(thing, f4);
+            LFLAG(thing) &= ~f4;
             DBDIRTY(thing);
             anotify_nolisten2(player, CSUCC "Flag reset.");
         } else {
             /* set the flag */
             ts_modifyobject(player, thing);
-            MUCK::addFlags4(thing, f4);
+            LFLAG(thing) |= f4;
             DBDIRTY(thing);
             anotify_nolisten2(player, CSUCC "Flag set.");
         }
@@ -1635,7 +1626,7 @@ do_propset(int descr, dbref player, const char *name, const char *prop)
     if ((thing = match_controlled(descr, player, name)) == NOTHING)
         return;
 
-    if (Protect(thing) && !(MLevel(player) > MLevel(MUCK::getOwner(thing)))) {
+    if (Protect(thing) && !(MLevel(player) > MLevel(OWNER(thing)))) {
         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
         return;
     }
@@ -1680,11 +1671,11 @@ do_propset(int descr, dbref player, const char *name, const char *prop)
         anotify_nolisten2(player, CFAIL "That property is already used as a system property.");
     }
 
-    if (!WizHidden(MUCK::getOwner(player)) && Prop_Hidden(pname)) {
+    if (!WizHidden(OWNER(player)) && Prop_Hidden(pname)) {
         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
         return;
     }
-    if (!Wiz(MUCK::getOwner(player)) && Prop_SeeOnly(pname)) {
+    if (!Wiz(OWNER(player)) && Prop_SeeOnly(pname)) {
         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
         return;
     }

@@ -1,12 +1,5 @@
 #!/usr/bin/env python3
-# @frob must leave a sane object, and a websocket connection must be
-# a first-class player connection.
-#
-# @frob: setType swaps the Player module for a FRESH Thing, whose home
-# defaulted to -3 (HOME) under a comment claiming NOTHING. Legacy MUCK
-# carried the player's home across in a shared union slot; nothing
-# does that now, so every frob left an object @sanity rejected. The
-# frobbed object is now homed on the wizard who frobbed it.
+# A websocket connection must be a first-class player connection.
 #
 # Websockets: process_input returned early for them before the only
 # line that refreshes d->last_time, so a wsclient player read as idle
@@ -16,7 +9,7 @@
 # printed "[Unknown]"; the frame parser decoded one frame per read and
 # stranded the rest; and ping frames went unanswered.
 #
-# Usage: run_frob_ws_tests.py <binary> <gamedir> <port>
+# Usage: run_ws_tests.py <binary> <gamedir> <port>
 import sys, os, shutil, re, socket, base64, struct, json, time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -36,16 +29,6 @@ for line in open('data/parmfile.cfg'):
         wwwport = int(line.split('=', 1)[1])
 
 sess = start(binpath, 'live.db', STORE, port)
-
-# --- @frob ---
-sess.cmd('@pcreate Victim=victimpw', 1.0)
-out = sess.cmd('@sanity', 8.0)
-check('sanity is clean before the frob', 'Object "' not in out,
-      out.strip()[-200:])
-sess.cmd('@frob Victim', 2.0)
-out = sess.cmd('@sanity', 8.0)
-check('sanity is still clean after the frob', 'Object "' not in out,
-      out.strip()[-300:])
 
 # --- websocket ---
 sess.cmd('@tune www_root=#0', 0.8)

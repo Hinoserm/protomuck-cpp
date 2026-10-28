@@ -9,11 +9,10 @@
 #include "tune.h"
 #include "interface.h"
 #include "externs.h"
-#include "ObjectAccess.h"
-#include "Modules.h"
 #include "match.h"
 #include "strutils.h"
 
+struct line *read_program(dbref i);
 
 /* parse_linkable_dest()
  *
@@ -82,13 +81,13 @@ exit_loop_check(dbref source, dbref dest)
     if (Typeof(dest) != TYPE_EXIT)
         return 0;
 
-    for (i = 0; i < MUCK::exitDestCount(dest); i++) {
-        if (MUCK::exitDestRef(dest, i) == source) {
+    for (i = 0; i < DBFETCH(dest)->sp.exit.ndest; i++) {
+        if ((DBFETCH(dest)->sp.exit.dest)[i] == source) {
             return 1;           /* Found a loop! */
         }
-        if (OkObj(MUCK::exitDestRef(dest, i))) {
-            if (Typeof(MUCK::exitDestRef(dest, i)) == TYPE_EXIT) {
-                if (exit_loop_check(source, MUCK::exitDestRef(dest, i))) {
+        if (OkObj((DBFETCH(dest)->sp.exit.dest)[i])) {
+            if (Typeof((DBFETCH(dest)->sp.exit.dest)[i]) == TYPE_EXIT) {
+                if (exit_loop_check(source, (DBFETCH(dest)->sp.exit.dest)[i])) {
                     return 1;   /* Found one recursively */
                 }
             }
@@ -130,7 +129,7 @@ do_open(int descr, dbref player, const char *direction, const char *linkto)
     qname = buf2;
     for (; *rname && isspace(*rname); rname++) ;
 
-    if ((loc = MUCK::getLocation(player)) == NOTHING)
+    if ((loc = getloc(player)) == NOTHING)
         return;
 
     if (!*direction) {
@@ -141,7 +140,7 @@ do_open(int descr, dbref player, const char *direction, const char *linkto)
         return;
     }
 
-    if (!controls(player, loc) && !(MUCK::getPowers(player) & POW_OPEN_ANYWHERE)) {
+    if (!controls(player, loc) && !(POWERS(player) & POW_OPEN_ANYWHERE)) {
         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
         return;
     } else if (!payfor(player, tp_exit_cost)) {
@@ -150,19 +149,19 @@ do_open(int descr, dbref player, const char *direction, const char *linkto)
     } else {
         char buf[BUFFER_LEN];
 
-        /* create the exit through the gatekeeper */
-        MUCK::Exit *newx =
-            MUCK::database().Create<MUCK::Exit>(direction, MUCK::getOwner(player));
+        /* create the exit */
+        exit = new_object(player);
 
-        if (!newx) {
-            anotify_nolisten2(player, CFAIL "That object type is not available on this server.");
-            return;
-        }
-        exit = newx->object()->ref();
-        MUCK::setLocation(exit, loc);          /* chain wiring flips later */
+        /* initialize everything */
+        NAME(exit) = alloc_string(direction);
+        DBFETCH(exit)->location = loc;
+        OWNER(exit) = OWNER(player);
+        FLAGS(exit) = TYPE_EXIT;
+        DBFETCH(exit)->sp.exit.ndest = 0;
+        DBFETCH(exit)->sp.exit.dest = NULL;
 
         /* link it in */
-        MUCK::attachExit(loc, exit);
+        PUSH(exit, DBFETCH(loc)->exits);
         DBDIRTY(loc);
 
         /* and we're done */
@@ -179,9 +178,13 @@ do_open(int descr, dbref player, const char *direction, const char *linkto)
                 int i;
                 int ndest = link_exit(descr, player, exit, (char *) qname, good_dest);
 
-                MUCK::database().get(exit)->As<MUCK::Exit>()
-                    ->setDestRefs(good_dest, ndest);
-                (void) i;
+                DBFETCH(exit)->sp.exit.ndest = ndest;
+                DBFETCH(exit)->sp.exit.dest = new dbref[ndest];
+
+                for (i = 0; i < ndest; i++) {
+                    (DBFETCH(exit)->sp.exit.dest)[i] = good_dest[i];
+                }
+                DBDIRTY(exit);
             }
         }
     }
@@ -282,7 +285,7 @@ _link_exit(int descr, dbref player, dbref exit, char *dest_name, dbref *dest_lis
             if (dest == HOME)
                 anotify_nolisten2(player, CSUCC "Linked to HOME.");
             else {
-                sprintf(buf, CSUCC "%s linked to %s.", MUCK::getName(exit), unparse_object(player, dest));
+                sprintf(buf, CSUCC "%s linked to %s.", NAME(exit), unparse_object(player, dest));
                 anotify_nolisten2(player, buf);
             }
         }
@@ -337,7 +340,7 @@ do_link(int descr, dbref player, const char *thing_name, const char *dest_name)
     match_absolute(&md);
     match_registered(&md);
 
-    if (Mage(MUCK::getOwner(player)))
+    if (Mage(OWNER(player)))
         match_player(&md);
 
     if ((thing = noisy_match_result(&md)) == NOTHING)
@@ -346,9 +349,9 @@ do_link(int descr, dbref player, const char *thing_name, const char *dest_name)
     switch (Typeof(thing)) {
         case TYPE_EXIT:
             /* we're ok, check the usual stuff */
-            if (MUCK::exitDestCount(thing) != 0) {
+            if (DBFETCH(thing)->sp.exit.ndest != 0) {
                 if (controls(player, thing)) {
-                    if (MUCK::exitDestRef(thing, 0) != NIL) {
+                    if ((DBFETCH(thing)->sp.exit.dest)[0] != NIL) {
                         anotify_nolisten2(player, CINFO "That exit is already linked.");
                         return;
                     }
@@ -359,7 +362,7 @@ do_link(int descr, dbref player, const char *thing_name, const char *dest_name)
             }
 
             /* handle costs */
-            if (MUCK::getOwner(thing) == MUCK::getOwner(player)) {
+            if (OWNER(thing) == OWNER(player)) {
                 if (!payfor(player, tp_link_cost)) {
                     anotify_fmt(player, CFAIL "It costs %d %s to link this exit.", tp_link_cost, (tp_link_cost == 1) ? tp_penny : tp_pennies);
                     return;
@@ -373,25 +376,31 @@ do_link(int descr, dbref player, const char *thing_name, const char *dest_name)
                     return;
                 } else {
                     /* pay the owner for his loss */
-                    dbref owner = MUCK::getOwner(thing);
+                    dbref owner = OWNER(thing);
 
-                    MUCK::playerAddPennies(owner, tp_exit_cost);
+                    DBFETCH(owner)->sp.player.pennies += tp_exit_cost;
                     DBDIRTY(owner);
                 }
             }
 
             /* link has been validated and paid for; do it */
-            MUCK::setOwner(thing, MUCK::getOwner(player));
+            OWNER(thing) = OWNER(player);
 
             if (!(ndest = link_exit(descr, player, thing, (char *) dest_name, good_dest))) {
                 anotify_nolisten2(player, CFAIL "No destinations linked.");
-                MUCK::playerAddPennies(player, tp_link_cost); /* Refund! */
+                DBFETCH(player)->sp.player.pennies += tp_link_cost; /* Refund! */
                 DBDIRTY(player);
                 break;
             }
 
-            MUCK::database().get(thing)->As<MUCK::Exit>()
-                ->setDestRefs(good_dest, ndest);
+            DBFETCH(thing)->sp.exit.ndest = ndest;
+            if (DBFETCH(thing)->sp.exit.dest)
+                delete DBFETCH(thing)->sp.exit.dest;
+
+            DBFETCH(thing)->sp.exit.dest = new dbref[ndest];
+
+            for (i = 0; i < ndest; i++)
+                (DBFETCH(thing)->sp.exit.dest)[i] = good_dest[i];
             break;
         case TYPE_THING:
         case TYPE_PLAYER:
@@ -421,17 +430,11 @@ do_link(int descr, dbref player, const char *thing_name, const char *dest_name)
                 return;
             }
             /* do the link */
-            /* setHomeRef, not setHome: the pointer overload resolves
-             * the dbref through database().get(), which returns null
-             * for the negative sentinels, so "@link thing=home" and
-             * "@link thing=nil" silently stored NOTHING while the
-             * success message named the sentinel the admin chose. */
             if (Typeof(thing) == TYPE_THING) {
-                MUCK::database().get(thing)->As<MUCK::Thing>()
-                    ->setHomeRef(dest);
+                DBFETCH(thing)->sp.thing.home = dest;
             } else
-                MUCK::database().get(thing)->As<MUCK::Player>()->setHomeRef(dest);
-            sprintf(buf, CSUCC "%s's home set to %s.", MUCK::getName(thing), unparse_object(player, dest));
+                DBFETCH(thing)->sp.player.home = dest;
+            sprintf(buf, CSUCC "%s's home set to %s.", NAME(thing), unparse_object(player, dest));
             anotify_nolisten2(player, buf);
             break;
         case TYPE_ROOM:        /* room dropto's */
@@ -451,21 +454,14 @@ do_link(int descr, dbref player, const char *thing_name, const char *dest_name)
                 || (thing == dest)) {
                 anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
             } else {
-                /* setDropToRef: same sentinel hazard as setHome
-                 * above, and "@link room=home" is the common way to
-                 * make a room drop its contents home */
-                MUCK::database().get(thing)->As<MUCK::Room>()
-                    ->setDropToRef(dest);
-                sprintf(buf, CSUCC "%s's dropto set to %s.", MUCK::getName(thing), unparse_object(player, dest));
+                DBFETCH(thing)->sp.room.dropto = dest; /* dropto */
+                sprintf(buf, CSUCC "%s's dropto set to %s.", NAME(thing), unparse_object(player, dest));
                 anotify_nolisten2(player, buf);
             }
 
             break;
         case TYPE_PROGRAM:
             anotify_nolisten2(player, CFAIL "You can't link programs to things!");
-            break;
-        case TYPE_UNSUPPORTED:
-            anotify_nolisten2(player, CFAIL "That object's type module is not loaded.");
             break;
         default:
             anotify_nolisten2(player, CFAIL "Weird object type.");
@@ -517,14 +513,13 @@ do_dig(int descr, dbref player, const char *name, const char *pname)
         anotify_fmt(player, CFAIL "You don't have enough %s to dig a room.", tp_pennies);
         return;
     }
-    room = MUCK::database().Create<MUCK::Room>("", MUCK::getOwner(player))
-        ->object()->ref();
+    room = new_object(player);
 
     /* Initialize everything */
-    newparent = MUCK::getLocation(MUCK::getLocation(player));
+    newparent = DBFETCH(DBFETCH(player)->location)->location;
     while ((OkObj(newparent)) && !(FLAGS(newparent) & ABODE)
            && !(FLAG2(newparent) & F2PARENT))
-        newparent = MUCK::getLocation(newparent);
+        newparent = DBFETCH(newparent)->location;
     if (!OkObj(newparent)) {
         if (OkObj(tp_default_parent))
             newparent = tp_default_parent;
@@ -532,10 +527,13 @@ do_dig(int descr, dbref player, const char *name, const char *pname)
             newparent = GLOBAL_ENVIRONMENT;
     }
 
-    MUCK::database().get(room)->setName(name);
-    MUCK::setLocation(room, newparent);        /* chain wiring flips later */
-    MUCK::addFlags(room, MUCK::getFlags(player) & JUMP_OK);
-    MUCK::attachContent(newparent, room);
+    NAME(room) = alloc_string(name);
+    DBFETCH(room)->location = newparent;
+    OWNER(room) = OWNER(player);
+    DBFETCH(room)->exits = NOTHING;
+    DBFETCH(room)->sp.room.dropto = NOTHING;
+    FLAGS(room) = TYPE_ROOM | (FLAGS(player) & JUMP_OK);
+    PUSH(room, DBFETCH(newparent)->contents);
     DBDIRTY(room);
     DBDIRTY(newparent);
 
@@ -619,13 +617,9 @@ do_prog(int descr, dbref player, const char *name)
     match_absolute(&md);
 
     if ((i = match_result(&md)) == NOTHING) {
-        i = MUCK::database().newProgram(MUCK::getOwner(player), name);
-        if (i == NOTHING) {
-            anotify_nolisten2(player, CFAIL "That object type is not available on this server.");
-            return;
-        }
-        MUCK::addFlags(i, INTERNAL);
-        MUCK::playerSession(player).currProg = i;
+        i = new_program(OWNER(player), name);
+        FLAGS(i) |= INTERNAL;
+        DBFETCH(player)->sp.player.curr_prog = i;
 
         anotify_fmt(player, CSUCC "Program %s created with number %d.", name, i);
         anotify_nolisten2(player, CINFO "Entering editor.");
@@ -641,16 +635,16 @@ do_prog(int descr, dbref player, const char *name)
             return;
         }
 
-        MUCK::programRuntime(i).first = MUCK::programs().read(i);
-        MUCK::addFlags(i, INTERNAL);
-        MUCK::playerSession(player).currProg = i;
+        DBFETCH(i)->sp.program.first = read_program(i);
+        FLAGS(i) |= INTERNAL;
+        DBFETCH(player)->sp.player.curr_prog = i;
         anotify_fmt(player, CINFO "Entering editor for %s.", unparse_object(player, i));
         /* list current line */
         do_list(player, i, 0, 0, 0);
         DBDIRTY(i);
     }
 
-    MUCK::addFlags(player, INTERACTIVE);
+    FLAGS(player) |= INTERACTIVE;
     DBDIRTY(player);
 }
 
@@ -691,13 +685,13 @@ do_edit(int descr, dbref player, const char *name)
         return;
     }
 
-    MUCK::addFlags(i, INTERNAL);
-    MUCK::programRuntime(i).first = MUCK::programs().read(i);
-    MUCK::playerSession(player).currProg = i;
+    FLAGS(i) |= INTERNAL;
+    DBFETCH(i)->sp.program.first = read_program(i);
+    DBFETCH(player)->sp.player.curr_prog = i;
     anotify_fmt(player, CINFO "Entering editor for %s.", unparse_object(player, i));
     /* list current line */
     do_list(player, i, 0, 0, 0);
-    MUCK::addFlags(player, INTERACTIVE);
+    FLAGS(player) |= INTERACTIVE;
     DBDIRTY(i);
     DBDIRTY(player);
 }
@@ -756,28 +750,29 @@ do_create(dbref player, char *name, char *acost)
         return;
     } else {
         /* create the object */
-        thing = MUCK::database().Create<MUCK::Thing>("", MUCK::getOwner(player))
-            ->object()->ref();
+        thing = new_object(player);
 
-        /* initialize through the gatekeeper and the module */
-        {
-            MUCK::Thing *t = MUCK::database().get(thing)->As<MUCK::Thing>();
-            int endow = OBJECT_ENDOWMENT(cost);
+        /* initialize everything */
+        NAME(thing) = alloc_string(name);
+        DBFETCH(thing)->location = player;
+        OWNER(thing) = OWNER(player);
+        DBFETCH(thing)->sp.thing.value = OBJECT_ENDOWMENT(cost);
+        DBFETCH(thing)->exits = NOTHING;
+        FLAGS(thing) = TYPE_THING;
 
-            MUCK::database().get(thing)->setName(name);
-            MUCK::setLocation(thing, player);    /* chain wiring flips later */
-            t->setValue(endow > tp_max_object_endowment
-                        ? tp_max_object_endowment : endow);
-            if ((loc = MUCK::getLocation(player)) != NOTHING
-                && controls(player, loc)) {
-                t->setHome(MUCK::database().get(loc));
-            } else {
-                t->setHome(MUCK::database().get(player));
-            }
+        /* endow the object */
+        if (DBFETCH(thing)->sp.thing.value > tp_max_object_endowment) {
+            DBFETCH(thing)->sp.thing.value = tp_max_object_endowment;
+        }
+        if ((loc = DBFETCH(player)->location) != NOTHING && controls(player, loc)) {
+            DBFETCH(thing)->sp.thing.home = loc; /* home */
+        } else {
+            DBFETCH(thing)->sp.thing.home = player;
+            /* set thing's home to player instead */
         }
 
         /* link it in */
-        MUCK::attachContent(player, thing);
+        PUSH(thing, DBFETCH(player)->contents);
         DBDIRTY(player);
 
         /* and we're done */
@@ -858,7 +853,7 @@ set_source(dbref player, dbref action, dbref source)
         case TYPE_ROOM:
         case TYPE_THING:
         case TYPE_PLAYER:
-            MUCK::attachExit(source, action);
+            PUSH(action, DBFETCH(source)->exits);
             break;
         default:
             anotify_nolisten2(player, CFAIL "Weird object type.");
@@ -867,7 +862,7 @@ set_source(dbref player, dbref action, dbref source)
             break;
     }
     DBDIRTY(source);
-    MUCK::setLocation(action, source);
+    DBSTORE(action, location, source);
     return;
 }
 
@@ -877,20 +872,18 @@ unset_source(dbref player, dbref loc, dbref action)
 
     dbref oldsrc;
 
-    if ((oldsrc = MUCK::getLocation(action)) == NOTHING) {
+    if ((oldsrc = DBFETCH(action)->location) == NOTHING) {
         /* old-style, sourceless exit */
-        if (!member(action, EXITS(loc))) {
+        if (!member(action, DBFETCH(loc)->exits)) {
             return 0;
         }
-        MUCK::detachExit(MUCK::getLocation(player), action);
-        DBDIRTY(MUCK::getLocation(player));
+        DBSTORE(DBFETCH(player)->location, exits, remove_first(DBFETCH(DBFETCH(player)->location)->exits, action));
     } else {
         switch (Typeof(oldsrc)) {
             case TYPE_PLAYER:
             case TYPE_ROOM:
             case TYPE_THING:
-                MUCK::detachExit(oldsrc, action);
-                DBDIRTY(oldsrc);
+                DBSTORE(oldsrc, exits, remove_first(DBFETCH(oldsrc)->exits, action));
                 break;
             default:
                 log_status("PANIC: source of action #%d was type: %d.\n", action, Typeof(oldsrc));
@@ -952,17 +945,17 @@ do_action(int descr, dbref player, const char *action_name, const char *source_n
         return;
     }
 
-    MUCK::Exit *newact =
-        MUCK::database().Create<MUCK::Exit>(action_name, MUCK::getOwner(player));
+    action = new_object(player);
 
-    if (!newact) {
-        anotify_nolisten2(player, CFAIL "That object type is not available on this server.");
-        return;
-    }
-    action = newact->object()->ref();
+    NAME(action) = alloc_string(action_name);
+    DBFETCH(action)->location = NOTHING;
+    OWNER(action) = OWNER(player);
+    DBFETCH(action)->sp.exit.ndest = 0;
+    DBFETCH(action)->sp.exit.dest = NULL;
+    FLAGS(action) = TYPE_EXIT;
 
     set_source(player, action, source);
-    sprintf(buf, CSUCC "Action %s created and attached to %s.", unparse_object(player, action), MUCK::getName(source));
+    sprintf(buf, CSUCC "Action %s created and attached to %s.", unparse_object(player, action), NAME(source));
     anotify_nolisten2(player, buf);
     DBDIRTY(action);
 
@@ -977,9 +970,10 @@ do_action(int descr, dbref player, const char *action_name, const char *source_n
         set_property(player, buf, &pdat);
     }
     if (tp_autolinking) {
-        dbref nildest = NIL;
+        DBFETCH(action)->sp.exit.ndest = 1;
+        DBFETCH(action)->sp.exit.dest = new dbref[1];
 
-        MUCK::database().get(action)->As<MUCK::Exit>()->setDestRefs(&nildest, 1);
+        (DBFETCH(action)->sp.exit.dest)[0] = NIL;
         sprintf(buf, CINFO "Linked to NIL.");
         anotify_nolisten2(player, buf);
     }
@@ -1001,7 +995,7 @@ do_attach(int descr, dbref player, const char *action_name, const char *source_n
     struct match_data md;
     char buf[BUFFER_LEN];
 
-    if ((loc = MUCK::getLocation(player)) == NOTHING)
+    if ((loc = DBFETCH(player)->location) == NOTHING)
         return;
 
     if (tp_db_readonly) {
@@ -1036,7 +1030,7 @@ do_attach(int descr, dbref player, const char *action_name, const char *source_n
         return;
     }
     set_source(player, action, source);
-    sprintf(buf, CSUCC "Action %s re-attached to %s.", unparse_object(player, action), MUCK::getName(source));
+    sprintf(buf, CSUCC "Action %s re-attached to %s.", unparse_object(player, action), NAME(source));
     anotify_nolisten2(player, buf);
     if (MLevel(action)) {
         SetMLevel(action, 0);

@@ -13,8 +13,6 @@
 #include "strutils.h"
 #include "interp.h"
 #include "netresolve.h"
-#include "Modules.h"
-#include "ObjectAccess.h"
 #include "JSONConvert.h"
 
 int
@@ -138,7 +136,7 @@ prim_awakep(PRIM_PROTOTYPE)
         abort_interp("invalid argument");
     ref = oper[0].data.objref;
     if (Typeof(ref) == TYPE_THING && (FLAGS(ref) & ZOMBIE))
-        ref = MUCK::getOwner(ref);
+        ref = OWNER(ref);
     if (Typeof(ref) != TYPE_PLAYER)
         abort_interp("invalid argument");
     result = online(ref);
@@ -515,7 +513,7 @@ prim_descr_setuser(PRIM_PROTOTYPE)
         abort_interp("That is not a valid descriptor.");
     ptr = oper[0].data.string ? oper[0].data.string->data.c_str() : pad_char;
     if (ref != NOTHING) {
-        const char *passwd = MUCK::playerPasswordSlot(ref);
+        const char *passwd = DBFETCH(ref)->sp.player.password;
 
         if (passwd) {
             if (!check_password(ref, ptr)) {
@@ -534,7 +532,7 @@ prim_descr_setuser(PRIM_PROTOTYPE)
     /* logged only once the password has actually been accepted, so the
      * log never records a login that did not happen */
     if (ref != NOTHING) {
-        log_status("SUSR: %d %s(%d) to %s(%d)\n", oper[2].data.number, OkObj(player) ? MUCK::getName(player) : "(Login)", player, MUCK::getName(ref), ref);
+        log_status("SUSR: %d %s(%d) to %s(%d)\n", oper[2].data.number, OkObj(player) ? NAME(player) : "(Login)", player, NAME(ref), ref);
     }
 
     tmp = oper[2].data.number;
@@ -563,7 +561,7 @@ prim_descr_setuser_nopass(PRIM_PROTOTYPE)
     if (!pdescrp(oper[1].data.number))
         abort_interp("That is not a valid descriptor.");
     if (ref != NOTHING) {
-        log_status("SUSR: %d %s(%d) to %s(%d)\n", oper[1].data.number, OkObj(player) ? MUCK::getName(player) : "(Login)", player, MUCK::getName(ref), ref);
+        log_status("SUSR: %d %s(%d) to %s(%d)\n", oper[1].data.number, OkObj(player) ? NAME(player) : "(Login)", player, NAME(ref), ref);
     }
     tmp = oper[1].data.number;
     result = pset_user2(tmp, ref);

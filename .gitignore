@@ -80,6 +80,5 @@ CMakeFiles/
 cmake_install.cmake
 /src/inc/version.h
 build/
-build-asan/
-build-dbg/
-build-tsan/
+__pycache__/
+*.pyc

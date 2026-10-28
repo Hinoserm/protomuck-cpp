@@ -2,16 +2,13 @@
 #include "config.h"
 
 #include "db.h"
-#include "ObjectAccess.h"
 #include "props.h"
 #include "interface.h"
 #include "externs.h"
-#include "Modules.h"
 #include "params.h"
 #include "tune.h"
 #include "match.h"
 #include "strutils.h"
-#include "MacroTable.h"
 
 #define DOWNCASE(x) (tolower(x))
 
@@ -22,6 +19,8 @@ void do_quit(dbref player, dbref program);
 void do_cancel(dbref player, dbref program);
 void do_list(dbref player, dbref program, int arg[], int argc, int commentit);
 void insert(dbref player, const char *line);
+struct line *get_new_line(void);
+struct line *read_program(dbref i);
 void do_compile(int descr, dbref player, dbref program, int force_err_disp);
 void free_line(struct line *l);
 void free_prog_text(struct line *l);
@@ -55,6 +54,202 @@ interactive(int descr, dbref player, const char *command, int len, int wclen)
     }
 }
 
+char *
+macro_expansion(struct macrotable *node, const char *match)
+{
+    if (!node)
+        return NULL;
+    else {
+        int value = string_compare(match, node->name);
+
+        if (value < 0)
+            return macro_expansion(node->left, match);
+        else if (value > 0)
+            return macro_expansion(node->right, match);
+        else
+            return alloc_string(node->definition);
+    }
+}
+
+struct macrotable *
+new_macro(const char *name, const char *definition, dbref player)
+{
+    struct macrotable *newmacro = new macrotable;
+    char buf[BUFFER_LEN];
+    int i;
+
+    for (i = 0; name[i]; i++)
+        buf[i] = DOWNCASE(name[i]);
+    buf[i] = '\0';
+    newmacro->name = alloc_string(buf);
+    newmacro->definition = alloc_string(definition);
+    newmacro->implementor = player;
+    newmacro->left = NULL;
+    newmacro->right = NULL;
+    return (newmacro);
+}
+
+int
+grow_macro_tree(struct macrotable *node, struct macrotable *newmacro)
+{
+    int value = strcmp(newmacro->name, node->name);
+
+    if (!value)
+        return 0;
+    else if (value < 0) {
+        if (node->left)
+            return grow_macro_tree(node->left, newmacro);
+        else {
+            node->left = newmacro;
+            return 1;
+        }
+    } else if (node->right)
+        return grow_macro_tree(node->right, newmacro);
+    else {
+        node->right = newmacro;
+        return 1;
+    }
+}
+
+int
+insert_macro(const char *macroname, const char *macrodef, dbref player, struct macrotable **node)
+{
+    struct macrotable *newmacro;
+
+    newmacro = new_macro(macroname, macrodef, player);
+    if (!(*node)) {
+        *node = newmacro;
+        return 1;
+    } else
+        return (grow_macro_tree((*node), newmacro));
+}
+
+void
+do_list_tree(struct macrotable *node, const char *first, const char *last, int length, dbref player)
+{
+    static char buf[BUFFER_LEN];
+
+    if (!node)
+        return;
+    else {
+        if (strncmp(node->name, first, strlen(first)) >= 0)
+            do_list_tree(node->left, first, last, length, player);
+        if ((strncmp(node->name, first, strlen(first)) >= 0) && (strncmp(node->name, last, strlen(last)) <= 0)) {
+            if (length) {
+                sprintf(buf, "%-16s %-16s  %s", node->name, NAME(node->implementor), node->definition);
+                notify(player, buf);
+                buf[0] = '\0';
+            } else {
+                sprintf(buf + strlen(buf), "%-16s", node->name);
+                if (strlen(buf) > 70) {
+                    notify(player, buf);
+                    buf[0] = '\0';
+                }
+            }
+        }
+        if (strncmp(last, node->name, strlen(last)) >= 0)
+            do_list_tree(node->right, first, last, length, player);
+        if ((node == macrotop) && !length) {
+            notify(player, buf);
+            buf[0] = '\0';
+        }
+    }
+}
+
+void
+list_macros(const char *word[], int k, dbref player, int length)
+{
+    if (!k--) {
+        do_list_tree(macrotop, "a", "z", length, player);
+    } else {
+        do_list_tree(macrotop, word[0], word[k], length, player);
+    }
+    anotify_nolisten(player, CINFO "End of list.", 1);
+    return;
+}
+
+void
+purge_macro_tree(struct macrotable *node)
+{
+    if (!node)
+        return;
+    purge_macro_tree(node->left);
+    purge_macro_tree(node->right);
+    delete[]node->name;
+    delete[]node->definition;
+    delete node;
+}
+
+int
+erase_node(struct macrotable *oldnode, struct macrotable *node, const char *killname, struct macrotable *mtop)
+{
+    if (!node)
+        return 0;
+    /* string_compare, not strcmp: names are downcased when they are
+     * inserted (new_macro), and the root case in kill_macro compares
+     * case-insensitively. A case-sensitive compare here meant
+     * "@macro/kill MyMacro" reported "not found" for any non-root
+     * macro typed in anything but lowercase, while the macro kept
+     * existing and expanding. */
+    else if (string_compare(killname, node->name) < 0)
+        return erase_node(node, node->left, killname, mtop);
+    else if (string_compare(killname, node->name))
+        return erase_node(node, node->right, killname, mtop);
+    else {
+        if (node == oldnode->left) {
+            oldnode->left = node->left;
+            if (node->right)
+                grow_macro_tree(mtop, node->right);
+            delete[]node->name;
+            delete[]node->definition;
+            delete node;
+
+            return 1;
+        } else {
+            oldnode->right = node->right;
+            if (node->left)
+                grow_macro_tree(mtop, node->left);
+            delete[]node->name;
+            delete[]node->definition;
+            delete node;
+
+            return 1;
+        }
+    }
+}
+
+
+int
+kill_macro(const char *macroname, dbref player, struct macrotable **mtop)
+{
+    if (!(*mtop)) {
+        return (0);
+    } else if (!string_compare(macroname, (*mtop)->name)) {
+        struct macrotable *macrotemp = (*mtop);
+        int whichway = ((*mtop)->left) ? 1 : 0;
+
+        *mtop = whichway ? (*mtop)->left : (*mtop)->right;
+        if ((*mtop) && (whichway ? macrotemp->right : macrotemp->left))
+            grow_macro_tree((*mtop), whichway ? macrotemp->right : macrotemp->left);
+        delete[]macrotemp->name;
+        delete[]macrotemp->definition;
+        delete macrotemp;
+
+        return (1);
+    } else if (erase_node((*mtop), (*mtop), macroname, (*mtop)))
+        return (1);
+    else
+        return (0);
+}
+
+
+void
+free_old_macros(void)
+{
+    purge_macro_tree(macrotop);
+}
+
+
 /* The editor itself --- this gets called each time every time to
  * parse a command.
  */
@@ -68,10 +263,10 @@ editor(int descr, dbref player, const char *command)
     const char *word[MAX_ARG + 1];
     int i, j;                   /* loop variables */
 
-    program = MUCK::playerSession(player).currProg;
+    program = DBFETCH(player)->sp.player.curr_prog;
 
     /* check to see if we are insert mode */
-    if (MUCK::playerSession(player).insertMode) {
+    if (DBFETCH(player)->sp.player.insert_mode) {
         insert(player, command); /* insert it! */
         return;
     }
@@ -96,7 +291,7 @@ editor(int descr, dbref player, const char *command)
             } else if (!word[2]) {
                 anotify_nolisten(player, CFAIL "Invalid definition syntax.", 1);
             } else {
-                if (MUCK::macros().insert(word[1], word[2], player)) {
+                if (insert_macro(word[1], word[2], player, &macrotop)) {
                     anotify_nolisten(player, CSUCC "Entry created.", 1);
                 } else {
                     anotify_nolisten(player, CINFO "That macro already exists.", 1);
@@ -126,17 +321,17 @@ editor(int descr, dbref player, const char *command)
                 if (!Mage(player)) {
                     anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
                 } else {
-                    if (MUCK::macros().remove(word[0]))
+                    if (kill_macro(word[0], player, &macrotop))
                         anotify_nolisten(player, CSUCC "Macro entry deleted.", 1);
                     else
                         anotify_nolisten(player, CINFO "Macro to delete not found.", 1);
                 }
                 break;
             case SHOW_COMMAND:
-                MUCK::macros().list(word, i, player, true);
+                list_macros(word, i, player, 1);
                 break;
             case SHORTSHOW_COMMAND:
-                MUCK::macros().list(word, i, player, false);
+                list_macros(word, i, player, 0);
                 break;
             case INSERT_COMMAND:
                 do_insert(player, program, arg, i);
@@ -192,10 +387,10 @@ editor(int descr, dbref player, const char *command)
 void
 do_insert(dbref player, dbref program, int arg[], int argc)
 {
-    MUCK::playerSession(player).insertMode++;
+    DBFETCH(player)->sp.player.insert_mode++;
     /* DBDIRTY(player); */
     if (argc)
-        MUCK::programRuntime(program).currLine = arg[0] - 1;
+        DBSTORE(program, sp.program.curr_line, arg[0] - 1);
     /* set current line to something else */
 }
 
@@ -211,7 +406,7 @@ do_delete(dbref player, dbref program, int arg[], int argc)
 
     switch (argc) {
         case 0:
-            arg[0] = MUCK::programRuntime(program).currLine;
+            arg[0] = DBFETCH(program)->sp.program.curr_line;
         case 1:
             arg[1] = arg[0];
         case 2:
@@ -222,10 +417,10 @@ do_delete(dbref player, dbref program, int arg[], int argc)
                 return;
             }
             i = arg[0] - 1;
-            for (curr = MUCK::programRuntime(program).first; curr && i; i--)
+            for (curr = DBFETCH(program)->sp.program.first; curr && i; i--)
                 curr = curr->next;
             if (curr) {
-                MUCK::programRuntime(program).currLine = arg[0];
+                DBFETCH(program)->sp.program.curr_line = arg[0];
                 i = arg[1] - arg[0] + 1;
                 /* delete n lines */
                 while (i && curr) {
@@ -233,7 +428,7 @@ do_delete(dbref player, dbref program, int arg[], int argc)
                     if (curr->prev)
                         curr->prev->next = curr->next;
                     else
-                        MUCK::programRuntime(program).first = curr->next;
+                        DBFETCH(program)->sp.program.first = curr->next;
                     if (curr->next)
                         curr->next->prev = curr->prev;
                     curr = curr->next;
@@ -258,17 +453,17 @@ do_delete(dbref player, dbref program, int arg[], int argc)
 void
 do_quit(dbref player, dbref program)
 {
-    log_status("PROGRAM SAVED: %s by %s(%d)\n", unparse_object(player, program), MUCK::getName(player), player);
-    MUCK::programs().write(MUCK::programRuntime(program).first, program);
+    log_status("PROGRAM SAVED: %s by %s(%d)\n", unparse_object(player, program), NAME(player), player);
+    write_program(DBFETCH(program)->sp.program.first, program);
 
     if (tp_log_programs)
-        MUCK::programs().logText(MUCK::programRuntime(program).first, player, program);
+        log_program_text(DBFETCH(program)->sp.program.first, player, program);
 
-    free_prog_text(MUCK::programRuntime(program).first);
-    MUCK::programRuntime(program).first = NULL;
-    MUCK::clearFlags(program, INTERNAL);
-    MUCK::clearFlags(player, INTERACTIVE);
-    MUCK::playerSession(player).currProg = NOTHING;
+    free_prog_text(DBFETCH(program)->sp.program.first);
+    DBFETCH(program)->sp.program.first = NULL;
+    FLAGS(program) &= ~INTERNAL;
+    FLAGS(player) &= ~INTERACTIVE;
+    DBFETCH(player)->sp.player.curr_prog = NOTHING;
     DBDIRTY(player);
     DBDIRTY(program);
 }
@@ -278,11 +473,11 @@ void
 do_cancel(dbref player, dbref program)
 {
     uncompile_program(program);
-    free_prog_text(MUCK::programRuntime(program).first);
-    MUCK::programRuntime(program).first = NULL;
-    MUCK::clearFlags(program, INTERNAL);
-    MUCK::clearFlags(player, INTERACTIVE);
-    MUCK::playerSession(player).currProg = NOTHING;
+    free_prog_text(DBFETCH(program)->sp.program.first);
+    DBFETCH(program)->sp.program.first = NULL;
+    FLAGS(program) &= ~INTERNAL;
+    FLAGS(player) &= ~INTERACTIVE;
+    DBFETCH(player)->sp.player.curr_prog = NOTHING;
     DBDIRTY(player);
 
 }
@@ -319,7 +514,7 @@ match_and_list(int descr, dbref player, const char *name, char *linespec, int ed
         return;
     }
     if (!controls(player, thing) && !Viewable(thing)
-        && !(MUCK::getPowers(player) & POW_SEE_ALL)) {
+        && !(POWERS(player) & POW_SEE_ALL)) {
         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
         return;
     }
@@ -335,9 +530,9 @@ match_and_list(int descr, dbref player, const char *name, char *linespec, int ed
     }
     tempFlags = FLAGS(player);
     if (haveNumbers == -1)      /* no numbers no matter what */
-        MUCK::clearFlags(player, INTERNAL);
+        FLAGS(player) &= ~INTERNAL;
     if (haveNumbers == 1)       /* force number displaying */
-        MUCK::addFlags(player, INTERNAL);
+        FLAGS(player) |= INTERNAL;
 
     if (!*linespec) {
         range[0] = 1;
@@ -370,13 +565,13 @@ match_and_list(int descr, dbref player, const char *name, char *linespec, int ed
                 range[1] = -1;
         }
     }
-    tmpline = MUCK::programRuntime(thing).first;
-    MUCK::programRuntime(thing).first = MUCK::programs().read(thing);
+    tmpline = DBFETCH(thing)->sp.program.first;
+    DBSTORE(thing, sp.program.first, read_program(thing));
     do_list(player, thing, range, argc, commentit);
-    free_prog_text(MUCK::programRuntime(thing).first);
-    MUCK::programRuntime(thing).first = tmpline;
+    free_prog_text(DBFETCH(thing)->sp.program.first);
+    DBSTORE(thing, sp.program.first, tmpline);
     if (haveNumbers)
-        MUCK::setFlags(player, tempFlags);
+        FLAGS(player) = tempFlags;
     return;
 }
 
@@ -399,7 +594,7 @@ do_list(dbref player, dbref program, int oarg[], int argc, int commentit)
         arg[0] = arg[1] = 0;
     switch (argc) {
         case 0:
-            arg[0] = MUCK::programRuntime(program).currLine;
+            arg[0] = DBFETCH(program)->sp.program.curr_line;
         case 1:
             arg[1] = arg[0];
         case 2:
@@ -412,7 +607,7 @@ do_list(dbref player, dbref program, int oarg[], int argc, int commentit)
                 return;
             }
             i = arg[0] - 1;
-            for (curr = MUCK::programRuntime(program).first; i && curr; i--)
+            for (curr = DBFETCH(program)->sp.program.first; i && curr; i--)
                 curr = curr->next;
             if (curr) {
                 i = arg[1] - arg[0] + 1;
@@ -462,7 +657,7 @@ val_and_head(dbref player, int arg[], int argc)
         return;
     }
     program = arg[0];
-    if ((program < 0) || (program >= MUCK::database().top())
+    if ((program < 0) || (program >= db_top)
         || (Typeof(program) != TYPE_PROGRAM)) {
         anotify_nolisten(player, CINFO "That isn't a program.", 1);
         return;
@@ -477,7 +672,7 @@ val_and_head(dbref player, int arg[], int argc)
 void
 do_list_header(dbref player, dbref program)
 {
-    struct line *curr = MUCK::programs().read(program);
+    struct line *curr = read_program(program);
 
     while (curr && (((curr->this_line)[0] == '(') || (((curr->this_line)[0] == '/')
                                                       && ((curr->this_line)[1] == '*')))) {
@@ -499,7 +694,7 @@ list_publics(int descr, dbref player, int arg[], int argc)
         anotify_nolisten(player, CINFO "I don't understand which program you want to list PUBLIC functions for.", 1);
         return;
     }
-    program = (argc == 0) ? MUCK::playerSession(player).currProg : arg[0];
+    program = (argc == 0) ? DBFETCH(player)->sp.player.curr_prog : arg[0];
     if (Typeof(program) != TYPE_PROGRAM) {
         anotify_nolisten(player, CINFO "That isn't a program.", 1);
         return;
@@ -508,19 +703,19 @@ list_publics(int descr, dbref player, int arg[], int argc)
         anotify_nolisten(player, CFAIL "That's not a public program.", 1);
         return;
     }
-    if (!(MUCK::programRuntime(program).code)) {
-        if (program == MUCK::playerSession(player).currProg) {
-            do_compile(descr, MUCK::getOwner(program), program, 0);
+    if (!(DBFETCH(program)->sp.program.code)) {
+        if (program == DBFETCH(player)->sp.player.curr_prog) {
+            do_compile(descr, OWNER(program), program, 0);
         } else {
             struct line *tmpline;
 
-            tmpline = MUCK::programRuntime(program).first;
-            MUCK::programRuntime(program).first = (struct line *) MUCK::programs().read(program);
-            do_compile(descr, MUCK::getOwner(program), program, 0);
-            free_prog_text(MUCK::programRuntime(program).first);
-            MUCK::programRuntime(program).first = tmpline;
+            tmpline = DBFETCH(program)->sp.program.first;
+            DBFETCH(program)->sp.program.first = (struct line *) read_program(program);
+            do_compile(descr, OWNER(program), program, 0);
+            free_prog_text(DBFETCH(program)->sp.program.first);
+            DBSTORE(program, sp.program.first, tmpline);
         }
-        if (!(MUCK::programRuntime(program).code)) {
+        if (!(DBFETCH(program)->sp.program.code)) {
             anotify_nolisten(player, CFAIL "Program not compilable.", 1);
             return;
         }
@@ -534,7 +729,7 @@ do_list_publics(dbref player, dbref program)
     struct publics *ptr;
 
     anotify_nolisten(player, CINFO "PUBLIC functions:", 1);
-    for (ptr = MUCK::programRuntime(program).pubs; ptr; ptr = ptr->next)
+    for (ptr = DBFETCH(program)->sp.program.pubs; ptr; ptr = ptr->next)
         notify(player, ptr->subname);
 }
 
@@ -544,20 +739,20 @@ toggle_numbers(dbref player, int arg[], int argc)
     if (argc) {
         switch (arg[0]) {
             case 0:
-                MUCK::clearFlags(player, INTERNAL);
+                FLAGS(player) &= ~INTERNAL;
                 anotify_nolisten(player, CINFO "Line numbers off.", 1);
                 break;
 
             default:
-                MUCK::addFlags(player, INTERNAL);
+                FLAGS(player) |= INTERNAL;
                 anotify_nolisten(player, CINFO "Line numbers on.", 1);
                 break;
         }
     } else if (FLAGS(player) & INTERNAL) {
-        MUCK::clearFlags(player, INTERNAL);
+        FLAGS(player) &= ~INTERNAL;
         anotify_nolisten(player, CINFO "Line numbers off.", 1);
     } else {
-        MUCK::addFlags(player, INTERNAL);
+        FLAGS(player) |= INTERNAL;
         anotify_nolisten(player, CINFO "Line numbers on.", 1);
     }
 }
@@ -573,50 +768,50 @@ insert(dbref player, const char *line)
     struct line *curr;
     struct line *new_line;
 
-    program = MUCK::playerSession(player).currProg;
+    program = DBFETCH(player)->sp.player.curr_prog;
     if (!string_compare(line, EXIT_INSERT)) {
-        MUCK::playerSession(player).insertMode = 0; /* turn off insert mode */
+        DBSTORE(player, sp.player.insert_mode, 0); /* turn off insert mode */
 #ifndef NO_EXITMSG
         anotify_nolisten(player, CSUCC "Exiting insert mode.", 1);
 #endif
         return;
     }
-    i = MUCK::programRuntime(program).currLine - 1;
-    for (curr = MUCK::programRuntime(program).first; curr && i && i + 1; i--)
+    i = DBFETCH(program)->sp.program.curr_line - 1;
+    for (curr = DBFETCH(program)->sp.program.first; curr && i && i + 1; i--)
         curr = curr->next;
-    new_line = MUCK::programs().newLine();  /* initialize line */
+    new_line = get_new_line();  /* initialize line */
     if (!*line) {
         new_line->this_line = alloc_string(" ");
     } else {
         new_line->this_line = alloc_string(line);
     }
-    if (!MUCK::programRuntime(program).first) { /* nothing --- insert in front */
-        MUCK::programRuntime(program).first = new_line;
-        MUCK::programRuntime(program).currLine = 2; /* insert at the end */
+    if (!DBFETCH(program)->sp.program.first) { /* nothing --- insert in front */
+        DBFETCH(program)->sp.program.first = new_line;
+        DBFETCH(program)->sp.program.curr_line = 2; /* insert at the end */
         /* DBDIRTY(program); */
         return;
     }
     if (!curr) {                /* insert at the end */
         i = 1;
-        for (curr = MUCK::programRuntime(program).first; curr->next; curr = curr->next)
+        for (curr = DBFETCH(program)->sp.program.first; curr->next; curr = curr->next)
             i++;                /* count lines */
-        MUCK::programRuntime(program).currLine = i + 2;
+        DBFETCH(program)->sp.program.curr_line = i + 2;
         new_line->prev = curr;
         curr->next = new_line;
         /* DBDIRTY(program); */
         return;
     }
-    if (!MUCK::programRuntime(program).currLine) { /* insert at the
+    if (!DBFETCH(program)->sp.program.curr_line) { /* insert at the
                                                     * beginning */
-        MUCK::programRuntime(program).currLine = 1; /* insert after this new
+        DBFETCH(program)->sp.program.curr_line = 1; /* insert after this new
                                                      * line */
-        new_line->next = MUCK::programRuntime(program).first;
-        MUCK::programRuntime(program).first = new_line;
+        new_line->next = DBFETCH(program)->sp.program.first;
+        DBFETCH(program)->sp.program.first = new_line;
         /* DBDIRTY(program); */
         return;
     }
     /* inserting in the middle */
-    MUCK::programRuntime(program).currLine++;
+    DBFETCH(program)->sp.program.curr_line++;
     new_line->prev = curr;
     new_line->next = curr->next;
     if (new_line->next)

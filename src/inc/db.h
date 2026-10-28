@@ -7,9 +7,6 @@
 #include <stdio.h>
 #include <math.h>
 #include <string>
-
-#include "ObjectType.h"
-
 #ifndef WIN_VC
 # include <time.h>
 #include <sys/time.h>
@@ -107,16 +104,6 @@ extern char match_args[BUFFER_LEN];
 extern char match_cmdname[BUFFER_LEN];
 
 typedef int dbref;		/* offset into db */
-
-/* Type access, declared here because the Typeof macros below expand to
- * it and nearly every file reaches it through db.h. Defined in
- * ObjectAccess.cpp; the full accessor set lives in ObjectAccess.h. */
-namespace MUCK {
-    ObjectType typeOf(dbref ref);
-    ObjectType rawTypeOf(dbref ref);
-    int getFlags(dbref ref);
-    void setFlags(dbref ref, int v);
-}
 #include <cstdint>
 typedef int64_t MUFINT;	/* the MUF integer type: 64-bit as of 2026 */
 #ifndef __cplusplus
@@ -124,7 +111,7 @@ typedef char bool;      /* for eventual C++ convert */
 #endif
 
 #define TIME_INFINITE ((sizeof(time_t) == 4)? 0xefffffff : 0xefffffffffffffff)
-#define valid_obj(a) (MUCK::database().valid(a))
+#define valid_obj(a) (a > -1 && a < db_top)
 #define DB_READLOCK(x)
 #define DB_WRITELOCK(x)
 #define DB_RELEASE(x)
@@ -136,17 +123,17 @@ typedef char bool;      /* for eventual C++ convert */
 #  ifdef DBDEBUG
 /* dbcheck for database debugging, found in db.c. */
 extern short dbcheck(const char *file, int line, dbref item);
-#    define DBFETCH(x)  (MUCK::database().object(x) + dbcheck(__FILE__, __LINE__, x))
+#    define DBFETCH(x)  (db + (x) + dbcheck(__FILE__, __LINE__, x))
 #  else
-#    define DBFETCH(x)  (MUCK::database().object(x))
+#    define DBFETCH(x)  (db + (x))
 #  endif
 #  ifdef DEBUGDBDIRTY
-#    define DBDIRTY(x)  {if (!(MUCK::database().object(x)->flags & OBJECT_CHANGED))  \
+#    define DBDIRTY(x)  {if (!(db[x].flags & OBJECT_CHANGED))  \
 			   log2file("dirty.out", "#%d: %s %d\n", (int)x, \
 			   __FILE__, __LINE__); \
-		       MUCK::database().object(x)->flags |= OBJECT_CHANGED;}
+		       db[x].flags |= OBJECT_CHANGED;}
 #  else
-#    define DBDIRTY(x)  {MUCK::database().object(x)->flags |= OBJECT_CHANGED;}
+#    define DBDIRTY(x)  {db[x].flags |= OBJECT_CHANGED;}
 #  endif
 #endif
 
@@ -164,22 +151,11 @@ extern short dbcheck(const char *file, int line, dbref item);
 #define POWERSDB(x) (DBFETCH(x)->powers)
 #define POWER2(x)   (DBFETCH(OWNER(x))->power2)
 #define POWER2DB(x) (DBFETCH(x)->power2)
-/* The raw form: same as Typeof but without the HOME special case. */
-#define TYPEOF(i)   (MUCK::rawTypeOf(i))
+#define TYPEOF(i)   (DBFETCH((i))->flags & TYPE_MASK)
 #define LOCATION(x) (DBFETCH((x))->location)
-
-/* Containment lives in owning vectors on MUCK::DbObject now. These
- * read facades keep the classic walk idiom compiling: CONTENTS and
- * EXITS yield the list head, NEXTOBJ the following sibling. They are
- * rvalues; writers go through MUCK::attachContent and friends. */
-namespace MUCK {
-    dbref firstContentRef(dbref loc);
-    dbref firstExitRef(dbref loc);
-    dbref nextSiblingRef(dbref obj);
-}
-#define CONTENTS(x) (MUCK::firstContentRef(x))
-#define EXITS(x)    (MUCK::firstExitRef(x))
-#define NEXTOBJ(x)  (MUCK::nextSiblingRef(x))
+#define CONTENTS(x) (DBFETCH((x))->contents)
+#define EXITS(x)    (DBFETCH((x))->exits)
+#define NEXTOBJ(x)  (DBFETCH((x))->next)
 
 /* defines for possible data access mods. */
 #define GETMESG(x,y)   (get_property_class(x, y))
@@ -260,24 +236,39 @@ namespace MUCK {
 #define DB_HASHVERU     0x0040
 #define DB_RESEVED7     0x0080 /* Reserved for future use with hashing */
 
-#include "PasswordHash.h"
+#define HVER_MASK       0x00F0
+#define HVER_SHIFT      4
+#define HVER_NONE       0x0 /* Tagging Disabled (Equivalent to old DB_MD5PASSES behavior, used when DB_NEWPASSES is ment to be off) */
+#define HVER_RAWMD5     0x0 /* Tagging Disabled (Equivalent to old DB_MD5PASSES behavior, used when DB_NEWPASSES is ment to be on) */
+#define HVER_SHA1SALT   0x1 /* Tagging Enabled, SHA-1+Salt is default algo, can read Plain, MD5, MD5+Salt, SHA1, SHA1+Salt */
+#define HVER_RESERVED2  0x2 /* Reserved for future hashing algo upgrades */
+#define HVER_RESERVED3  0x3 /* Reserved for future hashing algo upgrades */
+#define HVER_RESERVED4  0x4 /* Reserved for future hashing algo upgrades */
+#define HVER_RESERVED5  0x5 /* Reserved for future hashing algo upgrades */
+#define HVER_RESERVED6  0x6 /* Reserved for future hashing algo upgrades */
+#define HVER_RESERVED7  0x7 /* Reserved for future hashing algo upgrades */
+                           /* If more slots are needed, consider making a new database format update with a global DB parameter */
+                           /* Alternately, there's a flag reserved for future expansion if need be which will double the capacity */
+#define HVER_CURRENT   HVER_SHA1SALT /* Our current version */
 
-/* Object type is MUCK::ObjectType (ObjectType.h), not a flag bit.
- * These names remain as spellings of the enumerators so the hundreds
- * of "Typeof(x) == TYPE_ROOM" comparisons keep reading naturally; the
- * enum being scoped means anything that tried to do ARITHMETIC on a
- * type is now a compile error instead of a silent integer. */
-#define TYPE_ROOM	    MUCK::ObjectType::Room
-#define TYPE_THING	    MUCK::ObjectType::Thing
-#define TYPE_EXIT	    MUCK::ObjectType::Exit
-#define TYPE_PLAYER	    MUCK::ObjectType::Player
-#define TYPE_PROGRAM	    MUCK::ObjectType::Program
-#define TYPE_UNSUPPORTED    MUCK::ObjectType::Unsupported
-#define TYPE_GARBAGE	    MUCK::ObjectType::Garbage
-#define NOTYPE		    MUCK::ObjectType::NoType
-/* stays a plain integer: it is a bitmask over the flags word, and the
- * type bits are still mirrored there */
-#define TYPE_MASK	    0x7
+#define HTYPE_DISABLED  -2 /* Reserved for diabled passwords (disallow login with any password) */
+#define HTYPE_INVALID   -1 /* Returned for errors */
+#define HTYPE_NONE      0  /* Reserved for blank passwords (allow logins with any password) */
+#define HTYPE_PLAIN     1  /* Reserved for plaintext passwords */
+#define HTYPE_MD5       2  /* Reserved for MD5 hashed passwords */
+#define HTYPE_MD5SALT   3  /* Reserved for Salted MD5 hashed passwords */
+#define HTYPE_SHA1      4  /* Reserved for SHA1 hashed passwords */
+#define HTYPE_SHA1SALT  5  /* Reserved for Salted SHA1 hashed passwords */
+#define HTYPE_CURRENT   HTYPE_SHA1SALT /* Our current best */
+
+#define TYPE_ROOM	    0x0
+#define TYPE_THING	    0x1
+#define TYPE_EXIT	    0x2
+#define TYPE_PLAYER	    0x3
+#define TYPE_PROGRAM	    0x4
+#define TYPE_GARBAGE	    0x6
+#define NOTYPE		    0x7	/* no particular type */
+#define TYPE_MASK	    0x7	/* room for expansion */
 #define ANTILOCK	    0x8	/* negates key (*OBSOLETE*) */
 #define W3		   0x10	/* gets automatic control */
 #define LINK_OK		   0x20	/* anybody can link to this room */
@@ -420,9 +411,7 @@ typedef int object_flag_type;
 typedef int object_power_type;
 
 #define DoNull(s) ((s) ? (s) : "")
-/* Type reads go through the accessor: it knows HOME reports as a room
- * and that a bad ref is Invalid rather than an out-of-bounds read. */
-#define Typeof(x) (MUCK::typeOf(x))
+#define Typeof(x) ((x == HOME) ? TYPE_ROOM : (FLAGS(x) & TYPE_MASK))
 
 #define MAN	(1)
 #define Man(x)  ((x) == MAN)
@@ -453,10 +442,7 @@ extern int RawMWLevel(dbref thing, const char *file, int line);
 
 #define QLevel(x)	( (FLAGS(x) & QUELL) ? 0 : MLevel(x) )
 
-/* Goes through the setter: a raw flags-word write records no journal
- * entry, so the level change would be lost at restart. */
-#define SetMLevel(x,y)	MUCK::setFlags((x),                             \
-                          ( MUCK::getFlags(x) & ~(W1|W2|W3|W4) ) |      \
+#define SetMLevel(x,y)	( FLAGS(x) =  ( FLAGS(x) & ~(W1|W2|W3|W4) ) | \
 					  ( ((y) &  8) ? W4 : 0 ) | \
 					  ( ((y) &  4) ? W3 : 0 ) | \
 					  ( ((y) &  2) ? W2 : 0 ) | \
@@ -512,7 +498,7 @@ extern int RawMWLevel(dbref thing, const char *file, int line);
 #define Protect(x)  (FLAG2(x) & F2PROTECT)
 #define Hidden(x)   (FLAG2(x) & F2HIDDEN)
 
-#define OkObj(x)  (MUCK::database().valid(x))
+#define OkObj(x)  ( ((x) >= 0) && ((x) < db_top) )
 #define OkRoom(x) ( OkObj(x) && (Typeof(x)==TYPE_ROOM) )
 #define EnvRoom   ( OkRoom(GLOBAL_ENVIRONMENT) ? GLOBAL_ENVIRONMENT : 0 )
 #define RootRoom  ( (const) (OkRoom(tp_player_start) ? tp_player_start : EnvRoom) )
@@ -531,14 +517,12 @@ typedef char boolexp_type;
 #define BOOLEXP_CONST 3
 #define BOOLEXP_PROP 4
 
-namespace MUCK { class PropNode; }
-
 struct boolexp {
     boolexp_type type;
     struct boolexp *sub1;
     struct boolexp *sub2;
     dbref   thing;
-    MUCK::PropNode *prop_check;
+    struct plist *prop_check;
 };
 
 #define TRUE_BOOLEXP ((struct boolexp *) 0)
@@ -1037,8 +1021,49 @@ struct publics {
 
 /* union of type-specific fields */
 
-/* The old union specific is gone: type-specific data is owned by the
- * type modules (Modules.h). */
+union specific {      /* I've been railroaded! */
+    struct {			/* ROOM-specific fields */
+	dbref   dropto;
+    }       room;
+    struct {			/* THING-specific fields */
+	dbref   home;
+	int     value;
+    }       thing;
+    struct {			/* EXIT-specific fields */
+	int     ndest;
+	dbref  *dest;
+    }       exit;
+    struct {			/* PLAYER-specific fields */
+	dbref   home;
+	int     pennies;
+	dbref   curr_prog;	/* program I'm currently editing */
+	short   insert_mode;	/* in insert mode? */
+	short   block;
+	const char *password;
+        int*    descrs;
+        short   descr_count;
+        int     last_descr;
+#ifdef IGNORE_SUPPORT
+        dbref	ignore[MAX_IGNORES];
+        time_t  ignoretime;
+#endif
+    }       player;
+    struct {			      /* PROGRAM-specific fields */
+	short   curr_line;	      /* current-line */
+	unsigned short instances;     /* #instances of this prog running */
+	int     siz;		      /* size of code */
+	struct inst *code;	      /* byte-compiled code */
+	struct inst *start;	      /* place to start executing */
+	struct line *first;	      /* first line */
+	struct publics *pubs;	      /* public subroutine addresses */
+      struct timeval proftime;      /* Profiling time spent in this program */
+      time_t profstart;             /* Time when profiling started for this prog */
+      unsigned int profuses;        /* # calls to this program while profiling */
+      struct funcprof *fprofile;
+      struct inst *staticvars;
+      int staticvarcnt;
+    }       program;
+};
 
 /* timestamps record */
 
@@ -1058,20 +1083,34 @@ struct object {
     const char *name;
     dbref   location;		/* pointer to container */
     dbref   owner;
-    /* contents/exits/next chains are gone: containment is the owning
-     * vectors on MUCK::DbObject (contentsVec/exitsVec). */
-    /* the property root lives on the Properties module now; reach it
-     * with MUCK::propRoot(ref). docs/PROPERTIES.txt */
+    dbref   contents;
+    dbref   exits;
+    dbref   next;		/* pointer to next in contents/exits chain */
+    struct plist *properties;
 
+#ifdef DISKBASE
+    int	    propsfpos;
+    time_t  propstime;
+    dbref   nextold;
+    dbref   prevold;
+    short   propsmode;
+    short   spacer;
+#endif
 
     object_flag_type flags, flag2, flag3, flag4;
     object_power_type powers, power2;
     struct timestamps ts;
-    /* type-specific data lives on the type modules now: Room dropto,
-     * Thing home/value, Exit destinations, Player home/pennies/
-     * password, MufProgram runtime and source. See Modules.h. */
+    union specific sp;
     unsigned int     mpi_prof_use;
     struct timeval   mpi_proftime;
+};
+
+struct macrotable {
+    char   *name;
+    char   *definition;
+    dbref   implementor;
+    struct macrotable *left;
+    struct macrotable *right;
 };
 
 /* Possible data types that may be stored in a hash table */
@@ -1097,58 +1136,84 @@ typedef hash_entry *hash_tab;
 #define COMP_HASH_SIZE     (256)    /* Table for compiler keywords */
 #define DEFHASHSIZE        (256)    /* Table for compiler $defines */
 
-#include "Database.h"
-#include "ProgramStore.h"
+extern struct object *db;
+extern struct macrotable *macrotop;
+extern dbref db_top;
 
+#ifndef MALLOC_PROFILING
 extern char *alloc_string(const char *);
+#endif
 
+extern struct line * read_program(dbref);
+extern struct line * get_new_line(void);
 extern int fetch_propvals(dbref obj, const char *dir);
 
+extern dbref getparent(dbref obj);
 
 extern void free_prog_text(struct line * l);
 
+extern void write_program(struct line * first, dbref i);
 
+extern void log_program_text(struct line * first, dbref player, dbref i);
 
+#ifndef MALLOC_PROFILING
 /* alloc_prog_string is now a macro, works exactly the way it used to. */
 //extern struct shared_string *alloc_prog_string(const char *);
 #define alloc_prog_string(x) alloc_prog_string_exact(x, -2, -2)
 extern struct shared_string *alloc_prog_string_exact(const char *, int length, int wclength);
+#endif
 
+extern dbref new_object(dbref player);	/* return a new object */
+extern dbref new_program(dbref player, const char *name); /* return a new MUF program type. */
 extern dbref getref(FILE *);	/* Read a database reference from a file. */
 extern void putref(FILE *, dbref);	/* Write one ref to the file */
 extern struct boolexp *getboolexp(FILE *);	/* get a boolexp */
 extern void putboolexp(FILE *, struct boolexp *);	/* put a boolexp */
 extern int db_write_object(FILE * f, struct object *o);	/* write one object to file */
+extern dbref db_write(FILE * f);/* write db to file, return # of objects */
+extern dbref db_read(FILE * f);	/* read db from file, return # of objects */
 
  /* Warning: destroys existing db contents! */
+extern void db_free(void);
 extern dbref parse_dbref(const char *);	/* parse a dbref */
 extern int ifloat(const char *s);
 extern int number(const char *s);
 extern void putproperties(FILE *f, int obj);
 extern void getproperties(FILE *f, int obj);
 extern void free_line(struct line *l);
+extern void db_free_object(dbref i);
+extern void db_clear_object(dbref player, dbref i);
+extern void macrodump(struct macrotable *node, FILE *f);
+extern void macroload(FILE *f);
 extern int WLevel(dbref player);
 extern int db_load_format;
+extern bool db_hash_passwords;
+extern int db_hash_ver;
 
 extern char lflag_name[32][32];
 extern int lflag_mlev[32];
 
-/* Read-only walk over a containment list, starting from CONTENTS(x)
- * or EXITS(x). Do NOT remove members inside the loop; snapshot the
- * vector instead (see send_contents). The old PUSH macro is gone:
- * arrivals go through MUCK::attachContent / MUCK::attachExit. */
 #define DOLIST(var, first) \
-  for((var) = (first); (var) != NOTHING; (var) = MUCK::nextSiblingRef(var))
+  for((var) = (first); (var) != NOTHING; (var) = DBFETCH(var)->next)
+#define PUSH(thing, locative) \
+    {DBSTORE((thing), next, (locative)); (locative) = (thing);}
 #define getloc(thing) (DBFETCH(thing)->location)
 
+extern char *db_hash_valtotag(int type);
+extern int db_hash_tagtoval(const char *tag);
+extern int db_hash_password(int type, char *out, const char *password, const char *saltin);
+extern int db_hash_split(const char *hashin, int *tagout, char *hashout, char *saltout);
+extern int db_hash_compare(const char *hash, const char *password);
+extern int db_hash_oldconvert(char *out, const char *hash);
 
 
+extern int db_write_threaded(void);
 
 /*
   Usage guidelines:
 
   To obtain an object pointer use DBFETCH(i).  Pointers returned by DBFETCH
-  may become invalid after a call to MUCK::Database::newObject().
+  may become invalid after a call to new_object().
 
   To update an object, use DBSTORE(i, f, v), where i is the object number,
   f is the field (after ->), and v is the new value.

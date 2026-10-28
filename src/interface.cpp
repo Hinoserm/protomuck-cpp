@@ -1,8 +1,5 @@
 /* ProtoMUCK's main interface.c */
 /*  int main() is in this file  */
-#include <algorithm>
-#include <vector>
-
 #include "copyright.h"
 #include "config.h"
 
@@ -18,10 +15,6 @@
 #include "mpi.h"
 #include "reg.h"
 #include "externs.h"
-#include "Modules.h"
-#include "ObjectStore.h"
-#include "ObjectAccess.h"
-#include "MacroTable.h"
 #include "mufevent.h"
 #include "strutils.h"
 #include "interp.h"
@@ -158,6 +151,9 @@ int make_socket6(int);
 
 #ifndef BOOLEXP_DEBUGGING
 
+#ifdef DISKBASE
+extern FILE *input_file;
+#endif
 #ifdef DELTADUMPS
 extern FILE *delta_infile;
 extern FILE *delta_outfile;
@@ -319,14 +315,6 @@ show_program_usage(char *prog)
 #endif
     fprintf(stderr, "       -gamedir PATH     changes directory to PATH before starting up.\n");
     fprintf(stderr, "       -convert          load db, save in current format, and quit.\n");
-    fprintf(stderr, "       --db-exclude-type NAME\n");
-    fprintf(stderr, "                         boot without the NAME type module; its objects\n");
-    fprintf(stderr, "                         load as UNSUPPORTED placeholders, data kept.\n");
-    fprintf(stderr, "       --db-exclude-module NAME\n");
-    fprintf(stderr, "                         boot without the NAME feature module (e.g.\n");
-    fprintf(stderr, "                         properties); its data rides dormant, kept.\n");
-    fprintf(stderr, "       --force-load      boot even when the object store fails its\n");
-    fprintf(stderr, "                         integrity checks; damaged data is skipped.\n");
     fprintf(stderr, "       -pwconvert        convert passwords to hashed format on next save.\n");
     fprintf(stderr, "       -decompress       when saving db, save in uncompressed format.\n");
     fprintf(stderr, "       -nosanity         don't do db sanity checks at startup time.\n");
@@ -356,6 +344,7 @@ pem_passwd_cb(char *buf, int size, int rwflag, void *userdata)
 #endif
 
 //#ifdef MALLOC_PROFILING
+extern void free_old_macros(void);
 extern void purge_all_free_frames(void);
 extern void purge_mfns(void);
 extern void cleanup_game(void);
@@ -369,11 +358,6 @@ extern void free_compress_dictionary(void);
 int
 main(int argc, char **argv)
 {
-    /* Stamp the thread that owns the live database before anything
-     * can fault: panic() runs on whichever thread died and needs to
-     * know whether it is the one still mutating objects. */
-    MUCK::store().markGameThread();
-
     FILE *ffd;
     char *infile_name = NULL;
     char *outfile_name = NULL;
@@ -403,6 +387,10 @@ main(int argc, char **argv)
     }
 #endif
 
+#if defined(MALLOC_PROFILING) && defined(HAVE_PTHREAD_H)
+    /* initializing the mutex lock for CrT */
+    CrT_pthread_init();
+#endif
 
 #if defined(SQL_SUPPORT)
 
@@ -432,38 +420,8 @@ main(int argc, char **argv)
 #endif /* USE_PS */
     for (i = 1; i < argc; i++) {
         if (!nomore_options && argv[i][0] == '-') {
-            if (!strcmp(argv[i], "--verify-entries")) {
+            if (!strcmp(argv[i], "-convert")) {
                 db_conversion_flag = 1;
-                extern bool store_verify_flag;
-                store_verify_flag = 1;
-            } else if (!strcmp(argv[i], "-storegc")) {
-                db_conversion_flag = 1;
-                extern bool store_gc_flag;
-                store_gc_flag = 1;
-            } else if (!strcmp(argv[i], "--force-load")) {
-                MUCK::ObjectStore::setForceLoad(true);
-            } else if (!strcmp(argv[i], "-convert")) {
-                db_conversion_flag = 1;
-            } else if (!strcmp(argv[i], "--db-exclude-type")) {
-                if (i + 1 >= argc) {
-                    show_program_usage(*argv);
-                }
-                std::string exerr;
-
-                if (!MUCK::ObjectStore::excludeType(argv[++i], &exerr)) {
-                    fprintf(stderr, "--db-exclude-type: %s\n", exerr.c_str());
-                    exit(1);
-                }
-            } else if (!strcmp(argv[i], "--db-exclude-module")) {
-                if (i + 1 >= argc) {
-                    show_program_usage(*argv);
-                }
-                std::string exerr;
-
-                if (!MUCK::ObjectStore::excludeModule(argv[++i], &exerr)) {
-                    fprintf(stderr, "--db-exclude-module: %s\n", exerr.c_str());
-                    exit(1);
-                }
             } else if (!strcmp(argv[i], "-decompress")) {
                 db_decompression_flag = 1;
             } else if (!strcmp(argv[i], "-nosanity")) {
@@ -564,6 +522,12 @@ main(int argc, char **argv)
     if (!infile_name || !outfile_name) {
         show_program_usage(*argv);
     }
+#ifdef DISKBASE
+    if (!strcmp(infile_name, outfile_name)) {
+        fprintf(stderr, "Output file must be different from the input file.");
+        exit(3);
+    }
+#endif
 
 
     if (!sanity_interactive) {
@@ -636,11 +600,11 @@ main(int argc, char **argv)
 #ifdef DETACH
 /*    fprintf(stdout,"Console messages to '%s', Error messages to '%s'.", LOG_FILE, LOG_ERR_FILE); */
         if (!sanity_interactive && !db_conversion_flag) {
-            /* Detach from the TTY, log whatever output we have. Check
-             * freopen: if stderr cannot be reopened onto the error
-             * log, every later fprintf(stderr, "STORE: ...") vanishes
-             * and the post-deploy protomuck.err check passes clean
-             * while the store may be failing. Report through the
+            /* Detach from the TTY, log whatever output we have... */
+            /* Check freopen: if stderr cannot be reopened onto the error
+             * log, every later fprintf(stderr, ...) vanishes and the
+             * post-deploy check of protomuck.err passes clean while
+             * the server may be failing. Report through the
              * independent log_status path and refuse to continue
              * blind. */
             if (!freopen(LOG_ERR_FILE, "a", stderr)) {
@@ -827,23 +791,7 @@ main(int argc, char **argv)
     if (sanity_interactive) {
         san_main();
     } else {
-        extern bool store_gc_flag;
-        extern bool store_verify_flag;
-
-        /* -storegc and --verify-entries are maintenance/audit passes,
-         * not conversions: the conversion-mode exit save would rewrite
-         * every base and unlink every history sidecar, destroying the
-         * very survivors gcStore just computed and preserved, and
-         * writing to a store the operator was told was only being
-         * audited. gcStore writes its own manifest; verify writes
-         * nothing, which is the point. */
-        if (!store_gc_flag && !store_verify_flag)
-            dump_database(0);
-        /* The dump thread must finish before we exit or exec: this is
-         * the one place a pause remains, and it is where a pause has
-         * always been expected. docs/DATABASE.txt 7.1. */
-        MUCK::store().drain();
-        MUCK::store().stopDumpThread();
+        dump_database(0);
         tune_save_parmsfile();
 
 #ifdef SPAWN_HOST_RESOLVER
@@ -857,19 +805,56 @@ main(int argc, char **argv)
         WSACleanup();
 #endif
 
+#ifdef MALLOC_PROFILING
+        free_old_macros();
+        purge_all_free_frames();
+        purge_timenode_free_pool();
+        purge_for_pool();
+        purge_for_pool();       /* 2nd time is needed to completely purge */
+        purge_try_pool();       /* 3rd time is needed to... oh... wait... */
+        purge_try_pool();       /* 2nd time is needed to completely purge */
+        purge_mfns();
+        db_free();
+        cleanup_game();
+        tune_freeparms();
+        clear_color_hash();
+#ifdef COMPRESS
+        free_compress_dictionary();
+#endif /* COMPRESS */
+#endif /* MALLOC_PROFILING */
 
+#ifdef DISKBASE
+        fclose(input_file);
+#endif
 #ifdef DELTADUMPS
         fclose(delta_infile);
         fclose(delta_outfile);
         (void) unlink(DELTAFILE_NAME);
 #endif
 
+#ifdef MALLOC_PROFILING
+        CrT_summarize_to_file("malloc_log", "Shutdown");
+#endif
 
         if (restart_flag) {
-            /* The restart script owns startup: store paths are baked in
-             * and listener ports come from parmfile.cfg, so the legacy
-             * portlist argument is gone. */
-            execl("restart", "restart", (char *) 0);
+            char portlist[BUFFER_LEN];
+            char numbuf[16];
+
+            portlist[0] = '\0';
+            for (i = 0; i < numsocks; i++) {
+                if ((listener_port[i] != tp_textport)
+#ifdef NEWHTTPD                 /* hinoserm */
+                    && (listener_port[i] != tp_wwwport) /* hinoserm */
+#endif /* hinoserm */
+                    && (listener_port[i] != tp_puebloport)) {
+                    sprintf(numbuf, "%d", listener_port[i]);
+                    if (*portlist) {
+                        strcat(portlist, " ");
+                    }
+                    strcat(portlist, numbuf);
+                }
+            }
+            execl("restart", "restart", portlist, (char *) 0);
         }
     }
 
@@ -1313,11 +1298,11 @@ notify_nolisten(dbref player, const char *msg, int isprivate)
             }
         }
         if (tp_zombies) {
-            if ((Typeof(player) == TYPE_THING) && (FLAGS(player) & ZOMBIE) && !(FLAGS(MUCK::getOwner(player)) & ZOMBIE)
+            if ((Typeof(player) == TYPE_THING) && (FLAGS(player) & ZOMBIE) && !(FLAGS(OWNER(player)) & ZOMBIE)
                 && !(FLAGS(player) & QUELL)) {
-                ref = MUCK::getLocation(player);
-                if (Mage(MUCK::getOwner(player)) || ref == NOTHING || Typeof(ref) != TYPE_ROOM || !(FLAGS(ref) & ZOMBIE)) {
-                    if (isprivate || MUCK::getLocation(player) != MUCK::getLocation(MUCK::getOwner(player))) {
+                ref = getloc(player);
+                if (Mage(OWNER(player)) || ref == NOTHING || Typeof(ref) != TYPE_ROOM || !(FLAGS(ref) & ZOMBIE)) {
+                    if (isprivate || getloc(player) != getloc(OWNER(player))) {
                         char pbuf[BUFFER_LEN];
                         const char *prefix;
 
@@ -1331,16 +1316,16 @@ notify_nolisten(dbref player, const char *msg, int isprivate)
                             *match_args = ch;
                         }
                         if (!prefix || !*prefix) {
-                            prefix = MUCK::getName(player);
+                            prefix = NAME(player);
                             sprintf(buf2, "%s> %.*s", prefix, (int) (BUFFER_LEN - (strlen(prefix) + 3)), buf);
                         } else {
                             sprintf(buf2, "%s %.*s", prefix, (int) (BUFFER_LEN - (strlen(prefix) + 2)), buf);
                         }
-                        darr = get_player_descrs(MUCK::getOwner(player), &dcount);
+                        darr = get_player_descrs(OWNER(player), &dcount);
 
                         for (di = 0; di < dcount; di++) {
                             d = descrdata_by_index(darr[di]);
-                            if (Html(MUCK::getOwner(player)) && d)
+                            if (Html(OWNER(player)) && d)
                                 queue_ansi(d, html_escape(buf2));
                             else if (d)
                                 queue_unhtml(d, buf2);
@@ -1404,11 +1389,11 @@ notify_html_nolisten(dbref player, const char *msg, int isprivate)
                 retval++;
         }
         if (tp_zombies) {
-            if ((Typeof(player) == TYPE_THING) && (FLAGS(player) & ZOMBIE) && !(FLAGS(MUCK::getOwner(player)) & ZOMBIE)
+            if ((Typeof(player) == TYPE_THING) && (FLAGS(player) & ZOMBIE) && !(FLAGS(OWNER(player)) & ZOMBIE)
                 && !(FLAGS(player) & QUELL)) {
-                ref = MUCK::getLocation(player);
-                if (Mage(MUCK::getOwner(player)) || ref == NOTHING || Typeof(ref) != TYPE_ROOM || !(FLAGS(ref) & ZOMBIE)) {
-                    if (isprivate || MUCK::getLocation(player) != MUCK::getLocation(MUCK::getOwner(player))) {
+                ref = getloc(player);
+                if (Mage(OWNER(player)) || ref == NOTHING || Typeof(ref) != TYPE_ROOM || !(FLAGS(ref) & ZOMBIE)) {
+                    if (isprivate || getloc(player) != getloc(OWNER(player))) {
                         char pbuf[BUFFER_LEN];
                         const char *prefix;
 
@@ -1422,12 +1407,12 @@ notify_html_nolisten(dbref player, const char *msg, int isprivate)
                             *match_args = ch;
                         }
                         if (!prefix || !*prefix) {
-                            prefix = MUCK::getName(player);
+                            prefix = NAME(player);
                             sprintf(buf2, "%s> %.*s", prefix, (int) (BUFFER_LEN - (strlen(prefix) + 3)), buf);
                         } else {
                             sprintf(buf2, "%s %.*s", prefix, (int) (BUFFER_LEN - (strlen(prefix) + 2)), buf);
                         }
-                        darr = get_player_descrs(MUCK::getOwner(player), &dcount);
+                        darr = get_player_descrs(OWNER(player), &dcount);
 
                         for (di = 0; di < dcount; di++) {
                             d = descrdata_by_index(darr[di]);
@@ -1453,7 +1438,7 @@ notify_from_echo(dbref from, dbref player, const char *msg, int isprivate)
     if (ignorance(from, player))
         return 0;
 #endif
-    return notify_listeners(dbref_first_descr(from), from, NOTHING, player, MUCK::getLocation(from), msg, isprivate);
+    return notify_listeners(dbref_first_descr(from), from, NOTHING, player, getloc(from), msg, isprivate);
 }
 
 int
@@ -1463,7 +1448,7 @@ notify_html_from_echo(dbref from, dbref player, const char *msg, int isprivate)
     if (ignorance(from, player))
         return 0;
 #endif
-    return notify_html_listeners(dbref_first_descr(from), from, NOTHING, player, MUCK::getLocation(from), msg, isprivate);
+    return notify_html_listeners(dbref_first_descr(from), from, NOTHING, player, getloc(from), msg, isprivate);
 }
 
 int
@@ -1505,7 +1490,7 @@ anotify_nolisten(descriptor_data *d, dbref player, const char *msg, int isprivat
     if (!OkObj(player))
         return 0;
 
-    if ((FLAGS(MUCK::getOwner(player)) & CHOWN_OK) && !(FLAG2(MUCK::getOwner(player)) & F2HTML)) {
+    if ((FLAGS(OWNER(player)) & CHOWN_OK) && !(FLAG2(OWNER(player)) & F2HTML)) {
         parse_ansi(d, player, buf, msg, ANSINORMAL);
     } else {
         unparse_ansi(buf, msg);
@@ -1526,7 +1511,7 @@ anotify_from_echo(dbref from, dbref player, const char *msg, int isprivate)
     if (ignorance(from, player))
         return 0;
 #endif
-    return ansi_notify_listeners(dbref_first_descr(from), from, NOTHING, player, MUCK::getLocation(from), msg, isprivate);
+    return ansi_notify_listeners(dbref_first_descr(from), from, NOTHING, player, getloc(from), msg, isprivate);
 }
 
 
@@ -2488,14 +2473,14 @@ shovechars(void)
                     cnt++;
                     /* Check idle boot */
                     if (tp_idleboot && (dr_idletime > tp_maxidle) && !TMage(d->player)
-                        && !(MUCK::getPowers(d->player) & POW_IDLE)) {
+                        && !(POWERS(d->player) & POW_IDLE)) {
                         idleboot_user(d);
                     }
                     if (FLAG2(d->player) & F2IDLE) { /* update DF_IDLE flag */
                         if (!(DR_RAW_FLAGS(d, DF_IDLE)))
                             DR_RAW_ADD_FLAGS(d, DF_IDLE);
                     }
-                    if (MUCK::playerSession(d->player).lastDescr == d->descriptor) { /* check for idling */
+                    if (DBFETCH(d->player)->sp.player.last_descr == d->descriptor) { /* check for idling */
                         int idx_idletime = get_property_value(d->player,
                                                               "/_Prefs/IdleTime")
                             * 60;
@@ -2523,7 +2508,7 @@ shovechars(void)
                         if (!idx_idletime)
                             idx_idletime = (int) tp_idletime;
                         if (dr_idletime >= d->idletime_set) {
-                            MUCK::addFlags2(d->player, F2IDLE);
+                            FLAG2(d->player) |= F2IDLE;
                             if (!(DR_RAW_FLAGS(d, DF_IDLE)))
                                 DR_RAW_ADD_FLAGS(d, DF_IDLE);
                         } else {
@@ -2851,7 +2836,7 @@ show_wizards(dbref player)
     anotify(player, CINFO "WizChatters:");
     for (d = descriptor_list; d; d = d->next)
         if (d->connected && /* (d->player >= 0) && */ Mage(d->player))
-            notify(player, MUCK::getName(d->player));
+            notify(player, NAME(d->player));
 }
 
 
@@ -2864,7 +2849,7 @@ flush_user_output(dbref player)
     int dcount;
     struct descriptor_data *d;
 
-    darr = get_player_descrs(MUCK::getOwner(player), &dcount);
+    darr = get_player_descrs(OWNER(player), &dcount);
     for (di = 0; di < dcount; di++) {
         d = descrdata_by_index(darr[di]);
         if (d && !process_output(d)) {
@@ -3750,7 +3735,7 @@ save_command(struct descriptor_data *d, const char *command, int len, int wclen)
         ((MLevel(d->player) >= tp_min_progbreak_lev) || (Wiz(d->player)))) {
         if (dequeue_prog(d->player, 2))
             anotify(d->player, CINFO "Foreground program aborted.");
-        MUCK::playerSession(d->player).block = 0;
+        DBFETCH(d->player)->sp.player.block = 0;
         if (d->player == NOTHING)
             d->block = 0;
         if (!(FLAGS(d->player) & INTERACTIVE))
@@ -4301,54 +4286,11 @@ process_input(struct descriptor_data *d)
 void
 process_commands(void)
 {
-    /* Cooperative stop for a panic raised on another thread; never
-     * returns once one is in progress. See ObjectStore::panicPark. */
-    MUCK::store().panicPark();
-
     int nprocessed;
     struct descriptor_data *d, *dnext;
     struct text_block *t;
     char buf[BUFFER_LEN];
     dbref mufprog;
-
-    /* the dump thread raised this when a dump's manifest committed;
-     * the message is posted from here because walling walks the
-     * descriptor list, which that thread must never do. Whoever ran
-     * @dump gets the real numbers: how many objects landed and how
-     * long fire-to-commit took. */
-    /* Reconcile full layers whose write failed for good: the dump
-     * thread cannot touch live objects, so it left the refs for us.
-     * Clearing baseWritten drops the object from the committed index
-     * (so no manifest claims a file that is not there) and re-dirties
-     * it, making the next dump write a real full base. */
-    if (MUCK::store().anyFailedFullLayers()) {
-        for (dbref bad : MUCK::store().takeFailedFullLayers()) {
-            if (!MUCK::database().valid(bad))
-                continue;
-            if (MUCK::DbObject *o = MUCK::database().get(bad)) {
-                o->setBaseWritten(false);
-                MUCK::journalRecord(bad, "$core/flags");
-                log_status("STORE: #%d lost its base write; it will be "
-                           "written whole at the next dump\n", bad);
-            }
-        }
-    }
-
-    if (MUCK::store().takeDumpLanded()) {
-        if (tp_dbdump_warning)
-            wall_and_flush(tp_dumpdone_mesg);
-
-        /* every requester still valid gets the notice; a dbref that
-         * stopped being a player since (recycled, frobbed) is
-         * silently skipped rather than notified as a stranger */
-        for (dbref dumper : MUCK::store().takeDumpRequesters())
-            if (MUCK::database().valid(dumper)
-                && Typeof(dumper) == TYPE_PLAYER)
-                anotify_fmt(dumper, CSUCC
-                            "Dump complete: %ld object(s) in %.1fs.",
-                            MUCK::store().lastDumpLayers(),
-                            MUCK::store().lastDumpMillis() / 1000.0);
-    }
 
     do {
         nprocessed = 0;
@@ -4379,7 +4321,7 @@ process_commands(void)
                  * sitting at a prompt must not have a web UI's
                  * background traffic answer it for them */
                 if (!t->sideband
-                    && ((d->connected && MUCK::playerSession(d->player).block && !is_interface_command(t->start))
+                    && ((d->connected && DBFETCH(d->player)->sp.player.block && !is_interface_command(t->start))
                         || (!d->connected && d->block))) {
                     char *tmp = t->start;
 
@@ -4417,7 +4359,7 @@ process_commands(void)
                             if (*full_command)
                                 full_command++;
                             strcpy(match_args, full_command);
-                            tmpfr = interp(d->descriptor, d->player, MUCK::getLocation(d->player), tp_quit_prog, (dbref) -5, FOREGROUND, STD_REGUID, 0);
+                            tmpfr = interp(d->descriptor, d->player, DBFETCH(d->player)->location, tp_quit_prog, (dbref) -5, FOREGROUND, STD_REGUID, 0);
                             if (tmpfr) {
                                 interp_loop(d->player, tp_quit_prog, tmpfr, 0);
                             }
@@ -4506,7 +4448,7 @@ do_command(struct descriptor_data *d, struct text_block *t)
                 if ((FLAGS(d->player) & INTERACTIVE))
                     if ((FLAGS(d->player) & READMODE))
                         process_command(d->descriptor, d->player, command, len, wclen);
-                MUCK::playerSession(d->player).block = 0;
+                DBFETCH(d->player)->sp.player.block = 0;
             }
         }
     } else if (!strcmp(command, QUIT_COMMAND)) {
@@ -4578,7 +4520,7 @@ interact_warn(dbref player)
         sprintf(buf, CINFO "***  %s  ***",
                 (FLAGS(player) & READMODE) ?
                 "You are currently using a program.  Use \"@Q\" to return to a more reasonable state of control."
-                : (MUCK::playerSession(player).insertMode ?
+                : (DBFETCH(player)->sp.player.insert_mode ?
                    "You are currently inserting MUF program text.  Use \".\" to return to the editor, then \"quit\" if you wish to return to your regularly scheduled Muck universe."
                    : "You are currently using the MUF program editor."));
         anotify(player, buf);
@@ -4688,7 +4630,7 @@ check_connect(struct descriptor_data *d, const char *msg)
             queue_ansi(d, "\r\n");
             d->booted = 1;
         } else {
-            if (!string_compare(command, "ch") && !(Arch(player) || MUCK::getPowers(player) & POW_HIDE)) {
+            if (!string_compare(command, "ch") && !(Arch(player) || POWERS(player) & POW_HIDE)) {
                 queue_ansi(d, "Only wizards can connect hidden.\r\n");
                 d->fails++;
                 if (tp_log_connects)
@@ -4708,14 +4650,14 @@ check_connect(struct descriptor_data *d, const char *msg)
                 update_desc_count_table();
                 remember_player_descr(player, d->descriptor);
                 if (!string_compare(command, "ch")) {
-                    MUCK::addFlags2(player, F2HIDDEN);
+                    FLAG2(player) |= F2HIDDEN;
                 } else {
-                    MUCK::clearFlags2(player, F2HIDDEN);
+                    FLAG2(player) &= ~F2HIDDEN;
                 }
                 if (d->type == CT_PUEBLO) {
-                    MUCK::addFlags2(player, F2PUEBLO);
+                    FLAG2(player) |= F2PUEBLO;
                 } else {
-                    MUCK::clearFlags2(player, F2PUEBLO);
+                    FLAG2(player) &= ~F2PUEBLO;
                 }
 
                 /* If player has enabled 256 color, set the descr flag */
@@ -4724,7 +4666,7 @@ check_connect(struct descriptor_data *d, const char *msg)
                 }
 
                 /* cks: someone has to initialize this somewhere. */
-                MUCK::playerSession(d->player).block = 0;
+                DBFETCH(d->player)->sp.player.block = 0;
                 if (d->player == NOTHING)
                     d->block = 0;
                 spit_file(player, MOTD_FILE);
@@ -5065,7 +5007,7 @@ do_dinfo(dbref player, const char *arg)
                 SYSYELLOW "%s  " SYSCRIMSON "Commands: " SYSRED "%d", time_format_1(now - d->connected_at), time_format_2(now - d->last_time), d->commands);
 
     if (d->connected)
-        anotify_fmt(player, SYSAQUA "Location: %s", ansi_unparse_object(player, MUCK::getLocation(d->player)));
+        anotify_fmt(player, SYSAQUA "Location: %s", ansi_unparse_object(player, DBFETCH(d->player)->location));
 }
 
 void
@@ -5075,7 +5017,7 @@ do_dwall(dbref player, const char *name, const char *msg)
     int who, descr;
     char buf[BUFFER_LEN];
 
-    if (!Wiz(player) && !(MUCK::getPowers(player) & POW_ANNOUNCE)) {
+    if (!Wiz(player) && !(POWERS(player) & POW_ANNOUNCE)) {
         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
         return;
     }
@@ -5096,7 +5038,7 @@ do_dwall(dbref player, const char *name, const char *msg)
     switch (msg[0]) {
         case ':':
         case ';':
-            sprintf(buf, MARK "%s %s\r\n", MUCK::getName(player), msg + 1);
+            sprintf(buf, MARK "%s %s\r\n", NAME(player), msg + 1);
             break;
         case '@':
             sprintf(buf, MARK "%s\r\n", msg + 1);
@@ -5116,7 +5058,7 @@ do_dwall(dbref player, const char *name, const char *msg)
             sprintf(buf, "%s\r\n", msg + 1);
             break;
         default:
-            sprintf(buf, MARK "%s tells you, \"%s\"\r\n", MUCK::getName(player), msg);
+            sprintf(buf, MARK "%s tells you, \"%s\"\r\n", NAME(player), msg);
             break;
     }
 
@@ -5132,7 +5074,7 @@ do_dboot(dbref player, const char *name)
     struct descriptor_data *d;
     int who, descr;
 
-    if (!Arch(player) && !(MUCK::getPowers(player) & POW_BOOT)) {
+    if (!Arch(player) && !(POWERS(player) & POW_BOOT)) {
         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
         return;
     }
@@ -5184,15 +5126,9 @@ do_armageddon(dbref player, const char *msg)
         notify(player, "***WARNING*** All data since last save will be lost!");
         return;
     }
-    sprintf(buf, "\r\nImmediate shutdown by %s.\r\n", MUCK::getName(player));
-    log_status("DDAY: %s(%d): %s\n", MUCK::getName(player), player, msg);
-    fprintf(stderr, "DDAY: %s(%d)\n", MUCK::getName(player), player);
-
-    /* Exiting with the dump thread still joinable aborts through
-     * std::terminate. Armageddon is a deliberate shutdown, not a
-     * crash, so it can afford to wait for the writer. */
-    MUCK::store().stopDumpThread();
-
+    sprintf(buf, "\r\nImmediate shutdown by %s.\r\n", NAME(player));
+    log_status("DDAY: %s(%d): %s\n", NAME(player), player, msg);
+    fprintf(stderr, "DDAY: %s(%d)\n", NAME(player), player);
     close_sockets(buf);
 
 #ifdef SPAWN_HOST_RESOLVER
@@ -5202,6 +5138,23 @@ do_armageddon(dbref player, const char *msg)
     reslvd_close();
 #endif
 
+#ifdef MALLOC_PROFILING
+    free_old_macros();
+    purge_all_free_frames();
+    purge_timenode_free_pool();
+    purge_for_pool();
+    purge_for_pool();           /* 2nd time is needed to completely purge */
+    purge_try_pool();           /* 3rd time is needed to... oh... wait... */
+    purge_try_pool();           /* 2nd time is needed to completely purge */
+    purge_mfns();
+    db_free();
+    cleanup_game();
+    tune_freeparms();
+    clear_color_hash();
+#ifdef COMPRESS
+    free_compress_dictionary();
+#endif /* COMPRESS */
+#endif /* MALLOC_PROFILING */
 
     exit(1);
 }
@@ -5261,7 +5214,7 @@ dump_users(struct descriptor_data *d, char *user)
      */
     /* Rewrote the badly done logic check. -Hinoserm */
     if (!d->connected || !OkObj(d->player)
-        || (!Mage(d->player) && !(MUCK::getPowers(d->player) & POW_EXPANDED_WHO)))
+        || (!Mage(d->player) && !(POWERS(d->player) & POW_EXPANDED_WHO)))
         wizwho = 0;
 
     if (!index(user, '*')) {
@@ -5302,7 +5255,7 @@ dump_users(struct descriptor_data *d, char *user)
         switch (dlist->type) {
             case CT_MUCK:{
                 if (dlist->connected && OkObj(dlist->player)) {
-                    strcpy(plyrbuf, MUCK::getName(dlist->player));
+                    strcpy(plyrbuf, NAME(dlist->player));
                 } else {
                     strcpy(plyrbuf, "[Connecting]");
                 }
@@ -5312,7 +5265,7 @@ dump_users(struct descriptor_data *d, char *user)
 #ifdef USE_SSL
             case CT_SSL:{
                 if (dlist->connected && OkObj(dlist->player)) {
-                    strcpy(plyrbuf, MUCK::getName(dlist->player));
+                    strcpy(plyrbuf, NAME(dlist->player));
                 } else {
                     strcpy(plyrbuf, "[Connecting]");
                 }
@@ -5322,7 +5275,7 @@ dump_users(struct descriptor_data *d, char *user)
 #endif
             case CT_PUEBLO:{
                 if (dlist->connected && OkObj(dlist->player)) {
-                    strcpy(plyrbuf, MUCK::getName(dlist->player));
+                    strcpy(plyrbuf, NAME(dlist->player));
                 } else {
                     strcpy(plyrbuf, "[Connecting]");
                 }
@@ -5337,7 +5290,7 @@ dump_users(struct descriptor_data *d, char *user)
                  * "[Unknown]" on an "Unknown Port Type", despite
                  * being connected with a perfectly good dbref. */
                 if (dlist->connected && OkObj(dlist->player)) {
-                    strcpy(plyrbuf, MUCK::getName(dlist->player));
+                    strcpy(plyrbuf, NAME(dlist->player));
                 } else {
                     strcpy(plyrbuf, "[Connecting]");
                 }
@@ -5510,17 +5463,17 @@ announce_puppets(dbref player, const char *msg, const char *prop)
     const char *ptr, *msg2;
     char buf[BUFFER_LEN];
 
-    for (what = 0; what < MUCK::database().top(); what++) {
+    for (what = 0; what < db_top; what++) {
         if (Typeof(what) == TYPE_THING && (FLAGS(what) & ZOMBIE)) {
-            if (MUCK::getOwner(what) == player) {
-                where = MUCK::getLocation(what);
+            if (OWNER(what) == player) {
+                where = getloc(what);
                 if ((!Dark(where)) && (!Dark(player)) && (!Dark(what))) {
                     msg2 = msg;
                     if ((ptr = (char *) get_property_class(what, prop))
                         && *ptr)
                         msg2 = ptr;
-                    sprintf(buf, CMOVE "%.512s %.3000s", MUCK::getName(what), msg2);
-                    anotify_except(CONTENTS(where), what, buf, what);
+                    sprintf(buf, CMOVE "%.512s %.3000s", PNAME(what), msg2);
+                    anotify_except(DBFETCH(where)->contents, what, buf, what);
                 }
             }
         }
@@ -5535,16 +5488,16 @@ announce_connect(int descr, dbref player)
     struct match_data md;
     dbref exit;
 
-    if ((loc = MUCK::getLocation(player)) == NOTHING)
+    if ((loc = getloc(player)) == NOTHING)
         return;
 
     total_loggedin_connects++;
 
     if (Guest(player)) {
-        MUCK::clearFlags(player, CHOWN_OK);
+        FLAGS(player) &= ~CHOWN_OK;
     }
 
-    MUCK::playerSession(player).lastDescr = descr;
+    DBFETCH(player)->sp.player.last_descr = descr;
 
     /*
      * See if there's a connect action.  If so, and the player is the first to
@@ -5553,13 +5506,13 @@ announce_connect(int descr, dbref player)
      */
 
     /* queue up all _connect programs referred to by properties */
-    envpropqueue(descr, player, MUCK::getLocation(player), NOTHING, player, NOTHING, "@connect", "Connect", 1, 1);
-    envpropqueue(descr, player, MUCK::getLocation(player), NOTHING, player, NOTHING, "@oconnect", "Oconnect", 1, 0);
-    envpropqueue(descr, player, MUCK::getLocation(player), NOTHING, player, NOTHING, "~connect", "Connect", 1, 1);
-    envpropqueue(descr, player, MUCK::getLocation(player), NOTHING, player, NOTHING, "~oconnect", "Oconnect", 1, 0);
+    envpropqueue(descr, player, getloc(player), NOTHING, player, NOTHING, "@connect", "Connect", 1, 1);
+    envpropqueue(descr, player, getloc(player), NOTHING, player, NOTHING, "@oconnect", "Oconnect", 1, 0);
+    envpropqueue(descr, player, getloc(player), NOTHING, player, NOTHING, "~connect", "Connect", 1, 1);
+    envpropqueue(descr, player, getloc(player), NOTHING, player, NOTHING, "~oconnect", "Oconnect", 1, 0);
     if (tp_allow_old_trigs) {
-        envpropqueue(descr, player, MUCK::getLocation(player), NOTHING, player, NOTHING, "_connect", "Connect", 1, 1);
-        envpropqueue(descr, player, MUCK::getLocation(player), NOTHING, player, NOTHING, "_oconnect", "Oconnect", 1, 0);
+        envpropqueue(descr, player, getloc(player), NOTHING, player, NOTHING, "_connect", "Connect", 1, 1);
+        envpropqueue(descr, player, getloc(player), NOTHING, player, NOTHING, "_oconnect", "Oconnect", 1, 0);
     }
 
     exit = NOTHING;
@@ -5583,16 +5536,16 @@ announce_connect(int descr, dbref player)
         }
     }
 
-    if ((loc = MUCK::getLocation(player)) == NOTHING)
+    if ((loc = getloc(player)) == NOTHING)
         return;
 
     if (!tp_quiet_connects) {
         if ((!Dark(player)) && (!Dark(loc)) && (!Hidden(player))) {
             if (online(player) == 1)
-                sprintf(buf, CMOVE "%s has connected.", MUCK::getName(player));
+                sprintf(buf, CMOVE "%s has connected.", PNAME(player));
             else
-                sprintf(buf, CMOVE "%s has reconnected.", MUCK::getName(player));
-            anotify_except(CONTENTS(loc), player, buf, player);
+                sprintf(buf, CMOVE "%s has reconnected.", PNAME(player));
+            anotify_except(DBFETCH(loc)->contents, player, buf, player);
         }
 
         if (online(player) == 1 && (!Hidden(player))) {
@@ -5611,7 +5564,7 @@ announce_disconnect(struct descriptor_data *d)
     dbref loc;
     char buf[BUFFER_LEN];
 
-    if (!d->connected || !OkObj(player) || (Typeof(player) != TYPE_PLAYER) || ((loc = MUCK::getLocation(player)) == NOTHING)
+    if (!d->connected || !OkObj(player) || (Typeof(player) != TYPE_PLAYER) || ((loc = getloc(player)) == NOTHING)
         )
         return;
 
@@ -5622,10 +5575,10 @@ announce_disconnect(struct descriptor_data *d)
     if (!tp_quiet_connects) {
         if ((!Dark(player)) && (!Dark(loc)) && (!Hidden(player))) {
             if (online(player) == 1)
-                sprintf(buf, CMOVE "%s has disconnected.", MUCK::getName(player));
+                sprintf(buf, CMOVE "%s has disconnected.", PNAME(player));
             else
-                sprintf(buf, CMOVE "%s has dropped a connection.", MUCK::getName(player));
-            anotify_except(CONTENTS(loc), player, buf, player);
+                sprintf(buf, CMOVE "%s has dropped a connection.", PNAME(player));
+            anotify_except(DBFETCH(loc)->contents, player, buf, player);
         }
     }
 
@@ -5635,22 +5588,22 @@ announce_disconnect(struct descriptor_data *d)
     update_desc_count_table();
 
     if (!online(player) && (FLAG2(player) & F2IDLE)) {
-        MUCK::clearFlags2(player, F2IDLE);
+        FLAG2(player) &= ~F2IDLE;
     }
 
     if (!online(player) && (FLAG2(player) & F2TRUEIDLE)) {
-        MUCK::clearFlags2(player, F2TRUEIDLE);
+        FLAG2(player) &= ~F2TRUEIDLE;
     }
 
     /* trigger local disconnect action */
     /* queue up all _connect programs referred to by properties */
-    envpropqueue(d->descriptor, player, MUCK::getLocation(player), NOTHING, player, NOTHING, "@disconnect", "Disconnect", 1, 1);
-    envpropqueue(d->descriptor, player, MUCK::getLocation(player), NOTHING, player, NOTHING, "@odisconnect", "Odisconnect", 1, 0);
-    envpropqueue(d->descriptor, player, MUCK::getLocation(player), NOTHING, player, NOTHING, "~disconnect", "Disconnect", 1, 1);
-    envpropqueue(d->descriptor, player, MUCK::getLocation(player), NOTHING, player, NOTHING, "~odisconnect", "Odisconnect", 1, 0);
+    envpropqueue(d->descriptor, player, getloc(player), NOTHING, player, NOTHING, "@disconnect", "Disconnect", 1, 1);
+    envpropqueue(d->descriptor, player, getloc(player), NOTHING, player, NOTHING, "@odisconnect", "Odisconnect", 1, 0);
+    envpropqueue(d->descriptor, player, getloc(player), NOTHING, player, NOTHING, "~disconnect", "Disconnect", 1, 1);
+    envpropqueue(d->descriptor, player, getloc(player), NOTHING, player, NOTHING, "~odisconnect", "Odisconnect", 1, 0);
     if (tp_allow_old_trigs) {
-        envpropqueue(d->descriptor, player, MUCK::getLocation(player), NOTHING, player, NOTHING, "_disconnect", "Disconnect", 1, 1);
-        envpropqueue(d->descriptor, player, MUCK::getLocation(player), NOTHING, player, NOTHING, "_odisconnect", "Odisconnect", 1, 0);
+        envpropqueue(d->descriptor, player, getloc(player), NOTHING, player, NOTHING, "_disconnect", "Disconnect", 1, 1);
+        envpropqueue(d->descriptor, player, getloc(player), NOTHING, player, NOTHING, "_odisconnect", "Odisconnect", 1, 0);
     }
     if (!online(player)) {
         if (can_move(d->descriptor, player, "disconnect", 1)) {
@@ -5676,27 +5629,27 @@ announce_idle(struct descriptor_data *d)
     if (!(DR_RAW_FLAGS(d, DF_TRUEIDLE)))
         DR_RAW_ADD_FLAGS(d, DF_TRUEIDLE);
 
-    if (!d->connected || (loc = MUCK::getLocation(player)) == NOTHING)
+    if (!d->connected || (loc = getloc(player)) == NOTHING)
         return;
 
     if ((FLAG2(player) & F2TRUEIDLE))
         return;
 
-    MUCK::addFlags2(player, F2TRUEIDLE);
+    FLAG2(player) |= F2TRUEIDLE;
 
     if ((!Dark(player)) && (!Dark(loc)) && (tp_enable_idle_msgs)) {
-        sprintf(buf, CMOVE "%s has become terminally idle.", MUCK::getName(player));
-        anotify_except(CONTENTS(loc), player, buf, player);
+        sprintf(buf, CMOVE "%s has become terminally idle.", PNAME(player));
+        anotify_except(DBFETCH(loc)->contents, player, buf, player);
     }
 
     /* queue up all _idle programs referred to by properties */
-    envpropqueue(d->descriptor, player, MUCK::getLocation(player), NOTHING, player, NOTHING, "@idle", "Idle", 1, 1);
-    envpropqueue(d->descriptor, player, MUCK::getLocation(player), NOTHING, player, NOTHING, "@oidle", "Oidle", 1, 0);
-    envpropqueue(d->descriptor, player, MUCK::getLocation(player), NOTHING, player, NOTHING, "~idle", "Idle", 1, 1);
-    envpropqueue(d->descriptor, player, MUCK::getLocation(player), NOTHING, player, NOTHING, "~oidle", "Oidle", 1, 0);
+    envpropqueue(d->descriptor, player, getloc(player), NOTHING, player, NOTHING, "@idle", "Idle", 1, 1);
+    envpropqueue(d->descriptor, player, getloc(player), NOTHING, player, NOTHING, "@oidle", "Oidle", 1, 0);
+    envpropqueue(d->descriptor, player, getloc(player), NOTHING, player, NOTHING, "~idle", "Idle", 1, 1);
+    envpropqueue(d->descriptor, player, getloc(player), NOTHING, player, NOTHING, "~oidle", "Oidle", 1, 0);
     if (tp_user_idle_propqueue) {
-        envpropqueue(d->descriptor, player, MUCK::getLocation(player), NOTHING, player, NOTHING, "_idle", "Idle", 1, 1);
-        envpropqueue(d->descriptor, player, MUCK::getLocation(player), NOTHING, player, NOTHING, "_oidle", "Oidle", 1, 0);
+        envpropqueue(d->descriptor, player, getloc(player), NOTHING, player, NOTHING, "_idle", "Idle", 1, 1);
+        envpropqueue(d->descriptor, player, getloc(player), NOTHING, player, NOTHING, "_oidle", "Oidle", 1, 0);
     }
 }
 
@@ -5713,8 +5666,8 @@ descr_mark_active(struct descriptor_data *d)
         if (FLAG2(d->player) & F2TRUEIDLE)
             announce_unidle(d); /* really idle */
         if (FLAG2(d->player) & F2IDLE)
-            MUCK::clearFlags2(d->player, F2IDLE); /*remove idle */
-        MUCK::playerSession(d->player).lastDescr = d->descriptor; /* least idle */
+            FLAG2(d->player) &= ~F2IDLE; /*remove idle */
+        DBFETCH(d->player)->sp.player.last_descr = d->descriptor; /* least idle */
     } else { /* not a player */
         if (DR_RAW_FLAGS(d, DF_TRUEIDLE))
             announce_unidle(d);
@@ -5735,31 +5688,31 @@ announce_unidle(struct descriptor_data *d)
     if ((DR_RAW_FLAGS(d, DF_TRUEIDLE)))
         DR_RAW_REM_FLAGS(d, DF_TRUEIDLE);
 
-    if (!d->connected || (loc = MUCK::getLocation(player)) == NOTHING)
+    if (!d->connected || (loc = getloc(player)) == NOTHING)
         return;
 
     if (!(FLAG2(player) & F2TRUEIDLE))
         return;
 
-    MUCK::clearFlags2(player, F2TRUEIDLE);
+    FLAG2(player) &= ~F2TRUEIDLE;
 
     if ((!Dark(player)) && (!Dark(loc)) && (tp_enable_idle_msgs)) {
-        sprintf(buf, CMOVE "%s has unidled.", MUCK::getName(player));
-        anotify_except(CONTENTS(loc), player, buf, player);
+        sprintf(buf, CMOVE "%s has unidled.", PNAME(player));
+        anotify_except(DBFETCH(loc)->contents, player, buf, player);
     }
 
-    if (OkObj(d->player) && Typeof(d->player) == TYPE_PLAYER) {
-        MUCK::playerSession(d->player).lastDescr = d->descriptor;
+    if (OkObj(d->player) ? (Typeof(d->player) & TYPE_PLAYER) : 0) {
+        DBFETCH(d->player)->sp.player.last_descr = d->descriptor;
     }
 
     /* queue up all _unidle programs referred to by properties */
-    envpropqueue(d->descriptor, player, MUCK::getLocation(player), NOTHING, player, NOTHING, "@unidle", "Unidle", 1, 1);
-    envpropqueue(d->descriptor, player, MUCK::getLocation(player), NOTHING, player, NOTHING, "@ounidle", "Ounidle", 1, 0);
-    envpropqueue(d->descriptor, player, MUCK::getLocation(player), NOTHING, player, NOTHING, "~unidle", "Unidle", 1, 1);
-    envpropqueue(d->descriptor, player, MUCK::getLocation(player), NOTHING, player, NOTHING, "~ounidle", "Ounidle", 1, 0);
+    envpropqueue(d->descriptor, player, getloc(player), NOTHING, player, NOTHING, "@unidle", "Unidle", 1, 1);
+    envpropqueue(d->descriptor, player, getloc(player), NOTHING, player, NOTHING, "@ounidle", "Ounidle", 1, 0);
+    envpropqueue(d->descriptor, player, getloc(player), NOTHING, player, NOTHING, "~unidle", "Unidle", 1, 1);
+    envpropqueue(d->descriptor, player, getloc(player), NOTHING, player, NOTHING, "~ounidle", "Ounidle", 1, 0);
     if (tp_user_idle_propqueue) {
-        envpropqueue(d->descriptor, player, MUCK::getLocation(player), NOTHING, player, NOTHING, "_unidle", "Unidle", 1, 1);
-        envpropqueue(d->descriptor, player, MUCK::getLocation(player), NOTHING, player, NOTHING, "_ounidle", "Ounidle", 1, 0);
+        envpropqueue(d->descriptor, player, getloc(player), NOTHING, player, NOTHING, "_unidle", "Unidle", 1, 1);
+        envpropqueue(d->descriptor, player, getloc(player), NOTHING, player, NOTHING, "_ounidle", "Ounidle", 1, 0);
     }
 }
 
@@ -5903,37 +5856,83 @@ descr_index(int descr)
 int *
 get_player_descrs(dbref player, int *count)
 {
-    if (Typeof(player) == TYPE_PLAYER) {
-        MUCK::PlayerSession &s = MUCK::playerSession(player);
+    int *darr;
 
-        *count = (int) s.descrs.size();
-        return s.descrs.empty() ? NULL : s.descrs.data();
+    if (Typeof(player) == TYPE_PLAYER) {
+        *count = DBFETCH(player)->sp.player.descr_count;
+        darr = DBFETCH(player)->sp.player.descrs;
+        if (!darr) {
+            *count = 0;
+        }
+        return darr;
+    } else {
+        *count = 0;
+        return NULL;
     }
-    *count = 0;
-    return NULL;
 }
 
 void
 remember_player_descr(dbref player, int descr)
 {
-    int index = descr_index(descr);
+    int count = DBFETCH(player)->sp.player.descr_count;
+    int *arr = DBFETCH(player)->sp.player.descrs;
+    int index;
+
+    index = descr_index(descr);
 
     if ((index < 0) || (index >= MAX_SOCKETS))
         return;
-    MUCK::playerSession(player).descrs.push_back(index);
+
+    if (!arr) {
+        arr = new int[MAX_SOCKETS];
+
+        arr[0] = index;
+        count = 1;
+    } else {
+        //arr = (int *) realloc(arr, sizeof(int) * (count + 1));
+        arr[count] = index;
+        count++;
+    }
+    DBFETCH(player)->sp.player.descr_count = count;
+    DBFETCH(player)->sp.player.descrs = arr;
 }
 
 void
 forget_player_descr(dbref player, int descr)
 {
-    int index = descr_index(descr);
+    int count = DBFETCH(player)->sp.player.descr_count;
+    int *arr = DBFETCH(player)->sp.player.descrs;
+    int index;
+
+    index = descr_index(descr);
 
     if ((index < 0) || (index >= MAX_SOCKETS))
         return;
 
-    std::vector<int> &v = MUCK::playerSession(player).descrs;
+    if (!arr) {
+        count = 0;
+    } else if (count > 1) {
+        int src, dest;
 
-    v.erase(std::remove(v.begin(), v.end(), index), v.end());
+        for (src = dest = 0; src < count; src++) {
+            if (arr[src] != index) {
+                if (src != dest) {
+                    arr[dest] = arr[src];
+                }
+                dest++;
+            }
+        }
+        if (dest != count) {
+            count = dest;
+            //arr = (int *) realloc(arr, sizeof(int) * count);
+        }
+    } else {
+        delete[]arr;
+        arr = NULL;
+        count = 0;
+    }
+    DBFETCH(player)->sp.player.descr_count = count;
+    DBFETCH(player)->sp.player.descrs = arr;
 }
 
 int
@@ -5994,7 +5993,7 @@ descrdata_by_descr(int descr)
 int
 online(dbref player)
 {
-    return ((int) MUCK::playerSession(player).descrs.size());
+    return DBFETCH(player)->sp.player.descr_count;
 }
 
 int
@@ -6349,9 +6348,9 @@ pset_user(struct descriptor_data *d, dbref who)
             remember_player_descr(who, d->descriptor);
             announce_connect(d->descriptor, who);
             if (d->type == CT_PUEBLO) {
-                MUCK::addFlags2(d->player, F2PUEBLO);
+                FLAG2(d->player) |= F2PUEBLO;
             } else {
-                MUCK::clearFlags2(d->player, F2PUEBLO);
+                FLAG2(d->player) &= ~F2PUEBLO;
             }
         }
         return 1;
@@ -6381,9 +6380,9 @@ plogin_user(struct descriptor_data *d, dbref who)
         remember_player_descr(who, d->descriptor);
         announce_connect(d->descriptor, who);
         if (d->type == CT_PUEBLO) {
-            MUCK::addFlags2(d->player, F2PUEBLO);
+            FLAG2(d->player) |= F2PUEBLO;
         } else {
-            MUCK::clearFlags2(d->player, F2PUEBLO);
+            FLAG2(d->player) &= ~F2PUEBLO;
         }
     }
     return 1;
@@ -6416,21 +6415,21 @@ silent_connect(int descr, dbref player)
     dbref loc;
     char buf[BUFFER_LEN];
 
-    if ((loc = MUCK::getLocation(player)) == NOTHING)
+    if ((loc = getloc(player)) == NOTHING)
         return;
 
 
     if (Guest(player)) {
-        MUCK::clearFlags(player, CHOWN_OK);
+        FLAGS(player) &= ~CHOWN_OK;
     }
-    MUCK::playerSession(player).lastDescr = descr;
+    DBFETCH(player)->sp.player.last_descr = descr;
     if (!tp_quiet_connects) {
         if ((!Dark(player)) && (!Dark(loc)) && (!Hidden(player))) {
             if (online(player) == 1)
-                sprintf(buf, CMOVE "%s has connected.", MUCK::getName(player));
+                sprintf(buf, CMOVE "%s has connected.", PNAME(player));
             else
-                sprintf(buf, CMOVE "%s has reconnected.", MUCK::getName(player));
-            anotify_except(CONTENTS(loc), player, buf, player);
+                sprintf(buf, CMOVE "%s has reconnected.", PNAME(player));
+            anotify_except(DBFETCH(loc)->contents, player, buf, player);
         }
     }
     return;
@@ -6443,25 +6442,25 @@ silent_disconnect(struct descriptor_data *d)
     dbref loc;
     char buf[BUFFER_LEN];
 
-    if (!d->connected || !OkObj(player) || (Typeof(player) != TYPE_PLAYER) || ((loc = MUCK::getLocation(player)) == NOTHING)
+    if (!d->connected || !OkObj(player) || (Typeof(player) != TYPE_PLAYER) || ((loc = getloc(player)) == NOTHING)
         )
         return;
 
     if (!tp_quiet_connects) {
         if ((!Dark(player)) && (!Dark(loc)) && (!Hidden(player))) {
             if (online(player) == 1)
-                sprintf(buf, CMOVE "%s has disconnected.", MUCK::getName(player));
+                sprintf(buf, CMOVE "%s has disconnected.", PNAME(player));
             else
-                sprintf(buf, CMOVE "%s has dropped a connection.", MUCK::getName(player));
-            anotify_except(CONTENTS(loc), player, buf, player);
+                sprintf(buf, CMOVE "%s has dropped a connection.", PNAME(player));
+            anotify_except(DBFETCH(loc)->contents, player, buf, player);
         }
     }
 
     if (!online(player) && (FLAG2(player) & F2IDLE)) {
-        MUCK::clearFlags2(player, F2IDLE);
+        FLAG2(player) &= ~F2IDLE;
     }
     if (!online(player) && (FLAG2(player) & F2TRUEIDLE)) {
-        MUCK::clearFlags2(player, F2TRUEIDLE);
+        FLAG2(player) &= ~F2TRUEIDLE;
     }
     DBDIRTY(player);
 }
@@ -6469,15 +6468,54 @@ silent_disconnect(struct descriptor_data *d)
 void
 transfer_descr_to_player(int descr, dbref source, dbref target)
 {
-    int index = descr_index(descr);
+    int count = DBFETCH(target)->sp.player.descr_count;
+    int *arr = DBFETCH(target)->sp.player.descrs;
+    int index;
+
+    index = descr_index(descr);
 
     if ((index < 0) || (index >= MAX_SOCKETS))
         return;
 
-    MUCK::playerSession(target).descrs.push_back(index);
+    if (!arr) {
+        arr = (int *) malloc(sizeof(int));
+        arr[0] = index;
+        count = 1;
+    } else {
+        arr = (int *) realloc(arr, sizeof(int) * (count + 1));
+        arr[count] = index;
+        count++;
+    }
 
-    std::vector<int> &src = MUCK::playerSession(source).descrs;
-    src.erase(std::remove(src.begin(), src.end(), index), src.end());
+    DBFETCH(target)->sp.player.descr_count = count;
+    DBFETCH(target)->sp.player.descrs = arr;
+    count = DBFETCH(source)->sp.player.descr_count;
+    arr = DBFETCH(source)->sp.player.descrs;
+
+    if (!arr) {
+        count = 0;
+    } else if (count > 1) {
+        int src, dest;
+
+        for (src = dest = 0; src < count; src++) {
+            if (arr[src] != index) {
+                if (src != dest) {
+                    arr[dest] = arr[src];
+                }
+                dest++;
+            }
+        }
+        if (dest != count) {
+            count = dest;
+            arr = (int *) realloc(arr, sizeof(int) * count);
+        }
+    } else {
+        free((void *) arr);
+        arr = NULL;
+        count = 0;
+    }
+    DBFETCH(source)->sp.player.descr_count = count;
+    DBFETCH(source)->sp.player.descrs = arr;
 }
 
 int
@@ -6511,9 +6549,9 @@ pset_user_suid(int c, dbref who)
     DR_ADD_FLAGS(d->descriptor, DF_SUID);
 
     if (d->type == CT_PUEBLO) {
-        MUCK::addFlags2(d->player, F2PUEBLO);
+        FLAG2(d->player) |= F2PUEBLO;
     } else {
-        MUCK::clearFlags2(d->player, F2PUEBLO);
+        FLAG2(d->player) &= ~F2PUEBLO;
     }
     return 1;
 }
@@ -6631,7 +6669,7 @@ partial_pmatch(const char *name)
 
     d = descriptor_list;
     while (d) {
-        if (d->connected && (last != d->player) && (string_prefix(MUCK::getName(d->player), name) || lookup_alias(name, 1) != NOTHING)) {
+        if (d->connected && (last != d->player) && (string_prefix(NAME(d->player), name) || lookup_alias(name, 1) != NOTHING)) {
             if (last != NOTHING) {
                 last = AMBIGUOUS;
                 break;
@@ -6807,22 +6845,23 @@ propagate_descr_flag(dbref player, object_flag_type flag, int set)
 void
 init_ignore(dbref tgt)
 {
-    MUCK::PlayerSession &s = MUCK::playerSession(tgt);
+    struct object *pobj = DBFETCH(tgt);
     const char *rawstr;
+    int i = 0;
 
-    s.ignore.clear();
     if ((rawstr = get_property_class(tgt, "/@/ignore"))) {
         for (; *rawstr && isspace(*rawstr); rawstr++) ;
 
         /* extract dbrefs from the prop */
-        for (; *rawstr && (int) s.ignore.size() < MAX_IGNORES; rawstr++) {
+        for (; *rawstr && i < MAX_IGNORES; rawstr++) {
             if (*rawstr == '#')
                 continue;
 
             if (!isdigit(*rawstr))
                 break;
 
-            s.ignore.push_back(atoi(rawstr));
+            pobj->sp.player.ignore[i] = atoi(rawstr);
+            i++;
 
             for (; *rawstr && !isspace(*rawstr); rawstr++) ;
             for (; *rawstr && isspace(*rawstr); rawstr++) ;
@@ -6832,14 +6871,22 @@ init_ignore(dbref tgt)
         }
     }
 
+    /* terminate the array */
+    if (i <= (MAX_IGNORES - 1))
+        pobj->sp.player.ignore[i] = NOTHING;
+
     /* and set the timestamp */
-    s.ignoreTime = current_systime;
+    pobj->sp.player.ignoretime = current_systime;
+    return;
 }
 
 char                            /* char, for when you only need a byte's worth. */
 ignorance(dbref src, dbref tgt)
 {
-    /* We leave ignorance negatively if the dbref is invalid or the source is a wizard or theirselves.
+    struct object *tobj = DBFETCH(tgt);
+    int i;
+
+    /* We leave ignorance negatively if the dbref is invalid or the source is a wizard or theirselves. 
        This catches 99.999% of the cases where the system calls something through a standard player
        notify routine (with the src and target equal or the src being a random number), and wastes
        little time returning in that case.  We catch this case first so we can back out fast.
@@ -6850,19 +6897,21 @@ ignorance(dbref src, dbref tgt)
     if (src == tgt || !OkObj(src) || Wizard(src))
         return 0;
 
-    /* Ignorance cache and initialization
+    /* Ignorance cache and initialization 
      * Save time, only do the target, and only if it's been 10 secs from the last check or its not initialized.
      */
-    MUCK::PlayerSession &s = MUCK::playerSession(tgt);
-
-    if (s.ignoreTime + 10 <= current_systime)
+    if (tobj->sp.player.ignoretime + 10 <= current_systime)
         init_ignore(tgt);
 
+    /* If ignore[0] is -1, its not even worth doing an ignore scan. */
+    if (tobj->sp.player.ignore[0] == NOTHING)
+        return 0;
+
     /* if we got this far, lets check it out, get out ASAP, BTW. */
-    for (dbref ig : s.ignore) {
-        if (!OkObj(ig))
+    for (i = 0; i < MAX_IGNORES; i++) {
+        if (!OkObj(tobj->sp.player.ignore[i]))
             return 0;
-        if (MUCK::getOwner(ig) == MUCK::getOwner(src))
+        if (OWNER(tobj->sp.player.ignore[i]) == OWNER(src))
             return 1;
     }
 
@@ -7075,8 +7124,7 @@ mssp_send(struct descriptor_data *d)
     char mssp_val[BUFFER_LEN];
     char propname[BUFFER_LEN];
     char *p;
-    PropPtr propadr;
-    PropDirPtr pptr;
+    PropPtr propadr, pptr;
     PropPtr prptr;
 
     const char *dir = "/~mssp";
@@ -7098,12 +7146,15 @@ mssp_send(struct descriptor_data *d)
         sprintf(buf, "%s%c%s", dir, PROPDIR_DELIMITER, propname);
         prptr = get_property(ref, buf);
         if (prptr) {
+#ifdef DISKBASE
+            propfetch(ref, prptr);
+#endif
             switch (PropType(prptr)) {
                 case PROP_STRTYP:
                     strcpy(mssp_val, PropDataUNCStr(prptr));
                     break;
                 case PROP_INTTYP:
-                    sprintf(mssp_val, "%lld", (long long) PropDataVal(prptr));
+                    sprintf(mssp_val, "%d", PropDataVal(prptr));
                     break;
                 case PROP_FLTTYP:
                     sprintf(mssp_val, "%#.15g", PropDataFVal(prptr));

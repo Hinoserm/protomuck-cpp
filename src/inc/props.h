@@ -3,12 +3,10 @@
 
 /* Property struct */
 
-#include <stdint.h>
-
 union pdata_u {
     const char *str;
     struct boolexp *lok;
-    int64_t val;                /* prop ints are 64-bit */
+    MUFINT val;
     double fval;
     dbref ref;
     long pos;
@@ -21,14 +19,16 @@ struct pdata {
 };
 typedef struct pdata PData;
 
-/* The property node is MUCK::PropNode (inc/PropNode.h), a leaf of
- * the per-propdir adaptive radix tree. The legacy handle names keep
- * working: PropPtr is a node, PropDirPtr is a directory (one tree).
- * docs/PROPERTIES.txt. */
-#include "PropNode.h"
+struct plist {
+    unsigned short flags;
+    short height;               /* satisfy the avl monster.  */
+    union pdata_u data;
+    struct plist *left, *right, *dir;
+    char *key;
+};
 
-typedef MUCK::PropNode *PropPtr;
-typedef MUCK::PropertyTree *PropDirPtr;
+/* property node pointer type */
+typedef struct plist *PropPtr;
 
 /* propload queue types */
 #define PROPS_UNLOADED 0x0
@@ -66,27 +66,32 @@ typedef MUCK::PropertyTree *PropDirPtr;
 #define PROP_TOUCHED    0x0400
 
 
-/* Macros over the modern node. PropDir yields the child tree when
- * the node has children (matching the legacy truthiness), else null.
- * The Set* macros that took ownership of alloc_string results now
- * copy and free, so every legacy caller stays correct. */
-#define PropDir(x) ((x)->isDir() ? &(x)->children() : (PropDirPtr) 0)
+/* Macros */
+#define AVL_LF(x) (x)->left
+#define AVL_RT(x) (x)->right
 
-#define SetPDataStr(x,z) { const char *zz_ = (z); (x)->setStr(zz_); \
-                           delete[] (char *) zz_; }
-#define SetPDataVal(x,z) {(x)->setInt(z);}
-#define SetPDataRef(x,z) {(x)->setRef(z);}
-#define SetPDataLok(x,z) {(x)->setLok(z);}
-#define SetPDataFVal(x,z) {(x)->setFlt(z);}
+#define SetPDir(x,y) {(x)->dir = y;}
+#define PropDir(x) ((x)->dir)
 
-#define PropDataUNCStr(x) ((x)->strValue())
-#define PropDataStr(x) ((x)->strValue())
-#define PropDataVal(x) ((x)->intValue())
-#define PropDataRef(x) ((dbref) (x)->refValue())
-#define PropDataLok(x) ((x)->lokValue())
-#define PropDataFVal(x) ((x)->fltValue())
+#define SetPDataUnion(x,z) {(x)->data = z;}
+#define SetPDataStr(x,z) {(x)->data.str = z;}
+#define SetPDataVal(x,z) {(x)->data.val = z;}
+#define SetPDataRef(x,z) {(x)->data.ref = z;}
+#define SetPDataLok(x,z) {(x)->data.lok = z;}
+#define SetPDataFVal(x,z) {(x)->data.fval = z;}
 
-#define PropName(x) ((x)->name())
+#ifdef COMPRESS
+#define PropDataUNCStr(x) (((x)->flags & PROP_NOCOMPRESS || !(x)->data.str || !*((x)->data.str)) ? (x)->data.str : get_uncompress((x)->data.str))
+#else
+#define PropDataUNCStr(x) ((x)->data.str)
+#endif
+#define PropDataStr(x) ((x)->data.str)
+#define PropDataVal(x) ((x)->data.val)
+#define PropDataRef(x) ((x)->data.ref)
+#define PropDataLok(x) ((x)->data.lok)
+#define PropDataFVal(x) ((x)->data.fval)
+
+#define PropName(x) ((x)->key)
 
 #define SetPFlags(x,y) {(x)->flags = ((x)->flags & PROP_TYPMASK) | (short)y;}
 #define PropFlags(x) ((x)->flags & ~PROP_TYPMASK)
@@ -124,74 +129,84 @@ typedef MUCK::PropertyTree *PropDirPtr;
  */
 
 extern void clear_propnode(PropPtr p);
-extern void delete_proplist(PropDirPtr p);
+extern void delete_proplist(PropPtr p);
 extern PropPtr alloc_propnode(const char *name);
 extern void free_propnode(PropPtr node);
-extern PropPtr first_node(PropDirPtr p);
-extern PropPtr next_node(PropDirPtr p, const char *c);
+extern PropPtr first_node(PropPtr p);
+extern PropPtr next_node(PropPtr p, char *c);
 extern void putprop(FILE * f, PropPtr p);
 extern int Prop_Check(const char *name, const char what);
-extern PropPtr locate_prop(PropDirPtr l, char *path);
-extern PropPtr new_prop(PropDirPtr l, char *path);
-extern void delete_prop(PropDirPtr list, char *name);
-extern int size_proplist(PropDirPtr dir);
+extern PropPtr locate_prop(PropPtr l, char *path);
+extern PropPtr new_prop(PropPtr *l, char *path);
+extern PropPtr delete_prop(PropPtr *list, char *name);
+extern int size_proplist(PropPtr avl);
 
 extern void set_property_nofetch(dbref object, const char *pname, PData *dat, bool pure);
 extern void set_property(dbref object, const char *pname, PData *dat);
 
 extern void add_prop_nofetch(dbref player, const char *type, const char *pclass,
-                             int64_t value);
+                             int value);
 extern void add_property(dbref player, const char *type, const char *pclass,
-                         int64_t value);
+                         int value);
 extern void remove_property_list(dbref player, int all);
 extern void remove_property_nofetch(dbref player, const char *type);
 extern void remove_property(dbref player, const char *type);
 extern int has_property(int descr, dbref player, dbref what, const char *type,
-                        const char *pclass, int64_t value);
+                        const char *pclass, int value);
 extern int has_property_strict(int descr, dbref player, dbref what,
-                               const char *type, const char *pclass, int64_t value);
+                               const char *type, const char *pclass, int value);
 extern PropPtr get_property(dbref player, const char *type);
 
 extern const char *get_property_class(dbref player, const char *type);
 extern double get_property_fvalue(dbref player, const char *type);
-extern int64_t get_property_value(dbref player, const char *type);
+extern MUFINT get_property_value(dbref player, const char *type);
 extern dbref get_property_dbref(dbref player, const char *pclass);
 extern struct boolexp *get_property_lock(dbref player, const char *type);
 extern int genderof(int descr, dbref player);
-extern void copy_prop(dbref old, dbref nw);
-extern void copy_proplist(dbref obj, PropDirPtr new2, PropDirPtr old);
-extern PropPtr first_prop(dbref player, const char *dir, PropDirPtr *list,
+extern struct plist *copy_prop(dbref old);
+extern void copy_proplist(dbref obj, PropPtr *new2, PropPtr old);
+extern PropPtr first_prop(dbref player, const char *dir, PropPtr *list,
                           char *name);
-extern PropPtr first_prop_nofetch(dbref player, const char *dir, PropDirPtr *list,
+extern PropPtr first_prop_nofetch(dbref player, const char *dir, PropPtr *list,
                                   char *name);
-extern PropPtr next_prop(PropDirPtr list, PropPtr prop, char *name);
+extern PropPtr next_prop(PropPtr list, PropPtr prop, char *name);
 extern char *next_prop_name(dbref player, char *outbuf, char *name);
 extern int is_propdir(dbref player, const char *dir);
 extern const char *envpropstr(dbref *where, const char *propname);
 extern PropPtr envprop(dbref *where, const char *propname, int typ);
 extern PropPtr envprop_cmds(dbref *where, const char *propname, int typ);
 extern PropPtr regenvprop(dbref *where, const char *propname, int typ);
-extern void delete_proplist(PropDirPtr p);
+extern void delete_proplist(PropPtr p);
 
+#ifdef DISKBASE
+extern int fetchprops_priority(dbref obj, int mode);
+extern int fetchprops_nostamp(dbref obj);
+extern void fetchprops(dbref obj);
+extern void unloadprops_with_prejudice(dbref obj);
+extern int disposeprops_notime(dbref obj);
+extern int disposeprops(dbref obj);
+extern void dirtyprops(dbref obj);
+extern void undirtyprops(dbref obj);
+extern int propfetch(dbref obj, PropPtr p);
+#endif /* DISKBASE */
 
-extern const char *propdir_split(const char *path, char *comp);
-extern PropPtr propdir_new_elem(PropDirPtr l, char *path);
-extern PropDirPtr propdir_delete_elem(PropDirPtr l, char *path);
-extern PropPtr propdir_get_elem(PropDirPtr l, char *path);
-extern PropPtr propdir_first_elem(PropDirPtr l, char *path);
-extern PropPtr propdir_next_elem(PropDirPtr l, char *path);
-extern int propdir_check(PropDirPtr l, char *path);
+extern PropPtr propdir_new_elem(PropPtr *l, char *path);
+extern PropPtr propdir_delete_elem(PropPtr l, char *path);
+extern PropPtr propdir_get_elem(PropPtr l, char *path);
+extern PropPtr propdir_first_elem(PropPtr l, char *path);
+extern PropPtr propdir_next_elem(PropPtr l, char *path);
+extern int propdir_check(PropPtr l, char *path);
 
 extern void db_putprop(FILE * f, const char *dir, PropPtr p);
 extern int db_get_single_prop(FILE * f, dbref obj, int pos);
 extern void db_getprops(FILE * f, dbref obj);
-extern void db_dump_props(FILE * f, dbref obj);
+extern void db_dump_props(FILE * f, struct object *o);
 
 
 /* From property.c */
 
 extern void db_putprop(FILE * f, const char *dir, PropPtr p);
-extern void db_dump_props_rec(FILE * f, const char *dir, PropDirPtr d);
+extern void db_dump_props_rec(struct object *o, FILE * f, const char *dir, PropPtr p);
 extern void db_getprops(FILE * f, dbref obj);
 extern char *displayprop(dbref player, dbref obj, const char *name, char *buf);
 extern int size_properties(dbref player, int load);

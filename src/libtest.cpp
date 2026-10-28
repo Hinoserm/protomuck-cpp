@@ -17,7 +17,6 @@
 #include "mpi.h"
 #include "reg.h"
 #include "externs.h"
-#include "Modules.h"
 #include "mufevent.h"
 #include "interp.h"
 #include "newhttp.h"            /* hinoserm */
@@ -78,6 +77,9 @@ __prim_nuku_rp_getstatus_1(PRIM_PROTOTYPE)
 
         prptr = get_property(oper2->data.objref, buf);
         if (prptr) {
+#ifdef DISKBASE
+
+#endif
             switch (PropType(prptr)) {
                 case PROP_STRTYP:
                     sscanf(PropDataUNCStr(prptr), "%lg", &fresult);
@@ -157,10 +159,16 @@ __prim_nuku_rp_getstatus_1(PRIM_PROTOTYPE)
                 sprintf(buf, "%s%c%s", dir, PROPDIR_DELIMITER, propname);
                 prptr = get_property(oper2->data.objref, buf);
                 if (prptr) {
+#ifdef DISKBASE
+                    propfetch(ref, prptr);
+#endif
                     if (PropType(prptr) != PROP_DIRTYP) {
                         sprintf(buf, "%s%c%s%cPower", dir, PROPDIR_DELIMITER, propname, PROPDIR_DELIMITER);
                         prptr = get_property(oper2->data.objref, buf);
                         if (prptr) {
+#ifdef DISKBASE
+                            propfetch(ref, prptr);
+#endif
                             switch (PropType(prptr)) {
                                 case PROP_STRTYP:
                                     sscanf(PropDataUNCStr(prptr), "%lg", &fresult);
@@ -209,9 +217,9 @@ __prim_funcprof_array(PRIM_PROTOTYPE)
     if (oper1->type == PROG_OBJECT) {
         nw = new_array_dictionary();
 
-        for (i = MUCK::database().top(); i-- > 0;) {
-            if (i == oper1->data.objref && Typeof(i) == TYPE_PROGRAM && MUCK::programRuntime(i).code && MUCK::programRuntime(i).fprofile) {
-                struct funcprof *fpe = MUCK::programRuntime(i).fprofile;
+        for (i = db_top; i-- > 0;) {
+            if (i == oper1->data.objref && Typeof(i) == TYPE_PROGRAM && DBFETCH(i)->sp.program.code && DBFETCH(i)->sp.program.fprofile) {
+                struct funcprof *fpe = DBFETCH(i)->sp.program.fprofile;
 
                 while (fpe) {
                     stk_array *nw2 = new_array_dictionary();

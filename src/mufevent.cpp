@@ -7,14 +7,12 @@
 #include "tune.h"
 #include "inst.h"
 #include "externs.h"
-#include "Modules.h"
 #include "match.h"
 #include "interface.h"
 #include "params.h"
 #include "strutils.h"
 #include "interp.h"
 #include "mufevent.h"
-#include "ObjectAccess.h"
 
 struct mufevent_process *mufevent_processes;
 
@@ -174,7 +172,7 @@ muf_event_dequeue_frame(struct frame *fr)
         tmp = proc->next;
         if (proc->fr == fr) {
             if (OkObj(proc->player) && !proc->fr->been_background)
-                MUCK::playerSession(proc->player).block = 0;
+                DBFETCH(proc->player)->sp.player.block = 0;
             proc->fr = NULL;
             muf_event_process_free(proc);
             count++;
@@ -200,7 +198,7 @@ muf_event_dequeue_pid(int pid)
         proc = proc->next;
         if (tmp->fr->pid == pid) {
             if (OkObj(tmp->player) && !tmp->fr->been_background) {
-                MUCK::playerSession(tmp->player).block = 0;
+                DBFETCH(tmp->player)->sp.player.block = 0;
             }
             muf_event_purge(tmp->fr);
             muf_event_process_free(tmp);
@@ -262,7 +260,7 @@ muf_event_dequeue(dbref prog, int sleeponly)
              */
             if (sleeponly == 0 || (sleeponly == 2 && tmp->fr->multitask != BACKGROUND)) {
                 if (OkObj(tmp->player) && !tmp->fr->been_background) {
-                    MUCK::playerSession(tmp->player).block = 0;
+                    DBFETCH(tmp->player)->sp.player.block = 0;
                 }
                 muf_event_purge(tmp->fr);
                 muf_event_process_free(tmp);
@@ -387,8 +385,8 @@ muf_event_list(dbref player, char *pat)
         sprintf(buf, pat,
                 proc->fr->pid, "--",
                 time_format_2((long) (rtime - proc->fr->started)),
-                (proc->fr->instcnt / 1000), pcnt, proc->prog, (OkObj(proc->player)) ? MUCK::getName(proc->player) : "(Login)", "EVENT_WAITFOR");
-        if (Wiz(MUCK::getOwner(player)) || (MUCK::getOwner(proc->prog) == MUCK::getOwner(player))
+                (proc->fr->instcnt / 1000), pcnt, proc->prog, (OkObj(proc->player)) ? NAME(proc->player) : "(Login)", "EVENT_WAITFOR");
+        if (Wiz(OWNER(player)) || (OWNER(proc->prog) == OWNER(player))
             || (proc->player == player))
             notify_nolisten(player, buf, 1);
         count++;
@@ -713,8 +711,8 @@ muf_event_process(void)
                     }
 
                     if (OkObj(proc->player)) {
-                        current_program = MUCK::playerSession(proc->player).currProg;
-                        block = MUCK::playerSession(proc->player).block;
+                        current_program = DBFETCH(proc->player)->sp.player.curr_prog;
+                        block = DBFETCH(proc->player)->sp.player.block;
                     } else {
                         if ((curdescr = get_descr(proc->descr, NOTHING)))
                             block = curdescr->block;
@@ -729,8 +727,8 @@ muf_event_process(void)
 
                     if (!is_fg) {
                         if (OkObj(proc->player)) {
-                            MUCK::playerSession(proc->player).block = block;
-                            MUCK::playerSession(proc->player).currProg = current_program;
+                            DBFETCH(proc->player)->sp.player.block = block;
+                            DBFETCH(proc->player)->sp.player.curr_prog = current_program;
                         } else {
                             if ((curdescr = get_descr(proc->descr, NOTHING)))
                                 curdescr->block = block;

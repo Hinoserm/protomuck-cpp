@@ -1,6 +1,3 @@
-#include <algorithm>
-#include <vector>
-
 #include "copyright.h"
 #include "config.h"
 
@@ -11,9 +8,6 @@
 #include "interface.h"
 #include "match.h"
 #include "externs.h"
-#include "Journal.h"
-#include "ObjectAccess.h"
-#include "Modules.h"
 
 #define anotify_nolisten2(x, y) anotify_nolisten(x, y, 1);
 
@@ -28,31 +22,29 @@ moveto(dbref what, dbref where)
     }
 
     /* remove what from old loc */
-    if ((loc = MUCK::getLocation(what)) != NOTHING) {
-        MUCK::detachContent(loc, what);
-        DBDIRTY(loc);
+    if ((loc = DBFETCH(what)->location) != NOTHING) {
+        DBSTORE(loc, contents, remove_first(DBFETCH(loc)->contents, what));
     }
     /* test for special cases */
     switch (where) {
         case NOTHING:
-            MUCK::setLocation(what, NOTHING);
+            DBSTORE(what, location, NOTHING);
             return;             /* NOTHING doesn't have contents */
         case HOME:
             switch (Typeof(what)) {
                 case TYPE_PLAYER:
-                    where = MUCK::playerHomeRef(what);
+                    where = DBFETCH(what)->sp.player.home;
                     break;
                 case TYPE_THING:
-                    where = [&]{ MUCK::Thing *t = MUCK::database().get(what)->As<MUCK::Thing>(); return (t && t->home()) ? t->home()->ref() : NOTHING; }();
+                    where = DBFETCH(what)->sp.thing.home;
                     if (parent_loop_check(what, where))
-                        where = MUCK::playerHomeRef(MUCK::getOwner(what));
+                        where = DBFETCH(OWNER(what))->sp.player.home;
                     break;
                 case TYPE_ROOM:
                     where = GLOBAL_ENVIRONMENT;
                     break;
                 case TYPE_PROGRAM:
-                case TYPE_UNSUPPORTED:
-                    where = MUCK::getOwner(what);
+                    where = OWNER(what);
                     break;
             }
             break;
@@ -62,65 +54,64 @@ moveto(dbref what, dbref where)
                     where = tp_player_start;
                     break;
                 case TYPE_THING:
-                    where = MUCK::getOwner(what);
+                    where = OWNER(what);
                     break;
                 case TYPE_ROOM:
                     where = tp_default_parent;
                     break;
                 case TYPE_PROGRAM:
-                case TYPE_UNSUPPORTED:
-                    where = MUCK::getOwner(what);
+                    where = OWNER(what);
                     break;
             }
             break;
     }
 
     /* now put what in where */
-    MUCK::attachContent(where, what);
+    PUSH(what, DBFETCH(where)->contents);
     DBDIRTY(where);
-    MUCK::setLocation(what, where);
+    DBSTORE(what, location, where);
 }
 
+dbref reverse(dbref);
 void
 send_contents(int descr, dbref loc, dbref dest)
 {
-    /* snapshot: moveto mutates the list we are draining */
-    std::vector<MUCK::DbObject *> snapshot = MUCK::contentsOf(loc);
+    dbref first;
+    dbref rest;
 
-    MUCK::contentsOf(loc).clear();
-    MUCK::journalRecord(loc, "$type/contents");
+    first = DBFETCH(loc)->contents;
+    DBSTORE(loc, contents, NOTHING);
 
-    /* blast locations of everything in the old list */
-    for (MUCK::DbObject *o : snapshot)
-        MUCK::setLocation(o->ref(), NOTHING);
+    /* blast locations of everything in list */
+    DOLIST(rest, first) {
+        DBSTORE(rest, location, NOTHING);
+    }
 
-    for (MUCK::DbObject *o : snapshot) {
-        dbref first = o->ref();
-
+    while (first != NOTHING) {
+        rest = DBFETCH(first)->next;
         if ((Typeof(first) != TYPE_THING)
             && (Typeof(first) != TYPE_PROGRAM)) {
             moveto(first, loc);
         } else {
             moveto(first, FLAGS(first) & STICKY ? HOME : dest);
         }
+        first = rest;
     }
 
-    /* arrivals prepended in walk order; the reverse restores the
-     * original relative order for whatever stayed here, exactly as
-     * the old chain reverse did */
-    std::reverse(MUCK::contentsOf(loc).begin(), MUCK::contentsOf(loc).end());
-    DBDIRTY(loc);
+    DBSTORE(loc, contents, reverse(DBFETCH(loc)->contents));
 }
 
 void
 maybe_dropto(int descr, dbref loc, dbref dropto)
 {
+    dbref thing;
+
     if (loc == dropto)
         return;                 /* bizarre special case */
 
     /* check for players */
-    for (MUCK::DbObject *o : MUCK::contentsOf(loc)) {
-        if (Typeof(o->ref()) == TYPE_PLAYER)
+    DOLIST(thing, DBFETCH(loc)->contents) {
+        if (Typeof(thing) == TYPE_PLAYER)
             return;
     }
 
@@ -139,9 +130,9 @@ parent_loop_check(dbref source, dbref dest)
         return 0;
     if (dest == NIL)
         return 0;
-    if (Typeof(dest) == TYPE_THING && parent_loop_check(source, [&]{ MUCK::Thing *t = MUCK::database().get(dest)->As<MUCK::Thing>(); return (t && t->home()) ? t->home()->ref() : NOTHING; }()))
+    if (Typeof(dest) == TYPE_THING && parent_loop_check(source, DBFETCH(dest)->sp.thing.home))
         return 1;
-    return parent_loop_check(source, MUCK::getLocation(dest));
+    return parent_loop_check(source, DBFETCH(dest)->location);
 }
 
 static int donelook = 0;
@@ -154,13 +145,13 @@ enter_room(int descr, dbref player, dbref loc, dbref exit)
 
     /* check for room == HOME */
     if (loc == HOME)
-        loc = MUCK::playerHomeRef(player); /* home */
+        loc = DBFETCH(player)->sp.player.home; /* home */
     /* check for room == NIL */
     if (loc == NIL)
-        loc = Typeof(player) == TYPE_PLAYER ? tp_player_start : MUCK::getOwner(player);
+        loc = Typeof(player) == TYPE_PLAYER ? tp_player_start : OWNER(player);
 
     /* get old location */
-    old = MUCK::getLocation(player);
+    old = DBFETCH(player)->location;
 
     /* check for self-loop */
     /* self-loops don't do move or other player notification */
@@ -196,16 +187,14 @@ enter_room(int descr, dbref player, dbref loc, dbref exit)
                 /* && (Typeof(exit) != TYPE_EXIT || !Dark(exit) ) */
                 && !tp_quiet_moves) {
 #if !defined(QUIET_MOVES)
-                sprintf(buf, CMOVE "%s has left.", MUCK::getName(player));
-                anotify_except(CONTENTS(old), player, buf, player);
+                sprintf(buf, CMOVE "%s has left.", PNAME(player));
+                anotify_except(DBFETCH(old)->contents, player, buf, player);
 #endif
             }
         }
 
-        /* if old location has STICKY dropto, send stuff through it;
-         * the raw ref read keeps a HOME dropto working */
-        if (old != NOTHING && (FLAGS(old) & STICKY)
-            && (dropto = MUCK::roomDropToRef(old)) != NOTHING) {
+        /* if old location has STICKY dropto, send stuff through it */
+        if (old != NOTHING && Typeof(old) == TYPE_ROOM && (dropto = DBFETCH(old)->sp.room.dropto) != NOTHING && (FLAGS(old) & STICKY)) {
             maybe_dropto(descr, old, dropto);
         }
 
@@ -214,8 +203,8 @@ enter_room(int descr, dbref player, dbref loc, dbref exit)
             /* && (Typeof(exit) != TYPE_EXIT || !Dark(exit) ) */
             && !tp_quiet_moves) {
 #if !defined(QUIET_MOVES)
-            sprintf(buf, CMOVE "%s has arrived.", MUCK::getName(player));
-            anotify_except(CONTENTS(loc), player, buf, player);
+            sprintf(buf, CMOVE "%s has arrived.", PNAME(player));
+            anotify_except(DBFETCH(loc)->contents, player, buf, player);
 #endif
         }
     }
@@ -237,10 +226,10 @@ enter_room(int descr, dbref player, dbref loc, dbref exit)
     if (tp_penny_rate != 0) {
         /* check for pennies */
         if (!controls(player, loc)
-            && MUCK::playerPennies(player) <= tp_max_pennies && RANDOM() % tp_penny_rate == 0) {
+            && DBFETCH(player)->sp.player.pennies <= tp_max_pennies && RANDOM() % tp_penny_rate == 0) {
             anotify_fmt(player, CINFO "You found a %s!", tp_penny);
-            MUCK::playerAddPennies(MUCK::getOwner(player), 1);
-            DBDIRTY(MUCK::getOwner(player));
+            DBFETCH(OWNER(player))->sp.player.pennies++;
+            DBDIRTY(OWNER(player));
         }
     }
 
@@ -264,19 +253,19 @@ send_home(int descr, dbref thing, int puppethome)
             /* send his possessions home first! */
             /* that way he sees them when he arrives */
             send_contents(descr, thing, HOME);
-            enter_room(descr, thing, MUCK::playerHomeRef(thing), MUCK::getLocation(thing));
+            enter_room(descr, thing, DBFETCH(thing)->sp.player.home, DBFETCH(thing)->location);
             break;
         case TYPE_THING:
             if (puppethome)
                 send_contents(descr, thing, HOME);
             if (FLAGS(thing) & (ZOMBIE | LISTENER)) {
-                enter_room(descr, thing, MUCK::playerHomeRef(thing), MUCK::getLocation(thing));
+                enter_room(descr, thing, DBFETCH(thing)->sp.player.home, DBFETCH(thing)->location);
                 break;
             }
             moveto(thing, HOME); /* home */
             break;
         case TYPE_PROGRAM:
-            moveto(thing, MUCK::getOwner(thing));
+            moveto(thing, OWNER(thing));
             break;
         default:
             /* no effect */
@@ -323,10 +312,10 @@ can_move2(int descr, dbref player, const char *direction, int lev)
     matched = last_match_result(&md);
 
     if (OkObj(matched)) {
-        dbref dest = MUCK::exitDestCount(matched) ? MUCK::exitDestRef(matched, 0) : NOTHING;
+        dbref dest = DBFETCH(matched)->sp.exit.ndest ? DBFETCH(matched)->sp.exit.dest[0] : NOTHING;
 
         if ((FLAG2(player) & F2IMMOBILE) && !(FLAG2(matched) & F2IMMOBILE) && (!OkObj(dest) || Typeof(dest) != TYPE_PROGRAM)) {
-            envpropqueue(descr, player, OkObj(player) ? MUCK::getLocation(player) : -1, matched, player, NOTHING, "@immobile", "Immobile", 1, 1);
+            envpropqueue(descr, player, OkObj(player) ? getloc(player) : -1, matched, player, NOTHING, "@immobile", "Immobile", 1, 1);
             return 2;
         }
     }
@@ -359,21 +348,21 @@ trigger(int descr, dbref player, dbref exit, int pflag)
                                  * source obj */
     struct frame *tmpfr;
 
-    loc = MUCK::getLocation(player);
+    loc = DBFETCH(player)->location;
 
     sobjact = 0;
 
-    for (i = 0; i < MUCK::exitDestCount(exit); i++) {
-        dest = MUCK::exitDestRef(exit, i);
+    for (i = 0; i < DBFETCH(exit)->sp.exit.ndest; i++) {
+        dest = (DBFETCH(exit)->sp.exit.dest)[i];
         if (dest == HOME) {
-            dest = MUCK::playerHomeRef(player);
+            dest = DBFETCH(player)->sp.player.home;
         }
         if (dest == NIL) {      /* null destination, do nothing but the succ statements. */
             if (GETSUCC(exit)) {
                 exec_or_notify(descr, player, exit, GETSUCC(exit), "(@Succ)");
             }
             if (GETOSUCC(exit) && !Dark(player)) {
-                parse_omessage(descr, player, loc, exit, GETOSUCC(exit), MUCK::getName(player), "(@Osucc)");
+                parse_omessage(descr, player, loc, exit, GETOSUCC(exit), NAME(player), "(@Osucc)");
             }
         } else {
             switch (Typeof(dest)) {
@@ -383,7 +372,7 @@ trigger(int descr, dbref player, dbref exit, int pflag)
                             anotify_nolisten2(player, CINFO "That would cause a paradox.");
                             break;
                         }
-                        if (!Mage(MUCK::getOwner(player))
+                        if (!Mage(OWNER(player))
                             && Typeof(player) == TYPE_THING && ((FLAGS(dest) | FLAGS(exit)) & ZOMBIE)) {
                             anotify_nolisten2(player, CFAIL "Puppets can't go that way.");
                             break;
@@ -407,15 +396,15 @@ trigger(int descr, dbref player, dbref exit, int pflag)
                             exec_or_notify(descr, player, exit, GETSUCC(exit), "(@Succ)");
                         }
                         if (GETOSUCC(exit) && !Dark(player)) {
-                            parse_omessage(descr, player, loc, exit, GETOSUCC(exit), MUCK::getName(player), "(@Osucc)");
+                            parse_omessage(descr, player, loc, exit, GETOSUCC(exit), NAME(player), "(@Osucc)");
                         }
                         if (GETDROP(exit))
                             exec_or_notify(descr, player, exit, GETDROP(exit), "(@Drop)");
                         if (GETODROP(exit) && !Dark(player)) {
-                            parse_omessage(descr, player, dest, exit, GETODROP(exit), MUCK::getName(player), "(@Odrop)");
+                            parse_omessage(descr, player, dest, exit, GETODROP(exit), PNAME(player), "(@Odrop)");
                         }
 #ifdef DYNAMIC_LINKS
-                        dest = MUCK::exitDestRef(exit, i);
+                        dest = (DBFETCH(exit)->sp.exit.dest)[i];
                         if (Typeof(dest) != TYPE_ROOM)
                             break;
 #endif
@@ -423,7 +412,7 @@ trigger(int descr, dbref player, dbref exit, int pflag)
                     }
                     break;
                 case TYPE_THING:
-                    if (dest == MUCK::getLocation(exit) && (FLAGS(dest) & VEHICLE)) {
+                    if (dest == getloc(exit) && (FLAGS(dest) & VEHICLE)) {
                         if (pflag) {
                             if (parent_loop_check(player, dest)) {
                                 anotify_nolisten2(player, CINFO "That would cause a paradox.");
@@ -433,46 +422,46 @@ trigger(int descr, dbref player, dbref exit, int pflag)
                                 exec_or_notify(descr, player, exit, GETSUCC(exit), "(@Succ)");
                             }
                             if (GETOSUCC(exit) && !Dark(player)) {
-                                parse_omessage(descr, player, loc, exit, GETOSUCC(exit), MUCK::getName(player), "(@Osucc)");
+                                parse_omessage(descr, player, loc, exit, GETOSUCC(exit), NAME(player), "(@Osucc)");
                             }
                             if (GETDROP(exit))
                                 exec_or_notify(descr, player, exit, GETDROP(exit), "(@Drop)");
                             if (GETODROP(exit) && !Dark(player)) {
-                                parse_omessage(descr, player, dest, exit, GETODROP(exit), MUCK::getName(player), "(@Odrop)");
+                                parse_omessage(descr, player, dest, exit, GETODROP(exit), PNAME(player), "(@Odrop)");
                             }
 #ifdef DYNAMIC_LINKS
-                            dest = MUCK::exitDestRef(exit, i);
+                            dest = (DBFETCH(exit)->sp.exit.dest)[i];
                             if (Typeof(dest) != TYPE_THING)
                                 break;
 #endif
                             enter_room(descr, player, dest, exit);
                         }
                     } else {
-                        if (Typeof(MUCK::getLocation(exit)) == TYPE_THING) {
-                            if (parent_loop_check(dest, MUCK::getLocation(MUCK::getLocation(exit)))) {
+                        if (Typeof(DBFETCH(exit)->location) == TYPE_THING) {
+                            if (parent_loop_check(dest, getloc(getloc(exit)))) {
                                 anotify_nolisten2(player, CINFO "That would cause a paradox.");
                                 break;
                             }
-                            moveto(dest, MUCK::getLocation(MUCK::getLocation(exit)));
+                            moveto(dest, DBFETCH(DBFETCH(exit)->location)->location);
                             if (!(FLAGS(exit) & STICKY)) {
                                 /* send home source object */
                                 sobjact = 1;
                             }
                         } else {
-                            if (parent_loop_check(dest, MUCK::getLocation(exit))) {
+                            if (parent_loop_check(dest, getloc(exit))) {
                                 anotify_nolisten2(player, CINFO "That would cause a paradox.");
                                 break;
                             }
-                            moveto(dest, MUCK::getLocation(exit));
+                            moveto(dest, DBFETCH(exit)->location);
                         }
                     }
                     break;
                 case TYPE_EXIT: /* It's a meta-link(tm)! */
                     ts_useobject(player, dest);
-                    trigger(descr, player, MUCK::exitDestRef(exit, i), 0);
+                    trigger(descr, player, (DBFETCH(exit)->sp.exit.dest)[i], 0);
                     break;
                 case TYPE_PLAYER:
-                    if (pflag && MUCK::getLocation(dest) != NOTHING) {
+                    if (pflag && DBFETCH(dest)->location != NOTHING) {
                         if (parent_loop_check(player, dest)) {
                             anotify_nolisten2(player, CINFO "That would cause a paradox.");
                             break;
@@ -482,14 +471,14 @@ trigger(int descr, dbref player, dbref exit, int pflag)
                                 exec_or_notify(descr, player, exit, GETDROP(exit), "(@Drop)");
                             }
                             if (GETODROP(exit) && !Dark(player)) {
-                                parse_omessage(descr, player, MUCK::getLocation(dest), exit, GETODROP(exit), MUCK::getName(player), "(@Odrop)");
+                                parse_omessage(descr, player, getloc(dest), exit, GETODROP(exit), PNAME(player), "(@Odrop)");
                             }
 #ifdef DYNAMIC_LINKS
-                            dest = MUCK::exitDestRef(exit, i);
+                            dest = (DBFETCH(exit)->sp.exit.dest)[i];
                             if (Typeof(dest) != TYPE_PLAYER)
                                 break;
 #endif
-                            enter_room(descr, player, MUCK::getLocation(dest), exit);
+                            enter_room(descr, player, DBFETCH(dest)->location, exit);
                         } else {
                             anotify_nolisten2(player, CINFO "That player does not wish to be disturbed.");
                         }
@@ -506,7 +495,7 @@ trigger(int descr, dbref player, dbref exit, int pflag)
                         anotify_nolisten2(player, CFAIL "Guests can't do that.")
                             break;
                     }
-                    if (!Mage(MUCK::getOwner(player)) && Typeof(player) == TYPE_THING && (FLAGS(exit) & ZOMBIE)) {
+                    if (!Mage(OWNER(player)) && Typeof(player) == TYPE_THING && (FLAGS(exit) & ZOMBIE)) {
                         anotify_nolisten2(player, CFAIL "Puppets can't go that way.");
                         break;
                     }
@@ -514,22 +503,18 @@ trigger(int descr, dbref player, dbref exit, int pflag)
                         exec_or_notify(descr, player, exit, GETSUCC(exit), "(@Succ)");
                     }
                     if (GETOSUCC(exit) && !Dark(player)) {
-                        parse_omessage(descr, player, loc, exit, GETOSUCC(exit), MUCK::getName(player), "(@Osucc)");
+                        parse_omessage(descr, player, loc, exit, GETOSUCC(exit), NAME(player), "(@Osucc)");
                     }
-                    tmpfr = interp(descr, player, MUCK::getLocation(player), dest, exit, FOREGROUND, STD_REGUID, 0);
+                    tmpfr = interp(descr, player, DBFETCH(player)->location, dest, exit, FOREGROUND, STD_REGUID, 0);
                     if (tmpfr) {
                         interp_loop(player, dest, tmpfr, 0);
                     }
                     return;
-                default:
-                    /* an UNSUPPORTED placeholder destination */
-                    anotify_nolisten2(player, CINFO "Nothing happens.");
-                    break;
             }
         }
     }
     if (sobjact)
-        send_home(descr, MUCK::getLocation(exit), 0);
+        send_home(descr, DBFETCH(exit)->location, 0);
 }
 
 void
@@ -545,10 +530,10 @@ do_move(int descr, dbref player, const char *direction, int lev)
             anotify_nolisten2(player, CFAIL "Movement restricted, cannot return home.");
         } else {
             /* send him home */
-            if ((loc = MUCK::getLocation(player)) != NOTHING) {
+            if ((loc = DBFETCH(player)->location) != NOTHING) {
                 /* tell everybody else */
-                sprintf(buf, CMOVE "%s goes home.", MUCK::getName(player));
-                anotify_except(CONTENTS(loc), player, buf, player);
+                sprintf(buf, CMOVE "%s goes home.", PNAME(player));
+                anotify_except(DBFETCH(loc)->contents, player, buf, player);
             }
             /* give the player the messages */
             anotify_nolisten2(player, SYSRED "There's no place like home...");
@@ -572,7 +557,7 @@ do_move(int descr, dbref player, const char *direction, int lev)
                 /* we got one */
                 /* check to see if we got through */
                 ts_useobject(player, exit);
-                loc = MUCK::getLocation(player);
+                loc = DBFETCH(player)->location;
                 if (can_doit(descr, player, exit, "You can't go that way.")) {
                     trigger(descr, player, exit, 1);
                 }
@@ -587,7 +572,7 @@ do_leave(int descr, dbref player)
 {
     dbref loc, dest;
 
-    loc = MUCK::getLocation(player);
+    loc = DBFETCH(player)->location;
     if (loc == NOTHING || Typeof(loc) == TYPE_ROOM) {
         anotify_nolisten2(player, CFAIL "You can't go that way.");
         return;
@@ -598,8 +583,8 @@ do_leave(int descr, dbref player)
         return;
     }
 
-    dest = MUCK::getLocation(loc);
-    if (dest < 0 || dest >= MUCK::database().top())
+    dest = DBFETCH(loc)->location;
+    if (dest < 0 || dest >= db_top)
         return;
 
     if (Typeof(dest) != TYPE_ROOM && Typeof(dest) != TYPE_THING) {
@@ -640,7 +625,7 @@ do_get(int descr, dbref player, const char *what, const char *obj)
     init_match_check_keys(descr, player, what, TYPE_THING, &md);
     match_neighbor(&md);
     match_possession(&md);
-    if (Mage(MUCK::getOwner(player)) || (MUCK::getPowers(player) & POW_LONG_FINGERS))
+    if (Mage(OWNER(player)) || (POWERS(player) & POW_LONG_FINGERS))
         match_absolute(&md);    /* the wizard has long fingers */
 
     if ((thing = noisy_match_result(&md)) != NOTHING) {
@@ -648,7 +633,7 @@ do_get(int descr, dbref player, const char *what, const char *obj)
         if (obj && *obj) {
             init_match_check_keys(descr, player, obj, TYPE_THING, &md);
             match_rmatch(cont, &md);
-            if (Mage(MUCK::getOwner(player)) || (MUCK::getPowers(player) & POW_LONG_FINGERS))
+            if (Mage(OWNER(player)) || (POWERS(player) & POW_LONG_FINGERS))
                 match_absolute(&md); /* the wizard has long fingers */
             if ((thing = noisy_match_result(&md)) == NOTHING) {
                 return;
@@ -663,14 +648,14 @@ do_get(int descr, dbref player, const char *what, const char *obj)
             }
         }
         if (Typeof(player) != TYPE_PLAYER) {
-            if (Typeof(MUCK::getLocation(thing)) != TYPE_ROOM) {
-                if (MUCK::getOwner(player) != MUCK::getOwner(thing)) {
+            if (Typeof(DBFETCH(thing)->location) != TYPE_ROOM) {
+                if (OWNER(player) != OWNER(thing)) {
                     anotify(player, CFAIL "Puppets aren't allowed to be thieves!");
                     return;
                 }
             }
         }
-        if (MUCK::getLocation(thing) == player) {
+        if (DBFETCH(thing)->location == player) {
             anotify_nolisten2(player, CINFO "You already have that.");
             return;
         }
@@ -698,7 +683,7 @@ do_get(int descr, dbref player, const char *what, const char *obj)
                         exec_or_notify(descr, player, thing, GETSUCC(thing), "(@Succ)");
                     }
                     if (GETOSUCC(thing)) {
-                        parse_omessage(descr, player, MUCK::getLocation(thing), thing, GETOSUCC(thing), MUCK::getName(player), "(@Osucc)");
+                        parse_omessage(descr, player, getloc(thing), thing, GETOSUCC(thing), NAME(player), "(@Osucc)");
                     }
                     moveto(thing, player);
                     anotify_nolisten2(player, CSUCC "Taken.");
@@ -724,7 +709,7 @@ do_drop(int descr, dbref player, const char *name, const char *obj)
         return;
     }
 
-    if ((loc = MUCK::getLocation(player)) == NOTHING)
+    if ((loc = getloc(player)) == NOTHING)
         return;
 
     init_match(descr, player, name, NOTYPE, &md);
@@ -737,7 +722,7 @@ do_drop(int descr, dbref player, const char *name, const char *obj)
         init_match(descr, player, obj, NOTYPE, &md);
         match_possession(&md);
         match_neighbor(&md);
-        if (Mage(MUCK::getOwner(player)) || (MUCK::getPowers(player) & POW_LONG_FINGERS))
+        if (Mage(OWNER(player)) || (POWERS(player) & POW_LONG_FINGERS))
             match_absolute(&md); /* the wizard has long fingers */
         if ((cont = noisy_match_result(&md)) == NOTHING || thing == AMBIGUOUS) {
             return;
@@ -747,8 +732,7 @@ do_drop(int descr, dbref player, const char *name, const char *obj)
         case TYPE_THING:
             ts_useobject(player, thing);
         case TYPE_PROGRAM:
-        case TYPE_UNSUPPORTED:
-            if (MUCK::getLocation(thing) != player) {
+            if (DBFETCH(thing)->location != player) {
                 /* Shouldn't ever happen. */
                 anotify_nolisten2(player, CFAIL "You can't drop that.");
                 break;
@@ -768,19 +752,16 @@ do_drop(int descr, dbref player, const char *name, const char *obj)
             if (Typeof(cont) == TYPE_ROOM && (FLAGS(thing) & STICKY) && Typeof(thing) == TYPE_THING) {
                 send_home(descr, thing, 0);
             } else {
-                dbref cdrop = MUCK::roomDropToRef(cont);
-                bool immediate_dropto = (Typeof(cont) == TYPE_ROOM
-                                         && cdrop != NOTHING
-                                         && !(FLAGS(cont) & STICKY));
+                int immediate_dropto = (Typeof(cont) == TYPE_ROOM && DBFETCH(cont)->sp.room.dropto != NOTHING && !(FLAGS(cont) & STICKY));
 
-                moveto(thing, immediate_dropto ? cdrop : cont);
+                moveto(thing, immediate_dropto ? DBFETCH(cont)->sp.room.dropto : cont);
             }
             if (Typeof(cont) == TYPE_THING) {
                 anotify_nolisten2(player, CSUCC "Put away.");
                 return;
             } else if (Typeof(cont) == TYPE_PLAYER) {
-                anotify_fmt(cont, CNOTE "%s hands you %s.", MUCK::getName(player), MUCK::getName(thing));
-                anotify_fmt(player, CSUCC "You hand %s to %s.", MUCK::getName(thing), MUCK::getName(cont));
+                anotify_fmt(cont, CNOTE "%s hands you %s.", PNAME(player), PNAME(thing));
+                anotify_fmt(player, CSUCC "You hand %s to %s.", PNAME(thing), PNAME(cont));
                 return;
             }
 
@@ -793,14 +774,14 @@ do_drop(int descr, dbref player, const char *name, const char *obj)
                 exec_or_notify(descr, player, loc, GETDROP(loc), "(@Drop)");
 
             if (GETODROP(thing)) {
-                parse_omessage(descr, player, loc, thing, GETODROP(thing), MUCK::getName(player), "(@Odrop)");
+                parse_omessage(descr, player, loc, thing, GETODROP(thing), PNAME(player), "(@Odrop)");
             } else {
-                sprintf(buf, SYSBLUE "%s drops %s.", MUCK::getName(player), MUCK::getName(thing));
-                anotify_except(CONTENTS(loc), player, buf, player);
+                sprintf(buf, SYSBLUE "%s drops %s.", PNAME(player), PNAME(thing));
+                anotify_except(DBFETCH(loc)->contents, player, buf, player);
             }
 
             if (GETODROP(loc)) {
-                parse_omessage(descr, player, loc, loc, GETODROP(loc), MUCK::getName(thing), "(@Odrop)");
+                parse_omessage(descr, player, loc, loc, GETODROP(loc), PNAME(thing), "(@Odrop)");
             }
             break;
         default:
@@ -832,20 +813,17 @@ do_recycle(int descr, dbref player, const char *name)
     match_possession(&md);
     match_registered(&md);
     match_here(&md);
-    if (Mage(MUCK::getOwner(player)) || (MUCK::getPowers(player) & POW_LONG_FINGERS)) {
+    if (Mage(OWNER(player)) || (POWERS(player) & POW_LONG_FINGERS)) {
         match_absolute(&md);
     }
     if ((thing = noisy_match_result(&md)) != NOTHING) {
         if ((!controls(player, thing))
-            || (Protect(thing) && !(MLevel(player) > MLevel(MUCK::getOwner(thing))))) {
+            || (Protect(thing) && !(MLevel(player) > MLevel(OWNER(thing))))) {
             anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
         } else {
             switch (Typeof(thing)) {
-                case TYPE_UNSUPPORTED:
-                    anotify_nolisten2(player, CFAIL "That object's type module is not loaded; it can't be recycled right now.");
-                    return;
                 case TYPE_ROOM:
-                    if (MUCK::getOwner(thing) != MUCK::getOwner(player)) {
+                    if (OWNER(thing) != OWNER(player)) {
                         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
                         return;
                     }
@@ -855,7 +833,7 @@ do_recycle(int descr, dbref player, const char *name)
                     }
                     break;
                 case TYPE_THING:
-                    if (MUCK::getOwner(thing) != MUCK::getOwner(player)) {
+                    if (OWNER(thing) != OWNER(player)) {
                         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
                         return;
                     }
@@ -863,18 +841,18 @@ do_recycle(int descr, dbref player, const char *name)
                         sprintf(buf,
                                 SYSBLUE
                                 "%.512s's owner commands it to kill itself.  It blinks a few times in shock, and says, \"But.. but.. WHY?\"  It suddenly clutches it's heart, grimacing with pain..  Staggers a few steps before falling to it's knees, then plops down on it's face.  *thud*  It kicks it's legs a few times, with weakening force, as it suffers a seizure.  It's color slowly starts changing to purple, before it explodes with a fatal *POOF*!",
-                                MUCK::getName(thing));
-                        anotify_except(CONTENTS(MUCK::getLocation(thing)), thing, buf, player);
-                        anotify_nolisten2(MUCK::getOwner(player), buf);
-                        anotify_nolisten2(MUCK::getOwner(player), CINFO "Now don't you feel guilty?");
+                                PNAME(thing));
+                        anotify_except(DBFETCH(getloc(thing))->contents, thing, buf, player);
+                        anotify_nolisten2(OWNER(player), buf);
+                        anotify_nolisten2(OWNER(player), CINFO "Now don't you feel guilty?");
                     }
                     break;
                 case TYPE_EXIT:
-                    if (MUCK::getOwner(thing) != MUCK::getOwner(player)) {
+                    if (OWNER(thing) != OWNER(player)) {
                         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
                         return;
                     }
-                    if (!unset_source(player, MUCK::getLocation(player), thing)) {
+                    if (!unset_source(player, DBFETCH(player)->location, thing)) {
                         anotify_nolisten2(player, CFAIL "You can't do that to an exit in another room.");
                         return;
                     }
@@ -885,7 +863,7 @@ do_recycle(int descr, dbref player, const char *name)
                     /* NOTREACHED */
                     break;
                 case TYPE_PROGRAM:
-                    if (MUCK::getOwner(thing) != MUCK::getOwner(player)) {
+                    if (OWNER(thing) != OWNER(player)) {
                         anotify_fmt(player, CFAIL "%s", tp_noperm_mesg);
                         return;
                     }
@@ -906,6 +884,7 @@ do_recycle(int descr, dbref player, const char *name)
 void
 recycle(int descr, dbref player, dbref thing)
 {
+    extern dbref recyclable;
     static int depth = 0;
     dbref first;
     dbref rest;
@@ -915,41 +894,33 @@ recycle(int descr, dbref player, dbref thing)
     depth++;
     switch (Typeof(thing)) {
         case TYPE_ROOM:
-            if (!Mage(MUCK::getOwner(thing)))
-                MUCK::playerAddPennies(MUCK::getOwner(thing), tp_room_cost);
-            DBDIRTY(MUCK::getOwner(thing));
-            {
-                std::vector<MUCK::DbObject *> snap = MUCK::exitsOf(thing);
-
-                for (MUCK::DbObject *eo : snap) {
-                    first = eo->ref();
-                    if (MUCK::getLocation(first) == NOTHING || MUCK::getLocation(first) == thing)
-                        recycle(descr, player, first);
-                }
+            if (!Mage(OWNER(thing)))
+                DBFETCH(OWNER(thing))->sp.player.pennies += tp_room_cost;
+            DBDIRTY(OWNER(thing));
+            for (first = DBFETCH(thing)->exits; first != NOTHING; first = rest) {
+                rest = DBFETCH(first)->next;
+                if (DBFETCH(first)->location == NOTHING || DBFETCH(first)->location == thing)
+                    recycle(descr, player, first);
             }
-            anotify_except(CONTENTS(thing), NOTHING, CNOTE "You feel a wrenching sensation...", player);
+            anotify_except(DBFETCH(thing)->contents, NOTHING, CNOTE "You feel a wrenching sensation...", player);
             break;
         case TYPE_THING:
-            if (!Mage(MUCK::getOwner(thing)))
-                MUCK::playerAddPennies(MUCK::getOwner(thing), MUCK::database().get(thing)->As<MUCK::Thing>()->value());
-            DBDIRTY(MUCK::getOwner(thing));
-            {
-                std::vector<MUCK::DbObject *> snap = MUCK::exitsOf(thing);
-
-                for (MUCK::DbObject *eo : snap) {
-                    first = eo->ref();
-                    if (MUCK::getLocation(first) == NOTHING || MUCK::getLocation(first) == thing)
-                        recycle(descr, player, first);
-                }
+            if (!Mage(OWNER(thing)))
+                DBFETCH(OWNER(thing))->sp.player.pennies += DBFETCH(thing)->sp.thing.value;
+            DBDIRTY(OWNER(thing));
+            for (first = DBFETCH(thing)->exits; first != NOTHING; first = rest) {
+                rest = DBFETCH(first)->next;
+                if (DBFETCH(first)->location == NOTHING || DBFETCH(first)->location == thing)
+                    recycle(descr, player, first);
             }
             break;
         case TYPE_EXIT:
-            if (!Mage(MUCK::getOwner(thing)))
-                MUCK::playerAddPennies(MUCK::getOwner(thing), tp_exit_cost);
-            if (!Mage(MUCK::getOwner(thing)))
-                if (MUCK::exitDestCount(thing) != 0)
-                    MUCK::playerAddPennies(MUCK::getOwner(thing), tp_link_cost);
-            DBDIRTY(MUCK::getOwner(thing));
+            if (!Mage(OWNER(thing)))
+                DBFETCH(OWNER(thing))->sp.player.pennies += tp_exit_cost;
+            if (!Mage(OWNER(thing)))
+                if (DBFETCH(thing)->sp.exit.ndest != 0)
+                    DBFETCH(OWNER(thing))->sp.player.pennies += tp_link_cost;
+            DBDIRTY(OWNER(thing));
             break;
         case TYPE_PROGRAM:
             dequeue_prog(thing, 0);
@@ -958,80 +929,87 @@ recycle(int descr, dbref player, dbref thing)
             break;
     }
 
-    for (rest = 0; rest < MUCK::database().top(); rest++) {
+    for (rest = 0; rest < db_top; rest++) {
         switch (Typeof(rest)) {
-            case TYPE_ROOM: {
-                MUCK::Room *rr = MUCK::database().get(rest)->As<MUCK::Room>();
-
-                if (rr && rr->dropTo() && rr->dropTo()->ref() == thing)
-                    rr->setDropTo(nullptr);
-            }
-                if (MUCK::getOwner(rest) == thing) {
-                    MUCK::setOwner(rest, MAN);
+            case TYPE_ROOM:
+                if (DBFETCH(rest)->sp.room.dropto == thing) {
+                    DBFETCH(rest)->sp.room.dropto = NOTHING;
+                    DBDIRTY(rest);
+                }
+                if (DBFETCH(rest)->exits == thing) {
+                    DBFETCH(rest)->exits = DBFETCH(thing)->next;
+                    DBDIRTY(rest);
+                }
+                if (OWNER(rest) == thing) {
+                    OWNER(rest) = MAN;
                     DBDIRTY(rest);
                 }
                 break;
             case TYPE_THING:
-                if ([&]{ MUCK::Thing *t = MUCK::database().get(rest)->As<MUCK::Thing>(); return (t && t->home()) ? t->home()->ref() : NOTHING; }() == thing) {
-                    if (MUCK::playerHomeRef(MUCK::getOwner(rest)) == thing)
-                        MUCK::database().get(MUCK::getOwner(rest))->As<MUCK::Player>()
-                            ->setHome(MUCK::database().get(tp_player_start));
-                    MUCK::database().get(rest)->As<MUCK::Thing>()->setHome(
-                        MUCK::database().get(MUCK::playerHomeRef(MUCK::getOwner(rest))));
+                if (DBFETCH(rest)->sp.thing.home == thing) {
+                    if (DBFETCH(OWNER(rest))->sp.player.home == thing)
+                        DBSTORE(OWNER(rest), sp.player.home, tp_player_start);
+                    DBFETCH(rest)->sp.thing.home = DBFETCH(OWNER(rest))->sp.player.home;
                     DBDIRTY(rest);
                 }
-                if (MUCK::getOwner(rest) == thing) {
-                    MUCK::setOwner(rest, MAN);
+                if (DBFETCH(rest)->exits == thing) {
+                    DBFETCH(rest)->exits = DBFETCH(thing)->next;
+                    DBDIRTY(rest);
+                }
+                if (OWNER(rest) == thing) {
+                    OWNER(rest) = MAN;
                     DBDIRTY(rest);
                 }
                 break;
             case TYPE_EXIT:
             {
-                MUCK::Exit *e = MUCK::database().get(rest)->As<MUCK::Exit>();
-                dbref keep[MAX_LINKS];
-                int i, j = 0;
+                int i, j;
 
-                for (i = 0; i < e->destCount() && j < MAX_LINKS; i++) {
-                    if (e->destRef(i) != thing)
-                        keep[j++] = e->destRef(i);
+                for (i = j = 0; i < DBFETCH(rest)->sp.exit.ndest; i++) {
+                    if ((DBFETCH(rest)->sp.exit.dest)[i] != thing)
+                        (DBFETCH(rest)->sp.exit.dest)[j++] = (DBFETCH(rest)->sp.exit.dest)[i];
                 }
-                if (j < e->destCount()) {
-                    MUCK::playerAddPennies(MUCK::getOwner(rest), tp_link_cost);
-                    DBDIRTY(MUCK::getOwner(rest));
-                    e->setDestRefs(keep, j);
+                if (j < DBFETCH(rest)->sp.exit.ndest) {
+                    DBFETCH(OWNER(rest))->sp.player.pennies += tp_link_cost;
+                    DBDIRTY(OWNER(rest));
+                    DBFETCH(rest)->sp.exit.ndest = j;
+                    DBDIRTY(rest);
                 }
             }
-                if (MUCK::getOwner(rest) == thing) {
-                    MUCK::setOwner(rest, MAN);
+                if (OWNER(rest) == thing) {
+                    OWNER(rest) = MAN;
                     DBDIRTY(rest);
                 }
                 break;
             case TYPE_PLAYER:
                 if (Typeof(thing) == TYPE_PROGRAM && (FLAGS(rest) & INTERACTIVE)
-                    && (MUCK::playerSession(rest).currProg == thing)) {
+                    && (DBFETCH(rest)->sp.player.curr_prog == thing)) {
                     if (FLAGS(rest) & READMODE) {
                         anotify_nolisten2(rest, CINFO "The program you were running has been recycled.  Aborting program.");
                     } else {
-                        free_prog_text(MUCK::programRuntime(thing).first);
-                        MUCK::programRuntime(thing).first = NULL;
-                        MUCK::playerSession(rest).insertMode = 0;
-                        MUCK::clearFlags(thing, INTERNAL);
-                        MUCK::clearFlags(rest, INTERACTIVE);
-                        MUCK::playerSession(rest).currProg = NOTHING;
+                        free_prog_text(DBFETCH(thing)->sp.program.first);
+                        DBFETCH(thing)->sp.program.first = NULL;
+                        DBFETCH(rest)->sp.player.insert_mode = 0;
+                        FLAGS(thing) &= ~INTERNAL;
+                        FLAGS(rest) &= ~INTERACTIVE;
+                        DBFETCH(rest)->sp.player.curr_prog = NOTHING;
                         anotify_nolisten2(rest, CINFO "The program you were editing has been recycled.  Exiting Editor.");
                     }
                 }
-                if (MUCK::playerHomeRef(rest) == thing) {
-                    MUCK::database().get(rest)->As<MUCK::Player>()
-                        ->setHome(MUCK::database().get(tp_player_start));
+                if (DBFETCH(rest)->sp.player.home == thing) {
+                    DBFETCH(rest)->sp.player.home = tp_player_start;
+                    DBDIRTY(rest);
                 }
-                if (MUCK::playerSession(rest).currProg == thing)
-                    MUCK::playerSession(rest).currProg = 0;
+                if (DBFETCH(rest)->exits == thing) {
+                    DBFETCH(rest)->exits = DBFETCH(thing)->next;
+                    DBDIRTY(rest);
+                }
+                if (DBFETCH(rest)->sp.player.curr_prog == thing)
+                    DBFETCH(rest)->sp.player.curr_prog = 0;
                 break;
             case TYPE_PROGRAM:
-            case TYPE_UNSUPPORTED:
-                if (MUCK::getOwner(rest) == thing) {
-                    MUCK::setOwner(rest, MAN);
+                if (OWNER(rest) == thing) {
+                    OWNER(rest) = MAN;
                     DBDIRTY(rest);
                 }
         }
@@ -1039,25 +1017,21 @@ recycle(int descr, dbref player, dbref thing)
          *if (DBFETCH(rest)->location == thing)
          *    DBSTORE(rest, location, NOTHING);
          */
-        if (MUCK::listContains(MUCK::contentsOf(rest), thing)) {
-            MUCK::detachContent(rest, thing);
-            DBDIRTY(rest);
-        }
-        if (MUCK::listContains(MUCK::exitsOf(rest), thing)) {
-            MUCK::detachExit(rest, thing);
-            DBDIRTY(rest);
-        }
+        if (DBFETCH(rest)->contents == thing)
+            DBSTORE(rest, contents, DBFETCH(thing)->next);
+        if (DBFETCH(rest)->next == thing)
+            DBSTORE(rest, next, DBFETCH(thing)->next);
     }
 
-    looplimit = MUCK::database().top();
+    looplimit = db_top;
     while ((looplimit-- > 0)
-           && ((first = CONTENTS(thing)) != NOTHING)) {
+           && ((first = DBFETCH(thing)->contents) != NOTHING)) {
         if (Typeof(first) == TYPE_PLAYER) {
-            enter_room(descr, first, HOME, MUCK::getLocation(thing));
+            enter_room(descr, first, HOME, DBFETCH(thing)->location);
             /* If the room is set to drag players back, there'll be no
              * reasoning with it.  DRAG the player out.
              */
-            if (MUCK::getLocation(first) == thing) {
+            if (DBFETCH(first)->location == thing) {
                 notify_fmt(player, "Escaping teleport loop!");
                 moveto(first, HOME);
             }
@@ -1071,17 +1045,15 @@ recycle(int descr, dbref player, dbref thing)
 
     depth--;
 
-    /* the modern deletion gatekeeper: tombstone, store file removal,
-     * uuid retirement, OBJECT_DELETED event. Must run while the uuid
-     * still resolves, so before the object is emptied. */
-    MUCK::database().deleteObject(thing, player);
+    db_free_object(thing);
+    db_clear_object(player, thing);
 
-    MUCK::database().freeObject(thing);
-    MUCK::database().clearObject(player, thing);
+    NAME(thing) = "<garbage>";
+    SETDESC(thing, "<recyclable>");
+    FLAGS(thing) = TYPE_GARBAGE;
+    OWNER(thing) = NOTHING;
 
-    /* the slot stays a dead shell forever; dbrefs are never reused */
-    MUCK::setName(thing, "<garbage>");
-    MUCK::setDesc(thing, "<recyclable>");
-    MUCK::setType(thing, MUCK::ObjectType::Garbage);
-    MUCK::setOwner(thing, NOTHING);
+    DBFETCH(thing)->next = recyclable;
+    recyclable = thing;
+    DBDIRTY(thing);
 }
