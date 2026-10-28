@@ -957,45 +957,34 @@ anotify_descriptor(int descr, const char *msg)
 
 /* An entity is up to six bytes for one. This escaped into a BUFFER_LEN
  * stack buffer with no limit, and a line of quotes overwrote the
- * return address. The result still ends where that buffer did, at
- * BUFFER_LEN - 1, before any entity that would not fit whole. */
+ * return address. */
 std::string
 html_escape(const char *msg)
 {
     std::string out;
 
     for (; *msg; msg++) {
-        const char *ent;
-        size_t elen;
-
         switch (*msg) {
             case '&':
-                ent = "&amp;";
+                out += "&amp;";
                 break;
             case '\"':
-                ent = "&quot;";
+                out += "&quot;";
                 break;
             case '<':
-                ent = "&lt;";
+                out += "&lt;";
                 break;
             case '>':
-                ent = "&gt;";
+                out += "&gt;";
                 break;
 /*			case ' ':
-				ent = "&#32;";
+				out += "&#32;";
 				break; */
             case '\n':
-                continue;
+                break;
             default:
-                ent = NULL;
+                out += *msg;
         }
-        elen = ent ? strlen(ent) : 1;
-        if (out.size() + elen > BUFFER_LEN - 1)
-            break;
-        if (ent)
-            out += ent;
-        else
-            out += *msg;
     }
     return out;
 }
@@ -1005,10 +994,7 @@ html_escape2(const char *msg, int addbr)
 {
     std::string buff = "<PRE>"; //Used to be <CODE>
 
-    if (strlen(msg) >= (BUFFER_LEN - 18))
-        buff += html_escape(std::string(msg, BUFFER_LEN - 18).c_str());
-    else
-        buff += html_escape(msg);
+    buff += html_escape(msg);
     buff += "</PRE>"; //Used to be </CODE>
     if (addbr) {
         buff += "<BR>";

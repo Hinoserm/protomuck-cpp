@@ -810,8 +810,6 @@ http::makearray(void)
 int
   http::dohtmuf(const char *prop)
 {
-    char
-      buf[BUFFER_LEN];
     const char *
         m = NULL;
     struct frame *
@@ -868,16 +866,14 @@ int
     }
 
     /* Get the type. */
-    if ((m = get_property_class(ref, "/_type")))
-        strcpyn(buf, sizeof(buf), m);
-    else
-        strcpy(buf, "text/html");
+    std::string
+        type = (m = get_property_class(ref, "/_type")) ? m : "text/html";
 
     this->flags |= HS_HTMUF;
 
     /* Send the header. */
-    if (string_compare(buf, "noheader"))
-        this->sendheader(200, buf, -1);
+    if (string_compare(type.c_str(), "noheader"))
+        this->sendheader(200, type.c_str(), -1);
 
     /* Do it! */
     /* match_args is a fixed BUFFER_LEN global; the query string and the
@@ -945,15 +941,13 @@ int
 
     /* Get the type. */
     pname = std::string(prop) + "/_type";
-    if ((m = get_property_class(what, pname.c_str())))
-        strcpyn(buf, sizeof(buf), m);
-    else
-        strcpy(buf, "text/html");
+    std::string
+        type = (m = get_property_class(what, pname.c_str())) ? m : "text/html";
 
     this->flags |= HS_PROPLIST;
     /* Send the header. */
-    if (string_compare(buf, "noheader"))
-        this->sendheader(statcode, buf, -1);
+    if (string_compare(type.c_str(), "noheader"))
+        this->sendheader(statcode, type.c_str(), -1);
 
     /* Send the list. */
     for (i = 1; i <= lines; i++) {
@@ -1093,8 +1087,7 @@ int
     if (this->newdest.find("..") != std::string::npos)
         return 0;
 
-    if ((i = this->newdest.length()) >= BUFFER_LEN)
-        return 0;
+    i = this->newdest.length();
 
     const char *
         nd = this->newdest.c_str();
@@ -1152,14 +1145,12 @@ int
     if (tp_web_allow_mpi && *m == '&') {
         /* the _type value, s: copying m here sent the page's own MPI
          * source as its Content-Type header */
-        if ((s = get_property_class(this->rootobj, (std::string(prop) + "/_type").c_str())))
-            strcpyn(buf, sizeof(buf), s);
-        else
-            strcpy(buf, "text/html");
+        std::string
+            type = (s = get_property_class(this->rootobj, (std::string(prop) + "/_type").c_str())) ? s : "text/html";
 
         /* Send the header. */
-        if (string_compare(buf, "noheader"))
-            this->sendheader(200, buf, -1);
+        if (string_compare(type.c_str(), "noheader"))
+            this->sendheader(200, type.c_str(), -1);
 
         /* MPI output is data. It used to be passed to queue_text as the
          * FORMAT, so a page whose output contained "%s" or "%n" crashed

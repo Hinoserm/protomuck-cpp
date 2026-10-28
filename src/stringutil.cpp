@@ -1559,6 +1559,21 @@ tct(const char *in, char out[BUFFER_LEN])
     return out;
 }
 
+/* tct with no fixed out buffer: the char[] form stops at BUFFER_LEN - 2 */
+std::string
+tct(const char *in)
+{
+    std::string out;
+
+    if (in)
+        for (; *in; in++) {
+            out += *in;
+            if (*in == '^')
+                out += '^';
+        }
+    return out;
+}
+
 /* This function strips out Neon ANSI tags. I.e., ^RED^ 
  * would be removed.
  */

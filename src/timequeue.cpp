@@ -544,8 +544,8 @@ next_timequeue_event(void)
             char cbuf[BUFFER_LEN];
             int ival;
 
-            strcpy(match_args, event->str3 ? event->str3 : "");
-            strcpy(match_cmdname, event->command ? event->command : "");
+            strcpyn(match_args, BUFFER_LEN, event->str3 ? event->str3 : "");
+            strcpyn(match_cmdname, BUFFER_LEN, event->command ? event->command : "");
             ival = (event->subtyp & TQ_MPI_OMESG) ? MPI_ISPUBLIC : MPI_ISPRIVATE;
             if (event->subtyp & TQ_MPI_LISTEN) {
                 ival |= MPI_ISLISTENER;
@@ -602,8 +602,8 @@ next_timequeue_event(void)
                 } else if (event->subtyp == TQ_MUF_TREAD) {
                     handle_read_event(event->descr, event->uid, NULL, event, 0, 0);
                 } else {
-                    strcpy(match_args, event->called_data ? event->called_data : "");
-                    strcpy(match_cmdname, event->command ? event->command : "");
+                    strcpyn(match_args, BUFFER_LEN, event->called_data ? event->called_data : "");
+                    strcpyn(match_cmdname, BUFFER_LEN, event->command ? event->command : "");
                     tmpfr = interp(event->descr, event->uid, event->loc, event->called_prog, event->trig, BACKGROUND, STD_HARDUID, forced_pid);
                     if (tmpfr) {
                         interp_loop(event->uid, event->called_prog, tmpfr, 0);
@@ -1397,7 +1397,7 @@ propqueue(int descr, dbref player, dbref where, dbref trigger, dbref what, dbref
                     int ival;
 
                     strcpy(match_args, "");
-                    strcpy(match_cmdname, toparg);
+                    strcpyn(match_cmdname, BUFFER_LEN, toparg);
                     ival = (mt == 0) ? MPI_ISPUBLIC : MPI_ISPRIVATE;
                     do_parse_mesg(descr, player, what, tmpchar + 1, "(MPIqueue)", cbuf, ival);
                     if (*cbuf) {
@@ -1419,7 +1419,7 @@ propqueue(int descr, dbref player, dbref where, dbref trigger, dbref what, dbref
                 } else if (the_prog != NOTHING) {
                     struct frame *tmpfr;
 
-                    strcpy(match_args, toparg ? toparg : "");
+                    strcpyn(match_args, BUFFER_LEN, toparg ? toparg : "");
                     strcpy(match_cmdname, "Queued event.");
                     tmpfr = interp(descr, player, where, the_prog, trigger, BACKGROUND, STD_HARDUID, 0);
                     if (tmpfr) {

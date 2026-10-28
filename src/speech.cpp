@@ -407,8 +407,8 @@ ansi_notify_listeners(descriptor_data *d, dbref who, dbref xprog, dbref obj, dbr
 int
 notify_html_listeners(int descr, dbref who, dbref xprog, dbref obj, dbref room, const char *msg, int isprivate)
 {
-    char buf[BUFFER_LEN], *noabuf, buf2[BUFFER_LEN];
-    const char *nohbuf;
+    char buf[BUFFER_LEN];
+    const char *nohbuf, *noabuf;
     dbref ref;
 
     if (obj == NOTHING)
@@ -420,7 +420,9 @@ notify_html_listeners(int descr, dbref who, dbref xprog, dbref obj, dbref room, 
     /* tct(buf2, nohbuf) had its arguments the wrong way round: it
      * copied the uninitialized buf2 over html_escape's static buffer,
      * and both lines went out to the listeners as stack garbage */
-    noabuf = tct(nohbuf, buf2);
+    std::string noa = tct(nohbuf);
+
+    noabuf = noa.c_str();
 
     if (tp_listeners && (tp_listeners_obj || Typeof(obj) == TYPE_ROOM)) {
         listenqueue(descr, who, room, obj, obj, xprog, "_listen", nohbuf, tp_listen_mlev, 1, 0);

@@ -134,8 +134,8 @@ lookup_alias(const char *name, int checkname)
 int
 rotate_alias(dbref target, int killold)
 {
-    const char *oldalias = NULL;
-    char oldbuf[BUFFER_LEN];
+    std::string oldalias;
+    bool had_alias = false;
     PropPtr pptr;
     int valid;
 
@@ -148,8 +148,8 @@ rotate_alias(dbref target, int killold)
             const char *s = PropDataUNCStr(pptr);
 
             if (s) {
-                strcpyn(oldbuf, sizeof(oldbuf), s);
-                oldalias = oldbuf;
+                oldalias = s;
+                had_alias = true;
             }
         }
 
@@ -157,10 +157,9 @@ rotate_alias(dbref target, int killold)
             /* kill the old 'last' hint if we were asked to, or if it's bogus */
             remove_property(0, abuf);
         }
-        if (oldalias) {
+        if (had_alias) {
             /* kill the old alias. */
-            sprintf(abuf, ALIASDIR_CUR "%s", oldalias);
-            remove_property(0, abuf);
+            remove_property(0, (ALIASDIR_CUR + oldalias).c_str());
             return 1;
         }
     }

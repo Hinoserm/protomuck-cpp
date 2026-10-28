@@ -442,6 +442,7 @@ extern char *parse_ansi(dbref player, char *buf, const char *from, const char *d
 extern char* parse_ansi(descriptor_data *d, dbref player, char* buf, const char* from, const char* defcolor);
 extern char *unparse_ansi(char *buf, const char *from);
 extern char *tct(const char *in, char out[BUFFER_LEN]);
+extern std::string tct(const char *in);
 extern char *strip_ansi(char *buf, const char *input);
 extern char *strip_bad_ansi(char *buf, const char *input);
 extern void clear_color_hash(void);
